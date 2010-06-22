@@ -28,6 +28,8 @@
 #include <asm/setup.h>
 #include <asm/trampoline.h>
 
+#include "acpi/realmode/wakeup.h"
+
 /*
  * The e820 map is the map that gets modified e.g. with command line parameters
  * and that is also registered with modifications in the kernel resource tree
@@ -741,8 +743,7 @@ static struct early_res early_res[MAX_EARLY_RES] __initdata = {
 	 */
 	{ PAGE_SIZE, PAGE_SIZE + PAGE_SIZE, "EX TRAMPOLINE", 1 },
 #endif
-
-	{}
+	{ 0, 0, {0}, 0 }
 };
 
 static int __init find_overlapped_early(u64 start, u64 end)
