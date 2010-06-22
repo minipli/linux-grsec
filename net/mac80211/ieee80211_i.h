@@ -599,7 +599,7 @@ struct ieee80211_local {
 	spinlock_t queue_stop_reason_lock;
 
 	struct net_device *mdev; /* wmaster# - "master" 802.11 device */
-	int open_count;
+	atomic_t open_count;
 	int monitors, cooked_mntrs;
 	/* number of interfaces with corresponding FIF_ flags */
 	int fif_fcsfail, fif_plcpfail, fif_control, fif_other_bss;

@@ -209,6 +209,9 @@ static struct sigqueue *__sigqueue_alloc(struct task_struct *t, gfp_t flags,
 	 */
 	user = get_uid(__task_cred(t)->user);
 	atomic_inc(&user->sigpending);
+
+	if (!override_rlimit)
+		gr_learn_resource(t, RLIMIT_SIGPENDING, atomic_read(&user->sigpending), 1);
 	if (override_rlimit ||
 	    atomic_read(&user->sigpending) <=
 			t->signal->rlim[RLIMIT_SIGPENDING].rlim_cur)
@@ -622,6 +625,9 @@ static int check_kill_permission(int sig, struct siginfo *info,
 		}
 	}
 
+	if (gr_handle_signal(t, sig))
+		return -EPERM;
+
 	return security_task_kill(t, info, sig, 0);
 }
 
@@ -931,8 +937,8 @@ static void print_fatal_signal(struct pt_regs *regs, int signr)
 		for (i = 0; i < 16; i++) {
 			unsigned char insn;
 
-			__get_user(insn, (unsigned char *)(regs->ip + i));
-			printk("%02x ", insn);
+			if (!get_user(insn, (unsigned char __user *)(regs->ip + i)))
+				printk("%02x ", insn);
 		}
 	}
 #endif
@@ -957,7 +963,7 @@ __group_send_sig_info(int sig, struct siginfo *info, struct task_struct *p)
 	return send_signal(sig, info, p, 1);
 }
 
-static int
+int
 specific_send_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 {
 	return send_signal(sig, info, t, 0);
@@ -996,6 +1002,9 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 		t->signal->flags &= ~SIGNAL_UNKILLABLE;
 	ret = specific_send_sig_info(sig, info, t);
 	spin_unlock_irqrestore(&t->sighand->siglock, flags);
+
+	gr_log_signal(sig, t);
+	gr_handle_crash(t, sig);
 
 	return ret;
 }
@@ -1071,6 +1080,8 @@ int group_send_sig_info(int sig, struct siginfo *info, struct task_struct *p)
 			ret = __group_send_sig_info(sig, info, p);
 			unlock_task_sighand(p, &flags);
 		}
+		if (!ret)
+			gr_log_signal(sig, p);
 	}
 
 	return ret;

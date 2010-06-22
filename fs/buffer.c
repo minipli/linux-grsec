@@ -25,6 +25,7 @@
 #include <linux/percpu.h>
 #include <linux/slab.h>
 #include <linux/capability.h>
+#include <linux/security.h>
 #include <linux/blkdev.h>
 #include <linux/file.h>
 #include <linux/quotaops.h>
@@ -2233,6 +2234,7 @@ int generic_cont_expand_simple(struct inode *inode, loff_t size)
 
 	err = -EFBIG;
         limit = current->signal->rlim[RLIMIT_FSIZE].rlim_cur;
+	gr_learn_resource(current, RLIMIT_FSIZE, (unsigned long) size, 1);
 	if (limit != RLIM_INFINITY && size > (loff_t)limit) {
 		send_sig(SIGXFSZ, current, 0);
 		goto out;

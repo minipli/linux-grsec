@@ -107,7 +107,7 @@ static int pcpu_nr_slots __read_mostly;
 static size_t pcpu_chunk_struct_size __read_mostly;
 
 /* the address of the first chunk which starts with the kernel static area */
-void *pcpu_base_addr __read_mostly;
+void *pcpu_base_addr __read_only;
 EXPORT_SYMBOL_GPL(pcpu_base_addr);
 
 /* optional reserved chunk, only accessible for reserved allocations */

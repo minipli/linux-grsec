@@ -52,7 +52,7 @@
 #include "dat.h"
 #include "ifile.h"
 
-static struct address_space_operations def_gcinode_aops = {};
+static const struct address_space_operations def_gcinode_aops = {};
 /* XXX need def_gcinode_iops/fops? */
 
 /*

@@ -60,6 +60,10 @@ DEFINE_TRACE(sched_process_free);
 DEFINE_TRACE(sched_process_exit);
 DEFINE_TRACE(sched_process_wait);
 
+#ifdef CONFIG_GRKERNSEC
+extern rwlock_t grsec_exec_file_lock;
+#endif
+
 static void exit_mm(struct task_struct * tsk);
 
 static void __unhash_process(struct task_struct *p)
@@ -168,6 +172,8 @@ void release_task(struct task_struct * p)
 	struct task_struct *leader;
 	int zap_leader;
 repeat:
+	gr_del_task_from_ip_table(p);
+
 	tracehook_prepare_release_task(p);
 	/* don't need to get the RCU readlock here - the process is dead and
 	 * can't be modifying its own credentials */
@@ -334,10 +340,21 @@ static void reparent_to_kthreadd(void)
 {
 	write_lock_irq(&tasklist_lock);
 
+#ifdef CONFIG_GRKERNSEC
+	write_lock(&grsec_exec_file_lock);
+	if (current->exec_file) {
+		fput(current->exec_file);
+		current->exec_file = NULL;
+	}
+	write_unlock(&grsec_exec_file_lock);
+#endif
+
 	ptrace_unlink(current);
 	/* Reparent to init */
 	current->real_parent = current->parent = kthreadd_task;
 	list_move_tail(&current->sibling, &current->real_parent->children);
+
+	gr_set_kernel_label(current);
 
 	/* Set the exit signal to SIGCHLD so we signal init on exit */
 	current->exit_signal = SIGCHLD;
@@ -426,6 +443,17 @@ void daemonize(const char *name, ...)
 	va_start(args, name);
 	vsnprintf(current->comm, sizeof(current->comm), name, args);
 	va_end(args);
+
+#ifdef CONFIG_GRKERNSEC
+	write_lock(&grsec_exec_file_lock);
+	if (current->exec_file) {
+		fput(current->exec_file);
+		current->exec_file = NULL;
+	}
+	write_unlock(&grsec_exec_file_lock);
+#endif
+
+	gr_set_kernel_label(current);
 
 	/*
 	 * If we were started as result of loading a module, close all of the
@@ -954,6 +982,9 @@ NORET_TYPE void do_exit(long code)
 	tsk->exit_code = code;
 	taskstats_exit(tsk, group_dead);
 
+	gr_acl_handle_psacct(tsk, code);
+	gr_acl_handle_exit();
+
 	exit_mm(tsk);
 
 	if (group_dead)
@@ -1158,7 +1189,7 @@ static int wait_task_zombie(struct task_struct *p, int options,
 
 	if (unlikely(options & WNOWAIT)) {
 		int exit_code = p->exit_code;
-		int why, status;
+		int why;
 
 		get_task_struct(p);
 		read_unlock(&tasklist_lock);

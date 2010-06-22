@@ -132,6 +132,12 @@ static int set_one_prio(struct task_struct *p, int niceval, int error)
 		error = -EACCES;
 		goto out;
 	}
+
+	if (gr_handle_chroot_setpriority(p, niceval)) {
+		error = -EACCES;
+		goto out;
+	}
+
 	no_nice = security_task_setnice(p, niceval);
 	if (no_nice) {
 		error = no_nice;
@@ -508,6 +514,9 @@ SYSCALL_DEFINE2(setregid, gid_t, rgid, gid_t, egid)
 			goto error;
 	}
 
+	if (gr_check_group_change(new->gid, new->egid, -1))
+		goto error;
+
 	if (rgid != (gid_t) -1 ||
 	    (egid != (gid_t) -1 && egid != old->gid))
 		new->sgid = new->egid;
@@ -541,6 +550,10 @@ SYSCALL_DEFINE1(setgid, gid_t, gid)
 		goto error;
 
 	retval = -EPERM;
+
+	if (gr_check_group_change(gid, gid, gid))
+		goto error;
+
 	if (capable(CAP_SETGID))
 		new->gid = new->egid = new->sgid = new->fsgid = gid;
 	else if (gid == old->gid || gid == old->sgid)
@@ -631,6 +644,9 @@ SYSCALL_DEFINE2(setreuid, uid_t, ruid, uid_t, euid)
 			goto error;
 	}
 
+	if (gr_check_user_change(new->uid, new->euid, -1))
+		goto error;
+
 	if (new->uid != old->uid) {
 		retval = set_user(new);
 		if (retval < 0)
@@ -679,6 +695,12 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
 		goto error;
 
 	retval = -EPERM;
+
+	if (gr_check_crash_uid(uid))
+		goto error;
+	if (gr_check_user_change(uid, uid, uid))
+		goto error;
+
 	if (capable(CAP_SETUID)) {
 		new->suid = new->uid = uid;
 		if (uid != old->uid) {
@@ -735,6 +757,9 @@ SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)
 		    suid != old->euid  && suid != old->suid)
 			goto error;
 	}
+
+	if (gr_check_user_change(ruid, euid, -1))
+		goto error;
 
 	if (ruid != (uid_t) -1) {
 		new->uid = ruid;
@@ -804,6 +829,9 @@ SYSCALL_DEFINE3(setresgid, gid_t, rgid, gid_t, egid, gid_t, sgid)
 			goto error;
 	}
 
+	if (gr_check_group_change(rgid, egid, -1))
+		goto error;
+
 	if (rgid != (gid_t) -1)
 		new->gid = rgid;
 	if (egid != (gid_t) -1)
@@ -853,6 +881,9 @@ SYSCALL_DEFINE1(setfsuid, uid_t, uid)
 	if (security_task_setuid(uid, (uid_t)-1, (uid_t)-1, LSM_SETID_FS) < 0)
 		goto error;
 
+	if (gr_check_user_change(-1, -1, uid))
+		goto error;
+
 	if (uid == old->uid  || uid == old->euid  ||
 	    uid == old->suid || uid == old->fsuid ||
 	    capable(CAP_SETUID)) {
@@ -893,6 +924,9 @@ SYSCALL_DEFINE1(setfsgid, gid_t, gid)
 	if (gid == old->gid  || gid == old->egid  ||
 	    gid == old->sgid || gid == old->fsgid ||
 	    capable(CAP_SETGID)) {
+		if (gr_check_group_change(-1, -1, gid))
+			goto error;
+
 		if (gid != old_fsgid) {
 			new->fsgid = gid;
 			goto change_okay;
@@ -1725,7 +1759,7 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			error = get_dumpable(me->mm);
 			break;
 		case PR_SET_DUMPABLE:
-			if (arg2 < 0 || arg2 > 1) {
+			if (arg2 > 1) {
 				error = -EINVAL;
 				break;
 			}

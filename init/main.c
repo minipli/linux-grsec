@@ -98,6 +98,7 @@ static inline void mark_rodata_ro(void) { }
 #ifdef CONFIG_TC
 extern void tc_init(void);
 #endif
+extern void grsecurity_init(void);
 
 enum system_states system_state __read_mostly;
 EXPORT_SYMBOL(system_state);
@@ -183,6 +184,35 @@ static int __init set_reset_devices(char *str)
 }
 
 __setup("reset_devices", set_reset_devices);
+
+#if defined(CONFIG_PAX_MEMORY_UDEREF) && defined(CONFIG_X86_32)
+static int __init setup_pax_nouderef(char *str)
+{
+	unsigned int cpu;
+
+	for (cpu = 0; cpu < NR_CPUS; cpu++) {
+		get_cpu_gdt_table(cpu)[GDT_ENTRY_KERNEL_DS].type = 3;
+		get_cpu_gdt_table(cpu)[GDT_ENTRY_KERNEL_DS].limit = 0xf;
+	}
+	asm("mov %0, %%ds" : : "r" (__KERNEL_DS) : "memory");
+	asm("mov %0, %%es" : : "r" (__KERNEL_DS) : "memory");
+	asm("mov %0, %%ss" : : "r" (__KERNEL_DS) : "memory");
+
+	return 0;
+}
+early_param("pax_nouderef", setup_pax_nouderef);
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+unsigned int pax_softmode;
+
+static int __init setup_pax_softmode(char *str)
+{
+	get_option(&str, &pax_softmode);
+	return 1;
+}
+__setup("pax_softmode=", setup_pax_softmode);
+#endif
 
 static char * argv_init[MAX_INIT_ARGS+2] = { "init", NULL, };
 char * envp_init[MAX_INIT_ENVS+2] = { "HOME=/", "TERM=linux", NULL, };
@@ -377,7 +407,7 @@ static void __init setup_nr_cpu_ids(void)
 }
 
 #ifndef CONFIG_HAVE_SETUP_PER_CPU_AREA
-unsigned long __per_cpu_offset[NR_CPUS] __read_mostly;
+unsigned long __per_cpu_offset[NR_CPUS] __read_only;
 
 EXPORT_SYMBOL(__per_cpu_offset);
 
@@ -710,6 +740,7 @@ int do_one_initcall(initcall_t fn)
 {
 	int count = preempt_count();
 	ktime_t calltime, delta, rettime;
+	const char *msg1 = "", *msg2 = "";
 
 	if (initcall_debug) {
 		call.caller = task_pid_nr(current);
@@ -737,15 +768,15 @@ int do_one_initcall(initcall_t fn)
 		sprintf(msgbuf, "error code %d ", ret.result);
 
 	if (preempt_count() != count) {
-		strlcat(msgbuf, "preemption imbalance ", sizeof(msgbuf));
+		msg1 = " preemption imbalance";
 		preempt_count() = count;
 	}
 	if (irqs_disabled()) {
-		strlcat(msgbuf, "disabled interrupts ", sizeof(msgbuf));
+		msg2 = " disabled interrupts";
 		local_irq_enable();
 	}
-	if (msgbuf[0]) {
-		printk("initcall %pF returned with %s\n", fn, msgbuf);
+	if (msgbuf[0] || *msg1 || *msg2) {
+		printk("initcall %pF returned with %s%s%s\n", fn, msgbuf, msg1, msg2);
 	}
 
 	return ret.result;
@@ -885,6 +916,8 @@ static int __init kernel_init(void * unused)
 		ramdisk_execute_command = NULL;
 		prepare_namespace();
 	}
+
+	grsecurity_init();
 
 	/*
 	 * Ok, we have completed the initial bootup, and

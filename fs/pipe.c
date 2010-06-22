@@ -872,7 +872,7 @@ void free_pipe_info(struct inode *inode)
 	inode->i_pipe = NULL;
 }
 
-static struct vfsmount *pipe_mnt __read_mostly;
+struct vfsmount *pipe_mnt __read_mostly;
 static int pipefs_delete_dentry(struct dentry *dentry)
 {
 	/*

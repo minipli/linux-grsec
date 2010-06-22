@@ -184,7 +184,7 @@ static kprobe_opcode_t __kprobes *__get_insn_slot(void)
 	 * kernel image and loaded module images reside. This is required
 	 * so x86_64 can correctly handle the %rip-relative fixups.
 	 */
-	kip->insns = module_alloc(PAGE_SIZE);
+	kip->insns = module_alloc_exec(PAGE_SIZE);
 	if (!kip->insns) {
 		kfree(kip);
 		return NULL;
@@ -225,7 +225,7 @@ static int __kprobes collect_one_slot(struct kprobe_insn_page *kip, int idx)
 			hlist_add_head(&kip->hlist,
 				       &kprobe_insn_pages);
 		} else {
-			module_free(NULL, kip->insns);
+			module_free_exec(NULL, kip->insns);
 			kfree(kip);
 		}
 		return 1;
@@ -1333,7 +1333,7 @@ static int __kprobes show_kprobe_addr(struct seq_file *pi, void *v)
 	return 0;
 }
 
-static struct seq_operations kprobes_seq_ops = {
+static const struct seq_operations kprobes_seq_ops = {
 	.start = kprobe_seq_start,
 	.next  = kprobe_seq_next,
 	.stop  = kprobe_seq_stop,
@@ -1345,7 +1345,7 @@ static int __kprobes kprobes_open(struct inode *inode, struct file *filp)
 	return seq_open(filp, &kprobes_seq_ops);
 }
 
-static struct file_operations debugfs_kprobes_operations = {
+static const struct file_operations debugfs_kprobes_operations = {
 	.open           = kprobes_open,
 	.read           = seq_read,
 	.llseek         = seq_lseek,
@@ -1527,7 +1527,7 @@ static ssize_t write_enabled_file_bool(struct file *file,
 	return count;
 }
 
-static struct file_operations fops_kp = {
+static const struct file_operations fops_kp = {
 	.read =         read_enabled_file_bool,
 	.write =        write_enabled_file_bool,
 };

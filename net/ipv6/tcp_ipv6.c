@@ -1575,6 +1575,9 @@ static int tcp_v6_do_rcv(struct sock *sk, struct sk_buff *skb)
 	return 0;
 
 reset:
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+	if (!skb->dev || (skb->dev->flags & IFF_LOOPBACK))
+#endif
 	tcp_v6_send_reset(sk, skb);
 discard:
 	if (opt_skb)
@@ -1697,6 +1700,9 @@ no_tcp_socket:
 bad_packet:
 		TCP_INC_STATS_BH(net, TCP_MIB_INERRS);
 	} else {
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+		if (skb->dev->flags & IFF_LOOPBACK)
+#endif
 		tcp_v6_send_reset(NULL, skb);
 	}
 

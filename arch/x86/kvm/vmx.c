@@ -506,9 +506,23 @@ static void reload_tss(void)
 	struct descriptor_table gdt;
 	struct desc_struct *descs;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	kvm_get_gdt(&gdt);
 	descs = (void *)gdt.base;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	descs[GDT_ENTRY_TSS].type = 9; /* available TSS */
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	load_TR_desc();
 }
 
@@ -2214,7 +2228,7 @@ static int vmx_vcpu_setup(struct vcpu_vmx *vmx)
 	vmcs_writel(HOST_IDTR_BASE, dt.base);   /* 22.2.4 */
 
 	asm("mov $.Lkvm_vmx_return, %0" : "=r"(kvm_vmx_return));
-	vmcs_writel(HOST_RIP, kvm_vmx_return); /* 22.2.5 */
+	vmcs_writel(HOST_RIP, ktla_ktva(kvm_vmx_return)); /* 22.2.5 */
 	vmcs_write32(VM_EXIT_MSR_STORE_COUNT, 0);
 	vmcs_write32(VM_EXIT_MSR_LOAD_COUNT, 0);
 	vmcs_write32(VM_ENTRY_MSR_LOAD_COUNT, 0);
@@ -3516,6 +3530,12 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		"jmp .Lkvm_vmx_return \n\t"
 		".Llaunched: " __ex(ASM_VMX_VMRESUME) "\n\t"
 		".Lkvm_vmx_return: "
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		"ljmp %[cs],$.Lkvm_vmx_return2\n\t"
+		".Lkvm_vmx_return2: "
+#endif
+
 		/* Save guest registers, load host registers, keep flags */
 		"xchg %0,     (%%"R"sp) \n\t"
 		"mov %%"R"ax, %c[rax](%0) \n\t"
@@ -3562,6 +3582,11 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		[r15]"i"(offsetof(struct vcpu_vmx, vcpu.arch.regs[VCPU_REGS_R15])),
 #endif
 		[cr2]"i"(offsetof(struct vcpu_vmx, vcpu.arch.cr2))
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		,[cs]"i"(__KERNEL_CS)
+#endif
+
 	      : "cc", "memory"
 		, R"bx", R"di", R"si"
 #ifdef CONFIG_X86_64
@@ -3580,7 +3605,7 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 
 	vmx_update_window_states(vcpu);
 
-	asm("mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS));
+	asm("mov %0, %%ds; mov %0, %%es" : : "r"(__KERNEL_DS));
 	vmx->launched = 1;
 
 	intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
@@ -3716,7 +3741,7 @@ static int vmx_get_mt_mask_shift(void)
 	return VMX_EPT_MT_EPTE_SHIFT;
 }
 
-static struct kvm_x86_ops vmx_x86_ops = {
+static const struct kvm_x86_ops vmx_x86_ops = {
 	.cpu_has_kvm_support = cpu_has_kvm_support,
 	.disabled_by_bios = vmx_disabled_by_bios,
 	.hardware_setup = hardware_setup,

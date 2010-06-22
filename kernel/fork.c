@@ -245,7 +245,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	*stackend = STACK_END_MAGIC;	/* for overflow detection */
 
 #ifdef CONFIG_CC_STACKPROTECTOR
-	tsk->stack_canary = get_random_int();
+	tsk->stack_canary = pax_get_random_long();
 #endif
 
 	/* One for us, one for whoever does the "release_task()" (usually parent) */
@@ -282,8 +282,8 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 	mm->locked_vm = 0;
 	mm->mmap = NULL;
 	mm->mmap_cache = NULL;
-	mm->free_area_cache = oldmm->mmap_base;
-	mm->cached_hole_size = ~0UL;
+	mm->free_area_cache = oldmm->free_area_cache;
+	mm->cached_hole_size = oldmm->cached_hole_size;
 	mm->map_count = 0;
 	cpumask_clear(mm_cpumask(mm));
 	mm->mm_rb = RB_ROOT;
@@ -320,6 +320,7 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 		tmp->vm_flags &= ~VM_LOCKED;
 		tmp->vm_mm = mm;
 		tmp->vm_next = NULL;
+		tmp->vm_mirror = NULL;
 		anon_vma_link(tmp);
 		file = tmp->vm_file;
 		if (file) {
@@ -367,6 +368,31 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 		if (retval)
 			goto out;
 	}
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (oldmm->pax_flags & MF_PAX_SEGMEXEC) {
+		struct vm_area_struct *mpnt_m;
+
+		for (mpnt = oldmm->mmap, mpnt_m = mm->mmap; mpnt; mpnt = mpnt->vm_next, mpnt_m = mpnt_m->vm_next) {
+			BUG_ON(!mpnt_m || mpnt_m->vm_mirror || mpnt->vm_mm != oldmm || mpnt_m->vm_mm != mm);
+
+			if (!mpnt->vm_mirror)
+				continue;
+
+			if (mpnt->vm_end <= SEGMEXEC_TASK_SIZE) {
+				BUG_ON(mpnt->vm_mirror->vm_mirror != mpnt);
+				mpnt->vm_mirror = mpnt_m;
+			} else {
+				BUG_ON(mpnt->vm_mirror->vm_mirror == mpnt || mpnt->vm_mirror->vm_mirror->vm_mm != mm);
+				mpnt_m->vm_mirror = mpnt->vm_mirror->vm_mirror;
+				mpnt_m->vm_mirror->vm_mirror = mpnt_m;
+				mpnt->vm_mirror->vm_mirror = mpnt;
+			}
+		}
+		BUG_ON(mpnt_m);
+	}
+#endif
+
 	/* a new mm has just been created */
 	arch_dup_mmap(oldmm, mm);
 	retval = 0;
@@ -547,9 +573,11 @@ void mm_release(struct task_struct *tsk, struct mm_struct *mm)
 #ifdef CONFIG_FUTEX
 	if (unlikely(tsk->robust_list))
 		exit_robust_list(tsk);
+	tsk->robust_list = NULL;
 #ifdef CONFIG_COMPAT
 	if (unlikely(tsk->compat_robust_list))
 		compat_exit_robust_list(tsk);
+	tsk->compat_robust_list = NULL;
 #endif
 #endif
 
@@ -568,6 +596,7 @@ void mm_release(struct task_struct *tsk, struct mm_struct *mm)
 	 * the value intact in a core dump, and to save the unnecessary
 	 * trouble otherwise.  Userland only wants this done for a sys_exit.
 	 */
+
 	if (tsk->clear_child_tid) {
 		if (!(tsk->flags & PF_SIGNALED) &&
 		    atomic_read(&mm->mm_users) > 1) {
@@ -577,7 +606,7 @@ void mm_release(struct task_struct *tsk, struct mm_struct *mm)
 			 */
 			put_user(0, tsk->clear_child_tid);
 			sys_futex(tsk->clear_child_tid, FUTEX_WAKE,
-					1, NULL, NULL, 0);
+				  1, NULL, NULL, 0);
 		}
 		tsk->clear_child_tid = NULL;
 	}
@@ -695,7 +724,7 @@ static int copy_fs(unsigned long clone_flags, struct task_struct *tsk)
 			write_unlock(&fs->lock);
 			return -EAGAIN;
 		}
-		fs->users++;
+		atomic_inc(&fs->users);
 		write_unlock(&fs->lock);
 		return 0;
 	}
@@ -976,6 +1005,9 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	DEBUG_LOCKS_WARN_ON(!p->softirqs_enabled);
 #endif
 	retval = -EAGAIN;
+
+	gr_learn_resource(p, RLIMIT_NPROC, atomic_read(&p->real_cred->user->processes), 0);
+
 	if (atomic_read(&p->real_cred->user->processes) >=
 			p->signal->rlim[RLIMIT_NPROC].rlim_cur) {
 		if (!capable(CAP_SYS_ADMIN) && !capable(CAP_SYS_RESOURCE) &&
@@ -1130,6 +1162,8 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		if (retval)
 			goto bad_fork_free_graph;
 	}
+
+	gr_copy_label(p);
 
 	p->set_child_tid = (clone_flags & CLONE_CHILD_SETTID) ? child_tidptr : NULL;
 	/*
@@ -1300,6 +1334,8 @@ bad_fork_cleanup_count:
 bad_fork_free:
 	free_task(p);
 fork_out:
+	gr_log_forkfail(retval);
+
 	return ERR_PTR(retval);
 }
 
@@ -1392,6 +1428,8 @@ long do_fork(unsigned long clone_flags,
 
 		if (clone_flags & CLONE_PARENT_SETTID)
 			put_user(nr, parent_tidptr);
+
+		gr_handle_brute_check();
 
 		if (clone_flags & CLONE_VFORK) {
 			p->vfork_done = &vfork;
@@ -1525,7 +1563,7 @@ static int unshare_fs(unsigned long unshare_flags, struct fs_struct **new_fsp)
 		return 0;
 
 	/* don't need lock here; in the worst case we'll do useless copy */
-	if (fs->users == 1)
+	if (atomic_read(&fs->users) == 1)
 		return 0;
 
 	*new_fsp = copy_fs_struct(fs);
@@ -1648,7 +1686,7 @@ SYSCALL_DEFINE1(unshare, unsigned long, unshare_flags)
 			fs = current->fs;
 			write_lock(&fs->lock);
 			current->fs = new_fs;
-			if (--fs->users)
+			if (atomic_dec_return(&fs->users))
 				new_fs = NULL;
 			else
 				new_fs = fs;

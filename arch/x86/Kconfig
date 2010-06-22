@@ -345,6 +345,7 @@ config X86_VSMP
 	select PARAVIRT
 	depends on X86_64 && PCI
 	depends on X86_EXTENDED_PLATFORM
+	depends on !PAX_KERNEXEC
 	---help---
 	  Support for ScaleMP vSMP systems.  Say 'Y' here if this kernel is
 	  supposed to run on these EM64T-based machines.  Only choose this option
@@ -464,6 +465,7 @@ config VMI
 	bool "VMI Guest support"
 	select PARAVIRT
 	depends on X86_32
+	depends on !PAX_KERNEXEC
 	---help---
 	  VMI provides a paravirtualized interface to the VMware ESX server
 	  (it could be used by other hypervisors in theory too, but is not
@@ -474,6 +476,7 @@ config KVM_CLOCK
 	bool "KVM paravirtualized clock"
 	select PARAVIRT
 	select PARAVIRT_CLOCK
+	depends on !PAX_KERNEXEC
 	---help---
 	  Turning on this option will allow you to run a paravirtualized clock
 	  when running over the KVM hypervisor. Instead of relying on a PIT
@@ -484,6 +487,7 @@ config KVM_CLOCK
 config KVM_GUEST
 	bool "KVM Guest support"
 	select PARAVIRT
+	depends on !PAX_KERNEXEC
 	---help---
 	  This option enables various optimizations for running under the KVM
 	  hypervisor.
@@ -492,6 +496,7 @@ source "arch/x86/lguest/Kconfig"
 
 config PARAVIRT
 	bool "Enable paravirtualization code"
+	depends on !PAX_KERNEXEC
 	---help---
 	  This changes the kernel so it can modify itself when it is run
 	  under a hypervisor, potentially improving performance significantly
@@ -1058,7 +1063,7 @@ config PAGE_OFFSET
 	hex
 	default 0xB0000000 if VMSPLIT_3G_OPT
 	default 0x80000000 if VMSPLIT_2G
-	default 0x78000000 if VMSPLIT_2G_OPT
+	default 0x70000000 if VMSPLIT_2G_OPT
 	default 0x40000000 if VMSPLIT_1G
 	default 0xC0000000
 	depends on X86_32
@@ -1376,7 +1381,7 @@ config X86_PAT
 
 config EFI
 	bool "EFI runtime service support"
-	depends on ACPI
+	depends on ACPI && !PAX_KERNEXEC
 	---help---
 	  This enables the kernel to use EFI runtime services that are
 	  available (such as the EFI variable services).
@@ -1466,9 +1471,7 @@ config KEXEC_JUMP
 
 config PHYSICAL_START
 	hex "Physical address where the kernel is loaded" if (EMBEDDED || CRASH_DUMP)
-	default "0x1000000" if X86_NUMAQ
-	default "0x200000" if X86_64
-	default "0x100000"
+	default "0x1000000"
 	---help---
 	  This gives the physical address where the kernel is loaded.
 
@@ -1527,8 +1530,7 @@ config RELOCATABLE
 config PHYSICAL_ALIGN
 	hex
 	prompt "Alignment value to which kernel should be aligned" if X86_32
-	default "0x100000" if X86_32
-	default "0x200000" if X86_64
+	default "0x200000"
 	range 0x2000 0x400000
 	---help---
 	  This value puts the alignment restrictions on physical address
@@ -1560,9 +1562,10 @@ config HOTPLUG_CPU
 	  Say N if you want to disable CPU hotplug.
 
 config COMPAT_VDSO
-	def_bool y
+	def_bool n
 	prompt "Compat VDSO support"
 	depends on X86_32 || IA32_EMULATION
+	depends on !PAX_NOEXEC && !PAX_MEMORY_UDEREF
 	---help---
 	  Map the 32-bit VDSO to the predictable old-style address too.
 	---help---

@@ -65,7 +65,7 @@ int __ieee80211_suspend(struct ieee80211_hw *hw)
 	flush_workqueue(local->hw.workqueue);
 
 	/* stop hardware */
-	if (local->open_count) {
+	if (atomic_read(&local->open_count)) {
 		ieee80211_led_radio(local, false);
 		local->ops->stop(hw);
 	}
@@ -82,7 +82,7 @@ int __ieee80211_resume(struct ieee80211_hw *hw)
 	int res;
 
 	/* restart hardware */
-	if (local->open_count) {
+	if (atomic_read(&local->open_count)) {
 		res = local->ops->start(hw);
 
 		ieee80211_led_radio(local, hw->conf.radio_enabled);
