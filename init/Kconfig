@@ -1014,7 +1014,7 @@ config STRIP_ASM_SYMS
 
 config COMPAT_BRK
 	bool "Disable heap randomization"
-	default y
+	default n
 	help
 	  Randomizing heap placement makes heap exploits harder, but it
 	  also breaks ancient binaries (including anything libc5 based).
@@ -1101,9 +1101,9 @@ config HAVE_GENERIC_DMA_COHERENT
 
 config SLABINFO
 	bool
-	depends on PROC_FS
+	depends on PROC_FS && !GRKERNSEC_PROC_ADD
 	depends on SLAB || SLUB_DEBUG
-	default y
+	default n
 
 config RT_MUTEXES
 	boolean

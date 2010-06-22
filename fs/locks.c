@@ -434,7 +434,7 @@ static int lease_mylease_callback(struct file_lock *fl, struct file_lock *try)
 	return fl->fl_file == try->fl_file;
 }
 
-static struct lock_manager_operations lease_manager_ops = {
+static const struct lock_manager_operations lease_manager_ops = {
 	.fl_break = lease_break_callback,
 	.fl_release_private = lease_release_private_callback,
 	.fl_mylease = lease_mylease_callback,
@@ -2007,16 +2007,16 @@ void locks_remove_flock(struct file *filp)
 		return;
 
 	if (filp->f_op && filp->f_op->flock) {
-		struct file_lock fl = {
+		struct file_lock flock = {
 			.fl_pid = current->tgid,
 			.fl_file = filp,
 			.fl_flags = FL_FLOCK,
 			.fl_type = F_UNLCK,
 			.fl_end = OFFSET_MAX,
 		};
-		filp->f_op->flock(filp, F_SETLKW, &fl);
-		if (fl.fl_ops && fl.fl_ops->fl_release_private)
-			fl.fl_ops->fl_release_private(&fl);
+		filp->f_op->flock(filp, F_SETLKW, &flock);
+		if (flock.fl_ops && flock.fl_ops->fl_release_private)
+			flock.fl_ops->fl_release_private(&flock);
 	}
 
 	lock_kernel();

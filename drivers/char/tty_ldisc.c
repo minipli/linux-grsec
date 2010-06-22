@@ -73,7 +73,7 @@ static void put_ldisc(struct tty_ldisc *ld)
 	if (atomic_dec_and_lock(&ld->users, &tty_ldisc_lock)) {
 		struct tty_ldisc_ops *ldo = ld->ops;
 
-		ldo->refcount--;
+		atomic_dec(&ldo->refcount);
 		module_put(ldo->owner);
 		spin_unlock_irqrestore(&tty_ldisc_lock, flags);
 
@@ -107,7 +107,7 @@ int tty_register_ldisc(int disc, struct tty_ldisc_ops *new_ldisc)
 	spin_lock_irqsave(&tty_ldisc_lock, flags);
 	tty_ldiscs[disc] = new_ldisc;
 	new_ldisc->num = disc;
-	new_ldisc->refcount = 0;
+	atomic_set(&new_ldisc->refcount, 0);
 	spin_unlock_irqrestore(&tty_ldisc_lock, flags);
 
 	return ret;
@@ -135,7 +135,7 @@ int tty_unregister_ldisc(int disc)
 		return -EINVAL;
 
 	spin_lock_irqsave(&tty_ldisc_lock, flags);
-	if (tty_ldiscs[disc]->refcount)
+	if (atomic_read(&tty_ldiscs[disc]->refcount))
 		ret = -EBUSY;
 	else
 		tty_ldiscs[disc] = NULL;
@@ -175,7 +175,7 @@ static struct tty_ldisc *tty_ldisc_try_get(int disc)
 			err = -EAGAIN;
 		else {
 			/* lock it */
-			ldops->refcount++;
+			atomic_inc(&ldops->refcount);
 			ld->ops = ldops;
 			atomic_set(&ld->users, 1);
 			err = 0;

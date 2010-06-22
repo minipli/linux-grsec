@@ -213,7 +213,7 @@ chk_conflict(struct memtype *new, struct memtype *entry, unsigned long *type)
 
  conflict:
 	printk(KERN_INFO "%s:%d conflicting memory types "
-	       "%Lx-%Lx %s<->%s\n", current->comm, current->pid, new->start,
+	       "%Lx-%Lx %s<->%s\n", current->comm, task_pid_nr(current), new->start,
 	       new->end, cattr_name(new->type), cattr_name(entry->type));
 	return -EBUSY;
 }
@@ -487,7 +487,7 @@ int free_memtype(u64 start, u64 end)
 
 	if (err) {
 		printk(KERN_INFO "%s:%d freeing invalid memtype %Lx-%Lx\n",
-			current->comm, current->pid, start, end);
+			current->comm, task_pid_nr(current), start, end);
 	}
 
 	dprintk("free_memtype request 0x%Lx-0x%Lx\n", start, end);
@@ -588,7 +588,7 @@ int kernel_map_sync_memtype(u64 base, unsigned long size, unsigned long flags)
 		printk(KERN_INFO
 			"%s:%d ioremap_change_attr failed %s "
 			"for %Lx-%Lx\n",
-			current->comm, current->pid,
+			current->comm, task_pid_nr(current),
 			cattr_name(flags),
 			base, (unsigned long long)(base + size));
 		return -EINVAL;
@@ -628,7 +628,7 @@ static int reserve_pfn_range(u64 paddr, unsigned long size, pgprot_t *vma_prot,
 			free_memtype(paddr, paddr + size);
 			printk(KERN_ERR "%s:%d map pfn expected mapping type %s"
 				" for %Lx-%Lx, got %s\n",
-				current->comm, current->pid,
+				current->comm, task_pid_nr(current),
 				cattr_name(want_flags),
 				(unsigned long long)paddr,
 				(unsigned long long)(paddr + size),
@@ -827,7 +827,7 @@ static int memtype_seq_show(struct seq_file *seq, void *v)
 	return 0;
 }
 
-static struct seq_operations memtype_seq_ops = {
+static const struct seq_operations memtype_seq_ops = {
 	.start = memtype_seq_start,
 	.next  = memtype_seq_next,
 	.stop  = memtype_seq_stop,

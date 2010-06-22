@@ -167,7 +167,7 @@ static struct dmi_system_id __initdata i8042_dmi_noloop_table[] = {
 			DMI_MATCH(DMI_PRODUCT_VERSION, "Rev 1"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 
 /*
@@ -390,7 +390,7 @@ static struct dmi_system_id __initdata i8042_dmi_nomux_table[] = {
 			DMI_MATCH(DMI_PRODUCT_VERSION, "0100"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 
 static struct dmi_system_id __initdata i8042_dmi_reset_table[] = {
@@ -436,7 +436,7 @@ static struct dmi_system_id __initdata i8042_dmi_reset_table[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "N10"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 
 #ifdef CONFIG_PNP
@@ -455,7 +455,7 @@ static struct dmi_system_id __initdata i8042_dmi_nopnp_table[] = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "MICRO-STAR INTERNATIONAL CO., LTD"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 #endif
 
@@ -522,7 +522,7 @@ static struct dmi_system_id __initdata i8042_dmi_dritek_table[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "TravelMate 4280"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 
 #endif /* CONFIG_X86 */

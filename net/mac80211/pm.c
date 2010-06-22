@@ -103,7 +103,7 @@ int __ieee80211_suspend(struct ieee80211_hw *hw)
 	}
 
 	/* stop hardware - this must stop RX */
-	if (local->open_count) {
+	if (atomic_read(&local->open_count)) {
 		ieee80211_led_radio(local, false);
 		drv_stop(local);
 	}

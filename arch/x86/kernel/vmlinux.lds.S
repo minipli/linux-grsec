@@ -26,6 +26,22 @@
 #include <asm/page_types.h>
 #include <asm/cache.h>
 #include <asm/boot.h>
+#include <asm/segment.h>
+
+#undef PMD_SIZE
+#undef PMD_SHIFT
+#if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
+#define PMD_SHIFT 21
+#else
+#define PMD_SHIFT 22
+#endif
+#define PMD_SIZE (1 << PMD_SHIFT)
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+#define __KERNEL_TEXT_OFFSET	(LOAD_OFFSET + ____LOAD_PHYSICAL_ADDR)
+#else
+#define __KERNEL_TEXT_OFFSET	0
+#endif
 
 #undef i386     /* in case the preprocessor is a 32bit one */
 
@@ -34,46 +50,53 @@ OUTPUT_FORMAT(CONFIG_OUTPUT_FORMAT, CONFIG_OUTPUT_FORMAT, CONFIG_OUTPUT_FORMAT)
 #ifdef CONFIG_X86_32
 OUTPUT_ARCH(i386)
 ENTRY(phys_startup_32)
-jiffies = jiffies_64;
 #else
 OUTPUT_ARCH(i386:x86-64)
 ENTRY(phys_startup_64)
-jiffies_64 = jiffies;
 #endif
+
+jiffies = jiffies_64;
 
 PHDRS {
 	text PT_LOAD FLAGS(5);          /* R_E */
-	data PT_LOAD FLAGS(7);          /* RWE */
+	rodata PT_LOAD FLAGS(4);        /* R__ */
+	module PT_LOAD FLAGS(5);        /* R_E */
+	data PT_LOAD FLAGS(6);          /* RW_ */
 #ifdef CONFIG_X86_64
-	user PT_LOAD FLAGS(7);          /* RWE */
+	user PT_LOAD FLAGS(5);          /* R_E */
+#endif
+	init.begin PT_LOAD FLAGS(6);    /* RW_ */
 #ifdef CONFIG_SMP
-	percpu PT_LOAD FLAGS(7);        /* RWE */
+	percpu PT_LOAD FLAGS(6);        /* RW_ */
 #endif
+	text.init PT_LOAD FLAGS(5);     /* R_E */
+	text.exit PT_LOAD FLAGS(5);     /* R_E */
 	init PT_LOAD FLAGS(7);          /* RWE */
-#endif
 	note PT_NOTE FLAGS(0);          /* ___ */
 }
 
 SECTIONS
 {
 #ifdef CONFIG_X86_32
-        . = LOAD_OFFSET + LOAD_PHYSICAL_ADDR;
-        phys_startup_32 = startup_32 - LOAD_OFFSET;
+	. = LOAD_OFFSET + ____LOAD_PHYSICAL_ADDR;
 #else
-        . = __START_KERNEL;
-        phys_startup_64 = startup_64 - LOAD_OFFSET;
+	. = __START_KERNEL;
 #endif
 
 	/* Text and read-only data */
 
-	/* bootstrapping code */
-	.text.head : AT(ADDR(.text.head) - LOAD_OFFSET) {
+	.text (. - __KERNEL_TEXT_OFFSET): AT(ADDR(.text) - LOAD_OFFSET + __KERNEL_TEXT_OFFSET) {
+		/* bootstrapping code */
+#ifdef CONFIG_X86_32
+		phys_startup_32 = startup_32 - LOAD_OFFSET + __KERNEL_TEXT_OFFSET;
+#else
+		phys_startup_64 = startup_64 - LOAD_OFFSET + __KERNEL_TEXT_OFFSET;
+#endif
+		__LOAD_PHYSICAL_ADDR = . - LOAD_OFFSET + __KERNEL_TEXT_OFFSET;
 		_text = .;
 		*(.text.head)
-	} :text = 0x9090
 
-	/* The rest of the text */
-	.text :  AT(ADDR(.text) - LOAD_OFFSET) {
+		/* The rest of the text */
 #ifdef CONFIG_X86_32
 		/* not really needed, already page aligned */
 		. = ALIGN(PAGE_SIZE);
@@ -88,11 +111,12 @@ SECTIONS
 		IRQENTRY_TEXT
 		*(.fixup)
 		*(.gnu.warning)
-		/* End of text section */
-		_etext = .;
 	} :text = 0x9090
 
-	NOTES :text :note
+	. += __KERNEL_TEXT_OFFSET;
+
+	. = ALIGN(PAGE_SIZE);
+	NOTES :rodata :note
 
 	/* Exception table */
 	. = ALIGN(16);
@@ -100,22 +124,57 @@ SECTIONS
 		__start___ex_table = .;
 		*(__ex_table)
 		__stop___ex_table = .;
-	} :text = 0x9090
+	} :rodata
 
 	RO_DATA(PAGE_SIZE)
 
+#ifdef CONFIG_X86_32
+	. = ALIGN(PAGE_SIZE);
+	.rodata.page_aligned : AT(ADDR(.rodata.page_aligned) - LOAD_OFFSET) {
+		*(.idt)
+		. = ALIGN(PAGE_SIZE);
+		*(.empty_zero_page)
+		*(.swapper_pg_pmd)
+		*(.swapper_pg_dir)
+	}
+#endif
+
+	. = ALIGN(PAGE_SIZE);
+	.vmi.rom : AT(ADDR(.vmi.rom) - LOAD_OFFSET) {
+		*(.vmi.rom)
+	} :module
+
+	. = ALIGN(PAGE_SIZE);
+	.module.text : AT(ADDR(.module.text) - LOAD_OFFSET) {
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC) && defined(CONFIG_MODULES)
+		MODULES_EXEC_VADDR = .;
+		BYTE(0)
+		. += (8 * 1024 * 1024);
+		. = ALIGN(PMD_SIZE);
+		MODULES_EXEC_END = . - 1;
+#endif
+
+		/* End of text section */
+		_etext = . - __KERNEL_TEXT_OFFSET;
+	} :module
+
 	/* Data */
 	.data : AT(ADDR(.data) - LOAD_OFFSET) {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	. = ALIGN(PMD_SIZE);
+#else
+	. = ALIGN(PAGE_SIZE);
+#endif
+
 		/* Start of data section */
 		_sdata = .;
 
 		/* init_task */
 		INIT_TASK_DATA(THREAD_SIZE)
 
-#ifdef CONFIG_X86_32
-		/* 32 bit has nosave before _edata */
 		NOSAVE_DATA
-#endif
 
 		PAGE_ALIGNED_DATA(PAGE_SIZE)
 		*(.data.idt)
@@ -182,12 +241,6 @@ SECTIONS
 	}
 	vgetcpu_mode = VVIRT(.vgetcpu_mode);
 
-	. = ALIGN(CONFIG_X86_L1_CACHE_BYTES);
-	.jiffies : AT(VLOAD(.jiffies)) {
-		*(.jiffies)
-	}
-	jiffies = VVIRT(.jiffies);
-
 	.vsyscall_3 ADDR(.vsyscall_0) + 3072: AT(VLOAD(.vsyscall_3)) {
 		*(.vsyscall_3)
 	}
@@ -205,12 +258,19 @@ SECTIONS
 #endif /* CONFIG_X86_64 */
 
 	/* Init code and data - will be freed after init */
-	. = ALIGN(PAGE_SIZE);
 	.init.begin : AT(ADDR(.init.begin) - LOAD_OFFSET) {
-		__init_begin = .; /* paired with __init_end */
-	}
+		BYTE(0)
 
-#if defined(CONFIG_X86_64) && defined(CONFIG_SMP)
+#ifdef CONFIG_PAX_KERNEXEC
+		. = ALIGN(PMD_SIZE);
+#else
+		. = ALIGN(PAGE_SIZE);
+#endif
+
+		__init_begin = .; /* paired with __init_end */
+	} :init.begin
+
+#ifdef CONFIG_SMP
 	/*
 	 * percpu offsets are zero-based on SMP.  PERCPU_VADDR() changes the
 	 * output PHDR, so the next output section - .init.text - should
@@ -219,18 +279,26 @@ SECTIONS
 	PERCPU_VADDR(0, :percpu)
 #endif
 
-	.init.text : AT(ADDR(.init.text) - LOAD_OFFSET) {
+	init_begin = .;
+	.init.text (. - __KERNEL_TEXT_OFFSET): AT(init_begin - LOAD_OFFSET) {
 		_sinittext = .;
 		INIT_TEXT
 		_einittext = .;
-	}
-#ifdef CONFIG_X86_64
-	:init
-#endif
+	} :text.init
+
+	/*
+	 * .exit.text is discard at runtime, not link time, to deal with
+	 *  references from .altinstructions and .eh_frame
+	 */
+	.exit.text : AT(ADDR(.exit.text) - LOAD_OFFSET) {
+		EXIT_TEXT
+		. = ALIGN(16);
+	} :text.exit
+	. = init_begin + SIZEOF(.init.text) + SIZEOF(.exit.text);
 
 	.init.data : AT(ADDR(.init.data) - LOAD_OFFSET) {
 		INIT_DATA
-	}
+	} :init
 
 	. = ALIGN(16);
 	.init.setup : AT(ADDR(.init.setup) - LOAD_OFFSET) {
@@ -276,14 +344,6 @@ SECTIONS
 		*(.altinstr_replacement)
 	}
 
-	/*
-	 * .exit.text is discard at runtime, not link time, to deal with
-	 *  references from .altinstructions and .eh_frame
-	 */
-	.exit.text : AT(ADDR(.exit.text) - LOAD_OFFSET) {
-		EXIT_TEXT
-	}
-
 	.exit.data : AT(ADDR(.exit.data) - LOAD_OFFSET) {
 		EXIT_DATA
 	}
@@ -297,7 +357,7 @@ SECTIONS
 	}
 #endif
 
-#if !defined(CONFIG_X86_64) || !defined(CONFIG_SMP)
+#ifndef CONFIG_SMP
 	PERCPU(PAGE_SIZE)
 #endif
 
@@ -320,12 +380,6 @@ SECTIONS
 		. = ALIGN(PAGE_SIZE);
 	}
 
-#ifdef CONFIG_X86_64
-	.data_nosave : AT(ADDR(.data_nosave) - LOAD_OFFSET) {
-		NOSAVE_DATA
-	}
-#endif
-
 	/* BSS */
 	. = ALIGN(PAGE_SIZE);
 	.bss : AT(ADDR(.bss) - LOAD_OFFSET) {
@@ -341,6 +395,7 @@ SECTIONS
 		__brk_base = .;
 		. += 64 * 1024;		/* 64k alignment slop space */
 		*(.brk_reservation)	/* areas brk users have reserved */
+		. = ALIGN(PMD_SIZE);
 		__brk_limit = .;
 	}
 
@@ -369,13 +424,12 @@ SECTIONS
  * for the boot processor.
  */
 #define INIT_PER_CPU(x) init_per_cpu__##x = per_cpu__##x + __per_cpu_load
-INIT_PER_CPU(gdt_page);
 INIT_PER_CPU(irq_stack_union);
 
 /*
  * Build-time check on the image size:
  */
-. = ASSERT((_end - _text <= KERNEL_IMAGE_SIZE),
+. = ASSERT((_end - _text - __KERNEL_TEXT_OFFSET <= KERNEL_IMAGE_SIZE),
 	   "kernel image bigger than KERNEL_IMAGE_SIZE");
 
 #ifdef CONFIG_SMP

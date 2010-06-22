@@ -430,7 +430,7 @@ static inline int __snd_bug_on(int cond)
  */
 #define snd_printdd(format, args...) snd_printk(format, ##args)
 #else
-#define snd_printdd(format, args...) /* nothing */
+#define snd_printdd(format, args...) do {} while (0)
 #endif
 
 

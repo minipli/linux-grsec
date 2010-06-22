@@ -433,13 +433,13 @@ bool radeon_get_atom_connector_info_from_object_table(struct drm_device *dev)
 	return true;
 }
 
-struct bios_connector {
+static struct bios_connector {
 	bool valid;
 	uint8_t line_mux;
 	uint16_t devices;
 	int connector_type;
 	struct radeon_i2c_bus_rec ddc_bus;
-};
+} bios_connectors[ATOM_MAX_SUPPORTED_DEVICE];;
 
 bool radeon_get_atom_connector_info_from_supported_devices_table(struct
 								 drm_device
@@ -455,7 +455,6 @@ bool radeon_get_atom_connector_info_from_supported_devices_table(struct
 	uint8_t dac;
 	union atom_supported_devices *supported_devices;
 	int i, j;
-	struct bios_connector bios_connectors[ATOM_MAX_SUPPORTED_DEVICE];
 
 	atom_parse_data_header(ctx, index, &size, &frev, &crev, &data_offset);
 

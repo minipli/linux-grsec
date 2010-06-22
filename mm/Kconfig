@@ -216,7 +216,7 @@ config MMU_NOTIFIER
 
 config DEFAULT_MMAP_MIN_ADDR
         int "Low address space to protect from user allocation"
-        default 4096
+        default 65536
         help
 	  This is the portion of low virtual memory which should be protected
 	  from userspace allocation.  Keeping a user from writing to low pages

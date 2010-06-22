@@ -74,7 +74,12 @@ struct mod_arch_specific {};
 # else
 #  define MODULE_STACKSIZE ""
 # endif
-# define MODULE_ARCH_VERMAGIC MODULE_PROC_FAMILY MODULE_STACKSIZE
+# ifdef CONFIG_GRKERNSEC
+#  define MODULE_GRSEC "GRSECURITY "
+# else
+#  define MODULE_GRSEC ""
+# endif
+# define MODULE_ARCH_VERMAGIC MODULE_PROC_FAMILY MODULE_STACKSIZE MODULE_GRSEC
 #endif
 
 #endif /* _ASM_X86_MODULE_H */
