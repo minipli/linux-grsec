@@ -86,6 +86,7 @@
 #include <linux/audit.h>
 #include <linux/wireless.h>
 #include <linux/nsproxy.h>
+#include <linux/in.h>
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
@@ -95,6 +96,21 @@
 
 #include <net/sock.h>
 #include <linux/netfilter.h>
+
+extern void gr_attach_curr_ip(const struct sock *sk);
+extern int gr_handle_sock_all(const int family, const int type,
+			      const int protocol);
+extern int gr_handle_sock_server(const struct sockaddr *sck);
+extern int gr_handle_sock_server_other(const struct socket *sck);
+extern int gr_handle_sock_client(const struct sockaddr *sck);
+extern int gr_search_connect(struct socket * sock,
+			     struct sockaddr_in * addr);
+extern int gr_search_bind(struct socket * sock,
+			  struct sockaddr_in * addr);
+extern int gr_search_listen(struct socket * sock);
+extern int gr_search_accept(struct socket * sock);
+extern int gr_search_socket(const int domain, const int type,
+			    const int protocol);
 
 static int sock_no_open(struct inode *irrelevant, struct file *dontcare);
 static ssize_t sock_aio_read(struct kiocb *iocb, const struct iovec *iov,
@@ -285,7 +301,7 @@ static int init_inodecache(void)
 	return 0;
 }
 
-static struct super_operations sockfs_ops = {
+static const struct super_operations sockfs_ops = {
 	.alloc_inode =	sock_alloc_inode,
 	.destroy_inode =sock_destroy_inode,
 	.statfs =	simple_statfs,
@@ -299,7 +315,7 @@ static int sockfs_get_sb(struct file_system_type *fs_type,
 			     mnt);
 }
 
-static struct vfsmount *sock_mnt __read_mostly;
+struct vfsmount *sock_mnt __read_mostly;
 
 static struct file_system_type sock_fs_type = {
 	.name =		"sockfs",
@@ -328,7 +344,7 @@ static char *sockfs_dname(struct dentry *dentry, char *buffer, int buflen)
 				dentry->d_inode->i_ino);
 }
 
-static struct dentry_operations sockfs_dentry_operations = {
+static const struct dentry_operations sockfs_dentry_operations = {
 	.d_delete = sockfs_delete_dentry,
 	.d_dname  = sockfs_dname,
 };
@@ -694,7 +710,7 @@ static ssize_t sock_sendpage(struct file *file, struct page *page,
 	if (more)
 		flags |= MSG_MORE;
 
-	return sock->ops->sendpage(sock, page, offset, size, flags);
+	return kernel_sendpage(sock, page, offset, size, flags);
 }
 
 static ssize_t sock_splice_read(struct file *file, loff_t *ppos,
@@ -1234,6 +1250,16 @@ SYSCALL_DEFINE3(socket, int, family, int, type, int, protocol)
 	if (SOCK_NONBLOCK != O_NONBLOCK && (flags & SOCK_NONBLOCK))
 		flags = (flags & ~SOCK_NONBLOCK) | O_NONBLOCK;
 
+	if(!gr_search_socket(family, type, protocol)) {
+		retval = -EACCES;
+		goto out;
+	}
+
+	if (gr_handle_sock_all(family, type, protocol)) {
+		retval = -EACCES;
+		goto out;
+	}
+
 	retval = sock_create(family, type, protocol, &sock);
 	if (retval < 0)
 		goto out;
@@ -1366,6 +1392,14 @@ SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 	if (sock) {
 		err = move_addr_to_kernel(umyaddr, addrlen, (struct sockaddr *)&address);
 		if (err >= 0) {
+			if (gr_handle_sock_server((struct sockaddr *)&address)) {
+				err = -EACCES;
+				goto error;
+			}
+			err = gr_search_bind(sock, (struct sockaddr_in *)&address);
+			if (err)
+				goto error;
+
 			err = security_socket_bind(sock,
 						   (struct sockaddr *)&address,
 						   addrlen);
@@ -1374,6 +1408,7 @@ SYSCALL_DEFINE3(bind, int, fd, struct sockaddr __user *, umyaddr, int, addrlen)
 						      (struct sockaddr *)
 						      &address, addrlen);
 		}
+error:
 		fput_light(sock->file, fput_needed);
 	}
 	return err;
@@ -1397,10 +1432,20 @@ SYSCALL_DEFINE2(listen, int, fd, int, backlog)
 		if ((unsigned)backlog > somaxconn)
 			backlog = somaxconn;
 
+		if (gr_handle_sock_server_other(sock)) {
+			err = -EPERM;
+			goto error;
+		}
+
+		err = gr_search_listen(sock);
+		if (err)
+			goto error;
+
 		err = security_socket_listen(sock, backlog);
 		if (!err)
 			err = sock->ops->listen(sock, backlog);
 
+error:
 		fput_light(sock->file, fput_needed);
 	}
 	return err;
@@ -1442,6 +1487,18 @@ SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr,
 
 	newsock->type = sock->type;
 	newsock->ops = sock->ops;
+
+	if (gr_handle_sock_server_other(sock)) {
+		err = -EPERM;
+		sock_release(newsock);
+		goto out_put;
+	}
+
+	err = gr_search_accept(sock);
+	if (err) {
+		sock_release(newsock);
+		goto out_put;
+	}
 
 	/*
 	 * We don't need try_module_get here, as the listening socket (sock)
@@ -1486,6 +1543,7 @@ SYSCALL_DEFINE4(accept4, int, fd, struct sockaddr __user *, upeer_sockaddr,
 	err = newfd;
 
 	security_socket_post_accept(sock, newsock);
+	gr_attach_curr_ip(newsock->sk);
 
 out_put:
 	fput_light(sock->file, fput_needed);
@@ -1524,6 +1582,7 @@ SYSCALL_DEFINE3(connect, int, fd, struct sockaddr __user *, uservaddr,
 		int, addrlen)
 {
 	struct socket *sock;
+	struct sockaddr *sck;
 	struct sockaddr_storage address;
 	int err, fput_needed;
 
@@ -1532,6 +1591,17 @@ SYSCALL_DEFINE3(connect, int, fd, struct sockaddr __user *, uservaddr,
 		goto out;
 	err = move_addr_to_kernel(uservaddr, addrlen, (struct sockaddr *)&address);
 	if (err < 0)
+		goto out_put;
+
+	sck = (struct sockaddr *)&address;
+
+	if (gr_handle_sock_client(sck)) {
+		err = -EACCES;
+		goto out_put;
+	}
+
+	err = gr_search_connect(sock, (struct sockaddr_in *)sck);
+	if (err)
 		goto out_put;
 
 	err =

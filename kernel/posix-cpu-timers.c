@@ -6,6 +6,7 @@
 #include <linux/posix-timers.h>
 #include <linux/errno.h>
 #include <linux/math64.h>
+#include <linux/security.h>
 #include <asm/uaccess.h>
 #include <linux/kernel_stat.h>
 
@@ -1040,6 +1041,7 @@ static void check_thread_timers(struct task_struct *tsk,
 			__group_send_sig_info(SIGKILL, SEND_SIG_PRIV, tsk);
 			return;
 		}
+		gr_learn_resource(tsk, RLIMIT_RTTIME, tsk->rt.timeout, 1);
 		if (tsk->rt.timeout > DIV_ROUND_UP(*soft, USEC_PER_SEC/HZ)) {
 			/*
 			 * At the soft limit, send a SIGXCPU every second.
@@ -1195,6 +1197,7 @@ static void check_process_timers(struct task_struct *tsk,
 			__group_send_sig_info(SIGKILL, SEND_SIG_PRIV, tsk);
 			return;
 		}
+		gr_learn_resource(tsk, RLIMIT_CPU, psecs, 0);
 		if (psecs >= sig->rlim[RLIMIT_CPU].rlim_cur) {
 			/*
 			 * At the soft limit, send a SIGXCPU every second.
@@ -1419,17 +1422,17 @@ void run_posix_cpu_timers(struct task_struct *tsk)
 	 * timer call will interfere.
 	 */
 	list_for_each_entry_safe(timer, next, &firing, it.cpu.entry) {
-		int firing;
+		int __firing;
 		spin_lock(&timer->it_lock);
 		list_del_init(&timer->it.cpu.entry);
-		firing = timer->it.cpu.firing;
+		__firing = timer->it.cpu.firing;
 		timer->it.cpu.firing = 0;
 		/*
 		 * The firing flag is -1 if we collided with a reset
 		 * of the timer, which already reported this
 		 * almost-firing as an overrun.  So don't generate an event.
 		 */
-		if (likely(firing >= 0)) {
+		if (likely(__firing >= 0)) {
 			cpu_timer_fire(timer);
 		}
 		spin_unlock(&timer->it_lock);

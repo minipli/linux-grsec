@@ -848,7 +848,7 @@ void free_pipe_info(struct inode *inode)
 	inode->i_pipe = NULL;
 }
 
-static struct vfsmount *pipe_mnt __read_mostly;
+struct vfsmount *pipe_mnt __read_mostly;
 static int pipefs_delete_dentry(struct dentry *dentry)
 {
 	/*
@@ -870,7 +870,7 @@ static char *pipefs_dname(struct dentry *dentry, char *buffer, int buflen)
 				dentry->d_inode->i_ino);
 }
 
-static struct dentry_operations pipefs_dentry_operations = {
+static const struct dentry_operations pipefs_dentry_operations = {
 	.d_delete	= pipefs_delete_dentry,
 	.d_dname	= pipefs_dname,
 };

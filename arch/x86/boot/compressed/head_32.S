@@ -70,7 +70,7 @@ startup_32:
 	addl    $(CONFIG_PHYSICAL_ALIGN - 1), %ebx
 	andl    $(~(CONFIG_PHYSICAL_ALIGN - 1)), %ebx
 #else
-	movl $LOAD_PHYSICAL_ADDR, %ebx
+	movl $____LOAD_PHYSICAL_ADDR, %ebx
 #endif
 
 	/* Replace the compressed data size with the uncompressed size */
@@ -80,8 +80,8 @@ startup_32:
 	/* Add 8 bytes for every 32K input block */
 	shrl $12, %eax
 	addl %eax, %ebx
-	/* Add 32K + 18 bytes of extra slack */
-	addl $(32768 + 18), %ebx
+	/* Add 64K of extra slack */
+	addl $65536, %ebx
 	/* Align on a 4K boundary */
 	addl $4095, %ebx
 	andl $~4095, %ebx
@@ -105,7 +105,7 @@ startup_32:
 	addl    $(CONFIG_PHYSICAL_ALIGN - 1), %ebp
 	andl    $(~(CONFIG_PHYSICAL_ALIGN - 1)), %ebp
 #else
-	movl	$LOAD_PHYSICAL_ADDR, %ebp
+	movl	$____LOAD_PHYSICAL_ADDR, %ebp
 #endif
 
 /*
@@ -160,16 +160,15 @@ relocated:
  * and where it was actually loaded.
  */
 	movl %ebp, %ebx
-	subl $LOAD_PHYSICAL_ADDR, %ebx
+	subl $____LOAD_PHYSICAL_ADDR, %ebx
 	jz   2f		/* Nothing to be done if loaded at compiled addr. */
 /*
  * Process relocations.
  */
 
 1:	subl $4, %edi
-	movl 0(%edi), %ecx
-	testl %ecx, %ecx
-	jz 2f
+	movl (%edi), %ecx
+	jecxz 2f
 	addl %ebx, -__PAGE_OFFSET(%ebx, %ecx)
 	jmp 1b
 2:

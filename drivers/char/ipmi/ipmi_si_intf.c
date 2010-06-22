@@ -280,7 +280,7 @@ struct smi_info {
 	unsigned char slave_addr;
 
 	/* Counters and things for the proc filesystem. */
-	atomic_t stats[SI_NUM_STATS];
+	atomic_unchecked_t stats[SI_NUM_STATS];
 
 	struct task_struct *thread;
 
@@ -288,7 +288,7 @@ struct smi_info {
 };
 
 #define smi_inc_stat(smi, stat) \
-	atomic_inc(&(smi)->stats[SI_STAT_ ## stat])
+	atomic_inc_unchecked(&(smi)->stats[SI_STAT_ ## stat])
 #define smi_get_stat(smi, stat) \
 	((unsigned int) atomic_read(&(smi)->stats[SI_STAT_ ## stat]))
 

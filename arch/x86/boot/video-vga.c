@@ -225,7 +225,7 @@ static int vga_probe(void)
 	};
 	u8 vga_flag;
 
-	asm(INT10
+	asm volatile(INT10
 	    : "=b" (ega_bx)
 	    : "a" (0x1200), "b" (0x10) /* Check EGA/VGA */
 	    : "ecx", "edx", "esi", "edi");
@@ -237,7 +237,7 @@ static int vga_probe(void)
 	/* If we have MDA/CGA/HGC then BL will be unchanged at 0x10 */
 	if ((u8)ega_bx != 0x10) {
 		/* EGA/VGA */
-		asm(INT10
+		asm volatile(INT10
 		    : "=a" (vga_flag)
 		    : "a" (0x1a00)
 		    : "ebx", "ecx", "edx", "esi", "edi");

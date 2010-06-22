@@ -25,8 +25,6 @@
 #include <asm/time.h>
 #include <asm/timer.h>
 
-volatile unsigned long __jiffies __section_jiffies = INITIAL_JIFFIES;
-
 unsigned long profile_pc(struct pt_regs *regs)
 {
 	unsigned long pc = instruction_pointer(regs);
@@ -34,7 +32,7 @@ unsigned long profile_pc(struct pt_regs *regs)
 	/* Assume the lock function has either no stack frame or a copy
 	   of flags from PUSHF
 	   Eflags always has bits 22 and up cleared unlike kernel addresses. */
-	if (!user_mode_vm(regs) && in_lock_functions(pc)) {
+	if (!user_mode(regs) && in_lock_functions(pc)) {
 #ifdef CONFIG_FRAME_POINTER
 		return *(unsigned long *)(regs->bp + sizeof(long));
 #else

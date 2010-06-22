@@ -23,7 +23,7 @@ int query_voyager(void)
 
 	data_ptr[0] = 0xff;	/* Flag on config not found(?) */
 
-	asm("pushw %%es ; "
+	asm volatile("pushw %%es ; "
 	    "int $0x15 ; "
 	    "setc %0 ; "
 	    "movw %%es, %1 ; "

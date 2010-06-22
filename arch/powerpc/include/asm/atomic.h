@@ -244,6 +244,10 @@ static __inline__ int atomic_dec_if_positive(atomic_t *v)
 	return t;
 }
 
+#define atomic_inc_unchecked(v) atomic_inc((v))
+#define atomic_add_unchecked(i,v) atomic_add((i),(v))
+#define atomic_sub_unchecked(i,v) atomic_sub((i),(v))
+
 #define smp_mb__before_atomic_dec()     smp_mb()
 #define smp_mb__after_atomic_dec()      smp_mb()
 #define smp_mb__before_atomic_inc()     smp_mb()

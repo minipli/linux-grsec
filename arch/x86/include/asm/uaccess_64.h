@@ -10,6 +10,8 @@
 #include <linux/lockdep.h>
 #include <asm/page.h>
 
+#define set_fs(x)	(current_thread_info()->addr_limit = (x))
+
 /*
  * Copy To/From Userspace
  */
@@ -19,20 +21,18 @@ __must_check unsigned long
 copy_user_generic(void *to, const void *from, unsigned len);
 
 __must_check unsigned long
-copy_to_user(void __user *to, const void *from, unsigned len);
-__must_check unsigned long
-copy_from_user(void *to, const void __user *from, unsigned len);
-__must_check unsigned long
 copy_in_user(void __user *to, const void __user *from, unsigned len);
 
 static __always_inline __must_check
-int __copy_from_user(void *dst, const void __user *src, unsigned size)
+unsigned long __copy_from_user(void *dst, const void __user *src, unsigned size)
 {
-	int ret = 0;
+	unsigned ret = 0;
 
 	might_fault();
-	if (!__builtin_constant_p(size))
+	if (!__builtin_constant_p(size)) {
+		check_object_size(dst, size, false);
 		return copy_user_generic(dst, (__force void *)src, size);
+	}
 	switch (size) {
 	case 1:__get_user_asm(*(u8 *)dst, (u8 __user *)src,
 			      ret, "b", "b", "=q", 1);
@@ -70,13 +70,15 @@ int __copy_from_user(void *dst, const void __user *src, unsigned size)
 }
 
 static __always_inline __must_check
-int __copy_to_user(void __user *dst, const void *src, unsigned size)
+unsigned long __copy_to_user(void __user *dst, const void *src, unsigned size)
 {
-	int ret = 0;
+	unsigned ret = 0;
 
 	might_fault();
-	if (!__builtin_constant_p(size))
+	if (!__builtin_constant_p(size)) {
+		check_object_size(src, size, true);
 		return copy_user_generic((__force void *)dst, src, size);
+	}
 	switch (size) {
 	case 1:__put_user_asm(*(u8 *)src, (u8 __user *)dst,
 			      ret, "b", "b", "iq", 1);
@@ -114,11 +116,36 @@ int __copy_to_user(void __user *dst, const void *src, unsigned size)
 }
 
 static __always_inline __must_check
-int __copy_in_user(void __user *dst, const void __user *src, unsigned size)
+unsigned long copy_to_user(void __user *to, const void *from, unsigned len)
 {
-	int ret = 0;
+	if (access_ok(VERIFY_WRITE, to, len))
+		len = __copy_to_user(to, from, len);
+	return len;
+}
+
+static __always_inline __must_check
+unsigned long copy_from_user(void *to, const void __user *from, unsigned len)
+{
+	if (access_ok(VERIFY_READ, from, len))
+		len = __copy_from_user(to, from, len);
+	else if ((int)len > 0) {
+		if (!__builtin_constant_p(len))
+			check_object_size(to, len, false);
+		memset(to, 0, len);
+	}
+	return len;
+}
+
+static __always_inline __must_check
+unsigned long __copy_in_user(void __user *dst, const void __user *src, unsigned size)
+{
+	unsigned ret = 0;
 
 	might_fault();
+
+	if ((int)size < 0)
+		return size;
+
 	if (!__builtin_constant_p(size))
 		return copy_user_generic((__force void *)dst,
 					 (__force void *)src, size);
@@ -179,30 +206,40 @@ __must_check unsigned long __clear_user(void __user *mem, unsigned long len);
 __must_check long __copy_from_user_inatomic(void *dst, const void __user *src,
 					    unsigned size);
 
-static __must_check __always_inline int
+static __must_check __always_inline unsigned long
 __copy_to_user_inatomic(void __user *dst, const void *src, unsigned size)
 {
+	if ((int)size < 0)
+		return size;
+
 	return copy_user_generic((__force void *)dst, src, size);
 }
 
-extern long __copy_user_nocache(void *dst, const void __user *src,
+extern unsigned long __copy_user_nocache(void *dst, const void __user *src,
 				unsigned size, int zerorest);
 
-static inline int __copy_from_user_nocache(void *dst, const void __user *src,
+static inline unsigned long __copy_from_user_nocache(void *dst, const void __user *src,
 					   unsigned size)
 {
 	might_sleep();
+
+	if ((int)size < 0)
+		return size;
+
 	return __copy_user_nocache(dst, src, size, 1);
 }
 
-static inline int __copy_from_user_inatomic_nocache(void *dst,
+static inline unsigned long __copy_from_user_inatomic_nocache(void *dst,
 						    const void __user *src,
 						    unsigned size)
 {
+	if ((int)size < 0)
+		return size;
+
 	return __copy_user_nocache(dst, src, size, 0);
 }
 
-unsigned long
+extern unsigned long
 copy_user_handle_tail(char *to, char *from, unsigned len, unsigned zerorest);
 
 #endif /* _ASM_X86_UACCESS_64_H */

@@ -149,7 +149,7 @@ int __ptrace_may_access(struct task_struct *task, unsigned int mode)
 	     cred->gid != tcred->egid ||
 	     cred->gid != tcred->sgid ||
 	     cred->gid != tcred->gid) &&
-	    !capable(CAP_SYS_PTRACE)) {
+	    !capable_nolog(CAP_SYS_PTRACE)) {
 		rcu_read_unlock();
 		return -EPERM;
 	}
@@ -157,7 +157,7 @@ int __ptrace_may_access(struct task_struct *task, unsigned int mode)
 	smp_rmb();
 	if (task->mm)
 		dumpable = get_dumpable(task->mm);
-	if (!dumpable && !capable(CAP_SYS_PTRACE))
+	if (!dumpable && !capable_nolog(CAP_SYS_PTRACE))
 		return -EPERM;
 
 	return security_ptrace_may_access(task, mode);
@@ -221,7 +221,7 @@ repeat:
 
 	/* Go */
 	task->ptrace |= PT_PTRACED;
-	if (capable(CAP_SYS_PTRACE))
+	if (capable_nolog(CAP_SYS_PTRACE))
 		task->ptrace |= PT_PTRACE_CAP;
 
 	__ptrace_link(task, current);
@@ -611,6 +611,11 @@ SYSCALL_DEFINE4(ptrace, long, request, long, pid, long, addr, long, data)
 	ret = ptrace_check_attach(child, request == PTRACE_KILL);
 	if (ret < 0)
 		goto out_put_task_struct;
+
+	if (gr_handle_ptrace(child, request)) {
+		ret = -EPERM;
+		goto out_put_task_struct;
+	}
 
 	ret = arch_ptrace(child, request, addr, data);
 	if (ret < 0)

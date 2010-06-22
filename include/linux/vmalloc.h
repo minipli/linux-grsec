@@ -13,6 +13,11 @@ struct vm_area_struct;		/* vma defining user mapping in mm_types.h */
 #define VM_MAP		0x00000004	/* vmap()ed pages */
 #define VM_USERMAP	0x00000008	/* suitable for remap_vmalloc_range */
 #define VM_VPAGES	0x00000010	/* buffer for pages was vmalloc'ed */
+
+#if defined(CONFIG_MODULES) && defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+#define VM_KERNEXEC	0x00000020	/* allocate from executable kernel memory range */
+#endif
+
 /* bits [20..32] reserved for arch specific ioremap internals */
 
 /*
@@ -110,5 +115,76 @@ extern long vwrite(char *buf, char *addr, unsigned long count);
  */
 extern rwlock_t vmlist_lock;
 extern struct vm_struct *vmlist;
+
+#define vmalloc(x) \
+        ({ \
+                void *___retval; \
+                intoverflow_t ___x = (intoverflow_t)x; \
+                if (likely(___x <= ULONG_MAX)) \
+                        ___retval = vmalloc((unsigned long)___x); \
+                else \
+                        ___retval = NULL; \
+                ___retval; \
+        })
+#define __vmalloc(x,y,z) \
+        ({ \
+                void *___retval; \
+                intoverflow_t ___x = (intoverflow_t)x; \
+                if (likely(___x <= ULONG_MAX)) \
+                        ___retval = __vmalloc((unsigned long)___x, y, z); \
+                else \
+                        ___retval = NULL; \
+                ___retval; \
+        })
+#define vmalloc_user(x) \
+        ({ \
+                void *___retval; \
+                intoverflow_t ___x = (intoverflow_t)x; \
+                if (likely(___x <= ULONG_MAX)) \
+                        ___retval = vmalloc_user((unsigned long)___x); \
+                else \
+                        ___retval = NULL; \
+                ___retval; \
+        })
+#define vmalloc_exec(x) \
+        ({ \
+                void *___retval; \
+                intoverflow_t ___x = (intoverflow_t)x; \
+                if (likely(___x <= ULONG_MAX)) \
+                        ___retval = vmalloc_exec((unsigned long)___x); \
+                else \
+                        ___retval = NULL; \
+                ___retval; \
+        })
+#define vmalloc_node(x,y) \
+        ({ \
+                void *___retval; \
+                intoverflow_t ___x = (intoverflow_t)x; \
+                if (likely(___x <= ULONG_MAX)) \
+                        ___retval = vmalloc_node((unsigned long)___x,y); \
+                else \
+                        ___retval = NULL; \
+                ___retval; \
+        })
+#define vmalloc_32(x) \
+        ({ \
+                void *___retval; \
+                intoverflow_t ___x = (intoverflow_t)x; \
+                if (likely(___x <= ULONG_MAX)) \
+                        ___retval = vmalloc_32((unsigned long)___x); \
+                else \
+                        ___retval = NULL; \
+                ___retval; \
+        })
+#define vmalloc_32_user(x) \
+        ({ \
+                void *___retval; \
+                intoverflow_t ___x = (intoverflow_t)x; \
+                if (likely(___x <= ULONG_MAX)) \
+                        ___retval = vmalloc_32_user((unsigned long)___x); \
+                else \
+                        ___retval = NULL; \
+                ___retval; \
+        })
 
 #endif /* _LINUX_VMALLOC_H */

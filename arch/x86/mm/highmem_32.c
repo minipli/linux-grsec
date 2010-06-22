@@ -74,6 +74,10 @@ void *kmap_atomic_prot(struct page *page, enum km_type type, pgprot_t prot)
 	enum fixed_addresses idx;
 	unsigned long vaddr;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	/* even !CONFIG_PREEMPT needs this, for in_atomic in do_page_fault */
 	pagefault_disable();
 
@@ -85,7 +89,17 @@ void *kmap_atomic_prot(struct page *page, enum km_type type, pgprot_t prot)
 	idx = type + KM_TYPE_NR*smp_processor_id();
 	vaddr = __fix_to_virt(FIX_KMAP_BEGIN + idx);
 	BUG_ON(!pte_none(*(kmap_pte-idx)));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	set_pte(kmap_pte-idx, mk_pte(page, prot));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	arch_flush_lazy_mmu_mode();
 
 	return (void *)vaddr;
@@ -101,15 +115,29 @@ void kunmap_atomic(void *kvaddr, enum km_type type)
 	unsigned long vaddr = (unsigned long) kvaddr & PAGE_MASK;
 	enum fixed_addresses idx = type + KM_TYPE_NR*smp_processor_id();
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	/*
 	 * Force other mappings to Oops if they'll try to access this pte
 	 * without first remap it.  Keeping stale mappings around is a bad idea
 	 * also, in case the page changes cacheability attributes or becomes
 	 * a protected page in a hypervisor.
 	 */
-	if (vaddr == __fix_to_virt(FIX_KMAP_BEGIN+idx))
+	if (vaddr == __fix_to_virt(FIX_KMAP_BEGIN+idx)) {
+
+#ifdef CONFIG_PAX_KERNEXEC
+		pax_open_kernel(cr0);
+#endif
+
 		kpte_clear_flush(kmap_pte-idx, vaddr);
-	else {
+
+#ifdef CONFIG_PAX_KERNEXEC
+		pax_close_kernel(cr0);
+#endif
+
+	} else {
 #ifdef CONFIG_DEBUG_HIGHMEM
 		BUG_ON(vaddr < PAGE_OFFSET);
 		BUG_ON(vaddr >= (unsigned long)high_memory);
@@ -128,11 +156,25 @@ void *kmap_atomic_pfn(unsigned long pfn, enum km_type type)
 	enum fixed_addresses idx;
 	unsigned long vaddr;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	pagefault_disable();
 
 	idx = type + KM_TYPE_NR*smp_processor_id();
 	vaddr = __fix_to_virt(FIX_KMAP_BEGIN + idx);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	set_pte(kmap_pte-idx, pfn_pte(pfn, kmap_prot));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	arch_flush_lazy_mmu_mode();
 
 	return (void*) vaddr;

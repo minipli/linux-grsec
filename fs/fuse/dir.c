@@ -224,7 +224,7 @@ static int invalid_nodeid(u64 nodeid)
 	return !nodeid || nodeid == FUSE_ROOT_ID;
 }
 
-struct dentry_operations fuse_dentry_operations = {
+const struct dentry_operations fuse_dentry_operations = {
 	.d_revalidate	= fuse_dentry_revalidate,
 };
 
@@ -1081,7 +1081,7 @@ static char *read_link(struct dentry *dentry)
 	return link;
 }
 
-static void free_link(char *link)
+static void free_link(const char *link)
 {
 	if (!IS_ERR(link))
 		free_page((unsigned long) link);

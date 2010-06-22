@@ -1377,7 +1377,7 @@ void send_sigtrap(struct task_struct *tsk, struct pt_regs *regs,
 	info.si_code = si_code;
 
 	/* User-mode ip? */
-	info.si_addr = user_mode_vm(regs) ? (void __user *) regs->ip : NULL;
+	info.si_addr = user_mode(regs) ? (void __user *) regs->ip : NULL;
 
 	/* Send us the fake SIGTRAP */
 	force_sig_info(SIGTRAP, &info, tsk);

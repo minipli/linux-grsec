@@ -13,6 +13,23 @@
  */
 #define __PAGE_OFFSET		_AC(CONFIG_PAGE_OFFSET, UL)
 
+#ifdef CONFIG_PAX_KERNEXEC
+#ifndef __ASSEMBLY__
+extern unsigned char MODULES_VADDR[];
+extern unsigned char MODULES_END[];
+extern unsigned char KERNEL_TEXT_OFFSET[];
+#define ktla_ktva(addr)		(addr + (unsigned long)KERNEL_TEXT_OFFSET)
+#define ktva_ktla(addr)		(addr - (unsigned long)KERNEL_TEXT_OFFSET)
+#endif
+#else
+#define ktla_ktva(addr)		(addr)
+#define ktva_ktla(addr)		(addr)
+#endif
+
+#ifdef CONFIG_PAX_PAGEEXEC
+#define CONFIG_ARCH_TRACK_EXEC_LIMIT 1
+#endif
+
 #ifdef CONFIG_4KSTACKS
 #define THREAD_ORDER	0
 #else

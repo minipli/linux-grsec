@@ -114,8 +114,8 @@ int page_is_ram(unsigned long pagenr)
 	 * Second special case: Some BIOSen report the PC BIOS
 	 * area (640->1Mb) as ram even though it is not.
 	 */
-	if (pagenr >= (BIOS_BEGIN >> PAGE_SHIFT) &&
-		    pagenr < (BIOS_END >> PAGE_SHIFT))
+	if (pagenr >= (ISA_START_ADDRESS >> PAGE_SHIFT) &&
+		    pagenr < (ISA_END_ADDRESS >> PAGE_SHIFT))
 		return 0;
 
 	for (i = 0; i < e820.nr_map; i++) {
@@ -210,10 +210,7 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 	/*
 	 * Don't allow anybody to remap normal RAM that we're using..
 	 */
-	for (pfn = phys_addr >> PAGE_SHIFT;
-				(pfn << PAGE_SHIFT) < (last_addr & PAGE_MASK);
-				pfn++) {
-
+	for (pfn = phys_addr >> PAGE_SHIFT; ((resource_size_t)pfn << PAGE_SHIFT) < (last_addr & PAGE_MASK); pfn++) {
 		int is_ram = page_is_ram(pfn);
 
 		if (is_ram && pfn_valid(pfn) && !PageReserved(pfn_to_page(pfn)))
@@ -274,6 +271,8 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 		prot = PAGE_KERNEL_IO;
 		break;
 	}
+
+	prot = canon_pgprot(prot);
 
 	/*
 	 * Ok, go for it..
@@ -490,7 +489,6 @@ static int __init early_ioremap_debug_setup(char *str)
 early_param("early_ioremap_debug", early_ioremap_debug_setup);
 
 static __initdata int after_paging_init;
-static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __page_aligned_bss;
 
 static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 {
@@ -503,11 +501,6 @@ static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 	return pmd;
 }
 
-static inline pte_t * __init early_ioremap_pte(unsigned long addr)
-{
-	return &bm_pte[pte_index(addr)];
-}
-
 void __init early_ioremap_init(void)
 {
 	pmd_t *pmd;
@@ -516,8 +509,6 @@ void __init early_ioremap_init(void)
 		printk(KERN_INFO "early_ioremap_init()\n");
 
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
-	memset(bm_pte, 0, sizeof(bm_pte));
-	pmd_populate_kernel(&init_mm, pmd, bm_pte);
 
 	/*
 	 * The boot-ioremap range spans multiple pmds, for which
@@ -547,13 +538,15 @@ static void __init __early_set_fixmap(enum fixed_addresses idx,
 				   unsigned long phys, pgprot_t flags)
 {
 	unsigned long addr = __fix_to_virt(idx);
+	unsigned int level;
 	pte_t *pte;
 
 	if (idx >= __end_of_fixed_addresses) {
 		BUG();
 		return;
 	}
-	pte = early_ioremap_pte(addr);
+	pte = lookup_address(addr, &level);
+	BUG_ON(!pte || level != PG_LEVEL_4K);
 
 	if (pgprot_val(flags))
 		set_pte(pte, pfn_pte(phys >> PAGE_SHIFT, flags));

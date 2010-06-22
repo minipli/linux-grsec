@@ -108,7 +108,7 @@ int request_module(const char *fmt, ...)
 		return -ENOMEM;
 	}
 
-	ret = call_usermodehelper(modprobe_path, argv, envp, 1);
+	ret = call_usermodehelper(modprobe_path, argv, envp, UMH_WAIT_PROC);
 	atomic_dec(&kmod_concurrent);
 	return ret;
 }

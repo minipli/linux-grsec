@@ -74,7 +74,7 @@ int tty_register_ldisc(int disc, struct tty_ldisc_ops *new_ldisc)
 	spin_lock_irqsave(&tty_ldisc_lock, flags);
 	tty_ldiscs[disc] = new_ldisc;
 	new_ldisc->num = disc;
-	new_ldisc->refcount = 0;
+	atomic_set(&new_ldisc->refcount, 0);
 	spin_unlock_irqrestore(&tty_ldisc_lock, flags);
 
 	return ret;
@@ -102,7 +102,7 @@ int tty_unregister_ldisc(int disc)
 		return -EINVAL;
 
 	spin_lock_irqsave(&tty_ldisc_lock, flags);
-	if (tty_ldiscs[disc]->refcount)
+	if (atomic_read(&tty_ldiscs[disc]->refcount))
 		ret = -EBUSY;
 	else
 		tty_ldiscs[disc] = NULL;
@@ -139,7 +139,7 @@ static int tty_ldisc_try_get(int disc, struct tty_ldisc *ld)
 			err = -EAGAIN;
 		else {
 			/* lock it */
-			ldops->refcount++;
+			atomic_inc(&ldops->refcount);
 			ld->ops = ldops;
 			err = 0;
 		}
@@ -196,8 +196,8 @@ static void tty_ldisc_put(struct tty_ldisc_ops *ld)
 
 	spin_lock_irqsave(&tty_ldisc_lock, flags);
 	ld = tty_ldiscs[disc];
-	BUG_ON(ld->refcount == 0);
-	ld->refcount--;
+	BUG_ON(atomic_read(&ld->refcount) == 0);
+	atomic_dec(&ld->refcount);
 	module_put(ld->owner);
 	spin_unlock_irqrestore(&tty_ldisc_lock, flags);
 }
@@ -264,7 +264,7 @@ const struct file_operations tty_ldiscs_proc_fops = {
 
 static void tty_ldisc_assign(struct tty_struct *tty, struct tty_ldisc *ld)
 {
-	ld->refcount = 0;
+	atomic_set(&ld->refcount, 0);
 	tty->ldisc = *ld;
 }
 
@@ -289,7 +289,7 @@ static int tty_ldisc_try(struct tty_struct *tty)
 	spin_lock_irqsave(&tty_ldisc_lock, flags);
 	ld = &tty->ldisc;
 	if (test_bit(TTY_LDISC, &tty->flags)) {
-		ld->refcount++;
+		atomic_inc(&ld->refcount);
 		ret = 1;
 	}
 	spin_unlock_irqrestore(&tty_ldisc_lock, flags);
@@ -316,7 +316,7 @@ struct tty_ldisc *tty_ldisc_ref_wait(struct tty_struct *tty)
 {
 	/* wait_event is a macro */
 	wait_event(tty_ldisc_wait, tty_ldisc_try(tty));
-	WARN_ON(tty->ldisc.refcount == 0);
+	WARN_ON(atomic_read(&tty->ldisc.refcount) == 0);
 	return &tty->ldisc;
 }
 
@@ -359,11 +359,9 @@ void tty_ldisc_deref(struct tty_ldisc *ld)
 	BUG_ON(ld == NULL);
 
 	spin_lock_irqsave(&tty_ldisc_lock, flags);
-	if (ld->refcount == 0)
+	if (!atomic_add_unless(&ld->refcount, -1, 0))
 		printk(KERN_ERR "tty_ldisc_deref: no references.\n");
-	else
-		ld->refcount--;
-	if (ld->refcount == 0)
+	if (atomic_read(&ld->refcount) == 0)
 		wake_up(&tty_ldisc_wait);
 	spin_unlock_irqrestore(&tty_ldisc_lock, flags);
 }
@@ -507,8 +505,8 @@ restart:
 		clear_bit(TTY_LDISC, &o_tty->flags);
 
 	spin_lock_irqsave(&tty_ldisc_lock, flags);
-	if (tty->ldisc.refcount || (o_tty && o_tty->ldisc.refcount)) {
-		if (tty->ldisc.refcount) {
+	if (atomic_read(&tty->ldisc.refcount) || (o_tty && atomic_read(&o_tty->ldisc.refcount))) {
+		if (atomic_read(&tty->ldisc.refcount)) {
 			/* Free the new ldisc we grabbed. Must drop the lock
 			   first. */
 			spin_unlock_irqrestore(&tty_ldisc_lock, flags);
@@ -520,14 +518,14 @@ restart:
 			 * and retries if we made tty_ldisc_wait() smarter.
 			 * That is up for discussion.
 			 */
-			if (wait_event_interruptible(tty_ldisc_wait, tty->ldisc.refcount == 0) < 0)
+			if (wait_event_interruptible(tty_ldisc_wait, atomic_read(&tty->ldisc.refcount) == 0) < 0)
 				return -ERESTARTSYS;
 			goto restart;
 		}
-		if (o_tty && o_tty->ldisc.refcount) {
+		if (o_tty && atomic_read(&o_tty->ldisc.refcount)) {
 			spin_unlock_irqrestore(&tty_ldisc_lock, flags);
 			tty_ldisc_put(o_tty->ldisc.ops);
-			if (wait_event_interruptible(tty_ldisc_wait, o_tty->ldisc.refcount == 0) < 0)
+			if (wait_event_interruptible(tty_ldisc_wait, atomic_read(&o_tty->ldisc.refcount) == 0) < 0)
 				return -ERESTARTSYS;
 			goto restart;
 		}
@@ -670,9 +668,9 @@ void tty_ldisc_release(struct tty_struct *tty, struct tty_struct *o_tty)
 	 * side is zero.
 	 */
 	spin_lock_irqsave(&tty_ldisc_lock, flags);
-	while (tty->ldisc.refcount) {
+	while (atomic_read(&tty->ldisc.refcount)) {
 		spin_unlock_irqrestore(&tty_ldisc_lock, flags);
-		wait_event(tty_ldisc_wait, tty->ldisc.refcount == 0);
+		wait_event(tty_ldisc_wait, atomic_read(&tty->ldisc.refcount) == 0);
 		spin_lock_irqsave(&tty_ldisc_lock, flags);
 	}
 	spin_unlock_irqrestore(&tty_ldisc_lock, flags);

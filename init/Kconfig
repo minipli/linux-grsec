@@ -712,6 +712,7 @@ config SYSCTL_SYSCALL
 config KALLSYMS
 	 bool "Load all symbols for debugging/ksymoops" if EMBEDDED
 	 default y
+	 depends on !GRKERNSEC_HIDESYM
 	 help
 	   Say Y here to let the kernel print out symbolic crash information and
 	   symbolic stack backtraces. This increases the size of the kernel
@@ -887,7 +888,7 @@ config SLUB_DEBUG
 
 config COMPAT_BRK
 	bool "Disable heap randomization"
-	default y
+	default n
 	help
 	  Randomizing heap placement makes heap exploits harder, but it
 	  also breaks ancient binaries (including anything libc5 based).
@@ -960,9 +961,9 @@ config HAVE_GENERIC_DMA_COHERENT
 
 config SLABINFO
 	bool
-	depends on PROC_FS
+	depends on PROC_FS && !GRKERNSEC_PROC_ADD
 	depends on SLAB || SLUB_DEBUG
-	default y
+	default n
 
 config RT_MUTEXES
 	boolean

@@ -404,10 +404,12 @@ read_kcore(struct file *file, char __user *buffer, size_t buflen, loff_t *fpos)
 
 static int __init proc_kcore_init(void)
 {
+#if !defined(CONFIG_GRKERNSEC_PROC_ADD)
 	proc_root_kcore = proc_create("kcore", S_IRUSR, NULL, &proc_kcore_operations);
 	if (proc_root_kcore)
 		proc_root_kcore->size =
 				(size_t)high_memory - PAGE_OFFSET + PAGE_SIZE;
+#endif
 	return 0;
 }
 module_init(proc_kcore_init);

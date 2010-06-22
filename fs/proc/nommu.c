@@ -67,7 +67,7 @@ static int nommu_region_show(struct seq_file *m, struct vm_region *region)
 		if (len < 1)
 			len = 1;
 		seq_printf(m, "%*c", len, ' ');
-		seq_path(m, &file->f_path, "");
+		seq_path(m, &file->f_path, "\n\\");
 	}
 
 	seq_putc(m, '\n');
@@ -109,7 +109,7 @@ static void *nommu_region_list_next(struct seq_file *m, void *v, loff_t *pos)
 	return rb_next((struct rb_node *) v);
 }
 
-static struct seq_operations proc_nommu_region_list_seqop = {
+static const struct seq_operations proc_nommu_region_list_seqop = {
 	.start	= nommu_region_list_start,
 	.next	= nommu_region_list_next,
 	.stop	= nommu_region_list_stop,

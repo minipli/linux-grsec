@@ -1096,6 +1096,8 @@ static int do_umount(struct vfsmount *mnt, int flags)
 			lock_kernel();
 			retval = do_remount_sb(sb, MS_RDONLY, NULL, 0);
 			unlock_kernel();
+
+			gr_log_remount(mnt->mnt_devname, retval);
 		}
 		up_write(&sb->s_umount);
 		return retval;
@@ -1119,6 +1121,9 @@ static int do_umount(struct vfsmount *mnt, int flags)
 		security_sb_umount_busy(mnt);
 	up_write(&namespace_sem);
 	release_mounts(&umount_list);
+
+	gr_log_unmount(mnt->mnt_devname, retval);
+
 	return retval;
 }
 
@@ -1948,6 +1953,11 @@ long do_mount(char *dev_name, char *dir_name, char *type_page,
 	if (retval)
 		goto dput_out;
 
+	if (gr_handle_chroot_mount(path.dentry, path.mnt, dev_name)) {
+		retval = -EPERM;
+		goto dput_out;
+	}
+
 	if (flags & MS_REMOUNT)
 		retval = do_remount(&path, flags & ~MS_REMOUNT, mnt_flags,
 				    data_page);
@@ -1962,6 +1972,9 @@ long do_mount(char *dev_name, char *dir_name, char *type_page,
 				      dev_name, data_page);
 dput_out:
 	path_put(&path);
+
+	gr_log_mount(dev_name, dir_name, retval);
+
 	return retval;
 }
 
@@ -2072,6 +2085,9 @@ SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
 	retval = copy_mount_options(data, &data_page);
 	if (retval < 0)
 		goto out3;
+
+	if (gr_handle_chroot_pivot())
+		return -EPERM;
 
 	lock_kernel();
 	retval = do_mount((char *)dev_page, dir_page, (char *)type_page,
