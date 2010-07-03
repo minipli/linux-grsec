@@ -11,6 +11,9 @@
  *      Changed the compression method from stem compression to "table lookup"
  *      compression (see scripts/kallsyms.c for a more complete description)
  */
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+#define __INCLUDED_BY_HIDESYM 1
+#endif
 #include <linux/kallsyms.h>
 #include <linux/module.h>
 #include <linux/init.h>
@@ -52,6 +55,9 @@ extern const unsigned long kallsyms_markers[] __attribute__((weak));
 
 static inline int is_kernel_inittext(unsigned long addr)
 {
+	if (system_state != SYSTEM_BOOTING)
+		return 0;
+
 	if (addr >= (unsigned long)_sinittext
 	    && addr <= (unsigned long)_einittext)
 		return 1;
@@ -68,6 +74,26 @@ static inline int is_kernel_text(unsigned long addr)
 
 static inline int is_kernel(unsigned long addr)
 {
+	if (is_kernel_inittext(addr))
+		return 1;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+#ifdef CONFIG_MODULES
+	if ((unsigned long)MODULES_EXEC_VADDR <= ktla_ktva(addr) && ktla_ktva(addr) <= (unsigned long)MODULES_EXEC_END)
+		return 0;
+#endif
+
+	if (is_kernel_text(addr))
+		return 1;
+
+	if (ktla_ktva((unsigned long)_stext) <= addr && addr < ktla_ktva((unsigned long)_etext))
+		return 1;
+
+	if ((addr >= (unsigned long)_sdata && addr <= (unsigned long)_end))
+		return 1;
+	return in_gate_area_no_task(addr);
+#endif
+
 	if (addr >= (unsigned long)_stext && addr <= (unsigned long)_end)
 		return 1;
 	return in_gate_area_no_task(addr);
@@ -415,7 +441,6 @@ static unsigned long get_ksymbol_core(struct kallsym_iter *iter)
 
 static void reset_iter(struct kallsym_iter *iter, loff_t new_pos)
 {
-	iter->name[0] = '\0';
 	iter->nameoff = get_symbol_offset(new_pos);
 	iter->pos = new_pos;
 }
@@ -463,6 +488,11 @@ static int s_show(struct seq_file *m, void *p)
 {
 	struct kallsym_iter *iter = m->private;
 
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	if (current_uid())
+		return 0;
+#endif
+
 	/* Some debugging symbols have no name.  Ignore them. */
 	if (!iter->name[0])
 		return 0;
@@ -503,7 +533,7 @@ static int kallsyms_open(struct inode *inode, struct file *file)
 	struct kallsym_iter *iter;
 	int ret;
 
-	iter = kmalloc(sizeof(*iter), GFP_KERNEL);
+	iter = kzalloc(sizeof(*iter), GFP_KERNEL);
 	if (!iter)
 		return -ENOMEM;
 	reset_iter(iter, 0);

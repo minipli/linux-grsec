@@ -6,6 +6,7 @@
 #include <linux/posix-timers.h>
 #include <linux/errno.h>
 #include <linux/math64.h>
+#include <linux/security.h>
 #include <asm/uaccess.h>
 #include <linux/kernel_stat.h>
 #include <trace/events/timer.h>
@@ -1036,6 +1037,7 @@ static void check_thread_timers(struct task_struct *tsk,
 		unsigned long hard =
 			ACCESS_ONCE(sig->rlim[RLIMIT_RTTIME].rlim_max);
 
+		gr_learn_resource(tsk, RLIMIT_RTTIME, tsk->rt.timeout * (USEC_PER_SEC/HZ), 1);
 		if (hard != RLIM_INFINITY &&
 		    tsk->rt.timeout > DIV_ROUND_UP(hard, USEC_PER_SEC/HZ)) {
 			/*
@@ -1205,6 +1207,7 @@ static void check_process_timers(struct task_struct *tsk,
 		unsigned long hard =
 			ACCESS_ONCE(sig->rlim[RLIMIT_CPU].rlim_max);
 		cputime_t x;
+		gr_learn_resource(tsk, RLIMIT_CPU, psecs, 0);
 		if (psecs >= hard) {
 			/*
 			 * At the hard limit, we just die.

@@ -1460,7 +1460,7 @@ static struct serio_device_id psmouse_serio_ids[] = {
 		.id	= SERIO_ANY,
 		.extra	= SERIO_ANY,
 	},
-	{ 0 }
+	{ 0, 0, 0, 0 }
 };
 
 MODULE_DEVICE_TABLE(serio, psmouse_serio_ids);

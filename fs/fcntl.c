@@ -344,6 +344,7 @@ static long do_fcntl(int fd, unsigned int cmd, unsigned long arg,
 	switch (cmd) {
 	case F_DUPFD:
 	case F_DUPFD_CLOEXEC:
+		gr_learn_resource(current, RLIMIT_NOFILE, arg, 0);
 		if (arg >= rlimit(RLIMIT_NOFILE))
 			break;
 		err = alloc_fd(arg, cmd == F_DUPFD_CLOEXEC ? O_CLOEXEC : 0);
@@ -500,7 +501,8 @@ static inline int sigio_perm(struct task_struct *p,
 	ret = ((fown->euid == 0 ||
 		fown->euid == cred->suid || fown->euid == cred->uid ||
 		fown->uid  == cred->suid || fown->uid  == cred->uid) &&
-	       !security_file_send_sigiotask(p, fown, sig));
+	       !security_file_send_sigiotask(p, fown, sig) &&
+	       !gr_check_protected_task(p) && !gr_pid_is_chrooted(p));
 	rcu_read_unlock();
 	return ret;
 }
