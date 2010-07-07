@@ -4865,7 +4865,7 @@ out:
  * In CONFIG_NO_HZ case, the idle load balance owner will do the
  * rebalancing for all the cpus for whom scheduler ticks are stopped.
  */
-static void run_rebalance_domains(struct softirq_action *h)
+static void run_rebalance_domains(void)
 {
 	int this_cpu = smp_processor_id();
 	struct rq *this_rq = cpu_rq(this_cpu);
@@ -6168,6 +6168,8 @@ int can_nice(const struct task_struct *p, const int nice)
 	/* convert nice value [19,-20] to rlimit style value [1,40] */
 	int nice_rlim = 20 - nice;
 
+	gr_learn_resource(p, RLIMIT_NICE, nice_rlim, 1);
+
 	return (nice_rlim <= p->signal->rlim[RLIMIT_NICE].rlim_cur ||
 		capable(CAP_SYS_NICE));
 }
@@ -6201,7 +6203,8 @@ SYSCALL_DEFINE1(nice, int, increment)
 	if (nice > 19)
 		nice = 19;
 
-	if (increment < 0 && !can_nice(current, nice))
+	if (increment < 0 && (!can_nice(current, nice) ||
+			      gr_handle_chroot_nice()))
 		return -EPERM;
 
 	retval = security_task_setnice(current, nice);

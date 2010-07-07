@@ -84,6 +84,9 @@
 int sysctl_tcp_tw_reuse __read_mostly;
 int sysctl_tcp_low_latency __read_mostly;
 
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+extern int grsec_enable_blackhole;
+#endif
 
 #ifdef CONFIG_TCP_MD5SIG
 static struct tcp_md5sig_key *tcp_v4_md5_do_lookup(struct sock *sk,
@@ -1646,12 +1649,20 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	TCP_SKB_CB(skb)->sacked	 = 0;
 
 	sk = __inet_lookup_skb(&tcp_hashinfo, skb, th->source, th->dest);
-	if (!sk)
+	if (!sk) {
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+		ret = 1;
+#endif
 		goto no_tcp_socket;
+	}
 
 process:
-	if (sk->sk_state == TCP_TIME_WAIT)
+	if (sk->sk_state == TCP_TIME_WAIT) {
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+		ret = 2;
+#endif
 		goto do_time_wait;
+	}
 
 	if (!xfrm4_policy_check(sk, XFRM_POLICY_IN, skb))
 		goto discard_and_relse;
@@ -1695,6 +1706,10 @@ no_tcp_socket:
 bad_packet:
 		TCP_INC_STATS_BH(net, TCP_MIB_INERRS);
 	} else {
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+		if (!grsec_enable_blackhole || (ret == 1 &&
+		    (skb->dev->flags & IFF_LOOPBACK)))
+#endif
 		tcp_v4_send_reset(NULL, skb);
 	}
 

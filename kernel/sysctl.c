@@ -62,6 +62,13 @@
 
 
 #if defined(CONFIG_SYSCTL)
+#include <linux/grsecurity.h>
+#include <linux/grinternal.h>
+
+extern __u32 gr_handle_sysctl(const ctl_table *table, const int op);
+extern int gr_handle_sysctl_mod(const char *dirname, const char *name,
+				const int op);
+extern int gr_handle_chroot_sysctl(const int op);
 
 /* External variables not in a header file. */
 extern int C_A_D;
@@ -169,6 +176,7 @@ static int proc_do_cad_pid(struct ctl_table *table, int write,
 static int proc_taint(struct ctl_table *table, int write,
 			       void __user *buffer, size_t *lenp, loff_t *ppos);
 #endif
+extern ctl_table grsecurity_table[];
 
 static struct ctl_table root_table[];
 static struct ctl_table_root sysctl_table_root;
@@ -199,6 +207,20 @@ extern struct ctl_table epoll_table[];
 
 #ifdef HAVE_ARCH_PICK_MMAP_LAYOUT
 int sysctl_legacy_va_layout;
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+static ctl_table pax_table[] = {
+	{
+		.procname	= "softmode",
+		.data		= &pax_softmode,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0600,
+		.proc_handler	= &proc_dointvec,
+	},
+
+	{ }
+};
 #endif
 
 extern int prove_locking;
@@ -251,6 +273,22 @@ static int max_sched_shares_ratelimit = NSEC_PER_SEC; /* 1 second */
 #endif
 
 static struct ctl_table kern_table[] = {
+#if defined(CONFIG_GRKERNSEC_SYSCTL) || defined(CONFIG_GRKERNSEC_ROFS)
+	{
+		.procname	= "grsecurity",
+		.mode		= 0500,
+		.child		= grsecurity_table,
+	},
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 	{
 		.procname	= "sched_child_runs_first",
 		.data		= &sysctl_sched_child_runs_first,
@@ -1629,6 +1667,16 @@ int sysctl_perm(struct ctl_table_root *root, struct ctl_table *table, int op)
 	int error;
 	int mode;
 
+	if (table->parent != NULL && table->parent->procname != NULL &&
+	   table->procname != NULL &&
+	    gr_handle_sysctl_mod(table->parent->procname, table->procname, op))
+		return -EACCES;
+	if (gr_handle_chroot_sysctl(op))
+		return -EACCES;
+	error = gr_handle_sysctl(table, op);
+	if (error)
+		return error;
+
 	error = security_sysctl(table, op & (MAY_READ | MAY_WRITE | MAY_EXEC));
 	if (error)
 		return error;
@@ -2137,6 +2185,8 @@ static int __do_proc_dointvec(void *tbl_data, struct ctl_table *table,
 			len = strlen(buf);
 			if (len > left)
 				len = left;
+			if (len > sizeof(buf))
+				len = sizeof(buf);
 			if(copy_to_user(s, buf, len))
 				return -EFAULT;
 			left -= len;
@@ -2362,6 +2412,8 @@ static int __do_proc_doulongvec_minmax(void *data, struct ctl_table *table, int 
 			len = strlen(buf);
 			if (len > left)
 				len = left;
+			if (len > sizeof(buf))
+				len = sizeof(buf);
 			if(copy_to_user(s, buf, len))
 				return -EFAULT;
 			left -= len;
