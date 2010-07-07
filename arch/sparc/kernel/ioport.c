@@ -392,7 +392,7 @@ static void sbus_sync_sg_for_device(struct device *dev, struct scatterlist *sg,
 	BUG();
 }
 
-struct dma_map_ops sbus_dma_ops = {
+const struct dma_map_ops sbus_dma_ops = {
 	.alloc_coherent		= sbus_alloc_coherent,
 	.free_coherent		= sbus_free_coherent,
 	.map_page		= sbus_map_page,
@@ -403,7 +403,7 @@ struct dma_map_ops sbus_dma_ops = {
 	.sync_sg_for_device	= sbus_sync_sg_for_device,
 };
 
-struct dma_map_ops *dma_ops = &sbus_dma_ops;
+const struct dma_map_ops *dma_ops = &sbus_dma_ops;
 EXPORT_SYMBOL(dma_ops);
 
 static int __init sparc_register_ioport(void)
@@ -640,7 +640,7 @@ static void pci32_sync_sg_for_device(struct device *device, struct scatterlist *
 	}
 }
 
-struct dma_map_ops pci32_dma_ops = {
+const struct dma_map_ops pci32_dma_ops = {
 	.alloc_coherent		= pci32_alloc_coherent,
 	.free_coherent		= pci32_free_coherent,
 	.map_page		= pci32_map_page,
