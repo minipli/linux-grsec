@@ -63,6 +63,18 @@ int main(void)
 	OFFSET(PV_CPU_irq_enable_sysexit, pv_cpu_ops, irq_enable_sysexit);
 	OFFSET(PV_CPU_swapgs, pv_cpu_ops, swapgs);
 	OFFSET(PV_MMU_read_cr2, pv_mmu_ops, read_cr2);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	OFFSET(PV_CPU_read_cr0, pv_cpu_ops, read_cr0);
+	OFFSET(PV_CPU_write_cr0, pv_cpu_ops, write_cr0);
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	OFFSET(PV_MMU_read_cr3, pv_mmu_ops, read_cr3);
+	OFFSET(PV_MMU_write_cr3, pv_mmu_ops, write_cr3);
+	OFFSET(PV_MMU_set_pgd, pv_mmu_ops, set_pgd);
+#endif
+
 #endif
 
 
@@ -115,6 +127,7 @@ int main(void)
 	ENTRY(cr8);
 	BLANK();
 #undef ENTRY
+	DEFINE(TSS_size, sizeof(struct tss_struct));
 	DEFINE(TSS_ist, offsetof(struct tss_struct, x86_tss.ist));
 	BLANK();
 	DEFINE(crypto_tfm_ctx_offset, offsetof(struct crypto_tfm, __crt_ctx));

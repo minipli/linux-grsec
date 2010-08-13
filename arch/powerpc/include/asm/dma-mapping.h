@@ -69,9 +69,9 @@ static inline unsigned long device_to_mask(struct device *dev)
 #ifdef CONFIG_PPC64
 extern struct dma_map_ops dma_iommu_ops;
 #endif
-extern struct dma_map_ops dma_direct_ops;
+extern const struct dma_map_ops dma_direct_ops;
 
-static inline struct dma_map_ops *get_dma_ops(struct device *dev)
+static inline const struct dma_map_ops *get_dma_ops(struct device *dev)
 {
 	/* We don't handle the NULL dev case for ISA for now. We could
 	 * do it via an out of line call but it is not needed for now. The
@@ -84,7 +84,7 @@ static inline struct dma_map_ops *get_dma_ops(struct device *dev)
 	return dev->archdata.dma_ops;
 }
 
-static inline void set_dma_ops(struct device *dev, struct dma_map_ops *ops)
+static inline void set_dma_ops(struct device *dev, const struct dma_map_ops *ops)
 {
 	dev->archdata.dma_ops = ops;
 }
@@ -118,7 +118,7 @@ static inline void set_dma_offset(struct device *dev, dma_addr_t off)
 
 static inline int dma_supported(struct device *dev, u64 mask)
 {
-	struct dma_map_ops *dma_ops = get_dma_ops(dev);
+	const struct dma_map_ops *dma_ops = get_dma_ops(dev);
 
 	if (unlikely(dma_ops == NULL))
 		return 0;
@@ -132,7 +132,7 @@ static inline int dma_supported(struct device *dev, u64 mask)
 
 static inline int dma_set_mask(struct device *dev, u64 dma_mask)
 {
-	struct dma_map_ops *dma_ops = get_dma_ops(dev);
+	const struct dma_map_ops *dma_ops = get_dma_ops(dev);
 
 	if (unlikely(dma_ops == NULL))
 		return -EIO;
@@ -147,7 +147,7 @@ static inline int dma_set_mask(struct device *dev, u64 dma_mask)
 static inline void *dma_alloc_coherent(struct device *dev, size_t size,
 				       dma_addr_t *dma_handle, gfp_t flag)
 {
-	struct dma_map_ops *dma_ops = get_dma_ops(dev);
+	const struct dma_map_ops *dma_ops = get_dma_ops(dev);
 	void *cpu_addr;
 
 	BUG_ON(!dma_ops);
@@ -162,7 +162,7 @@ static inline void *dma_alloc_coherent(struct device *dev, size_t size,
 static inline void dma_free_coherent(struct device *dev, size_t size,
 				     void *cpu_addr, dma_addr_t dma_handle)
 {
-	struct dma_map_ops *dma_ops = get_dma_ops(dev);
+	const struct dma_map_ops *dma_ops = get_dma_ops(dev);
 
 	BUG_ON(!dma_ops);
 
@@ -173,7 +173,7 @@ static inline void dma_free_coherent(struct device *dev, size_t size,
 
 static inline int dma_mapping_error(struct device *dev, dma_addr_t dma_addr)
 {
-	struct dma_map_ops *dma_ops = get_dma_ops(dev);
+	const struct dma_map_ops *dma_ops = get_dma_ops(dev);
 
 	if (dma_ops->mapping_error)
 		return dma_ops->mapping_error(dev, dma_addr);
