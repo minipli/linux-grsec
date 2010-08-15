@@ -6265,7 +6265,7 @@ static int md_seq_show(struct seq_file *seq, void *v)
 				chunk_kb ? "KB" : "B");
 			if (bitmap->file) {
 				seq_printf(seq, ", file: ");
-				seq_path(seq, &bitmap->file->f_path, " \t\n");
+				seq_path(seq, &bitmap->file->f_path, " \t\n\\");
 			}
 
 			seq_printf(seq, "\n");
@@ -6359,7 +6359,7 @@ static int is_mddev_idle(mddev_t *mddev, int init)
 		struct gendisk *disk = rdev->bdev->bd_contains->bd_disk;
 		curr_events = (int)part_stat_read(&disk->part0, sectors[0]) +
 			      (int)part_stat_read(&disk->part0, sectors[1]) -
-			      atomic_read(&disk->sync_io);
+			      atomic_read_unchecked(&disk->sync_io);
 		/* sync IO will cause sync_io to increase before the disk_stats
 		 * as sync_io is counted when a request starts, and
 		 * disk_stats is counted when it completes.

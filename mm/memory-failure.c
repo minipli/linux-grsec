@@ -51,7 +51,7 @@ int sysctl_memory_failure_early_kill __read_mostly = 0;
 
 int sysctl_memory_failure_recovery __read_mostly = 1;
 
-atomic_long_t mce_bad_pages __read_mostly = ATOMIC_LONG_INIT(0);
+atomic_long_unchecked_t mce_bad_pages __read_mostly = ATOMIC_LONG_INIT(0);
 
 #if defined(CONFIG_HWPOISON_INJECT) || defined(CONFIG_HWPOISON_INJECT_MODULE)
 
@@ -939,7 +939,7 @@ int __memory_failure(unsigned long pfn, int trapno, int flags)
 		return 0;
 	}
 
-	atomic_long_add(1, &mce_bad_pages);
+	atomic_long_add_unchecked(1, &mce_bad_pages);
 
 	/*
 	 * We need/can do nothing about count=0 pages.
@@ -1003,7 +1003,7 @@ int __memory_failure(unsigned long pfn, int trapno, int flags)
 	}
 	if (hwpoison_filter(p)) {
 		if (TestClearPageHWPoison(p))
-			atomic_long_dec(&mce_bad_pages);
+			atomic_long_dec_unchecked(&mce_bad_pages);
 		unlock_page(p);
 		put_page(p);
 		return 0;
@@ -1096,7 +1096,7 @@ int unpoison_memory(unsigned long pfn)
 
 	if (!get_page_unless_zero(page)) {
 		if (TestClearPageHWPoison(p))
-			atomic_long_dec(&mce_bad_pages);
+			atomic_long_dec_unchecked(&mce_bad_pages);
 		pr_debug("MCE: Software-unpoisoned free page %#lx\n", pfn);
 		return 0;
 	}
@@ -1110,7 +1110,7 @@ int unpoison_memory(unsigned long pfn)
 	 */
 	if (TestClearPageHWPoison(p)) {
 		pr_debug("MCE: Software-unpoisoned page %#lx\n", pfn);
-		atomic_long_dec(&mce_bad_pages);
+		atomic_long_dec_unchecked(&mce_bad_pages);
 		freeit = 1;
 	}
 	unlock_page(page);
@@ -1291,7 +1291,7 @@ int soft_offline_page(struct page *page, int flags)
 		return ret;
 
 done:
-	atomic_long_add(1, &mce_bad_pages);
+	atomic_long_add_unchecked(1, &mce_bad_pages);
 	SetPageHWPoison(page);
 	/* keep elevated page count for bad page */
 	return ret;

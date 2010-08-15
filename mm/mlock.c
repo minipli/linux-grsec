@@ -13,6 +13,7 @@
 #include <linux/pagemap.h>
 #include <linux/mempolicy.h>
 #include <linux/syscalls.h>
+#include <linux/security.h>
 #include <linux/sched.h>
 #include <linux/module.h>
 #include <linux/rmap.h>
@@ -432,6 +433,17 @@ static int do_mlock(unsigned long start, size_t len, int on)
 		return -EINVAL;
 	if (end == start)
 		return 0;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (current->mm->pax_flags & MF_PAX_SEGMEXEC) {
+		if (end > SEGMEXEC_TASK_SIZE)
+			return -EINVAL;
+	} else
+#endif
+
+	if (end > TASK_SIZE)
+		return -EINVAL;
+
 	vma = find_vma_prev(current->mm, start, &prev);
 	if (!vma || vma->vm_start > start)
 		return -ENOMEM;
@@ -491,6 +503,7 @@ SYSCALL_DEFINE2(mlock, unsigned long, start, size_t, len)
 	lock_limit >>= PAGE_SHIFT;
 
 	/* check against resource limits */
+	gr_learn_resource(current, RLIMIT_MEMLOCK, (current->mm->locked_vm << PAGE_SHIFT) + len, 1);
 	if ((locked <= lock_limit) || capable(CAP_IPC_LOCK))
 		error = do_mlock(start, len, 1);
 	up_write(&current->mm->mmap_sem);
@@ -512,10 +525,10 @@ SYSCALL_DEFINE2(munlock, unsigned long, start, size_t, len)
 static int do_mlockall(int flags)
 {
 	struct vm_area_struct * vma, * prev = NULL;
-	unsigned int def_flags = 0;
+	unsigned int def_flags = current->mm->def_flags & ~VM_LOCKED;
 
 	if (flags & MCL_FUTURE)
-		def_flags = VM_LOCKED;
+		def_flags |= VM_LOCKED;
 	current->mm->def_flags = def_flags;
 	if (flags == MCL_FUTURE)
 		goto out;
@@ -523,6 +536,12 @@ static int do_mlockall(int flags)
 	for (vma = current->mm->mmap; vma ; vma = prev->vm_next) {
 		unsigned int newflags;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+		if ((current->mm->pax_flags & MF_PAX_SEGMEXEC) && (vma->vm_start >= SEGMEXEC_TASK_SIZE))
+			break;
+#endif
+
+		BUG_ON(vma->vm_end > TASK_SIZE);
 		newflags = vma->vm_flags | VM_LOCKED;
 		if (!(flags & MCL_CURRENT))
 			newflags &= ~VM_LOCKED;
@@ -554,6 +573,7 @@ SYSCALL_DEFINE1(mlockall, int, flags)
 	lock_limit >>= PAGE_SHIFT;
 
 	ret = -ENOMEM;
+	gr_learn_resource(current, RLIMIT_MEMLOCK, current->mm->total_vm, 1);
 	if (!(flags & MCL_CURRENT) || (current->mm->total_vm <= lock_limit) ||
 	    capable(CAP_IPC_LOCK))
 		ret = do_mlockall(flags);

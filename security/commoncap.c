@@ -28,6 +28,7 @@
 #include <linux/prctl.h>
 #include <linux/securebits.h>
 #include <linux/syslog.h>
+#include <net/sock.h>
 
 /*
  * If a non-root user executes a setuid-root binary in
@@ -51,9 +52,11 @@ static void warn_setuid_and_fcaps_mixed(char *fname)
 	}
 }
 
+extern kernel_cap_t gr_cap_rtnetlink(struct sock *sk);
+
 int cap_netlink_send(struct sock *sk, struct sk_buff *skb)
 {
-	NETLINK_CB(skb).eff_cap = current_cap();
+	NETLINK_CB(skb).eff_cap = gr_cap_rtnetlink(sk);
 	return 0;
 }
 
