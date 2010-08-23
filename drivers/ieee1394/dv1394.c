@@ -739,7 +739,7 @@ static void frame_prepare(struct video_card *video, unsigned int this_frame)
 	based upon DIF section and sequence
 */
 
-static void inline
+static inline void
 frame_put_packet (struct frame *f, struct packet *p)
 {
 	int section_type = p->data[0] >> 5;           /* section type is in bits 5 - 7 */
@@ -2178,7 +2178,7 @@ static const struct ieee1394_device_id dv1394_id_table[] = {
 		.specifier_id	= AVC_UNIT_SPEC_ID_ENTRY & 0xffffff,
 		.version	= AVC_SW_VERSION_ENTRY & 0xffffff
 	},
-	{ }
+	{ 0, 0, 0, 0, 0, 0 }
 };
 
 MODULE_DEVICE_TABLE(ieee1394, dv1394_id_table);

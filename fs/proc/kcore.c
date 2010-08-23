@@ -542,6 +542,9 @@ read_kcore(struct file *file, char __user *buffer, size_t buflen, loff_t *fpos)
 
 static int open_kcore(struct inode *inode, struct file *filp)
 {
+#if defined(CONFIG_GRKERNSEC_PROC_ADD) || defined(CONFIG_GRKERNSEC_HIDESYM)
+	return -EPERM;
+#endif
 	if (!capable(CAP_SYS_RAWIO))
 		return -EPERM;
 	if (kcore_need_update)

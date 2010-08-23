@@ -74,8 +74,6 @@ EXPORT_SYMBOL_GPL(xen_start_info);
 
 struct shared_info xen_dummy_shared_info;
 
-void *xen_initial_gdt;
-
 /*
  * Point at some empty memory to start with. We map the real shared_info
  * page as soon as fixmap is up and running.
@@ -551,7 +549,7 @@ static void xen_write_idt_entry(gate_desc *dt, int entrynum, const gate_desc *g)
 
 	preempt_disable();
 
-	start = __get_cpu_var(idt_desc).address;
+	start = (unsigned long)__get_cpu_var(idt_desc).address;
 	end = start + __get_cpu_var(idt_desc).size + 1;
 
 	xen_mc_flush();
@@ -1103,7 +1101,17 @@ asmlinkage void __init xen_start_kernel(void)
 	__userpte_alloc_gfp &= ~__GFP_HIGHMEM;
 
 	/* Work out if we support NX */
-	x86_configure_nx();
+#if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
+	if ((cpuid_eax(0x80000000) & 0xffff0000) == 0x80000000 &&
+	    (cpuid_edx(0x80000001) & (1 << (X86_FEATURE_NX & 31)))) {
+		unsigned l, h;
+
+		__supported_pte_mask |= _PAGE_NX;
+		rdmsr(MSR_EFER, l, h);
+		l |= EFER_NX;
+		wrmsr(MSR_EFER, l, h);
+	}
+#endif
 
 	xen_setup_features();
 
@@ -1133,13 +1141,6 @@ asmlinkage void __init xen_start_kernel(void)
 	}
 
 	machine_ops = xen_machine_ops;
-
-	/*
-	 * The only reliable way to retain the initial address of the
-	 * percpu gdt_page is to remember it here, so we can go and
-	 * mark it RW later, when the initial percpu area is freed.
-	 */
-	xen_initial_gdt = &per_cpu(gdt_page, 0);
 
 	xen_smp_init();
 
