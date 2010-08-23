@@ -136,21 +136,10 @@ LIST_HEAD(tty_drivers);			/* linked list of tty drivers */
 DEFINE_MUTEX(tty_mutex);
 EXPORT_SYMBOL(tty_mutex);
 
-static ssize_t tty_read(struct file *, char __user *, size_t, loff_t *);
-static ssize_t tty_write(struct file *, const char __user *, size_t, loff_t *);
 ssize_t redirected_tty_write(struct file *, const char __user *,
 							size_t, loff_t *);
-static unsigned int tty_poll(struct file *, poll_table *);
 static int tty_open(struct inode *, struct file *);
-static int tty_release(struct inode *, struct file *);
 long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
-#ifdef CONFIG_COMPAT
-static long tty_compat_ioctl(struct file *file, unsigned int cmd,
-				unsigned long arg);
-#else
-#define tty_compat_ioctl NULL
-#endif
-static int tty_fasync(int fd, struct file *filp, int on);
 static void release_tty(struct tty_struct *tty, int idx);
 static void __proc_set_tty(struct task_struct *tsk, struct tty_struct *tty);
 static void proc_set_tty(struct task_struct *tsk, struct tty_struct *tty);
@@ -870,7 +859,7 @@ EXPORT_SYMBOL(start_tty);
  *	read calls may be outstanding in parallel.
  */
 
-static ssize_t tty_read(struct file *file, char __user *buf, size_t count,
+ssize_t tty_read(struct file *file, char __user *buf, size_t count,
 			loff_t *ppos)
 {
 	int i;
@@ -897,6 +886,8 @@ static ssize_t tty_read(struct file *file, char __user *buf, size_t count,
 		inode->i_atime = current_fs_time(inode->i_sb);
 	return i;
 }
+
+EXPORT_SYMBOL(tty_read);
 
 void tty_write_unlock(struct tty_struct *tty)
 {
@@ -1045,7 +1036,7 @@ void tty_write_message(struct tty_struct *tty, char *msg)
  *	write method will not be invoked in parallel for each device.
  */
 
-static ssize_t tty_write(struct file *file, const char __user *buf,
+ssize_t tty_write(struct file *file, const char __user *buf,
 						size_t count, loff_t *ppos)
 {
 	struct tty_struct *tty;
@@ -1071,6 +1062,8 @@ static ssize_t tty_write(struct file *file, const char __user *buf,
 	tty_ldisc_deref(ld);
 	return ret;
 }
+
+EXPORT_SYMBOL(tty_write);
 
 ssize_t redirected_tty_write(struct file *file, const char __user *buf,
 						size_t count, loff_t *ppos)
@@ -1867,13 +1860,15 @@ static int tty_open(struct inode *inode, struct file *filp)
  *		Takes bkl. See tty_release_dev
  */
 
-static int tty_release(struct inode *inode, struct file *filp)
+int tty_release(struct inode *inode, struct file *filp)
 {
 	lock_kernel();
 	tty_release_dev(filp);
 	unlock_kernel();
 	return 0;
 }
+
+EXPORT_SYMBOL(tty_release);
 
 /**
  *	tty_poll	-	check tty status
@@ -1887,7 +1882,7 @@ static int tty_release(struct inode *inode, struct file *filp)
  *	may be re-entered freely by other callers.
  */
 
-static unsigned int tty_poll(struct file *filp, poll_table *wait)
+unsigned int tty_poll(struct file *filp, poll_table *wait)
 {
 	struct tty_struct *tty;
 	struct tty_ldisc *ld;
@@ -1904,7 +1899,9 @@ static unsigned int tty_poll(struct file *filp, poll_table *wait)
 	return ret;
 }
 
-static int tty_fasync(int fd, struct file *filp, int on)
+EXPORT_SYMBOL(tty_poll);
+
+int tty_fasync(int fd, struct file *filp, int on)
 {
 	struct tty_struct *tty;
 	unsigned long flags;
@@ -1947,6 +1944,8 @@ out:
 	unlock_kernel();
 	return retval;
 }
+
+EXPORT_SYMBOL(tty_fasync);
 
 /**
  *	tiocsti			-	fake input character
@@ -2582,8 +2581,10 @@ long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	return retval;
 }
 
+EXPORT_SYMBOL(tty_ioctl);
+
 #ifdef CONFIG_COMPAT
-static long tty_compat_ioctl(struct file *file, unsigned int cmd,
+long tty_compat_ioctl(struct file *file, unsigned int cmd,
 				unsigned long arg)
 {
 	struct inode *inode = file->f_dentry->d_inode;
@@ -2607,6 +2608,8 @@ static long tty_compat_ioctl(struct file *file, unsigned int cmd,
 
 	return retval;
 }
+
+EXPORT_SYMBOL(tty_compat_ioctl);
 #endif
 
 /*
@@ -3049,11 +3052,6 @@ struct tty_struct *get_current_tty(void)
 	return tty;
 }
 EXPORT_SYMBOL_GPL(get_current_tty);
-
-void tty_default_fops(struct file_operations *fops)
-{
-	*fops = tty_fops;
-}
 
 /*
  * Initialize the console device. This is called *early*, so

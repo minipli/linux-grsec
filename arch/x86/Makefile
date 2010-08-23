@@ -189,3 +189,12 @@ define archhelp
   echo  '                  FDARGS="..."  arguments for the booted kernel'
   echo  '                  FDINITRD=file initrd for the booted kernel'
 endef
+
+define OLD_LD
+
+*** ${VERSION}.${PATCHLEVEL} PaX kernels no longer build correctly with old versions of binutils.
+*** Please upgrade your binutils to 2.18 or newer
+endef
+
+archprepare:
+	$(if $(LDFLAGS_BUILD_ID),,$(error $(OLD_LD)))
