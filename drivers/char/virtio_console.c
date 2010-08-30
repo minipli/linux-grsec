@@ -44,6 +44,7 @@ static unsigned int in_len;
 static char *in, *inbuf;
 
 /* The operations for our console. */
+/* cannot be const */
 static struct hv_ops virtio_cons;
 
 /* The hvc device */

@@ -635,7 +635,7 @@ static struct tlvtype_proc tlvprochopopt_lst[] = {
 		.type	= IPV6_TLV_JUMBO,
 		.func	= ipv6_hop_jumbo,
 	},
-	{ -1, }
+	{ -1, NULL }
 };
 
 int ipv6_parse_hopopts(struct sk_buff *skb)

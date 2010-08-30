@@ -368,4 +368,11 @@ extern int dump_task_fpu(struct task_struct *, elf_fpregset_t *);
 #define ELF_ET_DYN_BASE         (TASK_SIZE / 3 * 2)
 #endif
 
+#ifdef CONFIG_PAX_ASLR
+#define PAX_ELF_ET_DYN_BASE	(test_thread_flag(TIF_32BIT_ADDR) ? 0x00400000UL : 0x00400000UL)
+
+#define PAX_DELTA_MMAP_LEN	(test_thread_flag(TIF_32BIT_ADDR) ? 27-PAGE_SHIFT : 36-PAGE_SHIFT)
+#define PAX_DELTA_STACK_LEN	(test_thread_flag(TIF_32BIT_ADDR) ? 27-PAGE_SHIFT : 36-PAGE_SHIFT)
+#endif
+
 #endif /* _ASM_ELF_H */
