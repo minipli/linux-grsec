@@ -175,7 +175,7 @@ static int pmem_mmap(struct file *, struct vm_area_struct *);
 static int pmem_open(struct inode *, struct file *);
 static long pmem_ioctl(struct file *, unsigned int, unsigned long);
 
-struct file_operations pmem_fops = {
+const struct file_operations pmem_fops = {
 	.release = pmem_release,
 	.mmap = pmem_mmap,
 	.open = pmem_open,
@@ -1201,7 +1201,7 @@ static ssize_t debug_read(struct file *file, char __user *buf, size_t count,
 	return simple_read_from_buffer(buf, count, ppos, buffer, n);
 }
 
-static struct file_operations debug_fops = {
+static const struct file_operations debug_fops = {
 	.read = debug_read,
 	.open = debug_open,
 };
