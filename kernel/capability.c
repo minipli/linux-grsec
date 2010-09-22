@@ -306,10 +306,21 @@ int capable(int cap)
 		BUG();
 	}
 
-	if (security_capable(cap) == 0) {
+	if (security_capable(cap) == 0 && gr_is_capable(cap)) {
 		current->flags |= PF_SUPERPRIV;
 		return 1;
 	}
 	return 0;
 }
+
+int capable_nolog(int cap)
+{
+	if (security_capable(cap) == 0 && gr_is_capable_nolog(cap)) {
+		current->flags |= PF_SUPERPRIV;
+		return 1;
+	}
+	return 0;
+}
+
 EXPORT_SYMBOL(capable);
+EXPORT_SYMBOL(capable_nolog);

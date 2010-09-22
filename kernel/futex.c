@@ -54,6 +54,7 @@
 #include <linux/mount.h>
 #include <linux/pagemap.h>
 #include <linux/syscalls.h>
+#include <linux/ptrace.h>
 #include <linux/signal.h>
 #include <linux/module.h>
 #include <linux/magic.h>
@@ -220,6 +221,11 @@ get_futex_key(u32 __user *uaddr, int fshared, union futex_key *key)
 	struct mm_struct *mm = current->mm;
 	struct page *page;
 	int err;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((mm->pax_flags & MF_PAX_SEGMEXEC) && address >= SEGMEXEC_TASK_SIZE)
+		return -EFAULT;
+#endif
 
 	/*
 	 * The futex address must be "naturally" aligned.
@@ -1843,7 +1849,7 @@ retry:
 
 	restart = &current_thread_info()->restart_block;
 	restart->fn = futex_wait_restart;
-	restart->futex.uaddr = (u32 *)uaddr;
+	restart->futex.uaddr = uaddr;
 	restart->futex.val = val;
 	restart->futex.time = abs_time->tv64;
 	restart->futex.bitset = bitset;
@@ -2376,7 +2382,9 @@ SYSCALL_DEFINE3(get_robust_list, int, pid,
 {
 	struct robust_list_head __user *head;
 	unsigned long ret;
+#ifndef CONFIG_GRKERNSEC_PROC_MEMMAP
 	const struct cred *cred = current_cred(), *pcred;
+#endif
 
 	if (!futex_cmpxchg_enabled)
 		return -ENOSYS;
@@ -2392,11 +2400,16 @@ SYSCALL_DEFINE3(get_robust_list, int, pid,
 		if (!p)
 			goto err_unlock;
 		ret = -EPERM;
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+		if (!ptrace_may_access(p, PTRACE_MODE_READ))
+			goto err_unlock;
+#else
 		pcred = __task_cred(p);
 		if (cred->euid != pcred->euid &&
 		    cred->euid != pcred->uid &&
 		    !capable(CAP_SYS_PTRACE))
 			goto err_unlock;
+#endif
 		head = p->robust_list;
 		rcu_read_unlock();
 	}
@@ -2458,7 +2471,7 @@ retry:
  */
 static inline int fetch_robust_entry(struct robust_list __user **entry,
 				     struct robust_list __user * __user *head,
-				     int *pi)
+				     unsigned int *pi)
 {
 	unsigned long uentry;
 

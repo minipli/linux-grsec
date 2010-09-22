@@ -577,6 +577,10 @@ static int static_obj(void *obj)
 	int i;
 #endif
 
+#ifdef CONFIG_PAX_KERNEXEC
+	start = ktla_ktva(start);
+#endif
+
 	/*
 	 * static variable?
 	 */
@@ -592,8 +596,7 @@ static int static_obj(void *obj)
 	 */
 	for_each_possible_cpu(i) {
 		start = (unsigned long) &__per_cpu_start + per_cpu_offset(i);
-		end   = (unsigned long) &__per_cpu_start + PERCPU_ENOUGH_ROOM
-					+ per_cpu_offset(i);
+		end   = start + PERCPU_ENOUGH_ROOM;
 
 		if ((addr >= start) && (addr < end))
 			return 1;
@@ -710,6 +713,7 @@ register_lock_class(struct lockdep_map *lock, unsigned int subclass, int force)
 	if (!static_obj(lock->key)) {
 		debug_locks_off();
 		printk("INFO: trying to register non-static key.\n");
+		printk("lock:%pS key:%pS.\n", lock, lock->key);
 		printk("the code is fine but needs lockdep annotation.\n");
 		printk("turning off the locking correctness validator.\n");
 		dump_stack();
