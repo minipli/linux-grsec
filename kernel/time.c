@@ -93,6 +93,9 @@ SYSCALL_DEFINE1(stime, time_t __user *, tptr)
 		return err;
 
 	do_settimeofday(&tv);
+
+	gr_log_timechange();
+
 	return 0;
 }
 
@@ -200,6 +203,8 @@ SYSCALL_DEFINE2(settimeofday, struct timeval __user *, tv,
 			return -EFAULT;
 	}
 
+	gr_log_timechange();
+
 	return do_sys_settimeofday(tv ? &new_ts : NULL, tz ? &new_tz : NULL);
 }
 
@@ -238,7 +243,7 @@ EXPORT_SYMBOL(current_fs_time);
  * Avoid unnecessary multiplications/divisions in the
  * two most common HZ cases:
  */
-unsigned int inline jiffies_to_msecs(const unsigned long j)
+inline unsigned int jiffies_to_msecs(const unsigned long j)
 {
 #if HZ <= MSEC_PER_SEC && !(MSEC_PER_SEC % HZ)
 	return (MSEC_PER_SEC / HZ) * j;
@@ -254,7 +259,7 @@ unsigned int inline jiffies_to_msecs(const unsigned long j)
 }
 EXPORT_SYMBOL(jiffies_to_msecs);
 
-unsigned int inline jiffies_to_usecs(const unsigned long j)
+inline unsigned int jiffies_to_usecs(const unsigned long j)
 {
 #if HZ <= USEC_PER_SEC && !(USEC_PER_SEC % HZ)
 	return (USEC_PER_SEC / HZ) * j;

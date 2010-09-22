@@ -149,7 +149,7 @@ struct scsi_host_template ahci_sht = {
 };
 EXPORT_SYMBOL_GPL(ahci_sht);
 
-struct ata_port_operations ahci_ops = {
+const struct ata_port_operations ahci_ops = {
 	.inherits		= &sata_pmp_port_ops,
 
 	.qc_defer		= ahci_pmp_qc_defer,
