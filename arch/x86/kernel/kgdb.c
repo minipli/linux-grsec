@@ -77,7 +77,7 @@ void pt_regs_to_gdb_regs(unsigned long *gdb_regs, struct pt_regs *regs)
 	gdb_regs[GDB_CS]	= regs->cs;
 	gdb_regs[GDB_FS]	= 0xFFFF;
 	gdb_regs[GDB_GS]	= 0xFFFF;
-	if (user_mode_vm(regs)) {
+	if (user_mode(regs)) {
 		gdb_regs[GDB_SS] = regs->ss;
 		gdb_regs[GDB_SP] = regs->sp;
 	} else {
@@ -720,7 +720,7 @@ void kgdb_arch_set_pc(struct pt_regs *regs, unsigned long ip)
 	regs->ip = ip;
 }
 
-struct kgdb_arch arch_kgdb_ops = {
+const struct kgdb_arch arch_kgdb_ops = {
 	/* Breakpoint instruction: */
 	.gdb_bpt_instr		= { 0xcc },
 	.flags			= KGDB_HW_BREAKPOINT,

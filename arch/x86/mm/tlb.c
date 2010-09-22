@@ -13,7 +13,7 @@
 #include <asm/uv/uv.h>
 
 DEFINE_PER_CPU_SHARED_ALIGNED(struct tlb_state, cpu_tlbstate)
-			= { &init_mm, 0, };
+			= { &init_mm, 0 };
 
 /*
  *	Smarter SMP flushing macros.
@@ -62,7 +62,11 @@ void leave_mm(int cpu)
 		BUG();
 	cpumask_clear_cpu(cpu,
 			  mm_cpumask(percpu_read(cpu_tlbstate.active_mm)));
+
+#ifndef CONFIG_PAX_PER_CPU_PGD
 	load_cr3(swapper_pg_dir);
+#endif
+
 }
 EXPORT_SYMBOL_GPL(leave_mm);
 

@@ -245,7 +245,7 @@ static ssize_t nvram_read(struct file *file, char __user *buf,
 
 	spin_unlock_irq(&rtc_lock);
 
-	if (copy_to_user(buf, contents, tmp - contents))
+	if (tmp - contents > sizeof(contents) || copy_to_user(buf, contents, tmp - contents))
 		return -EFAULT;
 
 	*ppos = i;
@@ -434,7 +434,10 @@ static const struct file_operations nvram_fops = {
 static struct miscdevice nvram_dev = {
 	NVRAM_MINOR,
 	"nvram",
-	&nvram_fops
+	&nvram_fops,
+	{NULL, NULL},
+	NULL,
+	NULL
 };
 
 static int __init nvram_init(void)

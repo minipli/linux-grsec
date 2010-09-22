@@ -130,7 +130,7 @@ static int aio_setup_ring(struct kioctx *ctx)
 	size += sizeof(struct io_event) * nr_events;
 	nr_pages = (size + PAGE_SIZE-1) >> PAGE_SHIFT;
 
-	if (nr_pages < 0)
+	if (nr_pages <= 0)
 		return -EINVAL;
 
 	nr_events = (PAGE_SIZE * nr_pages - sizeof(struct aio_ring)) / sizeof(struct io_event);
@@ -1658,6 +1658,9 @@ long do_io_submit(aio_context_t ctx_id, long nr,
 
 	if (unlikely(nr < 0))
 		return -EINVAL;
+
+	if (unlikely(nr > LONG_MAX/sizeof(*iocbpp)))
+		nr = LONG_MAX/sizeof(*iocbpp);
 
 	if (unlikely(!access_ok(VERIFY_READ, iocbpp, (nr*sizeof(*iocbpp)))))
 		return -EFAULT;
