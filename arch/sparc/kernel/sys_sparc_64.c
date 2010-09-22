@@ -124,7 +124,7 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr, unsi
 		/* We do not accept a shared mapping if it would violate
 		 * cache aliasing constraints.
 		 */
-		if ((flags & MAP_SHARED) &&
+		if ((filp || (flags & MAP_SHARED)) &&
 		    ((addr - (pgoff << PAGE_SHIFT)) & (SHMLBA - 1)))
 			return -EINVAL;
 		return addr;
@@ -139,6 +139,10 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr, unsi
 	if (filp || (flags & MAP_SHARED))
 		do_color_align = 1;
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (addr) {
 		if (do_color_align)
 			addr = COLOUR_ALIGN(addr, pgoff);
@@ -152,9 +156,9 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr, unsi
 	}
 
 	if (len > mm->cached_hole_size) {
-	        start_addr = addr = mm->free_area_cache;
+		start_addr = addr = mm->free_area_cache;
 	} else {
-	        start_addr = addr = TASK_UNMAPPED_BASE;
+		start_addr = addr = mm->mmap_base;
 	        mm->cached_hole_size = 0;
 	}
 
@@ -174,8 +178,8 @@ full_search:
 			vma = find_vma(mm, VA_EXCLUDE_END);
 		}
 		if (unlikely(task_size < addr)) {
-			if (start_addr != TASK_UNMAPPED_BASE) {
-				start_addr = addr = TASK_UNMAPPED_BASE;
+			if (start_addr != mm->mmap_base) {
+				start_addr = addr = mm->mmap_base;
 				mm->cached_hole_size = 0;
 				goto full_search;
 			}
@@ -215,7 +219,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 		/* We do not accept a shared mapping if it would violate
 		 * cache aliasing constraints.
 		 */
-		if ((flags & MAP_SHARED) &&
+		if ((filp || (flags & MAP_SHARED)) &&
 		    ((addr - (pgoff << PAGE_SHIFT)) & (SHMLBA - 1)))
 			return -EINVAL;
 		return addr;
@@ -385,6 +389,12 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 	    gap == RLIM_INFINITY ||
 	    sysctl_legacy_va_layout) {
 		mm->mmap_base = TASK_UNMAPPED_BASE + random_factor;
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (mm->pax_flags & MF_PAX_RANDMMAP)
+			mm->mmap_base += mm->delta_mmap;
+#endif
+
 		mm->get_unmapped_area = arch_get_unmapped_area;
 		mm->unmap_area = arch_unmap_area;
 	} else {
@@ -397,6 +407,12 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 			gap = (task_size / 6 * 5);
 
 		mm->mmap_base = PAGE_ALIGN(task_size - gap - random_factor);
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (mm->pax_flags & MF_PAX_RANDMMAP)
+			mm->mmap_base -= mm->delta_mmap + mm->delta_stack;
+#endif
+
 		mm->get_unmapped_area = arch_get_unmapped_area_topdown;
 		mm->unmap_area = arch_unmap_area_topdown;
 	}

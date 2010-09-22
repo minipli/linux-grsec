@@ -841,7 +841,7 @@ static unsigned int dt3155_poll (struct file * filp, poll_table *wait)
  *  needed by init_module
  *  register_chrdev
  *****************************************************/
-static struct file_operations dt3155_fops = {
+static const struct file_operations dt3155_fops = {
   read:		dt3155_read,
   ioctl:		dt3155_ioctl,
   mmap:		dt3155_mmap,

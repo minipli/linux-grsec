@@ -16,7 +16,7 @@ struct dev_archdata {
 	struct device_node	*of_node;
 
 	/* DMA operations on that device */
-	struct dma_map_ops	*dma_ops;
+	const struct dma_map_ops	*dma_ops;
 	void                    *dma_data;
 };
 

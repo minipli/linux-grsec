@@ -2034,7 +2034,7 @@ static int packet_getsockopt(struct socket *sock, int level, int optname,
 	case PACKET_HDRLEN:
 		if (len > sizeof(int))
 			len = sizeof(int);
-		if (copy_from_user(&val, optval, len))
+		if (len > sizeof(val) || copy_from_user(&val, optval, len))
 			return -EFAULT;
 		switch (val) {
 		case TPACKET_V1:
@@ -2066,7 +2066,7 @@ static int packet_getsockopt(struct socket *sock, int level, int optname,
 
 	if (put_user(len, optlen))
 		return -EFAULT;
-	if (copy_to_user(optval, data, len))
+	if (len > sizeof(st) || copy_to_user(optval, data, len))
 		return -EFAULT;
 	return 0;
 }
@@ -2545,7 +2545,11 @@ static int packet_seq_show(struct seq_file *seq, void *v)
 
 		seq_printf(seq,
 			   "%p %-6d %-4d %04x   %-5d %1d %-6u %-6u %-6lu\n",
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+			   NULL,
+#else
 			   s,
+#endif
 			   atomic_read(&s->sk_refcnt),
 			   s->sk_type,
 			   ntohs(po->num),

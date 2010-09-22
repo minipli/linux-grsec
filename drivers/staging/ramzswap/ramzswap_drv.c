@@ -1295,7 +1295,7 @@ out:
 	return ret;
 }
 
-static struct block_device_operations ramzswap_devops = {
+static const struct block_device_operations ramzswap_devops = {
 	.ioctl = ramzswap_ioctl,
 	.owner = THIS_MODULE,
 };
