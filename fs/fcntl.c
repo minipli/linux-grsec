@@ -223,6 +223,11 @@ int __f_setown(struct file *filp, struct pid *pid, enum pid_type type,
 	if (err)
 		return err;
 
+	if (gr_handle_chroot_fowner(pid, type))
+		return -ENOENT;
+	if (gr_check_protected_task_fowner(pid, type))
+		return -EACCES;
+
 	f_modown(filp, pid, type, force);
 	return 0;
 }
@@ -344,6 +349,7 @@ static long do_fcntl(int fd, unsigned int cmd, unsigned long arg,
 	switch (cmd) {
 	case F_DUPFD:
 	case F_DUPFD_CLOEXEC:
+		gr_learn_resource(current, RLIMIT_NOFILE, arg, 0);
 		if (arg >= current->signal->rlim[RLIMIT_NOFILE].rlim_cur)
 			break;
 		err = alloc_fd(arg, cmd == F_DUPFD_CLOEXEC ? O_CLOEXEC : 0);

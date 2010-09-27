@@ -287,16 +287,16 @@ struct module
 	int (*init)(void);
 
 	/* If this is non-NULL, vfree after init() returns */
-	void *module_init;
+	void *module_init_rx, *module_init_rw;
 
 	/* Here is the actual code + data, vfree'd on unload. */
-	void *module_core;
+	void *module_core_rx, *module_core_rw;
 
 	/* Here are the sizes of the init and core sections */
-	unsigned int init_size, core_size;
+	unsigned int init_size_rw, core_size_rw;
 
 	/* The size of the executable code in each section.  */
-	unsigned int init_text_size, core_text_size;
+	unsigned int init_size_rx, core_size_rx;
 
 	/* Arch-specific module values */
 	struct mod_arch_specific arch;
@@ -393,16 +393,46 @@ struct module *__module_address(unsigned long addr);
 bool is_module_address(unsigned long addr);
 bool is_module_text_address(unsigned long addr);
 
+static inline int within_module_range(unsigned long addr, void *start, unsigned long size)
+{
+
+#ifdef CONFIG_PAX_KERNEXEC
+	if (ktla_ktva(addr) >= (unsigned long)start &&
+	    ktla_ktva(addr) < (unsigned long)start + size)
+		return 1;
+#endif
+
+	return ((void *)addr >= start && (void *)addr < start + size);
+}
+
+static inline int within_module_core_rx(unsigned long addr, struct module *mod)
+{
+	return within_module_range(addr, mod->module_core_rx, mod->core_size_rx);
+}
+
+static inline int within_module_core_rw(unsigned long addr, struct module *mod)
+{
+	return within_module_range(addr, mod->module_core_rw, mod->core_size_rw);
+}
+
+static inline int within_module_init_rx(unsigned long addr, struct module *mod)
+{
+	return within_module_range(addr, mod->module_init_rx, mod->init_size_rx);
+}
+
+static inline int within_module_init_rw(unsigned long addr, struct module *mod)
+{
+	return within_module_range(addr, mod->module_init_rw, mod->init_size_rw);
+}
+
 static inline int within_module_core(unsigned long addr, struct module *mod)
 {
-	return (unsigned long)mod->module_core <= addr &&
-	       addr < (unsigned long)mod->module_core + mod->core_size;
+	return within_module_core_rx(addr, mod) || within_module_core_rw(addr, mod);
 }
 
 static inline int within_module_init(unsigned long addr, struct module *mod)
 {
-	return (unsigned long)mod->module_init <= addr &&
-	       addr < (unsigned long)mod->module_init + mod->init_size;
+	return within_module_init_rx(addr, mod) || within_module_init_rw(addr, mod);
 }
 
 /* Search for module by name: must hold module_mutex. */
