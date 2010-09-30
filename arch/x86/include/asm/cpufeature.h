@@ -323,7 +323,7 @@ static __always_inline __pure bool __static_cpu_has(u8 bit)
 			     " .byte 4f - 3f\n"		/* replacement len */
 			     " .byte 0xff + (4f-3f) - (2b-1b)\n" /* padding */
 			     ".previous\n"
-			     ".section .altinstr_replacement,\"ax\"\n"
+			     ".section .altinstr_replacement,\"a\"\n"
 			     "3: movb $1,%0\n"
 			     "4:\n"
 			     ".previous\n"
