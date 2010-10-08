@@ -11,6 +11,7 @@
 
 #include <linux/gfp.h>
 #include <linux/types.h>
+#include <linux/err.h>
 
 /*
  * Flags to pass to kmem_cache_create().
@@ -82,10 +83,13 @@
  * ZERO_SIZE_PTR can be passed to kfree though in the same way that NULL can.
  * Both make kfree a no-op.
  */
-#define ZERO_SIZE_PTR ((void *)16)
+#define ZERO_SIZE_PTR				\
+({						\
+	BUILD_BUG_ON(!(MAX_ERRNO & ~PAGE_MASK));\
+	(void *)(-MAX_ERRNO-1L);		\
+})
 
-#define ZERO_OR_NULL_PTR(x) ((unsigned long)(x) <= \
-				(unsigned long)ZERO_SIZE_PTR)
+#define ZERO_OR_NULL_PTR(x) ((unsigned long)(x) - 1 >= (unsigned long)ZERO_SIZE_PTR - 1)
 
 /*
  * struct kmem_cache related prototypes
@@ -138,6 +142,7 @@ void * __must_check krealloc(const void *, size_t, gfp_t);
 void kfree(const void *);
 void kzfree(const void *);
 size_t ksize(const void *);
+void check_object_size(const void *ptr, unsigned long n, bool to);
 
 /*
  * Allocator specific definitions. These are mainly used to establish optimized
@@ -327,5 +332,38 @@ static inline void *kzalloc_node(size_t size, gfp_t flags, int node)
 }
 
 void __init kmem_cache_init_late(void);
+
+#define kmalloc(x, y)					\
+({							\
+	void *___retval;				\
+	intoverflow_t ___x = (intoverflow_t)x;		\
+	if (WARN(___x > ULONG_MAX, "kmalloc size overflow\n"))\
+		___retval = NULL;			\
+	else						\
+		___retval = kmalloc((size_t)___x, (y));	\
+	___retval;					\
+})
+
+#define kmalloc_node(x, y, z)					\
+({								\
+	void *___retval;					\
+	intoverflow_t ___x = (intoverflow_t)x;			\
+	if (WARN(___x > ULONG_MAX, "kmalloc_node size overflow\n"))\
+		___retval = NULL;				\
+	else							\
+		___retval = kmalloc_node((size_t)___x, (y), (z));\
+	___retval;						\
+})
+
+#define kzalloc(x, y)					\
+({							\
+	void *___retval;				\
+	intoverflow_t ___x = (intoverflow_t)x;		\
+	if (WARN(___x > ULONG_MAX, "kzalloc size overflow\n"))\
+		___retval = NULL;			\
+	else						\
+		___retval = kzalloc((size_t)___x, (y));	\
+	___retval;					\
+})
 
 #endif	/* _LINUX_SLAB_H */

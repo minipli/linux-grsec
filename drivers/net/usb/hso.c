@@ -258,7 +258,7 @@ struct hso_serial {
 
 	/* from usb_serial_port */
 	struct tty_struct *tty;
-	int open_count;
+	atomic_t open_count;
 	spinlock_t serial_lock;
 
 	int (*write_data) (struct hso_serial *serial);
@@ -1180,7 +1180,7 @@ static void put_rxbuf_data_and_resubmit_ctrl_urb(struct hso_serial *serial)
 	struct urb *urb;
 
 	urb = serial->rx_urb[0];
-	if (serial->open_count > 0) {
+	if (atomic_read(&serial->open_count) > 0) {
 		count = put_rxbuf_data(urb, serial);
 		if (count == -1)
 			return;
@@ -1216,7 +1216,7 @@ static void hso_std_serial_read_bulk_callback(struct urb *urb)
 	DUMP1(urb->transfer_buffer, urb->actual_length);
 
 	/* Anyone listening? */
-	if (serial->open_count == 0)
+	if (atomic_read(&serial->open_count) == 0)
 		return;
 
 	if (status == 0) {
@@ -1311,8 +1311,7 @@ static int hso_serial_open(struct tty_struct *tty, struct file *filp)
 	spin_unlock_irq(&serial->serial_lock);
 
 	/* check for port already opened, if not set the termios */
-	serial->open_count++;
-	if (serial->open_count == 1) {
+	if (atomic_inc_return(&serial->open_count) == 1) {
 		tty->low_latency = 1;
 		serial->rx_state = RX_IDLE;
 		/* Force default termio settings */
@@ -1325,7 +1324,7 @@ static int hso_serial_open(struct tty_struct *tty, struct file *filp)
 		result = hso_start_serial_device(serial->parent, GFP_KERNEL);
 		if (result) {
 			hso_stop_serial_device(serial->parent);
-			serial->open_count--;
+			atomic_dec(&serial->open_count);
 			kref_put(&serial->parent->ref, hso_serial_ref_free);
 		}
 	} else {
@@ -1362,10 +1361,10 @@ static void hso_serial_close(struct tty_struct *tty, struct file *filp)
 
 	/* reset the rts and dtr */
 	/* do the actual close */
-	serial->open_count--;
+	atomic_dec(&serial->open_count);
 
-	if (serial->open_count <= 0) {
-		serial->open_count = 0;
+	if (atomic_read(&serial->open_count) <= 0) {
+		atomic_set(&serial->open_count,  0);
 		spin_lock_irq(&serial->serial_lock);
 		if (serial->tty == tty) {
 			serial->tty->driver_data = NULL;
@@ -1447,7 +1446,7 @@ static void hso_serial_set_termios(struct tty_struct *tty, struct ktermios *old)
 
 	/* the actual setup */
 	spin_lock_irqsave(&serial->serial_lock, flags);
-	if (serial->open_count)
+	if (atomic_read(&serial->open_count))
 		_hso_serial_set_termios(tty, old);
 	else
 		tty->termios = old;
@@ -1634,10 +1633,11 @@ static int hso_get_count(struct hso_serial *serial,
 	struct uart_icount cnow;
 	struct hso_tiocmget  *tiocmget = serial->tiocmget;
 
-	memset(&icount, 0, sizeof(struct serial_icounter_struct));
-
 	if (!tiocmget)
 		 return -ENOENT;
+
+	memset(&icount, 0, sizeof(icount));
+
 	spin_lock_irq(&serial->serial_lock);
 	memcpy(&cnow, &tiocmget->icount, sizeof(struct uart_icount));
 	spin_unlock_irq(&serial->serial_lock);
@@ -3097,7 +3097,7 @@ static int hso_resume(struct usb_interface *iface)
 	/* Start all serial ports */
 	for (i = 0; i < HSO_SERIAL_TTY_MINORS; i++) {
 		if (serial_table[i] && (serial_table[i]->interface == iface)) {
-			if (dev2ser(serial_table[i])->open_count) {
+			if (atomic_read(&dev2ser(serial_table[i])->open_count)) {
 				result =
 				    hso_start_serial_device(serial_table[i], GFP_NOIO);
 				hso_kick_transmit(dev2ser(serial_table[i]));

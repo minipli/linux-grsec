@@ -29,7 +29,7 @@ static int __init default_rootfs(void)
 {
 	int err;
 
-	err = sys_mkdir("/dev", 0755);
+	err = sys_mkdir((const char __user *)"/dev", 0755);
 	if (err < 0)
 		goto out;
 
@@ -39,7 +39,7 @@ static int __init default_rootfs(void)
 	if (err < 0)
 		goto out;
 
-	err = sys_mkdir("/root", 0700);
+	err = sys_mkdir((const char __user *)"/root", 0700);
 	if (err < 0)
 		goto out;
 
