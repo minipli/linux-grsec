@@ -693,7 +693,7 @@ void ramzswap_slot_free_notify(struct block_device *bdev, unsigned long index)
 	return;
 }
 
-static struct block_device_operations ramzswap_devops = {
+static const struct block_device_operations ramzswap_devops = {
 	.ioctl = ramzswap_ioctl,
 	.swap_slot_free_notify = ramzswap_slot_free_notify,
 	.owner = THIS_MODULE

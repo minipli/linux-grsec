@@ -91,7 +91,7 @@ static inline int alternatives_text_reserved(void *start, void *end)
       "	 .byte 664f-663f\n"			/* replacementlen  */	\
       "	 .byte 0xff + (664f-663f) - (662b-661b)\n" /* rlen <= slen */	\
       ".previous\n"							\
-      ".section .altinstr_replacement, \"ax\"\n"			\
+      ".section .altinstr_replacement, \"a\"\n"			\
       "663:\n\t" newinstr "\n664:\n"		/* replacement     */	\
       ".previous"
 
