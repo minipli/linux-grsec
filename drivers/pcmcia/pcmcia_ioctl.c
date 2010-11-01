@@ -850,7 +850,7 @@ static int ds_ioctl(struct file *file, u_int cmd, u_long arg)
 	    return -EFAULT;
 	}
     }
-    buf = kmalloc(sizeof(ds_ioctl_arg_t), GFP_KERNEL);
+    buf = kzalloc(sizeof(ds_ioctl_arg_t), GFP_KERNEL);
     if (!buf)
 	return -ENOMEM;
 

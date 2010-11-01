@@ -853,7 +853,7 @@ dt3155_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
  *  needed by init_module
  *  register_chrdev
  *****************************************************/
-static struct file_operations dt3155_fops = {
+static const struct file_operations dt3155_fops = {
 	.read		= dt3155_read,
 	.unlocked_ioctl	= dt3155_unlocked_ioctl,
 	.mmap		= dt3155_mmap,

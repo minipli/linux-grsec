@@ -548,7 +548,7 @@ __do_follow_link(struct path *path, struct nameidata *nd, void **p)
 	*p = dentry->d_inode->i_op->follow_link(dentry, nd);
 	error = PTR_ERR(*p);
 	if (!IS_ERR(*p)) {
-		char *s = nd_get_link(nd);
+		const char *s = nd_get_link(nd);
 		error = 0;
 		if (s)
 			error = __vfs_follow_link(nd, s);
@@ -581,6 +581,13 @@ static inline int do_follow_link(struct path *path, struct nameidata *nd)
 	err = security_inode_follow_link(path->dentry, nd);
 	if (err)
 		goto loop;
+
+	if (gr_handle_follow_link(path->dentry->d_parent->d_inode,
+				  path->dentry->d_inode, path->dentry, nd->path.mnt)) {
+		err = -EACCES;
+		goto loop;
+	}
+
 	current->link_count++;
 	current->total_link_count++;
 	nd->depth++;
@@ -965,11 +972,18 @@ return_reval:
 				break;
 		}
 return_base:
+		if (!(nd->flags & LOOKUP_PARENT) && !gr_acl_handle_hidden_file(nd->path.dentry, nd->path.mnt)) {
+			path_put(&nd->path);
+			return -ENOENT;
+		}
 		return 0;
 out_dput:
 		path_put_conditional(&next, nd);
 		break;
 	}
+	if (!(nd->flags & LOOKUP_PARENT) && !gr_acl_handle_hidden_file(nd->path.dentry, nd->path.mnt))
+		err = -ENOENT;
+
 	path_put(&nd->path);
 return_err:
 	return err;
@@ -1506,12 +1520,19 @@ static int __open_namei_create(struct nameidata *nd, struct path *path,
 	int error;
 	struct dentry *dir = nd->path.dentry;
 
+	if (!gr_acl_handle_creat(path->dentry, nd->path.dentry, nd->path.mnt, open_flag, mode)) {
+		error = -EACCES;
+		goto out_unlock;
+	}
+
 	if (!IS_POSIXACL(dir->d_inode))
 		mode &= ~current_umask();
 	error = security_path_mknod(&nd->path, path->dentry, mode, 0);
 	if (error)
 		goto out_unlock;
 	error = vfs_create(dir->d_inode, path->dentry, mode, nd);
+	if (!error)
+		gr_handle_create(path->dentry, nd->path.mnt);
 out_unlock:
 	mutex_unlock(&dir->d_inode->i_mutex);
 	dput(nd->path.dentry);
@@ -1614,6 +1635,7 @@ static struct file *do_last(struct nameidata *nd, struct path *path,
 			    int mode, const char *pathname)
 {
 	struct dentry *dir = nd->path.dentry;
+	int flag = open_to_namei_flags(open_flag);
 	struct file *filp;
 	int error = -EISDIR;
 
@@ -1662,6 +1684,22 @@ static struct file *do_last(struct nameidata *nd, struct path *path,
 		}
 		path_to_nameidata(path, nd);
 		audit_inode(pathname, nd->path.dentry);
+
+		if (gr_handle_rofs_blockwrite(nd->path.dentry, nd->path.mnt, acc_mode)) {
+			error = -EPERM;
+			goto exit;
+		}
+
+		if (gr_handle_rawio(nd->path.dentry->d_inode)) {
+			error = -EPERM;
+			goto exit;
+		}
+
+		if (!gr_acl_handle_open(nd->path.dentry, nd->path.mnt, flag)) {
+			error = -EACCES;
+			goto exit;
+		}
+
 		goto ok;
 	}
 
@@ -1714,6 +1752,24 @@ static struct file *do_last(struct nameidata *nd, struct path *path,
 	/*
 	 * It already exists.
 	 */
+
+	if (gr_handle_rofs_blockwrite(path->dentry, nd->path.mnt, acc_mode)) {
+		error = -EPERM;
+		goto exit_mutex_unlock;
+	}
+	if (gr_handle_rawio(path->dentry->d_inode)) {
+		error = -EPERM;
+		goto exit_mutex_unlock;
+	}
+	if (!gr_acl_handle_open(path->dentry, nd->path.mnt, flag)) {
+		error = -EACCES;
+		goto exit_mutex_unlock;
+	}
+	if (gr_handle_fifo(path->dentry, nd->path.mnt, dir, flag, acc_mode)) {
+		error = -EACCES;
+		goto exit_mutex_unlock;
+	}
+
 	mutex_unlock(&dir->d_inode->i_mutex);
 	audit_inode(pathname, path->dentry);
 
@@ -2034,6 +2090,17 @@ SYSCALL_DEFINE4(mknodat, int, dfd, const char __user *, filename, int, mode,
 	error = may_mknod(mode);
 	if (error)
 		goto out_dput;
+
+	if (gr_handle_chroot_mknod(dentry, nd.path.mnt, mode)) {
+		error = -EPERM;
+		goto out_dput;
+	}
+
+	if (!gr_acl_handle_mknod(dentry, nd.path.dentry, nd.path.mnt, mode)) {
+		error = -EACCES;
+		goto out_dput;
+	}
+
 	error = mnt_want_write(nd.path.mnt);
 	if (error)
 		goto out_dput;
@@ -2054,6 +2121,9 @@ SYSCALL_DEFINE4(mknodat, int, dfd, const char __user *, filename, int, mode,
 	}
 out_drop_write:
 	mnt_drop_write(nd.path.mnt);
+
+	if (!error)
+		gr_handle_create(dentry, nd.path.mnt);
 out_dput:
 	dput(dentry);
 out_unlock:
@@ -2106,6 +2176,11 @@ SYSCALL_DEFINE3(mkdirat, int, dfd, const char __user *, pathname, int, mode)
 	if (IS_ERR(dentry))
 		goto out_unlock;
 
+	if (!gr_acl_handle_mkdir(dentry, nd.path.dentry, nd.path.mnt)) {
+		error = -EACCES;
+		goto out_dput;
+	}
+
 	if (!IS_POSIXACL(nd.path.dentry->d_inode))
 		mode &= ~current_umask();
 	error = mnt_want_write(nd.path.mnt);
@@ -2117,6 +2192,10 @@ SYSCALL_DEFINE3(mkdirat, int, dfd, const char __user *, pathname, int, mode)
 	error = vfs_mkdir(nd.path.dentry->d_inode, dentry, mode);
 out_drop_write:
 	mnt_drop_write(nd.path.mnt);
+
+	if (!error)
+		gr_handle_create(dentry, nd.path.mnt);
+
 out_dput:
 	dput(dentry);
 out_unlock:
@@ -2198,6 +2277,8 @@ static long do_rmdir(int dfd, const char __user *pathname)
 	char * name;
 	struct dentry *dentry;
 	struct nameidata nd;
+	ino_t saved_ino = 0;
+	dev_t saved_dev = 0;
 
 	error = user_path_parent(dfd, pathname, &nd, &name);
 	if (error)
@@ -2222,6 +2303,19 @@ static long do_rmdir(int dfd, const char __user *pathname)
 	error = PTR_ERR(dentry);
 	if (IS_ERR(dentry))
 		goto exit2;
+
+	if (dentry->d_inode != NULL) {
+		if (dentry->d_inode->i_nlink <= 1) {
+			saved_ino = dentry->d_inode->i_ino;
+			saved_dev = dentry->d_inode->i_sb->s_dev;
+		}
+
+		if (!gr_acl_handle_rmdir(dentry, nd.path.mnt)) {
+			error = -EACCES;
+			goto exit3;
+		}
+	}
+
 	error = mnt_want_write(nd.path.mnt);
 	if (error)
 		goto exit3;
@@ -2229,6 +2323,8 @@ static long do_rmdir(int dfd, const char __user *pathname)
 	if (error)
 		goto exit4;
 	error = vfs_rmdir(nd.path.dentry->d_inode, dentry);
+	if (!error && (saved_dev || saved_ino))
+		gr_handle_delete(saved_ino, saved_dev);
 exit4:
 	mnt_drop_write(nd.path.mnt);
 exit3:
@@ -2291,6 +2387,8 @@ static long do_unlinkat(int dfd, const char __user *pathname)
 	struct dentry *dentry;
 	struct nameidata nd;
 	struct inode *inode = NULL;
+	ino_t saved_ino = 0;
+	dev_t saved_dev = 0;
 
 	error = user_path_parent(dfd, pathname, &nd, &name);
 	if (error)
@@ -2310,8 +2408,19 @@ static long do_unlinkat(int dfd, const char __user *pathname)
 		if (nd.last.name[nd.last.len])
 			goto slashes;
 		inode = dentry->d_inode;
-		if (inode)
+		if (inode) {
+			if (inode->i_nlink <= 1) {
+				saved_ino = inode->i_ino;
+				saved_dev = inode->i_sb->s_dev;
+			}
+
 			atomic_inc(&inode->i_count);
+
+			if (!gr_acl_handle_unlink(dentry, nd.path.mnt)) {
+				error = -EACCES;
+				goto exit2;
+			}
+		}
 		error = mnt_want_write(nd.path.mnt);
 		if (error)
 			goto exit2;
@@ -2319,6 +2428,8 @@ static long do_unlinkat(int dfd, const char __user *pathname)
 		if (error)
 			goto exit3;
 		error = vfs_unlink(nd.path.dentry->d_inode, dentry);
+		if (!error && (saved_ino || saved_dev))
+			gr_handle_delete(saved_ino, saved_dev);
 exit3:
 		mnt_drop_write(nd.path.mnt);
 	exit2:
@@ -2396,6 +2507,11 @@ SYSCALL_DEFINE3(symlinkat, const char __user *, oldname,
 	if (IS_ERR(dentry))
 		goto out_unlock;
 
+	if (!gr_acl_handle_symlink(dentry, nd.path.dentry, nd.path.mnt, from)) {
+		error = -EACCES;
+		goto out_dput;
+	}
+
 	error = mnt_want_write(nd.path.mnt);
 	if (error)
 		goto out_dput;
@@ -2403,6 +2519,8 @@ SYSCALL_DEFINE3(symlinkat, const char __user *, oldname,
 	if (error)
 		goto out_drop_write;
 	error = vfs_symlink(nd.path.dentry->d_inode, dentry, from);
+	if (!error)
+		gr_handle_create(dentry, nd.path.mnt);
 out_drop_write:
 	mnt_drop_write(nd.path.mnt);
 out_dput:
@@ -2495,6 +2613,20 @@ SYSCALL_DEFINE5(linkat, int, olddfd, const char __user *, oldname,
 	error = PTR_ERR(new_dentry);
 	if (IS_ERR(new_dentry))
 		goto out_unlock;
+
+	if (gr_handle_hardlink(old_path.dentry, old_path.mnt,
+			       old_path.dentry->d_inode,
+			       old_path.dentry->d_inode->i_mode, to)) {
+		error = -EACCES;
+		goto out_dput;
+	}
+
+	if (!gr_acl_handle_link(new_dentry, nd.path.dentry, nd.path.mnt,
+				old_path.dentry, old_path.mnt, to)) {
+		error = -EACCES;
+		goto out_dput;
+	}
+
 	error = mnt_want_write(nd.path.mnt);
 	if (error)
 		goto out_dput;
@@ -2502,6 +2634,8 @@ SYSCALL_DEFINE5(linkat, int, olddfd, const char __user *, oldname,
 	if (error)
 		goto out_drop_write;
 	error = vfs_link(old_path.dentry, nd.path.dentry->d_inode, new_dentry);
+	if (!error)
+		gr_handle_create(new_dentry, nd.path.mnt);
 out_drop_write:
 	mnt_drop_write(nd.path.mnt);
 out_dput:
@@ -2735,6 +2869,12 @@ SYSCALL_DEFINE4(renameat, int, olddfd, const char __user *, oldname,
 	if (new_dentry == trap)
 		goto exit5;
 
+	error = gr_acl_handle_rename(new_dentry, new_dir, newnd.path.mnt,
+				     old_dentry, old_dir->d_inode, oldnd.path.mnt,
+				     to);
+	if (error)
+		goto exit5;
+
 	error = mnt_want_write(oldnd.path.mnt);
 	if (error)
 		goto exit5;
@@ -2744,6 +2884,9 @@ SYSCALL_DEFINE4(renameat, int, olddfd, const char __user *, oldname,
 		goto exit6;
 	error = vfs_rename(old_dir->d_inode, old_dentry,
 				   new_dir->d_inode, new_dentry);
+	if (!error)
+		gr_handle_rename(old_dir->d_inode, new_dir->d_inode, old_dentry,
+				 new_dentry, oldnd.path.mnt, new_dentry->d_inode ? 1 : 0);
 exit6:
 	mnt_drop_write(oldnd.path.mnt);
 exit5:

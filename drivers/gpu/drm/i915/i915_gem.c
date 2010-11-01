@@ -471,7 +471,7 @@ i915_gem_pread_ioctl(struct drm_device *dev, void *data,
 	}
 
 	if (!access_ok(VERIFY_WRITE,
-		       (char __user *)(uintptr_t)args->data_ptr,
+		       (char __user *) (uintptr_t)args->data_ptr,
 		       args->size)) {
 		ret = -EFAULT;
 		goto err;
@@ -939,7 +939,7 @@ i915_gem_pwrite_ioctl(struct drm_device *dev, void *data,
 	}
 
 	if (!access_ok(VERIFY_READ,
-		       (char __user *)(uintptr_t)args->data_ptr,
+		       (char __user *) (uintptr_t)args->data_ptr,
 		       args->size)) {
 		ret = -EFAULT;
 		goto err;

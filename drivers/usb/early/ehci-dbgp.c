@@ -1026,6 +1026,7 @@ static void kgdbdbgp_write_char(u8 chr)
 	early_dbgp_write(NULL, &chr, 1);
 }
 
+/* cannot be const, see kgdbdbgp_parse_config() */
 static struct kgdb_io kgdbdbgp_io_ops = {
 	.name = "kgdbdbgp",
 	.read_char = kgdbdbgp_read_char,
