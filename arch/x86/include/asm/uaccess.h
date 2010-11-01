@@ -8,11 +8,14 @@
 #include <linux/thread_info.h>
 #include <linux/prefetch.h>
 #include <linux/string.h>
+#include <linux/sched.h>
 #include <asm/asm.h>
 #include <asm/page.h>
 
 #define VERIFY_READ 0
 #define VERIFY_WRITE 1
+
+extern void check_object_size(const void *ptr, unsigned long n, bool to);
 
 /*
  * The fs value determines whether argument validity checking should be
@@ -29,7 +32,12 @@
 
 #define get_ds()	(KERNEL_DS)
 #define get_fs()	(current_thread_info()->addr_limit)
+#ifdef CONFIG_X86_32
+void __set_fs(mm_segment_t x, int cpu);
+void set_fs(mm_segment_t x);
+#else
 #define set_fs(x)	(current_thread_info()->addr_limit = (x))
+#endif
 
 #define segment_eq(a, b)	((a).seg == (b).seg)
 
@@ -77,7 +85,33 @@
  * checks that the pointer is in the user space range - after calling
  * this function, memory access functions may still return -EFAULT.
  */
-#define access_ok(type, addr, size) (likely(__range_not_ok(addr, size) == 0))
+#define __access_ok(type, addr, size) (likely(__range_not_ok(addr, size) == 0))
+#define access_ok(type, addr, size)					\
+({									\
+	long __size = size;						\
+	unsigned long __addr = (unsigned long)addr;			\
+	unsigned long __addr_ao = __addr & PAGE_MASK;			\
+	unsigned long __end_ao = __addr + __size - 1;			\
+	bool __ret_ao = __range_not_ok(__addr, __size) == 0;		\
+	if (__ret_ao && unlikely((__end_ao ^ __addr_ao) & PAGE_MASK)) {	\
+		while(__addr_ao <= __end_ao) {				\
+			char __c_ao;					\
+			__addr_ao += PAGE_SIZE;				\
+			if (__size > PAGE_SIZE)				\
+				cond_resched();				\
+			if (__get_user(__c_ao, (char __user *)__addr))	\
+				break;					\
+			if (type != VERIFY_WRITE) {			\
+				__addr = __addr_ao;			\
+				continue;				\
+			}						\
+			if (__put_user(__c_ao, (char __user *)__addr))	\
+				break;					\
+			__addr = __addr_ao;				\
+		}							\
+	}								\
+	__ret_ao;							\
+})
 
 /*
  * The exception table consists of pairs of addresses: the first is the
@@ -183,13 +217,21 @@ extern int __get_user_bad(void);
 	asm volatile("call __put_user_" #size : "=a" (__ret_pu)	\
 		     : "0" ((typeof(*(ptr)))(x)), "c" (ptr) : "ebx")
 
-
+#ifdef CONFIG_X86_32
+#define _ASM_LOAD_USER_DS(ds) "movw %w" #ds ",%%ds\n"
+#define _ASM_LOAD_KERNEL_DS "pushl %%ss; popl %%ds\n"
+#else
+#define _ASM_LOAD_USER_DS(ds)
+#define _ASM_LOAD_KERNEL_DS
+#endif
 
 #ifdef CONFIG_X86_32
 #define __put_user_asm_u64(x, addr, err, errret)			\
-	asm volatile("1:	movl %%eax,0(%2)\n"			\
-		     "2:	movl %%edx,4(%2)\n"			\
+	asm volatile(_ASM_LOAD_USER_DS(5)				\
+		     "1:	movl %%eax,%%ds:0(%2)\n"		\
+		     "2:	movl %%edx,%%ds:4(%2)\n"		\
 		     "3:\n"						\
+		     _ASM_LOAD_KERNEL_DS				\
 		     ".section .fixup,\"ax\"\n"				\
 		     "4:	movl %3,%0\n"				\
 		     "	jmp 3b\n"					\
@@ -197,15 +239,18 @@ extern int __get_user_bad(void);
 		     _ASM_EXTABLE(1b, 4b)				\
 		     _ASM_EXTABLE(2b, 4b)				\
 		     : "=r" (err)					\
-		     : "A" (x), "r" (addr), "i" (errret), "0" (err))
+		     : "A" (x), "r" (addr), "i" (errret), "0" (err),	\
+		       "r"(__USER_DS))
 
 #define __put_user_asm_ex_u64(x, addr)					\
-	asm volatile("1:	movl %%eax,0(%1)\n"			\
-		     "2:	movl %%edx,4(%1)\n"			\
+	asm volatile(_ASM_LOAD_USER_DS(2)				\
+		     "1:	movl %%eax,%%ds:0(%1)\n"		\
+		     "2:	movl %%edx,%%ds:4(%1)\n"		\
 		     "3:\n"						\
+		     _ASM_LOAD_KERNEL_DS				\
 		     _ASM_EXTABLE(1b, 2b - 1b)				\
 		     _ASM_EXTABLE(2b, 3b - 2b)				\
-		     : : "A" (x), "r" (addr))
+		     : : "A" (x), "r" (addr), "r"(__USER_DS))
 
 #define __put_user_x8(x, ptr, __ret_pu)				\
 	asm volatile("call __put_user_8" : "=a" (__ret_pu)	\
@@ -374,16 +419,18 @@ do {									\
 } while (0)
 
 #define __get_user_asm(x, addr, err, itype, rtype, ltype, errret)	\
-	asm volatile("1:	mov"itype" %2,%"rtype"1\n"		\
+	asm volatile(_ASM_LOAD_USER_DS(5)				\
+		     "1:	mov"itype" %%ds:%2,%"rtype"1\n"		\
 		     "2:\n"						\
+		     _ASM_LOAD_KERNEL_DS				\
 		     ".section .fixup,\"ax\"\n"				\
 		     "3:	mov %3,%0\n"				\
 		     "	xor"itype" %"rtype"1,%"rtype"1\n"		\
 		     "	jmp 2b\n"					\
 		     ".previous\n"					\
 		     _ASM_EXTABLE(1b, 3b)				\
-		     : "=r" (err), ltype(x)				\
-		     : "m" (__m(addr)), "i" (errret), "0" (err))
+		     : "=r" (err), ltype (x)				\
+		     : "m" (__m(addr)), "i" (errret), "0" (err), "r"(__USER_DS))
 
 #define __get_user_size_ex(x, ptr, size)				\
 do {									\
@@ -407,10 +454,12 @@ do {									\
 } while (0)
 
 #define __get_user_asm_ex(x, addr, itype, rtype, ltype)			\
-	asm volatile("1:	mov"itype" %1,%"rtype"0\n"		\
+	asm volatile(_ASM_LOAD_USER_DS(2)				\
+		     "1:	mov"itype" %%ds:%1,%"rtype"0\n"		\
 		     "2:\n"						\
+		     _ASM_LOAD_KERNEL_DS				\
 		     _ASM_EXTABLE(1b, 2b - 1b)				\
-		     : ltype(x) : "m" (__m(addr)))
+		     : ltype(x) : "m" (__m(addr)), "r"(__USER_DS))
 
 #define __put_user_nocheck(x, ptr, size)			\
 ({								\
@@ -424,13 +473,24 @@ do {									\
 	int __gu_err;							\
 	unsigned long __gu_val;						\
 	__get_user_size(__gu_val, (ptr), (size), __gu_err, -EFAULT);	\
-	(x) = (__force __typeof__(*(ptr)))__gu_val;			\
+	(x) = (__typeof__(*(ptr)))__gu_val;				\
 	__gu_err;							\
 })
 
 /* FIXME: this hack is definitely wrong -AK */
 struct __large_struct { unsigned long buf[100]; };
-#define __m(x) (*(struct __large_struct __user *)(x))
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+#define ____m(x)					\
+({							\
+	unsigned long ____x = (unsigned long)(x);	\
+	if (____x < PAX_USER_SHADOW_BASE)		\
+		____x += PAX_USER_SHADOW_BASE;		\
+	(void __user *)____x;				\
+})
+#else
+#define ____m(x) (x)
+#endif
+#define __m(x) (*(struct __large_struct __user *)____m(x))
 
 /*
  * Tell gcc we read from memory instead of writing: this is because
@@ -438,21 +498,26 @@ struct __large_struct { unsigned long buf[100]; };
  * aliasing issues.
  */
 #define __put_user_asm(x, addr, err, itype, rtype, ltype, errret)	\
-	asm volatile("1:	mov"itype" %"rtype"1,%2\n"		\
+	asm volatile(_ASM_LOAD_USER_DS(5)				\
+		     "1:	mov"itype" %"rtype"1,%%ds:%2\n"		\
 		     "2:\n"						\
+		     _ASM_LOAD_KERNEL_DS				\
 		     ".section .fixup,\"ax\"\n"				\
 		     "3:	mov %3,%0\n"				\
 		     "	jmp 2b\n"					\
 		     ".previous\n"					\
 		     _ASM_EXTABLE(1b, 3b)				\
 		     : "=r"(err)					\
-		     : ltype(x), "m" (__m(addr)), "i" (errret), "0" (err))
+		     : ltype (x), "m" (__m(addr)), "i" (errret), "0" (err),\
+		       "r"(__USER_DS))
 
 #define __put_user_asm_ex(x, addr, itype, rtype, ltype)			\
-	asm volatile("1:	mov"itype" %"rtype"0,%1\n"		\
+	asm volatile(_ASM_LOAD_USER_DS(2)				\
+		     "1:	mov"itype" %"rtype"0,%%ds:%1\n"		\
 		     "2:\n"						\
+		     _ASM_LOAD_KERNEL_DS				\
 		     _ASM_EXTABLE(1b, 2b - 1b)				\
-		     : : ltype(x), "m" (__m(addr)))
+		     : : ltype(x), "m" (__m(addr)), "r"(__USER_DS))
 
 /*
  * uaccess_try and catch
@@ -530,7 +595,7 @@ struct __large_struct { unsigned long buf[100]; };
 #define get_user_ex(x, ptr)	do {					\
 	unsigned long __gue_val;					\
 	__get_user_size_ex((__gue_val), (ptr), (sizeof(*(ptr))));	\
-	(x) = (__force __typeof__(*(ptr)))__gue_val;			\
+	(x) = (__typeof__(*(ptr)))__gue_val;				\
 } while (0)
 
 #ifdef CONFIG_X86_WP_WORKS_OK
@@ -567,6 +632,7 @@ extern struct movsl_mask {
 
 #define ARCH_HAS_NOCACHE_UACCESS 1
 
+#define ARCH_HAS_SORT_EXTABLE
 #ifdef CONFIG_X86_32
 # include "uaccess_32.h"
 #else
