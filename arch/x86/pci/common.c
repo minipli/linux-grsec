@@ -32,8 +32,8 @@ int noioapicreroute = 1;
 int pcibios_last_bus = -1;
 unsigned long pirq_table_addr;
 struct pci_bus *pci_root_bus;
-struct pci_raw_ops *raw_pci_ops;
-struct pci_raw_ops *raw_pci_ext_ops;
+const struct pci_raw_ops *raw_pci_ops;
+const struct pci_raw_ops *raw_pci_ext_ops;
 
 int raw_pci_read(unsigned int domain, unsigned int bus, unsigned int devfn,
 						int reg, int len, u32 *val)
@@ -382,7 +382,7 @@ static const struct dmi_system_id __devinitconst pciprobe_dmi_table[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "ProLiant DL585 G2"),
 		},
 	},
-	{}
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL}
 };
 
 void __init dmi_check_pciprobe(void)

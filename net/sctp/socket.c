@@ -1494,7 +1494,7 @@ SCTP_STATIC int sctp_sendmsg(struct kiocb *iocb, struct sock *sk,
 	struct sctp_sndrcvinfo *sinfo;
 	struct sctp_initmsg *sinit;
 	sctp_assoc_t associd = 0;
-	sctp_cmsgs_t cmsgs = { NULL };
+	sctp_cmsgs_t cmsgs = { NULL, NULL };
 	int err;
 	sctp_scope_t scope;
 	long timeo;
@@ -4398,7 +4398,7 @@ static int sctp_getsockopt_peer_addrs(struct sock *sk, int len,
 		addrlen = sctp_get_af_specific(temp.sa.sa_family)->sockaddr_len;
 		if (space_left < addrlen)
 			return -ENOMEM;
-		if (copy_to_user(to, &temp, addrlen))
+		if (addrlen > sizeof(temp) || copy_to_user(to, &temp, addrlen))
 			return -EFAULT;
 		to += addrlen;
 		cnt++;

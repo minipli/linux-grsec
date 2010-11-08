@@ -70,7 +70,7 @@ static void dma_iommu_unmap_sg(struct device *dev, struct scatterlist *sglist,
 }
 
 /* We support DMA to/from any memory page via the iommu */
-static int dma_iommu_dma_supported(struct device *dev, u64 mask)
+int dma_iommu_dma_supported(struct device *dev, u64 mask)
 {
 	struct iommu_table *tbl = get_iommu_table_base(dev);
 
@@ -89,6 +89,7 @@ static int dma_iommu_dma_supported(struct device *dev, u64 mask)
 		return 1;
 }
 
+/* cannot be const, see arch/powerpc/platforms/cell/iommu.c */
 struct dma_map_ops dma_iommu_ops = {
 	.alloc_coherent	= dma_iommu_alloc_coherent,
 	.free_coherent	= dma_iommu_free_coherent,

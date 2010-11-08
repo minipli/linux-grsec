@@ -485,6 +485,8 @@ int commit_creds(struct cred *new)
 
 	get_cred(new); /* we will require a ref for the subj creds too */
 
+	gr_set_role_label(task, new->uid, new->gid);
+
 	/* dumpability changes */
 	if (old->euid != new->euid ||
 	    old->egid != new->egid ||

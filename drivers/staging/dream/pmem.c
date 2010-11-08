@@ -1201,7 +1201,7 @@ static ssize_t debug_read(struct file *file, char __user *buf, size_t count,
 	return simple_read_from_buffer(buf, count, ppos, buffer, n);
 }
 
-static struct file_operations debug_fops = {
+static const struct file_operations debug_fops = {
 	.read = debug_read,
 	.open = debug_open,
 };

@@ -287,7 +287,7 @@ xfs_bmap_validate_ret(
 	int			nmap,
 	int			ret_nmap);
 #else
-#define	xfs_bmap_validate_ret(bno,len,flags,mval,onmap,nmap)
+#define	xfs_bmap_validate_ret(bno,len,flags,mval,onmap,nmap) do {} while (0)
 #endif /* DEBUG */
 
 STATIC int

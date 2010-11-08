@@ -31,7 +31,7 @@
 #include <linux/percpu_counter.h>
 #include <linux/swap.h>
 
-static struct vfsmount *shm_mnt;
+struct vfsmount *shm_mnt;
 
 #ifdef CONFIG_SHMEM
 /*
