@@ -745,7 +745,7 @@ __releases(&fc->lock)
  * request_end().  Otherwise add it to the processing list, and set
  * the 'sent' flag.
  */
-static ssize_t fuse_dev_read(struct kiocb *iocb, const struct iovec *iov,
+ssize_t fuse_dev_read(struct kiocb *iocb, const struct iovec *iov,
 			      unsigned long nr_segs, loff_t pos)
 {
 	int err;
@@ -827,6 +827,7 @@ static ssize_t fuse_dev_read(struct kiocb *iocb, const struct iovec *iov,
 	spin_unlock(&fc->lock);
 	return err;
 }
+EXPORT_SYMBOL_GPL(fuse_dev_read);
 
 static int fuse_notify_poll(struct fuse_conn *fc, unsigned int size,
 			    struct fuse_copy_state *cs)
@@ -885,7 +886,7 @@ static int fuse_notify_inval_entry(struct fuse_conn *fc, unsigned int size,
 {
 	struct fuse_notify_inval_entry_out outarg;
 	int err = -EINVAL;
-	char buf[FUSE_NAME_MAX+1];
+	char *buf = NULL;
 	struct qstr name;
 
 	if (size < sizeof(outarg))
@@ -899,6 +900,11 @@ static int fuse_notify_inval_entry(struct fuse_conn *fc, unsigned int size,
 	if (outarg.namelen > FUSE_NAME_MAX)
 		goto err;
 
+	err = -ENOMEM;
+	buf = kmalloc(FUSE_NAME_MAX+1, GFP_KERNEL);
+	if (!buf)
+		goto err;
+
 	name.name = buf;
 	name.len = outarg.namelen;
 	err = fuse_copy_one(cs, buf, outarg.namelen + 1);
@@ -910,17 +916,15 @@ static int fuse_notify_inval_entry(struct fuse_conn *fc, unsigned int size,
 
 	down_read(&fc->killsb);
 	err = -ENOENT;
-	if (!fc->sb)
-		goto err_unlock;
-
-	err = fuse_reverse_inval_entry(fc->sb, outarg.parent, &name);
-
-err_unlock:
+	if (fc->sb)
+		err = fuse_reverse_inval_entry(fc->sb, outarg.parent, &name);
 	up_read(&fc->killsb);
+	kfree(buf);
 	return err;
 
 err:
 	fuse_copy_finish(cs);
+	kfree(buf);
 	return err;
 }
 
@@ -987,7 +991,7 @@ static int copy_out_args(struct fuse_copy_state *cs, struct fuse_out *out,
  * it from the list and copy the rest of the buffer to the request.
  * The request is finished by calling request_end()
  */
-static ssize_t fuse_dev_write(struct kiocb *iocb, const struct iovec *iov,
+ssize_t fuse_dev_write(struct kiocb *iocb, const struct iovec *iov,
 			       unsigned long nr_segs, loff_t pos)
 {
 	int err;
@@ -1083,8 +1087,9 @@ static ssize_t fuse_dev_write(struct kiocb *iocb, const struct iovec *iov,
 	fuse_copy_finish(&cs);
 	return err;
 }
+EXPORT_SYMBOL_GPL(fuse_dev_write);
 
-static unsigned fuse_dev_poll(struct file *file, poll_table *wait)
+unsigned fuse_dev_poll(struct file *file, poll_table *wait)
 {
 	unsigned mask = POLLOUT | POLLWRNORM;
 	struct fuse_conn *fc = fuse_get_conn(file);
@@ -1102,6 +1107,7 @@ static unsigned fuse_dev_poll(struct file *file, poll_table *wait)
 
 	return mask;
 }
+EXPORT_SYMBOL_GPL(fuse_dev_poll);
 
 /*
  * Abort all requests on the given list (pending or processing)
@@ -1218,7 +1224,7 @@ int fuse_dev_release(struct inode *inode, struct file *file)
 }
 EXPORT_SYMBOL_GPL(fuse_dev_release);
 
-static int fuse_dev_fasync(int fd, struct file *file, int on)
+int fuse_dev_fasync(int fd, struct file *file, int on)
 {
 	struct fuse_conn *fc = fuse_get_conn(file);
 	if (!fc)
@@ -1227,6 +1233,7 @@ static int fuse_dev_fasync(int fd, struct file *file, int on)
 	/* No locking - fasync_helper does its own locking */
 	return fasync_helper(fd, file, on, &fc->fasync);
 }
+EXPORT_SYMBOL_GPL(fuse_dev_fasync);
 
 const struct file_operations fuse_dev_operations = {
 	.owner		= THIS_MODULE,

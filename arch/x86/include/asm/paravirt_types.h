@@ -316,6 +316,12 @@ struct pv_mmu_ops {
 	   an mfn.  We can tell which is which from the index. */
 	void (*set_fixmap)(unsigned /* enum fixed_addresses */ idx,
 			   phys_addr_t phys, pgprot_t flags);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long (*pax_open_kernel)(void);
+	unsigned long (*pax_close_kernel)(void);
+#endif
+
 };
 
 struct raw_spinlock;

@@ -576,7 +576,7 @@ static struct adsp_device *inode_to_device(struct inode *inode)
 static dev_t adsp_devno;
 static struct class *adsp_class;
 
-static struct file_operations adsp_fops = {
+static const struct file_operations adsp_fops = {
 	.owner = THIS_MODULE,
 	.open = adsp_open,
 	.unlocked_ioctl = adsp_ioctl,
