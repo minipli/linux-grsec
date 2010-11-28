@@ -2890,7 +2890,7 @@ static int rt_fill_info(struct net *net,
 	expires = rt->dst.expires ? rt->dst.expires - jiffies : 0;
 	if (rt->peer) {
 		inet_peer_refcheck(rt->peer);
-		id = atomic_read(&rt->peer->ip_id_count) & 0xffff;
+		id = atomic_read_unchecked(&rt->peer->ip_id_count) & 0xffff;
 		if (rt->peer->tcp_ts_stamp) {
 			ts = rt->peer->tcp_ts;
 			tsage = get_seconds() - rt->peer->tcp_ts_stamp;

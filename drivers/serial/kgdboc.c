@@ -21,7 +21,8 @@
 
 #define MAX_CONFIG_LEN		40
 
-static struct kgdb_io		kgdboc_io_ops;
+/* cannot be const, see configure_kgdboc() */
+static struct kgdb_io	kgdboc_io_ops;
 
 /* -1 = init not run yet, 0 = unconfigured, 1 = configured. */
 static int configured		= -1;
@@ -233,6 +234,7 @@ static void kgdboc_post_exp_handler(void)
 	}
 }
 
+/* cannot be const, see configure_kgdboc() */
 static struct kgdb_io kgdboc_io_ops = {
 	.name			= "kgdboc",
 	.read_char		= kgdboc_get_char,

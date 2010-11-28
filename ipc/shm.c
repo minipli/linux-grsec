@@ -69,6 +69,14 @@ static void shm_destroy (struct ipc_namespace *ns, struct shmid_kernel *shp);
 static int sysvipc_shm_proc_show(struct seq_file *s, void *it);
 #endif
 
+#ifdef CONFIG_GRKERNSEC
+extern int gr_handle_shmat(const pid_t shm_cprid, const pid_t shm_lapid,
+			   const time_t shm_createtime, const uid_t cuid,
+			   const int shmid);
+extern int gr_chroot_shmat(const pid_t shm_cprid, const pid_t shm_lapid,
+			   const time_t shm_createtime);
+#endif
+
 void shm_init_ns(struct ipc_namespace *ns)
 {
 	ns->shm_ctlmax = SHMMAX;
@@ -395,6 +403,14 @@ static int newseg(struct ipc_namespace *ns, struct ipc_params *params)
 	shp->shm_lprid = 0;
 	shp->shm_atim = shp->shm_dtim = 0;
 	shp->shm_ctim = get_seconds();
+#ifdef CONFIG_GRKERNSEC
+	{
+		struct timespec timeval;
+		do_posix_clock_monotonic_gettime(&timeval);
+
+		shp->shm_createtime = timeval.tv_sec;
+	}
+#endif
 	shp->shm_segsz = size;
 	shp->shm_nattch = 0;
 	shp->shm_file = file;
@@ -472,6 +488,8 @@ static inline unsigned long copy_shmid_to_user(void __user *buf, struct shmid64_
 	case IPC_OLD:
 	    {
 		struct shmid_ds out;
+
+		memset(&out, 0, sizeof(out));
 
 		ipc64_perm_to_ipc_perm(&in->shm_perm, &out.shm_perm);
 		out.shm_segsz	= in->shm_segsz;
@@ -877,9 +895,21 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg, ulong *raddr)
 	if (err)
 		goto out_unlock;
 
+#ifdef CONFIG_GRKERNSEC
+	if (!gr_handle_shmat(shp->shm_cprid, shp->shm_lapid, shp->shm_createtime,
+			     shp->shm_perm.cuid, shmid) ||
+	    !gr_chroot_shmat(shp->shm_cprid, shp->shm_lapid, shp->shm_createtime)) {
+		err = -EACCES;
+		goto out_unlock;
+	}
+#endif
+
 	path = shp->shm_file->f_path;
 	path_get(&path);
 	shp->shm_nattch++;
+#ifdef CONFIG_GRKERNSEC
+	shp->shm_lapid = current->pid;
+#endif
 	size = i_size_read(path.dentry->d_inode);
 	shm_unlock(shp);
 
