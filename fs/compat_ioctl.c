@@ -234,6 +234,8 @@ static int do_video_set_spu_palette(unsigned int fd, unsigned int cmd, unsigned 
 	up = (struct compat_video_spu_palette __user *) arg;
 	err  = get_user(palp, &up->palette);
 	err |= get_user(length, &up->length);
+	if (err)
+		return -EFAULT;
 
 	up_native = compat_alloc_user_space(sizeof(struct video_spu_palette));
 	err  = put_user(compat_ptr(palp), &up_native->palette);
@@ -1827,15 +1829,15 @@ struct ioctl_trans {
 };
 
 #define HANDLE_IOCTL(cmd,handler) \
-	{ (cmd), (ioctl_trans_handler_t)(handler) },
+	{ (cmd), (ioctl_trans_handler_t)(handler), NULL },
 
 /* pointer to compatible structure or no argument */
 #define COMPATIBLE_IOCTL(cmd) \
-	{ (cmd), do_ioctl32_pointer },
+	{ (cmd), do_ioctl32_pointer, NULL },
 
 /* argument is an unsigned long integer, not a pointer */
 #define ULONG_IOCTL(cmd) \
-	{ (cmd), (ioctl_trans_handler_t)sys_ioctl },
+	{ (cmd), (ioctl_trans_handler_t)sys_ioctl, NULL },
 
 /* ioctl should not be warned about even if it's not implemented.
    Valid reasons to use this:

@@ -587,6 +587,10 @@ static void __free_pages_ok(struct page *page, unsigned int order)
 	int bad = 0;
 	int wasMlocked = __TestClearPageMlocked(page);
 
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	unsigned long index = 1UL << order;
+#endif
+
 	kmemcheck_free_shadow(page, order);
 
 	for (i = 0 ; i < (1 << order) ; ++i)
@@ -599,6 +603,12 @@ static void __free_pages_ok(struct page *page, unsigned int order)
 		debug_check_no_obj_freed(page_address(page),
 					   PAGE_SIZE << order);
 	}
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	for (; index; --index)
+		sanitize_highpage(page + index - 1);
+#endif
+
 	arch_free_page(page, order);
 	kernel_map_pages(page, 1 << order, 0);
 
@@ -702,8 +712,10 @@ static int prep_new_page(struct page *page, int order, gfp_t gfp_flags)
 	arch_alloc_page(page, order);
 	kernel_map_pages(page, 1 << order, 1);
 
+#ifndef CONFIG_PAX_MEMORY_SANITIZE
 	if (gfp_flags & __GFP_ZERO)
 		prep_zero_page(page, order, gfp_flags);
+#endif
 
 	if (order && (gfp_flags & __GFP_COMP))
 		prep_compound_page(page, order);
@@ -1097,6 +1109,11 @@ static void free_hot_cold_page(struct page *page, int cold)
 		debug_check_no_locks_freed(page_address(page), PAGE_SIZE);
 		debug_check_no_obj_freed(page_address(page), PAGE_SIZE);
 	}
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	sanitize_highpage(page);
+#endif
+
 	arch_free_page(page, 0);
 	kernel_map_pages(page, 1, 0);
 
@@ -3736,7 +3753,7 @@ static void __init setup_usemap(struct pglist_data *pgdat,
 		zone->pageblock_flags = alloc_bootmem_node(pgdat, usemapsize);
 }
 #else
-static void inline setup_usemap(struct pglist_data *pgdat,
+static inline void setup_usemap(struct pglist_data *pgdat,
 				struct zone *zone, unsigned long zonesize) {}
 #endif /* CONFIG_SPARSEMEM */
 

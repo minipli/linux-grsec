@@ -2483,9 +2483,12 @@ static int handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 static void reload_tss(struct kvm_vcpu *vcpu)
 {
 	int cpu = raw_smp_processor_id();
-
 	struct svm_cpu_data *svm_data = per_cpu(svm_data, cpu);
+
+	pax_open_kernel();
 	svm_data->tss_desc->type = 9; /* available 32/64-bit TSS */
+	pax_close_kernel();
+
 	load_TR_desc();
 }
 
@@ -2946,7 +2949,7 @@ static bool svm_gb_page_enable(void)
 	return true;
 }
 
-static struct kvm_x86_ops svm_x86_ops = {
+static const struct kvm_x86_ops svm_x86_ops = {
 	.cpu_has_kvm_support = has_svm,
 	.disabled_by_bios = is_disabled,
 	.hardware_setup = svm_hardware_setup,

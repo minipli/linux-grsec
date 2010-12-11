@@ -1098,7 +1098,7 @@ static ssize_t compat_do_readv_writev(int type, struct file *file,
 	 * verify all the pointers
 	 */
 	ret = -EINVAL;
-	if ((nr_segs > UIO_MAXIOV) || (nr_segs <= 0))
+	if (nr_segs > UIO_MAXIOV)
 		goto out;
 	if (!file->f_op)
 		goto out;
@@ -1353,6 +1353,10 @@ static int compat_count(compat_uptr_t __user *argv, int max)
 			argv++;
 			if (i++ >= max)
 				return -E2BIG;
+
+			if (fatal_signal_pending(current))
+				return -ERESTARTNOHAND;
+			cond_resched();
 		}
 	}
 	return i;
@@ -1394,6 +1398,12 @@ static int compat_copy_strings(int argc, compat_uptr_t __user *argv,
 		while (len > 0) {
 			int offset, bytes_to_copy;
 
+			if (fatal_signal_pending(current)) {
+				ret = -ERESTARTNOHAND;
+				goto out;
+			}
+			cond_resched();
+
 			offset = pos % PAGE_SIZE;
 			if (offset == 0)
 				offset = PAGE_SIZE;
@@ -1410,17 +1420,8 @@ static int compat_copy_strings(int argc, compat_uptr_t __user *argv,
 			if (!kmapped_page || kpos != (pos & PAGE_MASK)) {
 				struct page *page;
 
-#ifdef CONFIG_STACK_GROWSUP
-				ret = expand_stack_downwards(bprm->vma, pos);
-				if (ret < 0) {
-					/* We've exceed the stack rlimit. */
-					ret = -E2BIG;
-					goto out;
-				}
-#endif
-				ret = get_user_pages(current, bprm->mm, pos,
-						     1, 1, 1, &page, NULL);
-				if (ret <= 0) {
+				page = get_arg_page(bprm, pos, 1);
+				if (!page) {
 					/* We've exceed the stack rlimit. */
 					ret = -E2BIG;
 					goto out;
@@ -1463,6 +1464,11 @@ int compat_do_execve(char * filename,
 	compat_uptr_t __user *envp,
 	struct pt_regs * regs)
 {
+#ifdef CONFIG_GRKERNSEC
+	struct file *old_exec_file;
+	struct acl_subject_label *old_acl;
+	struct rlimit old_rlim[RLIM_NLIMITS];
+#endif
 	struct linux_binprm *bprm;
 	struct file *file;
 	struct files_struct *displaced;
@@ -1499,6 +1505,14 @@ int compat_do_execve(char * filename,
 	bprm->filename = filename;
 	bprm->interp = filename;
 
+	gr_learn_resource(current, RLIMIT_NPROC, atomic_read(&current->cred->user->processes), 1);
+	retval = -EAGAIN;
+	if (gr_handle_nproc())
+		goto out_file;
+	retval = -EACCES;
+	if (!gr_acl_handle_execve(file->f_dentry, file->f_vfsmnt))
+		goto out_file;
+
 	retval = bprm_mm_init(bprm);
 	if (retval)
 		goto out_file;
@@ -1528,9 +1542,40 @@ int compat_do_execve(char * filename,
 	if (retval < 0)
 		goto out;
 
+	if (!gr_tpe_allow(file)) {
+		retval = -EACCES;
+		goto out;
+	}
+
+	if (gr_check_crash_exec(file)) {
+		retval = -EACCES;
+		goto out;
+	}
+
+	gr_log_chroot_exec(file->f_dentry, file->f_vfsmnt);
+
+	gr_handle_exec_args(bprm, (char __user * __user *)argv);
+
+#ifdef CONFIG_GRKERNSEC
+	old_acl = current->acl;
+	memcpy(old_rlim, current->signal->rlim, sizeof(old_rlim));
+	old_exec_file = current->exec_file;
+	get_file(file);
+	current->exec_file = file;
+#endif
+
+	retval = gr_set_proc_label(file->f_dentry, file->f_vfsmnt,
+				   bprm->unsafe & LSM_UNSAFE_SHARE);
+	if (retval < 0)
+		goto out_fail;
+
 	retval = search_binary_handler(bprm, regs);
 	if (retval < 0)
-		goto out;
+		goto out_fail;
+#ifdef CONFIG_GRKERNSEC
+	if (old_exec_file)
+		fput(old_exec_file);
+#endif
 
 	/* execve succeeded */
 	current->fs->in_exec = 0;
@@ -1541,9 +1586,19 @@ int compat_do_execve(char * filename,
 		put_files_struct(displaced);
 	return retval;
 
+out_fail:
+#ifdef CONFIG_GRKERNSEC
+	current->acl = old_acl;
+	memcpy(current->signal->rlim, old_rlim, sizeof(old_rlim));
+	fput(current->exec_file);
+	current->exec_file = old_exec_file;
+#endif
+
 out:
-	if (bprm->mm)
+	if (bprm->mm) {
+		acct_arg_size(bprm, 0);
 		mmput(bprm->mm);
+	}
 
 out_file:
 	if (bprm->file) {

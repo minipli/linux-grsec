@@ -15,13 +15,14 @@
 #include <asm/asm-offsets.h>
 #include <asm/thread_info.h>
 #include <asm/cpufeature.h>
+#include <asm/pgtable.h>
 
 	.macro ALTERNATIVE_JUMP feature,orig,alt
 0:
 	.byte 0xe9	/* 32bit jump */
 	.long \orig-1f	/* by default jump to orig */
 1:
-	.section .altinstr_replacement,"ax"
+	.section .altinstr_replacement,"a"
 2:	.byte 0xe9			/* near jump with 32bit immediate */
 	.long \alt-1b /* offset */   /* or alternatively to alt */
 	.previous
@@ -64,32 +65,6 @@
 #endif
 	.endm
 
-/* Standard copy_to_user with segment limit checking */
-ENTRY(copy_to_user)
-	CFI_STARTPROC
-	GET_THREAD_INFO(%rax)
-	movq %rdi,%rcx
-	addq %rdx,%rcx
-	jc bad_to_user
-	cmpq TI_addr_limit(%rax),%rcx
-	jae bad_to_user
-	ALTERNATIVE_JUMP X86_FEATURE_REP_GOOD,copy_user_generic_unrolled,copy_user_generic_string
-	CFI_ENDPROC
-ENDPROC(copy_to_user)
-
-/* Standard copy_from_user with segment limit checking */
-ENTRY(copy_from_user)
-	CFI_STARTPROC
-	GET_THREAD_INFO(%rax)
-	movq %rsi,%rcx
-	addq %rdx,%rcx
-	jc bad_from_user
-	cmpq TI_addr_limit(%rax),%rcx
-	jae bad_from_user
-	ALTERNATIVE_JUMP X86_FEATURE_REP_GOOD,copy_user_generic_unrolled,copy_user_generic_string
-	CFI_ENDPROC
-ENDPROC(copy_from_user)
-
 ENTRY(copy_user_generic)
 	CFI_STARTPROC
 	ALTERNATIVE_JUMP X86_FEATURE_REP_GOOD,copy_user_generic_unrolled,copy_user_generic_string
@@ -98,6 +73,15 @@ ENDPROC(copy_user_generic)
 
 ENTRY(__copy_from_user_inatomic)
 	CFI_STARTPROC
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	mov $PAX_USER_SHADOW_BASE,%rcx
+	cmp %rcx,%rsi
+	jae 1f
+	add %rcx,%rsi
+1:
+#endif
+
 	ALTERNATIVE_JUMP X86_FEATURE_REP_GOOD,copy_user_generic_unrolled,copy_user_generic_string
 	CFI_ENDPROC
 ENDPROC(__copy_from_user_inatomic)
@@ -107,6 +91,8 @@ ENDPROC(__copy_from_user_inatomic)
 ENTRY(bad_from_user)
 bad_from_user:
 	CFI_STARTPROC
+	testl %edx,%edx
+	js bad_to_user
 	movl %edx,%ecx
 	xorl %eax,%eax
 	rep

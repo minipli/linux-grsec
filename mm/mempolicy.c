@@ -573,6 +573,10 @@ static int mbind_range(struct vm_area_struct *vma, unsigned long start,
 	struct vm_area_struct *next;
 	int err;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	struct vm_area_struct *vma_m;
+#endif
+
 	err = 0;
 	for (; vma && vma->vm_start < end; vma = next) {
 		next = vma->vm_next;
@@ -584,6 +588,16 @@ static int mbind_range(struct vm_area_struct *vma, unsigned long start,
 			err = policy_vma(vma, new);
 		if (err)
 			break;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		vma_m = pax_find_mirror_vma(vma);
+		if (vma_m) {
+			err = policy_vma(vma_m, new);
+			if (err)
+				break;
+		}
+#endif
+
 	}
 	return err;
 }
@@ -1002,6 +1016,17 @@ static long do_mbind(unsigned long start, unsigned long len,
 
 	if (end < start)
 		return -EINVAL;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (mm->pax_flags & MF_PAX_SEGMEXEC) {
+		if (end > SEGMEXEC_TASK_SIZE)
+			return -EINVAL;
+	} else
+#endif
+
+	if (end > TASK_SIZE)
+		return -EINVAL;
+
 	if (end == start)
 		return 0;
 
@@ -1207,6 +1232,14 @@ SYSCALL_DEFINE4(migrate_pages, pid_t, pid, unsigned long, maxnode,
 	if (!mm)
 		return -EINVAL;
 
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	if (mm != current->mm &&
+	    (mm->pax_flags & MF_PAX_RANDMMAP || mm->pax_flags & MF_PAX_SEGMEXEC)) {
+		err = -EPERM;
+		goto out;
+	}
+#endif
+
 	/*
 	 * Check if this process has the right to modify the specified
 	 * process. The right exists if the process has administrative
@@ -1216,8 +1249,7 @@ SYSCALL_DEFINE4(migrate_pages, pid_t, pid, unsigned long, maxnode,
 	rcu_read_lock();
 	tcred = __task_cred(task);
 	if (cred->euid != tcred->suid && cred->euid != tcred->uid &&
-	    cred->uid  != tcred->suid && cred->uid  != tcred->uid &&
-	    !capable(CAP_SYS_NICE)) {
+	    cred->uid  != tcred->suid && !capable(CAP_SYS_NICE)) {
 		rcu_read_unlock();
 		err = -EPERM;
 		goto out;
@@ -2396,7 +2428,7 @@ int show_numa_map(struct seq_file *m, void *v)
 
 	if (file) {
 		seq_printf(m, " file=");
-		seq_path(m, &file->f_path, "\n\t= ");
+		seq_path(m, &file->f_path, "\n\t\\= ");
 	} else if (vma->vm_start <= mm->brk && vma->vm_end >= mm->start_brk) {
 		seq_printf(m, " heap");
 	} else if (vma->vm_start <= mm->start_stack &&

@@ -50,7 +50,7 @@ void task_mem(struct seq_file *m, struct mm_struct *mm)
 	else
 		bytes += kobjsize(mm);
 	
-	if (current->fs && current->fs->users > 1)
+	if (current->fs && atomic_read(&current->fs->users) > 1)
 		sbytes += kobjsize(current->fs);
 	else
 		bytes += kobjsize(current->fs);
@@ -154,7 +154,7 @@ static int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma)
 		if (len < 1)
 			len = 1;
 		seq_printf(m, "%*c", len, ' ');
-		seq_path(m, &file->f_path, "");
+		seq_path(m, &file->f_path, "\n\\");
 	}
 
 	seq_putc(m, '\n');

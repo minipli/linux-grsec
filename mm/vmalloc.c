@@ -40,8 +40,19 @@ static void vunmap_pte_range(pmd_t *pmd, unsigned long addr, unsigned long end)
 
 	pte = pte_offset_kernel(pmd, addr);
 	do {
-		pte_t ptent = ptep_get_and_clear(&init_mm, addr, pte);
-		WARN_ON(!pte_none(ptent) && !pte_present(ptent));
+
+#if defined(CONFIG_MODULES) && defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		if ((unsigned long)MODULES_EXEC_VADDR <= addr && addr < (unsigned long)MODULES_EXEC_END) {
+			BUG_ON(!pte_exec(*pte));
+			set_pte_at(&init_mm, addr, pte, pfn_pte(__pa(addr) >> PAGE_SHIFT, PAGE_KERNEL_EXEC));
+			continue;
+		}
+#endif
+
+		{
+			pte_t ptent = ptep_get_and_clear(&init_mm, addr, pte);
+			WARN_ON(!pte_none(ptent) && !pte_present(ptent));
+		}
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 }
 
@@ -92,6 +103,7 @@ static int vmap_pte_range(pmd_t *pmd, unsigned long addr,
 		unsigned long end, pgprot_t prot, struct page **pages, int *nr)
 {
 	pte_t *pte;
+	int ret = -ENOMEM;
 
 	/*
 	 * nr is a running index into the array which helps higher level
@@ -101,17 +113,32 @@ static int vmap_pte_range(pmd_t *pmd, unsigned long addr,
 	pte = pte_alloc_kernel(pmd, addr);
 	if (!pte)
 		return -ENOMEM;
+
+	pax_open_kernel();
 	do {
 		struct page *page = pages[*nr];
 
-		if (WARN_ON(!pte_none(*pte)))
-			return -EBUSY;
-		if (WARN_ON(!page))
-			return -ENOMEM;
+#if defined(CONFIG_MODULES) && defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		if (!(pgprot_val(prot) & _PAGE_NX))
+			BUG_ON(!pte_exec(*pte) || pte_pfn(*pte) != __pa(addr) >> PAGE_SHIFT);
+		else
+#endif
+
+		if (WARN_ON(!pte_none(*pte))) {
+			ret = -EBUSY;
+			goto out;
+		}
+		if (WARN_ON(!page)) {
+			ret = -ENOMEM;
+			goto out;
+		}
 		set_pte_at(&init_mm, addr, pte, mk_pte(page, prot));
 		(*nr)++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
-	return 0;
+	ret = 0;
+out:
+	pax_close_kernel();
+	return ret;
 }
 
 static int vmap_pmd_range(pud_t *pud, unsigned long addr,
@@ -192,11 +219,20 @@ int is_vmalloc_or_module_addr(const void *x)
 	 * and fall back on vmalloc() if that fails. Others
 	 * just put it in the vmalloc space.
 	 */
-#if defined(CONFIG_MODULES) && defined(MODULES_VADDR)
+#ifdef CONFIG_MODULES
+#ifdef MODULES_VADDR
 	unsigned long addr = (unsigned long)x;
 	if (addr >= MODULES_VADDR && addr < MODULES_END)
 		return 1;
 #endif
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if (x >= (const void *)MODULES_EXEC_VADDR && x < (const void *)MODULES_EXEC_END)
+		return 1;
+#endif
+
+#endif
+
 	return is_vmalloc_addr(x);
 }
 
@@ -217,8 +253,14 @@ struct page *vmalloc_to_page(const void *vmalloc_addr)
 
 	if (!pgd_none(*pgd)) {
 		pud_t *pud = pud_offset(pgd, addr);
+#ifdef CONFIG_X86
+		if (!pud_large(*pud))
+#endif
 		if (!pud_none(*pud)) {
 			pmd_t *pmd = pmd_offset(pud, addr);
+#ifdef CONFIG_X86
+			if (!pmd_large(*pmd))
+#endif
 			if (!pmd_none(*pmd)) {
 				pte_t *ptep, pte;
 
@@ -292,13 +334,13 @@ static void __insert_vmap_area(struct vmap_area *va)
 	struct rb_node *tmp;
 
 	while (*p) {
-		struct vmap_area *tmp;
+		struct vmap_area *varea;
 
 		parent = *p;
-		tmp = rb_entry(parent, struct vmap_area, rb_node);
-		if (va->va_start < tmp->va_end)
+		varea = rb_entry(parent, struct vmap_area, rb_node);
+		if (va->va_start < varea->va_end)
 			p = &(*p)->rb_left;
-		else if (va->va_end > tmp->va_start)
+		else if (va->va_end > varea->va_start)
 			p = &(*p)->rb_right;
 		else
 			BUG();
@@ -1232,6 +1274,16 @@ static struct vm_struct *__get_vm_area_node(unsigned long size,
 	struct vm_struct *area;
 
 	BUG_ON(in_interrupt());
+
+#if defined(CONFIG_MODULES) && defined(CONFIG_X86) && defined(CONFIG_PAX_KERNEXEC)
+	if (flags & VM_KERNEXEC) {
+		if (start != VMALLOC_START || end != VMALLOC_END)
+			return NULL;
+		start = (unsigned long)MODULES_EXEC_VADDR;
+		end = (unsigned long)MODULES_EXEC_END;
+	}
+#endif
+
 	if (flags & VM_IOREMAP) {
 		int bit = fls(size);
 
@@ -1457,6 +1509,11 @@ void *vmap(struct page **pages, unsigned int count,
 	if (count > totalram_pages)
 		return NULL;
 
+#if defined(CONFIG_MODULES) && defined(CONFIG_X86) && defined(CONFIG_PAX_KERNEXEC)
+	if (!(pgprot_val(prot) & _PAGE_NX))
+		flags |= VM_KERNEXEC;
+#endif
+
 	area = get_vm_area_caller((count << PAGE_SHIFT), flags,
 					__builtin_return_address(0));
 	if (!area)
@@ -1567,6 +1624,13 @@ static void *__vmalloc_node(unsigned long size, unsigned long align,
 	if (!size || (size >> PAGE_SHIFT) > totalram_pages)
 		return NULL;
 
+#if defined(CONFIG_MODULES) && defined(CONFIG_X86) && defined(CONFIG_PAX_KERNEXEC)
+	if (!(pgprot_val(prot) & _PAGE_NX))
+		area = __get_vm_area_node(size, align, VM_ALLOC | VM_KERNEXEC, VMALLOC_START, VMALLOC_END,
+						node, gfp_mask, caller);
+	else
+#endif
+
 	area = __get_vm_area_node(size, align, VM_ALLOC, VMALLOC_START,
 				  VMALLOC_END, node, gfp_mask, caller);
 
@@ -1585,6 +1649,7 @@ static void *__vmalloc_node(unsigned long size, unsigned long align,
 	return addr;
 }
 
+#undef __vmalloc
 void *__vmalloc(unsigned long size, gfp_t gfp_mask, pgprot_t prot)
 {
 	return __vmalloc_node(size, 1, gfp_mask, prot, -1,
@@ -1601,6 +1666,7 @@ EXPORT_SYMBOL(__vmalloc);
  *	For tight control over page level allocator and protection flags
  *	use __vmalloc() instead.
  */
+#undef vmalloc
 void *vmalloc(unsigned long size)
 {
 	return __vmalloc_node(size, 1, GFP_KERNEL | __GFP_HIGHMEM, PAGE_KERNEL,
@@ -1615,6 +1681,7 @@ EXPORT_SYMBOL(vmalloc);
  * The resulting memory area is zeroed so it can be mapped to userspace
  * without leaking data.
  */
+#undef vmalloc_user
 void *vmalloc_user(unsigned long size)
 {
 	struct vm_struct *area;
@@ -1642,6 +1709,7 @@ EXPORT_SYMBOL(vmalloc_user);
  *	For tight control over page level allocator and protection flags
  *	use __vmalloc() instead.
  */
+#undef vmalloc_node
 void *vmalloc_node(unsigned long size, int node)
 {
 	return __vmalloc_node(size, 1, GFP_KERNEL | __GFP_HIGHMEM, PAGE_KERNEL,
@@ -1664,10 +1732,10 @@ EXPORT_SYMBOL(vmalloc_node);
  *	For tight control over page level allocator and protection flags
  *	use __vmalloc() instead.
  */
-
+#undef vmalloc_exec
 void *vmalloc_exec(unsigned long size)
 {
-	return __vmalloc_node(size, 1, GFP_KERNEL | __GFP_HIGHMEM, PAGE_KERNEL_EXEC,
+	return __vmalloc_node(size, 1, GFP_KERNEL | __GFP_HIGHMEM | __GFP_ZERO, PAGE_KERNEL_EXEC,
 			      -1, __builtin_return_address(0));
 }
 
@@ -1686,6 +1754,7 @@ void *vmalloc_exec(unsigned long size)
  *	Allocate enough 32bit PA addressable pages to cover @size from the
  *	page level allocator and map them into contiguous kernel virtual space.
  */
+#undef vmalloc_32
 void *vmalloc_32(unsigned long size)
 {
 	return __vmalloc_node(size, 1, GFP_VMALLOC32, PAGE_KERNEL,
@@ -1700,6 +1769,7 @@ EXPORT_SYMBOL(vmalloc_32);
  * The resulting memory area is 32bit addressable and zeroed so it can be
  * mapped to userspace without leaking data.
  */
+#undef vmalloc_32_user
 void *vmalloc_32_user(unsigned long size)
 {
 	struct vm_struct *area;
@@ -1963,6 +2033,8 @@ int remap_vmalloc_range(struct vm_area_struct *vma, void *addr,
 	struct vm_struct *area;
 	unsigned long uaddr = vma->vm_start;
 	unsigned long usize = vma->vm_end - vma->vm_start;
+
+	BUG_ON(vma->vm_mirror);
 
 	if ((PAGE_SIZE-1) & (unsigned long)addr)
 		return -EINVAL;
