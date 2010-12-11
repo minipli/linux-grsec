@@ -895,6 +895,7 @@ enum mismatch {
 	ANY_INIT_TO_ANY_EXIT,
 	ANY_EXIT_TO_ANY_INIT,
 	EXPORT_TO_INIT_EXIT,
+	DATA_TO_TEXT
 };
 
 struct sectioncheck {
@@ -1003,6 +1004,12 @@ const struct sectioncheck sectioncheck[] = {
 	.tosec   = { INIT_SECTIONS, EXIT_SECTIONS, NULL },
 	.mismatch = EXPORT_TO_INIT_EXIT,
 	.symbol_white_list = { DEFAULT_SYMBOL_WHITE_LIST, NULL },
+},
+/* Do not reference code from writable data */
+{
+	.fromsec = { DATA_SECTIONS, NULL },
+	.tosec   = { TEXT_SECTIONS, NULL },
+	.mismatch = DATA_TO_TEXT
 }
 };
 
@@ -1125,10 +1132,10 @@ static Elf_Sym *find_elf_symbol(struct elf_info *elf, Elf64_Sword addr,
 			continue;
 		if (ELF_ST_TYPE(sym->st_info) == STT_SECTION)
 			continue;
-		if (sym->st_value == addr)
-			return sym;
 		/* Find a symbol nearby - addr are maybe negative */
 		d = sym->st_value - addr;
+		if (d == 0)
+			return sym;
 		if (d < 0)
 			d = addr - sym->st_value;
 		if (d < distance) {
@@ -1396,6 +1403,14 @@ static void report_sec_mismatch(const char *modname,
 		"or drop the export.\n",
 		tosym, prl_to, prl_to, tosym);
 		free(prl_to);
+		break;
+	case DATA_TO_TEXT:
+/*
+		fprintf(stderr,
+		"The variable %s references\n"
+		"the %s %s%s%s\n",
+		fromsym, to, sec2annotation(tosec), tosym, to_p);
+*/
 		break;
 	}
 	fprintf(stderr, "\n");
@@ -1720,7 +1735,7 @@ void __attribute__((format(printf, 2, 3))) buf_printf(struct buffer *buf,
 	va_end(ap);
 }
 
-void buf_write(struct buffer *buf, const char *s, int len)
+void buf_write(struct buffer *buf, const char *s, unsigned int len)
 {
 	if (buf->size - buf->pos < len) {
 		buf->size += len + SZ;
@@ -1932,7 +1947,7 @@ static void write_if_changed(struct buffer *b, const char *fname)
 	if (fstat(fileno(file), &st) < 0)
 		goto close_write;
 
-	if (st.st_size != b->pos)
+	if (st.st_size != (off_t)b->pos)
 		goto close_write;
 
 	tmp = NOFAIL(malloc(b->pos));

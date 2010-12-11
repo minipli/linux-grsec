@@ -34,7 +34,7 @@
  */
 TRACE_EVENT(irq_handler_entry,
 
-	TP_PROTO(int irq, struct irqaction *action),
+	TP_PROTO(int irq, const struct irqaction *action),
 
 	TP_ARGS(irq, action),
 
@@ -64,7 +64,7 @@ TRACE_EVENT(irq_handler_entry,
  */
 TRACE_EVENT(irq_handler_exit,
 
-	TP_PROTO(int irq, struct irqaction *action, int ret),
+	TP_PROTO(int irq, const struct irqaction *action, int ret),
 
 	TP_ARGS(irq, action, ret),
 
@@ -84,7 +84,7 @@ TRACE_EVENT(irq_handler_exit,
 
 DECLARE_EVENT_CLASS(softirq,
 
-	TP_PROTO(struct softirq_action *h, struct softirq_action *vec),
+	TP_PROTO(const struct softirq_action *h, const struct softirq_action *vec),
 
 	TP_ARGS(h, vec),
 
@@ -113,7 +113,7 @@ DECLARE_EVENT_CLASS(softirq,
  */
 DEFINE_EVENT(softirq, softirq_entry,
 
-	TP_PROTO(struct softirq_action *h, struct softirq_action *vec),
+	TP_PROTO(const struct softirq_action *h, const struct softirq_action *vec),
 
 	TP_ARGS(h, vec)
 );
@@ -131,7 +131,7 @@ DEFINE_EVENT(softirq, softirq_entry,
  */
 DEFINE_EVENT(softirq, softirq_exit,
 
-	TP_PROTO(struct softirq_action *h, struct softirq_action *vec),
+	TP_PROTO(const struct softirq_action *h, const struct softirq_action *vec),
 
 	TP_ARGS(h, vec)
 );

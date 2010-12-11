@@ -593,7 +593,7 @@ ssize_t compat_rw_copy_check_uvector(int type,
 		goto out;
 
 	ret = -EINVAL;
-	if (nr_segs > UIO_MAXIOV || nr_segs < 0)
+	if (nr_segs > UIO_MAXIOV)
 		goto out;
 	if (nr_segs > fast_segs) {
 		ret = -ENOMEM;
@@ -1447,6 +1447,7 @@ static int compat_copy_strings(int argc, compat_uptr_t __user *argv,
 
 				page = get_arg_page(bprm, pos, 1);
 				if (!page) {
+					/* We've exceed the stack rlimit. */
 					ret = -E2BIG;
 					goto out;
 				}
@@ -1488,6 +1489,11 @@ int compat_do_execve(char * filename,
 	compat_uptr_t __user *envp,
 	struct pt_regs * regs)
 {
+#ifdef CONFIG_GRKERNSEC
+	struct file *old_exec_file;
+	struct acl_subject_label *old_acl;
+	struct rlimit old_rlim[RLIM_NLIMITS];
+#endif
 	struct linux_binprm *bprm;
 	struct file *file;
 	struct files_struct *displaced;
@@ -1524,6 +1530,14 @@ int compat_do_execve(char * filename,
 	bprm->filename = filename;
 	bprm->interp = filename;
 
+	gr_learn_resource(current, RLIMIT_NPROC, atomic_read(&current->cred->user->processes), 1);
+	retval = -EAGAIN;
+	if (gr_handle_nproc())
+		goto out_file;
+	retval = -EACCES;
+	if (!gr_acl_handle_execve(file->f_dentry, file->f_vfsmnt))
+		goto out_file;
+
 	retval = bprm_mm_init(bprm);
 	if (retval)
 		goto out_file;
@@ -1553,9 +1567,40 @@ int compat_do_execve(char * filename,
 	if (retval < 0)
 		goto out;
 
+	if (!gr_tpe_allow(file)) {
+		retval = -EACCES;
+		goto out;
+	}
+
+	if (gr_check_crash_exec(file)) {
+		retval = -EACCES;
+		goto out;
+	}
+
+	gr_log_chroot_exec(file->f_dentry, file->f_vfsmnt);
+
+	gr_handle_exec_args(bprm, (char __user * __user *)argv);
+
+#ifdef CONFIG_GRKERNSEC
+	old_acl = current->acl;
+	memcpy(old_rlim, current->signal->rlim, sizeof(old_rlim));
+	old_exec_file = current->exec_file;
+	get_file(file);
+	current->exec_file = file;
+#endif
+
+	retval = gr_set_proc_label(file->f_dentry, file->f_vfsmnt,
+				   bprm->unsafe & LSM_UNSAFE_SHARE);
+	if (retval < 0)
+		goto out_fail;
+
 	retval = search_binary_handler(bprm, regs);
 	if (retval < 0)
-		goto out;
+		goto out_fail;
+#ifdef CONFIG_GRKERNSEC
+	if (old_exec_file)
+		fput(old_exec_file);
+#endif
 
 	/* execve succeeded */
 	current->fs->in_exec = 0;
@@ -1565,6 +1610,14 @@ int compat_do_execve(char * filename,
 	if (displaced)
 		put_files_struct(displaced);
 	return retval;
+
+out_fail:
+#ifdef CONFIG_GRKERNSEC
+	current->acl = old_acl;
+	memcpy(current->signal->rlim, old_rlim, sizeof(old_rlim));
+	fput(current->exec_file);
+	current->exec_file = old_exec_file;
+#endif
 
 out:
 	if (bprm->mm) {

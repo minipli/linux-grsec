@@ -804,7 +804,7 @@ static const struct user_regset_view user_x86_32_view; /* Initialized below. */
 long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 {
 	int ret;
-	unsigned long __user *datap = (unsigned long __user *)data;
+	unsigned long __user *datap = (__force unsigned long __user *)data;
 
 	switch (request) {
 	/* read the word at location addr in the USER area. */
@@ -891,14 +891,14 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 		if (addr < 0)
 			return -EIO;
 		ret = do_get_thread_area(child, addr,
-					 (struct user_desc __user *) data);
+					 (__force struct user_desc __user *) data);
 		break;
 
 	case PTRACE_SET_THREAD_AREA:
 		if (addr < 0)
 			return -EIO;
 		ret = do_set_thread_area(child, addr,
-					 (struct user_desc __user *) data, 0);
+					 (__force struct user_desc __user *) data, 0);
 		break;
 #endif
 
@@ -1315,7 +1315,7 @@ static void fill_sigtrap_info(struct task_struct *tsk,
 	memset(info, 0, sizeof(*info));
 	info->si_signo = SIGTRAP;
 	info->si_code = si_code;
-	info->si_addr = user_mode_vm(regs) ? (void __user *)regs->ip : NULL;
+	info->si_addr = user_mode(regs) ? (__force void __user *)regs->ip : NULL;
 }
 
 void user_single_step_siginfo(struct task_struct *tsk,

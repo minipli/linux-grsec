@@ -1732,7 +1732,7 @@ perf_callchain_user(struct pt_regs *regs, struct perf_callchain_entry *entry)
 			break;
 
 		callchain_store(entry, frame.return_address);
-		fp = frame.next_frame;
+		fp = (__force const void __user *)frame.next_frame;
 	}
 }
 
