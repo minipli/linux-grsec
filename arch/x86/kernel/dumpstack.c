@@ -2,6 +2,9 @@
  *  Copyright (C) 1991, 1992  Linus Torvalds
  *  Copyright (C) 2000, 2001, 2002 Andi Kleen, SuSE Labs
  */
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+#define __INCLUDED_BY_HIDESYM 1
+#endif
 #include <linux/kallsyms.h>
 #include <linux/kprobes.h>
 #include <linux/uaccess.h>
@@ -27,7 +30,7 @@ static int die_counter;
 
 void printk_address(unsigned long address, int reliable)
 {
-	printk(" [<%p>] %s%pS\n", (void *) address,
+	printk(" [<%p>] %s%pA\n", (void *) address,
 			reliable ? "" : "? ", (void *) address);
 }
 
@@ -206,7 +209,7 @@ void dump_stack(void)
 #endif
 
 	printk("Pid: %d, comm: %.20s %s %s %.*s\n",
-		current->pid, current->comm, print_tainted(),
+		task_pid_nr(current), current->comm, print_tainted(),
 		init_utsname()->release,
 		(int)strcspn(init_utsname()->version, " "),
 		init_utsname()->version);
@@ -262,7 +265,7 @@ void __kprobes oops_end(unsigned long flags, struct pt_regs *regs, int signr)
 		panic("Fatal exception in interrupt");
 	if (panic_on_oops)
 		panic("Fatal exception");
-	do_exit(signr);
+	do_group_exit(signr);
 }
 
 int __kprobes __die(const char *str, struct pt_regs *regs, long err)
@@ -289,7 +292,7 @@ int __kprobes __die(const char *str, struct pt_regs *regs, long err)
 
 	show_registers(regs);
 #ifdef CONFIG_X86_32
-	if (user_mode_vm(regs)) {
+	if (user_mode(regs)) {
 		sp = regs->sp;
 		ss = regs->ss & 0xffff;
 	} else {
@@ -317,7 +320,7 @@ void die(const char *str, struct pt_regs *regs, long err)
 	unsigned long flags = oops_begin();
 	int sig = SIGSEGV;
 
-	if (!user_mode_vm(regs))
+	if (!user_mode(regs))
 		report_bug(regs->ip, regs);
 
 	if (__die(str, regs, err))

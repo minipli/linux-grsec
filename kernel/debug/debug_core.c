@@ -71,7 +71,7 @@ int			kgdb_io_module_registered;
 /* Guard for recursive entry */
 static int			exception_level;
 
-struct kgdb_io		*dbg_io_ops;
+const struct kgdb_io		*dbg_io_ops;
 static DEFINE_SPINLOCK(kgdb_registration_lock);
 
 /* kgdb console driver is loaded */
@@ -873,7 +873,7 @@ static void kgdb_initial_breakpoint(void)
  *
  *	Register it with the KGDB core.
  */
-int kgdb_register_io_module(struct kgdb_io *new_dbg_io_ops)
+int kgdb_register_io_module(const struct kgdb_io *new_dbg_io_ops)
 {
 	int err;
 
@@ -918,7 +918,7 @@ EXPORT_SYMBOL_GPL(kgdb_register_io_module);
  *
  *	Unregister it with the KGDB core.
  */
-void kgdb_unregister_io_module(struct kgdb_io *old_dbg_io_ops)
+void kgdb_unregister_io_module(const struct kgdb_io *old_dbg_io_ops)
 {
 	BUG_ON(kgdb_connected);
 

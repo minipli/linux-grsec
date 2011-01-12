@@ -16,6 +16,9 @@
  * - scnprintf and vscnprintf
  */
 
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+#define __INCLUDED_BY_HIDESYM 1
+#endif
 #include <stdarg.h>
 #include <linux/module.h>
 #include <linux/types.h>
@@ -574,7 +577,7 @@ char *symbol_string(char *buf, char *end, void *ptr,
 	unsigned long value = (unsigned long) ptr;
 #ifdef CONFIG_KALLSYMS
 	char sym[KSYM_SYMBOL_LEN];
-	if (ext != 'f' && ext != 's')
+	if (ext != 'f' && ext != 's' && ext != 'a')
 		sprint_symbol(sym, value);
 	else
 		kallsyms_lookup(value, NULL, NULL, NULL, sym);
@@ -947,6 +950,8 @@ char *uuid_string(char *buf, char *end, const u8 *addr,
  * - 'f' For simple symbolic function names without offset
  * - 'S' For symbolic direct pointers with offset
  * - 's' For symbolic direct pointers without offset
+ * - 'A' For symbolic direct pointers with offset approved for use with GRKERNSEC_HIDESYM
+ * - 'a' For symbolic direct pointers without offset approved for use with GRKERNSEC_HIDESYM
  * - 'R' For decoded struct resource, e.g., [mem 0x0-0x1f 64bit pref]
  * - 'r' For raw struct resource, e.g., [mem 0x0-0x1f flags 0x201]
  * - 'M' For a 6-byte MAC address, it prints the address in the
@@ -989,7 +994,7 @@ char *pointer(const char *fmt, char *buf, char *end, void *ptr,
 	      struct printf_spec spec)
 {
 	if (!ptr)
-		return string(buf, end, "(null)", spec);
+		return string(buf, end, "(nil)", spec);
 
 	switch (*fmt) {
 	case 'F':
@@ -998,6 +1003,13 @@ char *pointer(const char *fmt, char *buf, char *end, void *ptr,
 		/* Fallthrough */
 	case 'S':
 	case 's':
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		break;
+#else
+		return symbol_string(buf, end, ptr, spec, *fmt);
+#endif
+	case 'A':
+	case 'a':
 		return symbol_string(buf, end, ptr, spec, *fmt);
 	case 'R':
 	case 'r':
@@ -1739,11 +1751,11 @@ int bstr_printf(char *buf, size_t size, const char *fmt, const u32 *bin_buf)
 	typeof(type) value;						\
 	if (sizeof(type) == 8) {					\
 		args = PTR_ALIGN(args, sizeof(u32));			\
-		*(u32 *)&value = *(u32 *)args;				\
-		*((u32 *)&value + 1) = *(u32 *)(args + 4);		\
+		*(u32 *)&value = *(const u32 *)args;			\
+		*((u32 *)&value + 1) = *(const u32 *)(args + 4);	\
 	} else {							\
 		args = PTR_ALIGN(args, sizeof(type));			\
-		value = *(typeof(type) *)args;				\
+		value = *(const typeof(type) *)args;			\
 	}								\
 	args += sizeof(type);						\
 	value;								\
@@ -1806,7 +1818,7 @@ int bstr_printf(char *buf, size_t size, const char *fmt, const u32 *bin_buf)
 		case FORMAT_TYPE_STR: {
 			const char *str_arg = args;
 			args += strlen(str_arg) + 1;
-			str = string(str, end, (char *)str_arg, spec);
+			str = string(str, end, str_arg, spec);
 			break;
 		}
 

@@ -360,7 +360,7 @@ int ieee80211_init_rate_ctrl_alg(struct ieee80211_local *local,
 
 	ASSERT_RTNL();
 
-	if (local->open_count)
+	if (atomic_read(&local->open_count))
 		return -EBUSY;
 
 	if (local->hw.flags & IEEE80211_HW_HAS_RATE_CONTROL) {

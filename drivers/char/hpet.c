@@ -429,7 +429,7 @@ static int hpet_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static int hpet_ioctl_common(struct hpet_dev *, int, unsigned long, int);
+static int hpet_ioctl_common(struct hpet_dev *, unsigned int, unsigned long, int);
 
 static long hpet_ioctl(struct file *file, unsigned int cmd,
 			unsigned long arg)
@@ -568,7 +568,7 @@ static inline unsigned long hpet_time_div(struct hpets *hpets,
 }
 
 static int
-hpet_ioctl_common(struct hpet_dev *devp, int cmd, unsigned long arg, int kernel)
+hpet_ioctl_common(struct hpet_dev *devp, unsigned int cmd, unsigned long arg, int kernel)
 {
 	struct hpet_timer __iomem *timer;
 	struct hpet __iomem *hpet;
@@ -611,11 +611,11 @@ hpet_ioctl_common(struct hpet_dev *devp, int cmd, unsigned long arg, int kernel)
 		{
 			struct hpet_info info;
 
+			memset(&info, 0, sizeof(info));
+
 			if (devp->hd_ireqfreq)
 				info.hi_ireqfreq =
 					hpet_time_div(hpetp, devp->hd_ireqfreq);
-			else
-				info.hi_ireqfreq = 0;
 			info.hi_flags =
 			    readq(&timer->hpet_config) & Tn_PER_INT_CAP_MASK;
 			info.hi_hpet = hpetp->hp_which;
@@ -1015,7 +1015,7 @@ static struct acpi_driver hpet_acpi_driver = {
 		},
 };
 
-static struct miscdevice hpet_misc = { HPET_MINOR, "hpet", &hpet_fops };
+static struct miscdevice hpet_misc = { HPET_MINOR, "hpet", &hpet_fops, {NULL, NULL}, NULL, NULL };
 
 static int __init hpet_init(void)
 {

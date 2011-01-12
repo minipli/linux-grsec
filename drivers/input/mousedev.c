@@ -762,7 +762,7 @@ static ssize_t mousedev_read(struct file *file, char __user *buffer,
 
 	spin_unlock_irq(&client->packet_lock);
 
-	if (copy_to_user(buffer, data, count))
+	if (count > sizeof(data) || copy_to_user(buffer, data, count))
 		return -EFAULT;
 
 	return count;
@@ -1064,7 +1064,7 @@ static struct input_handler mousedev_handler = {
 
 #ifdef CONFIG_INPUT_MOUSEDEV_PSAUX
 static struct miscdevice psaux_mouse = {
-	PSMOUSE_MINOR, "psaux", &mousedev_fops
+	PSMOUSE_MINOR, "psaux", &mousedev_fops, {NULL, NULL}, NULL, NULL
 };
 static int psaux_registered;
 #endif

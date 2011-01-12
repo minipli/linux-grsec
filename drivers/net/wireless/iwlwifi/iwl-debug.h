@@ -68,8 +68,8 @@ do {                                            			\
 } while (0)
 
 #else
-#define IWL_DEBUG(__priv, level, fmt, args...)
-#define IWL_DEBUG_LIMIT(__priv, level, fmt, args...)
+#define IWL_DEBUG(__priv, level, fmt, args...) do {} while (0)
+#define IWL_DEBUG_LIMIT(__priv, level, fmt, args...) do {} while (0)
 static inline void iwl_print_hex_dump(struct iwl_priv *priv, int level,
 				      const void *p, u32 len)
 {}

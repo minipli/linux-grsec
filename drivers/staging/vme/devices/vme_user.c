@@ -137,7 +137,7 @@ static long vme_user_unlocked_ioctl(struct file *, unsigned int, unsigned long);
 static int __init vme_user_probe(struct device *, int, int);
 static int __exit vme_user_remove(struct device *, int, int);
 
-static struct file_operations vme_user_fops = {
+static const struct file_operations vme_user_fops = {
 	.open = vme_user_open,
 	.release = vme_user_release,
 	.read = vme_user_read,

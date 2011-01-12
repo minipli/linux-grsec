@@ -1252,19 +1252,19 @@ static inline int blk_integrity_rq(struct request *rq)
 #endif /* CONFIG_BLK_DEV_INTEGRITY */
 
 struct block_device_operations {
-	int (*open) (struct block_device *, fmode_t);
-	int (*release) (struct gendisk *, fmode_t);
-	int (*ioctl) (struct block_device *, fmode_t, unsigned, unsigned long);
-	int (*compat_ioctl) (struct block_device *, fmode_t, unsigned, unsigned long);
-	int (*direct_access) (struct block_device *, sector_t,
+	int (* const open) (struct block_device *, fmode_t);
+	int (* const release) (struct gendisk *, fmode_t);
+	int (* const ioctl) (struct block_device *, fmode_t, unsigned, unsigned long);
+	int (* const compat_ioctl) (struct block_device *, fmode_t, unsigned, unsigned long);
+	int (* const direct_access) (struct block_device *, sector_t,
 						void **, unsigned long *);
-	int (*media_changed) (struct gendisk *);
-	void (*unlock_native_capacity) (struct gendisk *);
-	int (*revalidate_disk) (struct gendisk *);
-	int (*getgeo)(struct block_device *, struct hd_geometry *);
+	int (* const media_changed) (struct gendisk *);
+	void (* const unlock_native_capacity) (struct gendisk *);
+	int (* const revalidate_disk) (struct gendisk *);
+	int (* const getgeo)(struct block_device *, struct hd_geometry *);
 	/* this callback is with swap_lock and sometimes page table lock held */
-	void (*swap_slot_free_notify) (struct block_device *, unsigned long);
-	struct module *owner;
+	void (* const swap_slot_free_notify) (struct block_device *, unsigned long);
+	struct module * const owner;
 };
 
 extern int __blkdev_driver_ioctl(struct block_device *, fmode_t, unsigned int,

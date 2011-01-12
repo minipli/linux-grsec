@@ -17,6 +17,7 @@
 #include <asm/apic.h>
 #include <asm/io_apic.h>
 #include <asm/bios_ebda.h>
+#include <asm/boot.h>
 
 static void __init i386_default_early_setup(void)
 {
@@ -40,7 +41,7 @@ void __init i386_start_kernel(void)
 					 "EX TRAMPOLINE");
 #endif
 
-	reserve_early(__pa_symbol(&_text), __pa_symbol(&__bss_stop), "TEXT DATA BSS");
+	reserve_early(LOAD_PHYSICAL_ADDR, __pa_symbol(&__bss_stop), "TEXT DATA BSS");
 
 #ifdef CONFIG_BLK_DEV_INITRD
 	/* Reserve INITRD */

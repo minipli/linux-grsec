@@ -1170,7 +1170,7 @@ static struct ext4_dir_entry_2 *do_split(handle_t *handle, struct inode *dir,
 	char *data1 = (*bh)->b_data, *data2;
 	unsigned split, move, size;
 	struct ext4_dir_entry_2 *de = NULL, *de2;
-	int	err = 0, i;
+	int	i, err = 0;
 
 	bh2 = ext4_append (handle, dir, &newblock, &err);
 	if (!(bh2)) {
