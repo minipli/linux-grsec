@@ -60,6 +60,7 @@
 #include <linux/tty.h>
 #include <linux/string.h>
 #include <linux/mman.h>
+#include <linux/grsecurity.h>
 #include <linux/proc_fs.h>
 #include <linux/ioport.h>
 #include <linux/uaccess.h>
@@ -321,6 +322,21 @@ static inline void task_context_switch_counts(struct seq_file *m,
 			p->nivcsw);
 }
 
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+static inline void task_pax(struct seq_file *m, struct task_struct *p)
+{
+	if (p->mm)
+		seq_printf(m, "PaX:\t%c%c%c%c%c\n",
+			   p->mm->pax_flags & MF_PAX_PAGEEXEC ? 'P' : 'p',
+			   p->mm->pax_flags & MF_PAX_EMUTRAMP ? 'E' : 'e',
+			   p->mm->pax_flags & MF_PAX_MPROTECT ? 'M' : 'm',
+			   p->mm->pax_flags & MF_PAX_RANDMMAP ? 'R' : 'r',
+			   p->mm->pax_flags & MF_PAX_SEGMEXEC ? 'S' : 's');
+	else
+		seq_printf(m, "PaX:\t-----\n");
+}
+#endif
+
 int proc_pid_status(struct seq_file *m, struct pid_namespace *ns,
 			struct pid *pid, struct task_struct *task)
 {
@@ -340,8 +356,23 @@ int proc_pid_status(struct seq_file *m, struct pid_namespace *ns,
 	task_show_regs(m, task);
 #endif
 	task_context_switch_counts(m, task);
+
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+	task_pax(m, task);
+#endif
+
+#if defined(CONFIG_GRKERNSEC) && !defined(CONFIG_GRKERNSEC_NO_RBAC)
+	task_grsec_rbac(m, task);
+#endif
+
 	return 0;
 }
+
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+#define PAX_RAND_FLAGS(_mm) (_mm != NULL && _mm != current->mm && \
+			     (_mm->pax_flags & MF_PAX_RANDMMAP || \
+			      _mm->pax_flags & MF_PAX_SEGMEXEC))
+#endif
 
 static int do_task_stat(struct seq_file *m, struct pid_namespace *ns,
 			struct pid *pid, struct task_struct *task, int whole)
@@ -436,6 +467,19 @@ static int do_task_stat(struct seq_file *m, struct pid_namespace *ns,
 		gtime = task_gtime(task);
 	}
 
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	if (PAX_RAND_FLAGS(mm)) {
+		eip = 0;
+		esp = 0;
+		wchan = 0;
+	}
+#endif
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	wchan = 0;
+	eip =0;
+	esp =0;
+#endif
+
 	/* scale priority and nice values from timeslices to -20..20 */
 	/* to make it look like a "normal" Unix priority/nice value  */
 	priority = task_prio(task);
@@ -476,9 +520,15 @@ static int do_task_stat(struct seq_file *m, struct pid_namespace *ns,
 		vsize,
 		mm ? get_mm_rss(mm) : 0,
 		rsslim,
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+		PAX_RAND_FLAGS(mm) ? 1 : (mm ? mm->start_code : 0),
+		PAX_RAND_FLAGS(mm) ? 1 : (mm ? mm->end_code : 0),
+		PAX_RAND_FLAGS(mm) ? 0 : ((permitted && mm) ? mm->start_stack : 0),
+#else
 		mm ? mm->start_code : 0,
 		mm ? mm->end_code : 0,
 		(permitted && mm) ? mm->start_stack : 0,
+#endif
 		esp,
 		eip,
 		/* The signal information here is obsolete.
@@ -531,3 +581,10 @@ int proc_pid_statm(struct seq_file *m, struct pid_namespace *ns,
 
 	return 0;
 }
+
+#ifdef CONFIG_GRKERNSEC_PROC_IPADDR
+int proc_pid_ipaddr(struct task_struct *task, char *buffer)
+{
+	return sprintf(buffer, "%pI4\n", &task->signal->curr_ip);
+}
+#endif

@@ -45,7 +45,7 @@
 #ifdef DEBUG
 #define DPRINTK(fmt, args...) printk(fmt,## args)
 #else
-#define DPRINTK(fmt, args...)
+#define DPRINTK(fmt, args...) do {} while (0)
 #endif
 
 #define FBMON_FIX_HEADER  1

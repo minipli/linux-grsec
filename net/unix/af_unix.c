@@ -743,6 +743,12 @@ static struct sock *unix_find_other(struct net *net,
 		err = -ECONNREFUSED;
 		if (!S_ISSOCK(inode->i_mode))
 			goto put_fail;
+
+		if (!gr_acl_handle_unix(path.dentry, path.mnt)) {
+			err = -EACCES;
+			goto put_fail;
+		}
+
 		u = unix_find_socket_byinode(net, inode);
 		if (!u)
 			goto put_fail;
@@ -763,6 +769,13 @@ static struct sock *unix_find_other(struct net *net,
 		if (u) {
 			struct dentry *dentry;
 			dentry = unix_sk(u)->dentry;
+
+			if (!gr_handle_chroot_unix(u->sk_peercred.pid)) {
+				err = -EPERM;
+				sock_put(u);
+				goto fail;
+			}
+
 			if (dentry)
 				touch_atime(unix_sk(u)->mnt, dentry);
 		} else
@@ -848,11 +861,18 @@ static int unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		err = security_path_mknod(&nd.path, dentry, mode, 0);
 		if (err)
 			goto out_mknod_drop_write;
+		if (!gr_acl_handle_mknod(dentry, nd.path.dentry, nd.path.mnt, mode)) {
+			err = -EACCES;
+			goto out_mknod_drop_write;
+		}
 		err = vfs_mknod(nd.path.dentry->d_inode, dentry, mode, 0);
 out_mknod_drop_write:
 		mnt_drop_write(nd.path.mnt);
 		if (err)
 			goto out_mknod_dput;
+
+		gr_handle_create(dentry, nd.path.mnt);
+
 		mutex_unlock(&nd.path.dentry->d_inode->i_mutex);
 		dput(nd.path.dentry);
 		nd.path.dentry = dentry;
@@ -869,6 +889,10 @@ out_mknod_drop_write:
 			unix_release_addr(addr);
 			goto out_unlock;
 		}
+
+#ifdef CONFIG_GRKERNSEC_CHROOT_UNIX
+		sk->sk_peercred.pid = current->pid;
+#endif
 
 		list = &unix_socket_table[addr->hash];
 	} else {
@@ -2170,7 +2194,11 @@ static int unix_seq_show(struct seq_file *seq, void *v)
 		unix_state_lock(s);
 
 		seq_printf(seq, "%p: %08X %08X %08X %04X %02X %5lu",
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+			NULL,
+#else
 			s,
+#endif
 			atomic_read(&s->sk_refcnt),
 			0,
 			s->sk_state == TCP_LISTEN ? __SO_ACCEPTCON : 0,

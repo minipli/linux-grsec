@@ -134,7 +134,7 @@ xfs_find_handle(
 	}
 
 	error = -EFAULT;
-	if (copy_to_user(hreq->ohandle, &handle, hsize) ||
+	if (hsize > sizeof handle || copy_to_user(hreq->ohandle, &handle, hsize) ||
 	    copy_to_user(hreq->ohandlen, &hsize, sizeof(__s32)))
 		goto out_put;
 
@@ -423,7 +423,7 @@ xfs_attrlist_by_handle(
 	if (IS_ERR(dentry))
 		return PTR_ERR(dentry);
 
-	kbuf = kmalloc(al_hreq.buflen, GFP_KERNEL);
+	kbuf = kzalloc(al_hreq.buflen, GFP_KERNEL);
 	if (!kbuf)
 		goto out_dput;
 

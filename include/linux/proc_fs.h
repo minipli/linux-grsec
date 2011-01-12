@@ -155,6 +155,19 @@ static inline struct proc_dir_entry *proc_create(const char *name, mode_t mode,
 	return proc_create_data(name, mode, parent, proc_fops, NULL);
 }
 
+static inline struct proc_dir_entry *proc_create_grsec(const char *name, mode_t mode,
+	struct proc_dir_entry *parent, const struct file_operations *proc_fops)
+{
+#ifdef CONFIG_GRKERNSEC_PROC_USER
+	return proc_create_data(name, S_IRUSR, parent, proc_fops, NULL);
+#elif defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+	return proc_create_data(name, S_IRUSR | S_IRGRP, parent, proc_fops, NULL);
+#else
+	return proc_create_data(name, mode, parent, proc_fops, NULL);
+#endif
+}
+	
+
 static inline struct proc_dir_entry *create_proc_read_entry(const char *name,
 	mode_t mode, struct proc_dir_entry *base, 
 	read_proc_t *read_proc, void * data)

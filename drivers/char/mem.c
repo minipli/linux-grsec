@@ -18,6 +18,7 @@
 #include <linux/raw.h>
 #include <linux/tty.h>
 #include <linux/capability.h>
+#include <linux/security.h>
 #include <linux/ptrace.h>
 #include <linux/device.h>
 #include <linux/highmem.h>
@@ -33,6 +34,10 @@
 
 #ifdef CONFIG_IA64
 # include <linux/efi.h>
+#endif
+
+#if defined(CONFIG_GRKERNSEC) && !defined(CONFIG_GRKERNSEC_NO_RBAC)
+extern struct file_operations grsec_fops;
 #endif
 
 static inline unsigned long size_inside_page(unsigned long start,
@@ -155,6 +160,8 @@ static ssize_t read_mem(struct file * file, char __user * buf,
 #endif
 
 	while (count > 0) {
+		char *temp;
+
 		/*
 		 * Handle first page in case it's not aligned
 		 */
@@ -177,10 +184,30 @@ static ssize_t read_mem(struct file * file, char __user * buf,
 		if (!ptr)
 			return -EFAULT;
 
-		if (copy_to_user(buf, ptr, sz)) {
+#ifdef CONFIG_PAX_USERCOPY
+		temp = kmalloc(sz, GFP_KERNEL);
+		if (!temp) {
+			unxlate_dev_mem_ptr(p, ptr);
+			return -ENOMEM;
+		}
+		memcpy(temp, ptr, sz);
+#else
+		temp = ptr;
+#endif
+
+		if (copy_to_user(buf, temp, sz)) {
+
+#ifdef CONFIG_PAX_USERCOPY
+			kfree(temp);
+#endif
+
 			unxlate_dev_mem_ptr(p, ptr);
 			return -EFAULT;
 		}
+
+#ifdef CONFIG_PAX_USERCOPY
+		kfree(temp);
+#endif
 
 		unxlate_dev_mem_ptr(p, ptr);
 
@@ -204,6 +231,11 @@ static ssize_t write_mem(struct file * file, const char __user * buf,
 
 	if (!valid_phys_addr_range(p, count))
 		return -EFAULT;
+
+#ifdef CONFIG_GRKERNSEC_KMEM
+	gr_handle_mem_write();
+	return -EPERM;
+#endif
 
 	written = 0;
 
@@ -337,6 +369,11 @@ static int mmap_mem(struct file * file, struct vm_area_struct * vma)
 						&vma->vm_page_prot))
 		return -EINVAL;
 
+#ifdef CONFIG_GRKERNSEC_KMEM
+	if (gr_handle_mem_mmap(vma->vm_pgoff << PAGE_SHIFT, vma))
+		return -EPERM;
+#endif
+
 	vma->vm_page_prot = phys_mem_access_prot(file, vma->vm_pgoff,
 						 size,
 						 vma->vm_page_prot);
@@ -419,9 +456,8 @@ static ssize_t read_kmem(struct file *file, char __user *buf,
 			 size_t count, loff_t *ppos)
 {
 	unsigned long p = *ppos;
-	ssize_t low_count, read, sz;
+	ssize_t low_count, read, sz, err = 0;
 	char * kbuf; /* k-addr because vread() takes vmlist_lock rwlock */
-	int err = 0;
 
 	read = 0;
 	if (p < (unsigned long) high_memory) {
@@ -444,6 +480,8 @@ static ssize_t read_kmem(struct file *file, char __user *buf,
 		}
 #endif
 		while (low_count > 0) {
+			char *temp;
+
 			sz = size_inside_page(p, low_count);
 
 			/*
@@ -453,7 +491,22 @@ static ssize_t read_kmem(struct file *file, char __user *buf,
 			 */
 			kbuf = xlate_dev_kmem_ptr((char *)p);
 
-			if (copy_to_user(buf, kbuf, sz))
+#ifdef CONFIG_PAX_USERCOPY
+			temp = kmalloc(sz, GFP_KERNEL);
+			if (!temp)
+				return -ENOMEM;
+			memcpy(temp, kbuf, sz);
+#else
+			temp = kbuf;
+#endif
+
+			err = copy_to_user(buf, temp, sz);
+
+#ifdef CONFIG_PAX_USERCOPY
+			kfree(temp);
+#endif
+
+			if (err)
 				return -EFAULT;
 			buf += sz;
 			p += sz;
@@ -559,6 +612,11 @@ static ssize_t write_kmem(struct file * file, const char __user * buf,
 	ssize_t written;
 	char * kbuf; /* k-addr because vwrite() takes vmlist_lock rwlock */
 	int err = 0;
+
+#ifdef CONFIG_GRKERNSEC_KMEM
+	gr_handle_kmem_write();
+	return -EPERM;
+#endif
 
 	if (p < (unsigned long) high_memory) {
 
@@ -765,6 +823,16 @@ static loff_t memory_lseek(struct file * file, loff_t offset, int orig)
 
 static int open_port(struct inode * inode, struct file * filp)
 {
+#ifdef CONFIG_GRKERNSEC_KMEM
+	gr_handle_open_port();
+	return -EPERM;
+#endif
+
+	return capable(CAP_SYS_RAWIO) ? 0 : -EPERM;
+}
+
+static int open_mem(struct inode * inode, struct file * filp)
+{
 	return capable(CAP_SYS_RAWIO) ? 0 : -EPERM;
 }
 
@@ -772,7 +840,6 @@ static int open_port(struct inode * inode, struct file * filp)
 #define full_lseek      null_lseek
 #define write_zero	write_null
 #define read_full       read_zero
-#define open_mem	open_port
 #define open_kmem	open_mem
 #define open_oldmem	open_mem
 
@@ -888,6 +955,9 @@ static const struct memdev {
 	[11] = { "kmsg", 0, &kmsg_fops, NULL },
 #ifdef CONFIG_CRASH_DUMP
 	[12] = { "oldmem", 0, &oldmem_fops, NULL },
+#endif
+#if defined(CONFIG_GRKERNSEC) && !defined(CONFIG_GRKERNSEC_NO_RBAC)
+	[13] = { "grsec",S_IRUSR | S_IWUGO, &grsec_fops, NULL },
 #endif
 };
 

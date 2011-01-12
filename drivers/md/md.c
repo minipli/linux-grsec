@@ -2514,7 +2514,7 @@ static void rdev_free(struct kobject *ko)
 	mdk_rdev_t *rdev = container_of(ko, mdk_rdev_t, kobj);
 	kfree(rdev);
 }
-static struct sysfs_ops rdev_sysfs_ops = {
+static const struct sysfs_ops rdev_sysfs_ops = {
 	.show		= rdev_attr_show,
 	.store		= rdev_attr_store,
 };
@@ -3884,7 +3884,7 @@ static void md_free(struct kobject *ko)
 	kfree(mddev);
 }
 
-static struct sysfs_ops md_sysfs_ops = {
+static const struct sysfs_ops md_sysfs_ops = {
 	.show	= md_attr_show,
 	.store	= md_attr_store,
 };
@@ -4471,7 +4471,8 @@ out:
 	err = 0;
 	blk_integrity_unregister(disk);
 	md_new_event(mddev);
-	sysfs_notify_dirent(mddev->sysfs_state);
+	if (mddev->sysfs_state)
+		sysfs_notify_dirent(mddev->sysfs_state);
 	return err;
 }
 
@@ -6039,7 +6040,7 @@ static int md_seq_show(struct seq_file *seq, void *v)
 				chunk_kb ? "KB" : "B");
 			if (bitmap->file) {
 				seq_printf(seq, ", file: ");
-				seq_path(seq, &bitmap->file->f_path, " \t\n");
+				seq_path(seq, &bitmap->file->f_path, " \t\n\\");
 			}
 
 			seq_printf(seq, "\n");
@@ -6133,7 +6134,7 @@ static int is_mddev_idle(mddev_t *mddev, int init)
 		struct gendisk *disk = rdev->bdev->bd_contains->bd_disk;
 		curr_events = (int)part_stat_read(&disk->part0, sectors[0]) +
 			      (int)part_stat_read(&disk->part0, sectors[1]) -
-			      atomic_read(&disk->sync_io);
+			      atomic_read_unchecked(&disk->sync_io);
 		/* sync IO will cause sync_io to increase before the disk_stats
 		 * as sync_io is counted when a request starts, and
 		 * disk_stats is counted when it completes.

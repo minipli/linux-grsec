@@ -296,7 +296,14 @@ typedef struct compat_siginfo {
 #define ELF_DATA	ELFDATA2LSB
 #define ELF_ARCH	EM_386
 
-#define IA32_STACK_TOP		IA32_PAGE_OFFSET
+#ifdef CONFIG_PAX_RANDUSTACK
+#define __IA32_DELTA_STACK	(current->mm->delta_stack)
+#else
+#define __IA32_DELTA_STACK	0UL
+#endif
+
+#define IA32_STACK_TOP		(IA32_PAGE_OFFSET - __IA32_DELTA_STACK)
+
 #define IA32_GATE_OFFSET	IA32_PAGE_OFFSET
 #define IA32_GATE_END		IA32_PAGE_OFFSET + PAGE_SIZE
 

@@ -166,9 +166,13 @@ static void __kprobes set_jmp_op(void *from, void *to)
 		char op;
 		s32 raddr;
 	} __attribute__((packed)) * jop;
-	jop = (struct __arch_jmp_op *)from;
+
+	jop = (struct __arch_jmp_op *)(ktla_ktva(from));
+
+	pax_open_kernel();
 	jop->raddr = (s32)((long)(to) - ((long)(from) + 5));
 	jop->op = RELATIVEJUMP_INSTRUCTION;
+	pax_close_kernel();
 }
 
 /*
@@ -193,7 +197,7 @@ static int __kprobes can_boost(kprobe_opcode_t *opcodes)
 	kprobe_opcode_t opcode;
 	kprobe_opcode_t *orig_opcodes = opcodes;
 
-	if (search_exception_tables((unsigned long)opcodes))
+	if (search_exception_tables(ktva_ktla((unsigned long)opcodes)))
 		return 0;	/* Page fault may occur on this address. */
 
 retry:
@@ -337,7 +341,9 @@ static void __kprobes fix_riprel(struct kprobe *p)
 			disp = (u8 *) p->addr + *((s32 *) insn) -
 			       (u8 *) p->ainsn.insn;
 			BUG_ON((s64) (s32) disp != disp); /* Sanity check.  */
+			pax_open_kernel();
 			*(s32 *)insn = (s32) disp;
+			pax_close_kernel();
 		}
 	}
 #endif
@@ -345,16 +351,18 @@ static void __kprobes fix_riprel(struct kprobe *p)
 
 static void __kprobes arch_copy_kprobe(struct kprobe *p)
 {
-	memcpy(p->ainsn.insn, p->addr, MAX_INSN_SIZE * sizeof(kprobe_opcode_t));
+	pax_open_kernel();
+	memcpy(p->ainsn.insn, ktla_ktva(p->addr), MAX_INSN_SIZE * sizeof(kprobe_opcode_t));
+	pax_close_kernel();
 
 	fix_riprel(p);
 
-	if (can_boost(p->addr))
+	if (can_boost(ktla_ktva(p->addr)))
 		p->ainsn.boostable = 0;
 	else
 		p->ainsn.boostable = -1;
 
-	p->opcode = *p->addr;
+	p->opcode = *(ktla_ktva(p->addr));
 }
 
 int __kprobes arch_prepare_kprobe(struct kprobe *p)
@@ -432,7 +440,7 @@ static void __kprobes prepare_singlestep(struct kprobe *p, struct pt_regs *regs)
 	if (p->opcode == BREAKPOINT_INSTRUCTION)
 		regs->ip = (unsigned long)p->addr;
 	else
-		regs->ip = (unsigned long)p->ainsn.insn;
+		regs->ip = ktva_ktla((unsigned long)p->ainsn.insn);
 }
 
 void __kprobes arch_prepare_kretprobe(struct kretprobe_instance *ri,
@@ -453,7 +461,7 @@ static void __kprobes setup_singlestep(struct kprobe *p, struct pt_regs *regs,
 	if (p->ainsn.boostable == 1 && !p->post_handler) {
 		/* Boost up -- we can execute copied instructions directly */
 		reset_current_kprobe();
-		regs->ip = (unsigned long)p->ainsn.insn;
+		regs->ip = ktva_ktla((unsigned long)p->ainsn.insn);
 		preempt_enable_no_resched();
 		return;
 	}
@@ -523,7 +531,7 @@ static int __kprobes kprobe_handler(struct pt_regs *regs)
 	struct kprobe_ctlblk *kcb;
 
 	addr = (kprobe_opcode_t *)(regs->ip - sizeof(kprobe_opcode_t));
-	if (*addr != BREAKPOINT_INSTRUCTION) {
+	if (*(kprobe_opcode_t *)ktla_ktva((unsigned long)addr) != BREAKPOINT_INSTRUCTION) {
 		/*
 		 * The breakpoint instruction was removed right
 		 * after we hit it.  Another cpu has removed
@@ -775,7 +783,7 @@ static void __kprobes resume_execution(struct kprobe *p,
 		struct pt_regs *regs, struct kprobe_ctlblk *kcb)
 {
 	unsigned long *tos = stack_addr(regs);
-	unsigned long copy_ip = (unsigned long)p->ainsn.insn;
+	unsigned long copy_ip = ktva_ktla((unsigned long)p->ainsn.insn);
 	unsigned long orig_ip = (unsigned long)p->addr;
 	kprobe_opcode_t *insn = p->ainsn.insn;
 
@@ -958,7 +966,7 @@ int __kprobes kprobe_exceptions_notify(struct notifier_block *self,
 	struct die_args *args = data;
 	int ret = NOTIFY_DONE;
 
-	if (args->regs && user_mode_vm(args->regs))
+	if (args->regs && user_mode(args->regs))
 		return ret;
 
 	switch (val) {
