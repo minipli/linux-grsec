@@ -157,7 +157,7 @@ VOID ConfigureEndPointTypesThroughEEPROM(PMINI_ADAPTER Adapter)
 
 }
 
-static struct file_operations usbbcm_fops = {
+static const struct file_operations usbbcm_fops = {
     .open    =  usbbcm_open,
     .release =  usbbcm_release,
     .read    =  usbbcm_read,

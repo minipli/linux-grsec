@@ -325,22 +325,23 @@ struct e1000_phy_operations {
 };
 
 struct e1000_nvm_operations {
-	s32  (*acquire)(struct e1000_hw *);
-	s32  (*read)(struct e1000_hw *, u16, u16, u16 *);
-	void (*release)(struct e1000_hw *);
-	s32  (*write)(struct e1000_hw *, u16, u16, u16 *);
+	s32  (* const acquire)(struct e1000_hw *);
+	s32  (* const read)(struct e1000_hw *, u16, u16, u16 *);
+	void (* const release)(struct e1000_hw *);
+	s32  (* const write)(struct e1000_hw *, u16, u16, u16 *);
 };
 
 struct e1000_info {
 	s32 (*get_invariants)(struct e1000_hw *);
-	struct e1000_mac_operations *mac_ops;
-	struct e1000_phy_operations *phy_ops;
-	struct e1000_nvm_operations *nvm_ops;
+	const struct e1000_mac_operations *mac_ops;
+	const struct e1000_phy_operations *phy_ops;
+	const struct e1000_nvm_operations *nvm_ops;
 };
 
 extern const struct e1000_info e1000_82575_info;
 
 struct e1000_mac_info {
+	/* cannot be const see igb_get_invariants_82575() */
 	struct e1000_mac_operations ops;
 
 	u8 addr[6];
@@ -379,6 +380,7 @@ struct e1000_mac_info {
 };
 
 struct e1000_phy_info {
+	/* cannot be const see igb_get_invariants_82575() */
 	struct e1000_phy_operations ops;
 
 	enum e1000_phy_type type;
@@ -414,6 +416,7 @@ struct e1000_phy_info {
 };
 
 struct e1000_nvm_info {
+	/* cannot be const */
 	struct e1000_nvm_operations ops;
 
 	enum e1000_nvm_type type;

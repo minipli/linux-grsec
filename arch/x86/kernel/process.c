@@ -74,7 +74,7 @@ void exit_thread(void)
 	unsigned long *bp = t->io_bitmap_ptr;
 
 	if (bp) {
-		struct tss_struct *tss = &per_cpu(init_tss, get_cpu());
+		struct tss_struct *tss = init_tss + get_cpu();
 
 		t->io_bitmap_ptr = NULL;
 		clear_thread_flag(TIF_IO_BITMAP);
@@ -108,7 +108,7 @@ void show_regs_common(void)
 
 	printk(KERN_CONT "\n");
 	printk(KERN_DEFAULT "Pid: %d, comm: %.20s %s %s %.*s %s/%s\n",
-		current->pid, current->comm, print_tainted(),
+		task_pid_nr(current), current->comm, print_tainted(),
 		init_utsname()->release,
 		(int)strcspn(init_utsname()->version, " "),
 		init_utsname()->version, board, product);
@@ -118,6 +118,9 @@ void flush_thread(void)
 {
 	struct task_struct *tsk = current;
 
+#if defined(CONFIG_X86_32) && !defined(CONFIG_CC_STACKPROTECTOR) && !defined(CONFIG_PAX_MEMORY_UDEREF)
+	loadsegment(gs, 0);
+#endif
 	flush_ptrace_hw_breakpoint(tsk);
 	memset(tsk->thread.tls_array, 0, sizeof(tsk->thread.tls_array));
 	/*
@@ -280,10 +283,10 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 	regs.di = (unsigned long) arg;
 
 #ifdef CONFIG_X86_32
-	regs.ds = __USER_DS;
-	regs.es = __USER_DS;
+	regs.ds = __KERNEL_DS;
+	regs.es = __KERNEL_DS;
 	regs.fs = __KERNEL_PERCPU;
-	regs.gs = __KERNEL_STACK_CANARY;
+	savesegment(gs, regs.gs);
 #else
 	regs.ss = __KERNEL_DS;
 #endif
@@ -658,17 +661,3 @@ static int __init idle_setup(char *str)
 	return 0;
 }
 early_param("idle", idle_setup);
-
-unsigned long arch_align_stack(unsigned long sp)
-{
-	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
-		sp -= get_random_int() % 8192;
-	return sp & ~0xf;
-}
-
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long range_end = mm->brk + 0x02000000;
-	return randomize_range(mm->brk, range_end, 0) ? : mm->brk;
-}
-

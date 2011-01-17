@@ -93,16 +93,16 @@ extern int (*pcibios_enable_irq)(struct pci_dev *dev);
 extern void (*pcibios_disable_irq)(struct pci_dev *dev);
 
 struct pci_raw_ops {
-	int (*read)(unsigned int domain, unsigned int bus, unsigned int devfn,
+	int (* const read)(unsigned int domain, unsigned int bus, unsigned int devfn,
 						int reg, int len, u32 *val);
-	int (*write)(unsigned int domain, unsigned int bus, unsigned int devfn,
+	int (* const write)(unsigned int domain, unsigned int bus, unsigned int devfn,
 						int reg, int len, u32 val);
 };
 
-extern struct pci_raw_ops *raw_pci_ops;
-extern struct pci_raw_ops *raw_pci_ext_ops;
+extern const struct pci_raw_ops *raw_pci_ops;
+extern const struct pci_raw_ops *raw_pci_ext_ops;
 
-extern struct pci_raw_ops pci_direct_conf1;
+extern const struct pci_raw_ops pci_direct_conf1;
 extern bool port_cf9_safe;
 
 /* arch_initcall level */

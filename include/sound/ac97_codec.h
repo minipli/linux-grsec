@@ -419,15 +419,15 @@
 struct snd_ac97;
 
 struct snd_ac97_build_ops {
-	int (*build_3d) (struct snd_ac97 *ac97);
-	int (*build_specific) (struct snd_ac97 *ac97);
-	int (*build_spdif) (struct snd_ac97 *ac97);
-	int (*build_post_spdif) (struct snd_ac97 *ac97);
+	int (* const build_3d) (struct snd_ac97 *ac97);
+	int (* const build_specific) (struct snd_ac97 *ac97);
+	int (* const build_spdif) (struct snd_ac97 *ac97);
+	int (* const build_post_spdif) (struct snd_ac97 *ac97);
 #ifdef CONFIG_PM
-	void (*suspend) (struct snd_ac97 *ac97);
-	void (*resume) (struct snd_ac97 *ac97);
+	void (* const suspend) (struct snd_ac97 *ac97);
+	void (* const resume) (struct snd_ac97 *ac97);
 #endif
-	void (*update_jacks) (struct snd_ac97 *ac97);	/* for jack-sharing */
+	void (* const update_jacks) (struct snd_ac97 *ac97);	/* for jack-sharing */
 };
 
 struct snd_ac97_bus_ops {
@@ -477,7 +477,7 @@ struct snd_ac97_template {
 
 struct snd_ac97 {
 	/* -- lowlevel (hardware) driver specific -- */
-	struct snd_ac97_build_ops * build_ops;
+	const struct snd_ac97_build_ops * build_ops;
 	void *private_data;
 	void (*private_free) (struct snd_ac97 *ac97);
 	/* --- */

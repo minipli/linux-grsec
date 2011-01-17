@@ -94,17 +94,17 @@ static struct scsi_host_template ahci_sht = {
 	AHCI_SHT("ahci"),
 };
 
-static struct ata_port_operations ahci_vt8251_ops = {
+static const struct ata_port_operations ahci_vt8251_ops = {
 	.inherits		= &ahci_ops,
 	.hardreset		= ahci_vt8251_hardreset,
 };
 
-static struct ata_port_operations ahci_p5wdh_ops = {
+static const struct ata_port_operations ahci_p5wdh_ops = {
 	.inherits		= &ahci_ops,
 	.hardreset		= ahci_p5wdh_hardreset,
 };
 
-static struct ata_port_operations ahci_sb600_ops = {
+static const struct ata_port_operations ahci_sb600_ops = {
 	.inherits		= &ahci_ops,
 	.softreset		= ahci_sb600_softreset,
 	.pmp_softreset		= ahci_sb600_softreset,
@@ -388,7 +388,7 @@ static const struct pci_device_id ahci_pci_tbl[] = {
 	{ PCI_ANY_ID, PCI_ANY_ID, PCI_ANY_ID, PCI_ANY_ID,
 	  PCI_CLASS_STORAGE_SATA_AHCI, 0xffffff, board_ahci },
 
-	{ }	/* terminate list */
+	{ 0, 0, 0, 0, 0, 0, 0 }	/* terminate list */
 };
 
 

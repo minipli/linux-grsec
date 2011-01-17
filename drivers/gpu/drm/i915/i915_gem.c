@@ -587,6 +587,7 @@ i915_gem_pread_ioctl(struct drm_device *dev, void *data,
 		goto out_put;
 
 	ret = -EFAULT;
+
 	if (!i915_gem_object_needs_bit17_swizzle(obj))
 		ret = i915_gem_shmem_pread_fast(dev, obj, args, file_priv);
 	if (ret == -EFAULT)

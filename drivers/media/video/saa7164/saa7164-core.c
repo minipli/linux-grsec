@@ -1169,7 +1169,7 @@ static int saa7164_proc_open(struct inode *inode, struct file *filp)
 	return single_open(filp, saa7164_proc_show, NULL);
 }
 
-static struct file_operations saa7164_proc_fops = {
+static const struct file_operations saa7164_proc_fops = {
 	.open		= saa7164_proc_open,
 	.read		= seq_read,
 	.llseek		= seq_lseek,
