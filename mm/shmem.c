@@ -31,7 +31,7 @@
 #include <linux/percpu_counter.h>
 #include <linux/swap.h>
 
-static struct vfsmount *shm_mnt;
+struct vfsmount *shm_mnt;
 
 #ifdef CONFIG_SHMEM
 /*
@@ -1070,6 +1070,8 @@ static int shmem_writepage(struct page *page, struct writeback_control *wbc)
 		goto unlock;
 	}
 	entry = shmem_swp_entry(info, index, NULL);
+	if (!entry)
+		goto unlock;
 	if (entry->val) {
 		/*
 		 * The more uptodate page coming down from a stacked
