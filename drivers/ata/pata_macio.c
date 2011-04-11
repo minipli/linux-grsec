@@ -918,9 +918,8 @@ static struct scsi_host_template pata_macio_sht = {
 	.slave_configure	= pata_macio_slave_config,
 };
 
-static struct ata_port_operations pata_macio_ops = {
+static const struct ata_port_operations pata_macio_ops = {
 	.inherits		= &ata_bmdma_port_ops,
-
 	.freeze			= pata_macio_freeze,
 	.set_piomode		= pata_macio_set_timings,
 	.set_dmamode		= pata_macio_set_timings,

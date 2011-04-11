@@ -478,7 +478,7 @@ int hfsplus_cat_read_inode(struct inode *inode, struct hfs_find_data *fd)
 		struct hfsplus_cat_folder *folder = &entry.folder;
 
 		if (fd->entrylength < sizeof(struct hfsplus_cat_folder))
-			/* panic? */;
+			{/* panic? */}
 		hfs_bnode_read(fd->bnode, &entry, fd->entryoffset,
 					sizeof(struct hfsplus_cat_folder));
 		hfsplus_get_perms(inode, &folder->permissions, 1);
@@ -495,7 +495,7 @@ int hfsplus_cat_read_inode(struct inode *inode, struct hfs_find_data *fd)
 		struct hfsplus_cat_file *file = &entry.file;
 
 		if (fd->entrylength < sizeof(struct hfsplus_cat_file))
-			/* panic? */;
+			{/* panic? */}
 		hfs_bnode_read(fd->bnode, &entry, fd->entryoffset,
 					sizeof(struct hfsplus_cat_file));
 
@@ -551,7 +551,7 @@ int hfsplus_cat_write_inode(struct inode *inode)
 		struct hfsplus_cat_folder *folder = &entry.folder;
 
 		if (fd.entrylength < sizeof(struct hfsplus_cat_folder))
-			/* panic? */;
+			{/* panic? */}
 		hfs_bnode_read(fd.bnode, &entry, fd.entryoffset,
 					sizeof(struct hfsplus_cat_folder));
 		/* simple node checks? */
@@ -573,7 +573,7 @@ int hfsplus_cat_write_inode(struct inode *inode)
 		struct hfsplus_cat_file *file = &entry.file;
 
 		if (fd.entrylength < sizeof(struct hfsplus_cat_file))
-			/* panic? */;
+			{/* panic? */}
 		hfs_bnode_read(fd.bnode, &entry, fd.entryoffset,
 					sizeof(struct hfsplus_cat_file));
 		hfsplus_inode_write_fork(inode, &file->data_fork);

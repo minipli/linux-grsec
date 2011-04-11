@@ -57,7 +57,7 @@ dump_user_backtrace_32(struct stack_frame_ia32 *head)
 	struct stack_frame_ia32 *fp;
 
 	/* Also check accessibility of one struct frame_head beyond */
-	if (!access_ok(VERIFY_READ, head, sizeof(bufhead)))
+	if (!__access_ok(VERIFY_READ, head, sizeof(bufhead)))
 		return NULL;
 	if (__copy_from_user_inatomic(bufhead, head, sizeof(bufhead)))
 		return NULL;
@@ -123,7 +123,7 @@ x86_backtrace(struct pt_regs * const regs, unsigned int depth)
 {
 	struct stack_frame *head = (struct stack_frame *)frame_pointer(regs);
 
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		unsigned long stack = kernel_stack_pointer(regs);
 		if (depth)
 			dump_trace(NULL, regs, (unsigned long *)stack, 0,

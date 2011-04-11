@@ -86,10 +86,14 @@ int drm_vm_info(struct seq_file *m, void *data)
 	struct drm_local_map *map;
 	struct drm_map_list *r_list;
 
-	/* Hardcoded from _DRM_FRAME_BUFFER,
-	   _DRM_REGISTERS, _DRM_SHM, _DRM_AGP, and
-	   _DRM_SCATTER_GATHER and _DRM_CONSISTENT */
-	const char *types[] = { "FB", "REG", "SHM", "AGP", "SG", "PCI" };
+	static const char * const types[] = {
+		[_DRM_FRAME_BUFFER] = "FB",
+		[_DRM_REGISTERS] = "REG",
+		[_DRM_SHM] = "SHM",
+		[_DRM_AGP] = "AGP",
+		[_DRM_SCATTER_GATHER] = "SG",
+		[_DRM_CONSISTENT] = "PCI",
+		[_DRM_GEM] = "GEM" };
 	const char *type;
 	int i;
 
@@ -100,7 +104,7 @@ int drm_vm_info(struct seq_file *m, void *data)
 		map = r_list->map;
 		if (!map)
 			continue;
-		if (map->type < 0 || map->type > 5)
+		if (map->type >= ARRAY_SIZE(types))
 			type = "??";
 		else
 			type = types[map->type];
@@ -285,7 +289,11 @@ int drm_vma_info(struct seq_file *m, void *data)
 	mutex_lock(&dev->struct_mutex);
 	seq_printf(m, "vma use count: %d, high_memory = %p, 0x%08llx\n",
 		   atomic_read(&dev->vma_count),
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		   NULL, 0);
+#else
 		   high_memory, (u64)virt_to_phys(high_memory));
+#endif
 
 	list_for_each_entry(pt, &dev->vmalist, head) {
 		vma = pt->vma;
@@ -293,14 +301,23 @@ int drm_vma_info(struct seq_file *m, void *data)
 			continue;
 		seq_printf(m,
 			   "\n%5d 0x%08lx-0x%08lx %c%c%c%c%c%c 0x%08lx000",
-			   pt->pid, vma->vm_start, vma->vm_end,
+			   pt->pid,
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+			   0, 0,
+#else
+			   vma->vm_start, vma->vm_end,
+#endif
 			   vma->vm_flags & VM_READ ? 'r' : '-',
 			   vma->vm_flags & VM_WRITE ? 'w' : '-',
 			   vma->vm_flags & VM_EXEC ? 'x' : '-',
 			   vma->vm_flags & VM_MAYSHARE ? 's' : 'p',
 			   vma->vm_flags & VM_LOCKED ? 'l' : '-',
 			   vma->vm_flags & VM_IO ? 'i' : '-',
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+			   0);
+#else
 			   vma->vm_pgoff);
+#endif
 
 #if defined(__i386__)
 		pgprot = pgprot_val(vma->vm_page_prot);

@@ -643,6 +643,8 @@ acpi_os_read_memory(acpi_physical_address phys_addr, u32 * value, u32 width)
 	rcu_read_unlock();
 	if (!virt_addr) {
 		virt_addr = ioremap(phys_addr, size);
+		if (!virt_addr)
+			return AE_NO_MEMORY;
 		unmap = 1;
 	}
 	if (!value)
@@ -679,6 +681,8 @@ acpi_os_write_memory(acpi_physical_address phys_addr, u32 value, u32 width)
 	rcu_read_unlock();
 	if (!virt_addr) {
 		virt_addr = ioremap(phys_addr, size);
+		if (!virt_addr)
+			return AE_NO_MEMORY;
 		unmap = 1;
 	}
 

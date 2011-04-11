@@ -41,6 +41,7 @@ static int try_to_freeze_tasks(bool sig_only)
 	u64 elapsed_csecs64;
 	unsigned int elapsed_csecs;
 	bool wakeup = false;
+	bool timedout = false;
 
 	do_gettimeofday(&start);
 
@@ -51,6 +52,8 @@ static int try_to_freeze_tasks(bool sig_only)
 
 	while (true) {
 		todo = 0;
+		if (time_after(jiffies, end_time))
+			timedout = true;
 		read_lock(&tasklist_lock);
 		do_each_thread(g, p) {
 			if (frozen(p) || !freezeable(p))
@@ -65,9 +68,13 @@ static int try_to_freeze_tasks(bool sig_only)
 			 * It is "frozen enough".  If the task does wake
 			 * up, it will immediately call try_to_freeze.
 			 */
-			if (!task_is_stopped_or_traced(p) &&
-			    !freezer_should_skip(p))
+			if (!task_is_stopped_or_traced(p) && !freezer_should_skip(p)) {
 				todo++;
+				if (timedout) {
+					printk(KERN_ERR "Task refusing to freeze:\n");
+					sched_show_task(p);
+				}
+			}
 		} while_each_thread(g, p);
 		read_unlock(&tasklist_lock);
 
@@ -76,7 +83,7 @@ static int try_to_freeze_tasks(bool sig_only)
 			todo += wq_busy;
 		}
 
-		if (!todo || time_after(jiffies, end_time))
+		if (!todo || timedout)
 			break;
 
 		if (!pm_check_wakeup_events()) {

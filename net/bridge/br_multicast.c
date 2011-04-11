@@ -707,7 +707,8 @@ static int br_multicast_add_group(struct net_bridge *br,
 		goto err;
 
 	if (!port) {
-		hlist_add_head(&mp->mglist, &br->mglist);
+		if (hlist_unhashed(&mp->mglist))
+			hlist_add_head(&mp->mglist, &br->mglist);
 		mod_timer(&mp->timer, now + br->multicast_membership_interval);
 		goto out;
 	}
@@ -1461,7 +1462,7 @@ static int br_multicast_ipv6_rcv(struct net_bridge *br,
 	nexthdr = ip6h->nexthdr;
 	offset = ipv6_skip_exthdr(skb, sizeof(*ip6h), &nexthdr);
 
-	if (offset < 0 || nexthdr != IPPROTO_ICMPV6)
+	if (nexthdr != IPPROTO_ICMPV6)
 		return 0;
 
 	/* Okay, we found ICMPv6 header */

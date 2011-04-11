@@ -359,7 +359,7 @@ static void omap2_pm_end(void)
 	suspend_state = PM_SUSPEND_ON;
 }
 
-static struct platform_suspend_ops omap_pm_ops = {
+static const struct platform_suspend_ops omap_pm_ops = {
 	.begin		= omap2_pm_begin,
 	.prepare	= omap2_pm_prepare,
 	.enter		= omap2_pm_enter,
