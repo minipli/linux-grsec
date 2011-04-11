@@ -128,7 +128,7 @@ xfs_find_handle(
 	}
 
 	error = -EFAULT;
-	if (copy_to_user(hreq->ohandle, &handle, hsize) ||
+	if (hsize > sizeof handle || copy_to_user(hreq->ohandle, &handle, hsize) ||
 	    copy_to_user(hreq->ohandlen, &hsize, sizeof(__s32)))
 		goto out_put;
 
@@ -720,6 +720,7 @@ xfs_ioc_fsgeometry(
 	xfs_fsop_geom_t		fsgeo;
 	int			error;
 
+	memset(&fsgeo, 0, sizeof(fsgeo));
 	error = xfs_fs_geometry(mp, &fsgeo, 4);
 	if (error)
 		return -error;
