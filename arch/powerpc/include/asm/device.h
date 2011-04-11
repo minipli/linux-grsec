@@ -17,7 +17,7 @@ struct device_node;
  */
 struct dev_archdata {
 	/* DMA operations on that device */
-	struct dma_map_ops	*dma_ops;
+	const struct dma_map_ops	*dma_ops;
 
 	/*
 	 * When an iommu is in use, dma_data is used as a ptr to the base of the

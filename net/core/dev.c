@@ -1124,7 +1124,7 @@ void dev_load(struct net *net, const char *name)
 	if (no_module && capable(CAP_NET_ADMIN))
 		no_module = request_module("netdev-%s", name);
 	if (no_module && capable(CAP_SYS_MODULE)) {
-		if (!request_module("%s", name))
+		if (!request_module("%s", name))  
 			pr_err("Loading kernel module for a network device "
 "with CAP_SYS_MODULE (deprecated).  Use CAP_NET_ADMIN and alias netdev-%s "
 "instead\n", name);
@@ -2787,7 +2787,7 @@ int netif_rx_ni(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(netif_rx_ni);
 
-static void net_tx_action(struct softirq_action *h)
+static void net_tx_action(void)
 {
 	struct softnet_data *sd = &__get_cpu_var(softnet_data);
 
@@ -3697,7 +3697,7 @@ void netif_napi_del(struct napi_struct *napi)
 }
 EXPORT_SYMBOL(netif_napi_del);
 
-static void net_rx_action(struct softirq_action *h)
+static void net_rx_action(void)
 {
 	struct softnet_data *sd = &__get_cpu_var(softnet_data);
 	unsigned long time_limit = jiffies + 2;
