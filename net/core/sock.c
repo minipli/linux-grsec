@@ -934,7 +934,7 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 			return -ENOTCONN;
 		if (lv < len)
 			return -EINVAL;
-		if (copy_to_user(optval, address, len))
+		if (len > sizeof(address) || copy_to_user(optval, address, len))
 			return -EFAULT;
 		goto lenout;
 	}
@@ -967,7 +967,7 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 
 	if (len > lv)
 		len = lv;
-	if (copy_to_user(optval, &v, len))
+	if (len > sizeof(v) || copy_to_user(optval, &v, len))
 		return -EFAULT;
 lenout:
 	if (put_user(len, optlen))
