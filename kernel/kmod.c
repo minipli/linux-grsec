@@ -90,6 +90,28 @@ int __request_module(bool wait, const char *fmt, ...)
 	if (ret >= MODULE_NAME_LEN)
 		return -ENAMETOOLONG;
 
+#ifdef CONFIG_GRKERNSEC_MODHARDEN
+	/* we could do a tighter check here, but some distros
+	   are taking it upon themselves to remove CAP_SYS_MODULE
+	   from even root-running apps which cause modules to be 
+	   auto-loaded
+	*/
+	if (current_uid()) {
+#if !defined(CONFIG_IPV6) && !defined(CONFIG_IPV6_MODULE)
+		/* There are known knowns.  These are things we know
+		   that we know.  There are known unknowns.  That is to say,
+		   there are things that we know we don't know.  But there are
+		   also unknown unknowns.  There are things we don't know
+		   we don't know.
+		   This here is a known unknown.
+		*/
+		if (strcmp(module_name, "net-pf-10"))
+#endif
+			gr_log_nonroot_mod_load(module_name);
+		return -EPERM;
+	}
+#endif
+
 	/* If modprobe needs a service that is in a module, we get a recursive
 	 * loop.  Limit the number of running kmod threads to max_threads/2 or
 	 * MAX_KMOD_CONCURRENT, whichever is the smaller.  A cleaner method
