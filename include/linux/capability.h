@@ -563,6 +563,7 @@ extern const kernel_cap_t __cap_init_eff_set;
 	(security_real_capable_noaudit((t), (cap)) == 0)
 
 extern int capable(int cap);
+int capable_nolog(int cap);
 
 /* audit system wants to get cap info from files as well */
 struct dentry;
