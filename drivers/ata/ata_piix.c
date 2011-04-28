@@ -300,7 +300,7 @@ static const struct pci_device_id piix_pci_tbl[] = {
 	{ 0x8086, 0x1c08, PCI_ANY_ID, PCI_ANY_ID, 0, 0, ich8_2port_sata },
 	/* SATA Controller IDE (CPT) */
 	{ 0x8086, 0x1c09, PCI_ANY_ID, PCI_ANY_ID, 0, 0, ich8_2port_sata },
-	{ }	/* terminate list */
+	{ 0, 0, 0, 0, 0, 0, 0 }	/* terminate list */
 };
 
 static struct pci_driver piix_pci_driver = {
@@ -318,7 +318,7 @@ static struct scsi_host_template piix_sht = {
 	ATA_BMDMA_SHT(DRV_NAME),
 };
 
-static struct ata_port_operations piix_pata_ops = {
+static const struct ata_port_operations piix_pata_ops = {
 	.inherits		= &ata_bmdma32_port_ops,
 	.cable_detect		= ata_cable_40wire,
 	.set_piomode		= piix_set_piomode,
@@ -326,22 +326,22 @@ static struct ata_port_operations piix_pata_ops = {
 	.prereset		= piix_pata_prereset,
 };
 
-static struct ata_port_operations piix_vmw_ops = {
+static const struct ata_port_operations piix_vmw_ops = {
 	.inherits		= &piix_pata_ops,
 	.bmdma_status		= piix_vmw_bmdma_status,
 };
 
-static struct ata_port_operations ich_pata_ops = {
+static const struct ata_port_operations ich_pata_ops = {
 	.inherits		= &piix_pata_ops,
 	.cable_detect		= ich_pata_cable_detect,
 	.set_dmamode		= ich_set_dmamode,
 };
 
-static struct ata_port_operations piix_sata_ops = {
+static const struct ata_port_operations piix_sata_ops = {
 	.inherits		= &ata_bmdma_port_ops,
 };
 
-static struct ata_port_operations piix_sidpr_sata_ops = {
+static const struct ata_port_operations piix_sidpr_sata_ops = {
 	.inherits		= &piix_sata_ops,
 	.hardreset		= sata_std_hardreset,
 	.scr_read		= piix_sidpr_scr_read,
@@ -617,7 +617,7 @@ static const struct ich_laptop ich_laptop[] = {
 	{ 0x2653, 0x1043, 0x82D8 },	/* ICH6M on Asus Eee 701 */
 	{ 0x27df, 0x104d, 0x900e },	/* ICH7 on Sony TZ-90 */
 	/* end marker */
-	{ 0, }
+	{ 0, 0, 0 }
 };
 
 /**
@@ -1101,7 +1101,7 @@ static int piix_broken_suspend(void)
 			},
 		},
 
-		{ }	/* terminate list */
+		{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }	/* terminate list */
 	};
 	static const char *oemstrs[] = {
 		"Tecra M3,",
