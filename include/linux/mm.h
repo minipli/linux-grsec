@@ -106,7 +106,14 @@ extern unsigned int kobjsize(const void *objp);
 
 #define VM_CAN_NONLINEAR 0x08000000	/* Has ->fault & does nonlinear pages */
 #define VM_MIXEDMAP	0x10000000	/* Can contain "struct page" and pure PFN pages */
+
+#if defined(CONFIG_PAX_PAGEEXEC) && defined(CONFIG_X86_32)
+#define VM_SAO		0x00000000	/* Strong Access Ordering (powerpc) */
+#define VM_PAGEEXEC	0x20000000	/* vma->vm_page_prot needs special handling */
+#else
 #define VM_SAO		0x20000000	/* Strong Access Ordering (powerpc) */
+#endif
+
 #define VM_PFN_AT_MMAP	0x40000000	/* PFNMAP vma that is fully mapped at mmap time */
 #define VM_MERGEABLE	0x80000000	/* KSM may merge identical pages */
 
@@ -841,12 +848,6 @@ int set_page_dirty(struct page *page);
 int set_page_dirty_lock(struct page *page);
 int clear_page_dirty_for_io(struct page *page);
 
-/* Is the vma a continuation of the stack vma above it? */
-static inline int vma_stack_continue(struct vm_area_struct *vma, unsigned long addr)
-{
-	return vma && (vma->vm_end == addr) && (vma->vm_flags & VM_GROWSDOWN);
-}
-
 extern unsigned long move_page_tables(struct vm_area_struct *vma,
 		unsigned long old_addr, struct vm_area_struct *new_vma,
 		unsigned long new_addr, unsigned long len);
@@ -889,6 +890,8 @@ struct shrinker {
 #define DEFAULT_SEEKS 2 /* A good number if you don't know better. */
 extern void register_shrinker(struct shrinker *);
 extern void unregister_shrinker(struct shrinker *);
+
+pgprot_t vm_get_page_prot(unsigned long vm_flags);
 
 int vma_wants_writenotify(struct vm_area_struct *vma);
 
@@ -1162,6 +1165,7 @@ out:
 }
 
 extern int do_munmap(struct mm_struct *, unsigned long, size_t);
+extern int __do_munmap(struct mm_struct *, unsigned long, size_t);
 
 extern unsigned long do_brk(unsigned long, unsigned long);
 
@@ -1218,6 +1222,10 @@ extern struct vm_area_struct * find_vma(struct mm_struct * mm, unsigned long add
 extern struct vm_area_struct * find_vma_prev(struct mm_struct * mm, unsigned long addr,
 					     struct vm_area_struct **pprev);
 
+extern struct vm_area_struct *pax_find_mirror_vma(struct vm_area_struct *vma);
+extern void pax_mirror_vma(struct vm_area_struct *vma_m, struct vm_area_struct *vma);
+extern void pax_mirror_file_pte(struct vm_area_struct *vma, unsigned long address, struct page *page_m, spinlock_t *ptl);
+
 /* Look up the first VMA which intersects the interval start_addr..end_addr-1,
    NULL if none.  Assume start_addr < end_addr. */
 static inline struct vm_area_struct * find_vma_intersection(struct mm_struct * mm, unsigned long start_addr, unsigned long end_addr)
@@ -1234,7 +1242,6 @@ static inline unsigned long vma_pages(struct vm_area_struct *vma)
 	return (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
 }
 
-pgprot_t vm_get_page_prot(unsigned long vm_flags);
 struct vm_area_struct *find_extend_vma(struct mm_struct *, unsigned long addr);
 int remap_pfn_range(struct vm_area_struct *, unsigned long addr,
 			unsigned long pfn, unsigned long size, pgprot_t);
@@ -1332,7 +1339,13 @@ extern void memory_failure(unsigned long pfn, int trapno);
 extern int __memory_failure(unsigned long pfn, int trapno, int ref);
 extern int sysctl_memory_failure_early_kill;
 extern int sysctl_memory_failure_recovery;
-extern atomic_long_t mce_bad_pages;
+extern atomic_long_unchecked_t mce_bad_pages;
+
+#ifdef CONFIG_ARCH_TRACK_EXEC_LIMIT
+extern void track_exec_limit(struct mm_struct *mm, unsigned long start, unsigned long end, unsigned long prot);
+#else
+static inline void track_exec_limit(struct mm_struct *mm, unsigned long start, unsigned long end, unsigned long prot) {}
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* _LINUX_MM_H */
