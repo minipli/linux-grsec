@@ -600,7 +600,7 @@ out:
 	return err;
 }
 
-static int rawv6_send_hdrinc(struct sock *sk, void *from, int length,
+static int rawv6_send_hdrinc(struct sock *sk, void *from, unsigned int length,
 			struct flowi *fl, struct rt6_info *rt,
 			unsigned int flags)
 {
@@ -916,12 +916,17 @@ do_confirm:
 static int rawv6_seticmpfilter(struct sock *sk, int level, int optname,
 			       char __user *optval, int optlen)
 {
+	struct icmp6_filter filter;
+
 	switch (optname) {
 	case ICMPV6_FILTER:
+		if (optlen < 0)
+			return -EINVAL;
 		if (optlen > sizeof(struct icmp6_filter))
 			optlen = sizeof(struct icmp6_filter);
-		if (copy_from_user(&raw6_sk(sk)->filter, optval, optlen))
+		if (copy_from_user(&filter, optval, optlen))
 			return -EFAULT;
+		memcpy(&raw6_sk(sk)->filter, &filter, optlen);
 		return 0;
 	default:
 		return -ENOPROTOOPT;
@@ -933,6 +938,7 @@ static int rawv6_seticmpfilter(struct sock *sk, int level, int optname,
 static int rawv6_geticmpfilter(struct sock *sk, int level, int optname,
 			       char __user *optval, int __user *optlen)
 {
+	struct icmp6_filter filter;
 	int len;
 
 	switch (optname) {
@@ -945,7 +951,8 @@ static int rawv6_geticmpfilter(struct sock *sk, int level, int optname,
 			len = sizeof(struct icmp6_filter);
 		if (put_user(len, optlen))
 			return -EFAULT;
-		if (copy_to_user(optval, &raw6_sk(sk)->filter, len))
+		memcpy(&filter, &raw6_sk(sk)->filter, len);
+		if (copy_to_user(optval, &filter, len))
 			return -EFAULT;
 		return 0;
 	default:
@@ -1241,7 +1248,13 @@ static void raw6_sock_seq_show(struct seq_file *seq, struct sock *sp, int i)
 		   0, 0L, 0,
 		   sock_i_uid(sp), 0,
 		   sock_i_ino(sp),
-		   atomic_read(&sp->sk_refcnt), sp, atomic_read(&sp->sk_drops));
+		   atomic_read(&sp->sk_refcnt),
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		   NULL,
+#else
+		   sp,
+#endif
+		   atomic_read(&sp->sk_drops));
 }
 
 static int raw6_seq_show(struct seq_file *seq, void *v)

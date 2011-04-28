@@ -51,7 +51,6 @@ void foo(void)
 	OFFSET(CPUINFO_x86_vendor_id, cpuinfo_x86, x86_vendor_id);
 	BLANK();
 
-	OFFSET(TI_task, thread_info, task);
 	OFFSET(TI_exec_domain, thread_info, exec_domain);
 	OFFSET(TI_flags, thread_info, flags);
 	OFFSET(TI_status, thread_info, status);
@@ -115,6 +114,11 @@ void foo(void)
 	OFFSET(PV_CPU_iret, pv_cpu_ops, iret);
 	OFFSET(PV_CPU_irq_enable_sysexit, pv_cpu_ops, irq_enable_sysexit);
 	OFFSET(PV_CPU_read_cr0, pv_cpu_ops, read_cr0);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	OFFSET(PV_CPU_write_cr0, pv_cpu_ops, write_cr0);
+#endif
+
 #endif
 
 #ifdef CONFIG_XEN
