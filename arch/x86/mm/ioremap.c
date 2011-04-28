@@ -41,8 +41,8 @@ int page_is_ram(unsigned long pagenr)
 	 * Second special case: Some BIOSen report the PC BIOS
 	 * area (640->1Mb) as ram even though it is not.
 	 */
-	if (pagenr >= (BIOS_BEGIN >> PAGE_SHIFT) &&
-		    pagenr < (BIOS_END >> PAGE_SHIFT))
+	if (pagenr >= (ISA_START_ADDRESS >> PAGE_SHIFT) &&
+		    pagenr < (ISA_END_ADDRESS >> PAGE_SHIFT))
 		return 0;
 
 	for (i = 0; i < e820.nr_map; i++) {
@@ -137,13 +137,10 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 	/*
 	 * Don't allow anybody to remap normal RAM that we're using..
 	 */
-	for (pfn = phys_addr >> PAGE_SHIFT;
-				(pfn << PAGE_SHIFT) < (last_addr & PAGE_MASK);
-				pfn++) {
-
+	for (pfn = phys_addr >> PAGE_SHIFT; ((resource_size_t)pfn << PAGE_SHIFT) < (last_addr & PAGE_MASK); pfn++) {
 		int is_ram = page_is_ram(pfn);
 
-		if (is_ram && pfn_valid(pfn) && !PageReserved(pfn_to_page(pfn)))
+		if (is_ram && pfn_valid(pfn) && (pfn >= 0x100 || !PageReserved(pfn_to_page(pfn))))
 			return NULL;
 		WARN_ON_ONCE(is_ram);
 	}
@@ -407,7 +404,7 @@ static int __init early_ioremap_debug_setup(char *str)
 early_param("early_ioremap_debug", early_ioremap_debug_setup);
 
 static __initdata int after_paging_init;
-static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __page_aligned_bss;
+static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __read_only __aligned(PAGE_SIZE);
 
 static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 {
@@ -439,8 +436,7 @@ void __init early_ioremap_init(void)
 		slot_virt[i] = __fix_to_virt(FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*i);
 
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
-	memset(bm_pte, 0, sizeof(bm_pte));
-	pmd_populate_kernel(&init_mm, pmd, bm_pte);
+	pmd_populate_user(&init_mm, pmd, bm_pte);
 
 	/*
 	 * The boot-ioremap range spans multiple pmds, for which
