@@ -237,7 +237,7 @@ int trace_seq_path(struct trace_seq *s, struct path *path)
 		return 0;
 	p = d_path(path, s->buffer + s->len, PAGE_SIZE - s->len);
 	if (!IS_ERR(p)) {
-		p = mangle_path(s->buffer + s->len, p, "\n");
+		p = mangle_path(s->buffer + s->len, p, "\n\\");
 		if (p) {
 			s->len = p - s->buffer;
 			return 1;
