@@ -128,7 +128,7 @@ extern struct cred init_cred;
 #define INIT_TASK(tsk)	\
 {									\
 	.state		= 0,						\
-	.stack		= &init_thread_info,				\
+	.stack		= &init_thread_union,				\
 	.usage		= ATOMIC_INIT(2),				\
 	.flags		= PF_KTHREAD,					\
 	.lock_depth	= -1,						\
