@@ -59,11 +59,11 @@ int mac_partition(struct parsed_partitions *state, struct block_device *bdev)
 		return 0;		/* not a MacOS disk */
 	}
 	blocks_in_map = be32_to_cpu(part->map_count);
+	printk(" [mac]");
 	if (blocks_in_map < 0 || blocks_in_map >= DISK_MAX_PARTS) {
 		put_dev_sector(sect);
 		return 0;
 	}
-	printk(" [mac]");
 	for (slot = 1; slot <= blocks_in_map; ++slot) {
 		int pos = slot * secsize;
 		put_dev_sector(sect);

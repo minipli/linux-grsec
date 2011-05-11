@@ -63,7 +63,7 @@ static const struct inode_operations btrfs_file_inode_operations;
 static const struct address_space_operations btrfs_aops;
 static const struct address_space_operations btrfs_symlink_aops;
 static const struct file_operations btrfs_dir_file_operations;
-static struct extent_io_ops btrfs_extent_io_ops;
+static const struct extent_io_ops btrfs_extent_io_ops;
 
 static struct kmem_cache *btrfs_inode_cachep;
 struct kmem_cache *btrfs_trans_handle_cachep;
@@ -5410,7 +5410,7 @@ fail:
 	return -ENOMEM;
 }
 
-static int btrfs_getattr(struct vfsmount *mnt,
+int btrfs_getattr(struct vfsmount *mnt,
 			 struct dentry *dentry, struct kstat *stat)
 {
 	struct inode *inode = dentry->d_inode;
@@ -5421,6 +5421,14 @@ static int btrfs_getattr(struct vfsmount *mnt,
 			BTRFS_I(inode)->delalloc_bytes) >> 9;
 	return 0;
 }
+
+EXPORT_SYMBOL(btrfs_getattr);
+
+dev_t get_btrfs_dev_from_inode(struct inode *inode)
+{
+	return BTRFS_I(inode)->root->anon_super.s_dev;
+}
+EXPORT_SYMBOL(get_btrfs_dev_from_inode);
 
 static int btrfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 			   struct inode *new_dir, struct dentry *new_dentry)
@@ -5972,7 +5980,7 @@ static const struct file_operations btrfs_dir_file_operations = {
 	.fsync		= btrfs_sync_file,
 };
 
-static struct extent_io_ops btrfs_extent_io_ops = {
+static const struct extent_io_ops btrfs_extent_io_ops = {
 	.fill_delalloc = run_delalloc_range,
 	.submit_bio_hook = btrfs_submit_bio_hook,
 	.merge_bio_hook = btrfs_merge_bio_hook,
