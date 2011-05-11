@@ -73,6 +73,7 @@
 #include <linux/workqueue.h>
 #include <linux/poll.h>
 #include <asm/pgalloc.h>
+#include <asm/local.h>
 #include "drm.h"
 
 #include <linux/idr.h>
@@ -881,7 +882,7 @@ struct drm_driver {
 	void (*vgaarb_irq)(struct drm_device *dev, bool state);
 
 	/* Driver private ops for this object */
-	struct vm_operations_struct *gem_vm_ops;
+	const struct vm_operations_struct *gem_vm_ops;
 
 	int major;
 	int minor;
@@ -894,7 +895,7 @@ struct drm_driver {
 	int dev_priv_size;
 	struct drm_ioctl_desc *ioctls;
 	int num_ioctls;
-	struct file_operations fops;
+	const struct file_operations fops;
 	struct pci_driver pci_driver;
 	struct platform_device *platform_device;
 	/* List of devices hanging off this driver */
@@ -991,7 +992,7 @@ struct drm_device {
 
 	/** \name Usage Counters */
 	/*@{ */
-	int open_count;			/**< Outstanding files open */
+	local_t open_count;		/**< Outstanding files open */
 	atomic_t ioctl_count;		/**< Outstanding IOCTLs pending */
 	atomic_t vma_count;		/**< Outstanding vma areas open */
 	int buf_use;			/**< Buffers in use -- cannot alloc */
@@ -1002,7 +1003,7 @@ struct drm_device {
 	/*@{ */
 	unsigned long counters;
 	enum drm_stat_type types[15];
-	atomic_t counts[15];
+	atomic_unchecked_t counts[15];
 	/*@} */
 
 	struct list_head filelist;
@@ -1101,7 +1102,7 @@ struct drm_device {
 	struct platform_device *platformdev; /**< Platform device struture */
 
 	struct drm_sg_mem *sg;	/**< Scatter gather memory */
-	unsigned int num_crtcs;                  /**< Number of CRTCs on this device */
+	unsigned int num_crtcs;		/**< Number of CRTCs on this device */
 	void *dev_private;		/**< device private data */
 	void *mm_private;
 	struct address_space *dev_mapping;
