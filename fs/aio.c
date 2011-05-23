@@ -130,7 +130,7 @@ static int aio_setup_ring(struct kioctx *ctx)
 	size += sizeof(struct io_event) * nr_events;
 	nr_pages = (size + PAGE_SIZE-1) >> PAGE_SHIFT;
 
-	if (nr_pages < 0)
+	if (nr_pages <= 0)
 		return -EINVAL;
 
 	nr_events = (PAGE_SIZE * nr_pages - sizeof(struct aio_ring)) / sizeof(struct io_event);
@@ -1098,6 +1098,8 @@ static int read_events(struct kioctx *ctx,
 	struct io_event		ent;
 	struct aio_timeout	to;
 	int			retry = 0;
+
+	pax_track_stack();
 
 	/* needed to zero any padding within an entry (there shouldn't be 
 	 * any, but C is fun!

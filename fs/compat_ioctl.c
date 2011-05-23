@@ -208,6 +208,8 @@ static int do_video_set_spu_palette(unsigned int fd, unsigned int cmd,
 
 	err  = get_user(palp, &up->palette);
 	err |= get_user(length, &up->length);
+	if (err)
+		return -EFAULT;
 
 	up_native = compat_alloc_user_space(sizeof(struct video_spu_palette));
 	err  = put_user(compat_ptr(palp), &up_native->palette);
@@ -1638,8 +1640,8 @@ asmlinkage long compat_sys_ioctl(unsigned int fd, unsigned int cmd,
 static int __init init_sys32_ioctl_cmp(const void *p, const void *q)
 {
 	unsigned int a, b;
-	a = *(unsigned int *)p;
-	b = *(unsigned int *)q;
+	a = *(const unsigned int *)p;
+	b = *(const unsigned int *)q;
 	if (a > b)
 		return 1;
 	if (a < b)
