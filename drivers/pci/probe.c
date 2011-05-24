@@ -62,14 +62,14 @@ static ssize_t pci_bus_show_cpuaffinity(struct device *dev,
 	return ret;
 }
 
-static ssize_t inline pci_bus_show_cpumaskaffinity(struct device *dev,
+static inline ssize_t pci_bus_show_cpumaskaffinity(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
 	return pci_bus_show_cpuaffinity(dev, 0, attr, buf);
 }
 
-static ssize_t inline pci_bus_show_cpulistaffinity(struct device *dev,
+static inline ssize_t pci_bus_show_cpulistaffinity(struct device *dev,
 					struct device_attribute *attr,
 					char *buf)
 {
@@ -165,7 +165,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 	u32 l, sz, mask;
 	u16 orig_cmd;
 
-	mask = type ? PCI_ROM_ADDRESS_MASK : ~0;
+	mask = type ? (u32)PCI_ROM_ADDRESS_MASK : ~0;
 
 	if (!dev->mmio_always_on) {
 		pci_read_config_word(dev, PCI_COMMAND, &orig_cmd);
@@ -1407,7 +1407,7 @@ unsigned int __devinit pci_scan_child_bus(struct pci_bus *bus)
 }
 
 struct pci_bus * pci_create_bus(struct device *parent,
-		int bus, struct pci_ops *ops, void *sysdata)
+		int bus, const struct pci_ops *ops, void *sysdata)
 {
 	int error;
 	struct pci_bus *b, *b2;
@@ -1483,7 +1483,7 @@ err_out:
 }
 
 struct pci_bus * __devinit pci_scan_bus_parented(struct device *parent,
-		int bus, struct pci_ops *ops, void *sysdata)
+		int bus, const struct pci_ops *ops, void *sysdata)
 {
 	struct pci_bus *b;
 

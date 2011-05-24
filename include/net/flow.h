@@ -167,6 +167,6 @@ extern struct flow_cache_object *flow_cache_lookup(
 		u8 dir, flow_resolve_t resolver, void *ctx);
 
 extern void flow_cache_flush(void);
-extern atomic_t flow_cache_genid;
+extern atomic_unchecked_t flow_cache_genid;
 
 #endif

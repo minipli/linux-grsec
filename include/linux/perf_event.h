@@ -759,8 +759,8 @@ struct perf_event {
 
 	enum perf_event_active_state	state;
 	unsigned int			attach_state;
-	local64_t			count;
-	atomic64_t			child_count;
+	local64_t			count; /* PaX: fix it one day */
+	atomic64_unchecked_t		child_count;
 
 	/*
 	 * These are the total time in nanoseconds that the event
@@ -811,8 +811,8 @@ struct perf_event {
 	 * These accumulate total time (in nanoseconds) that children
 	 * events have been enabled and running, respectively.
 	 */
-	atomic64_t			child_total_time_enabled;
-	atomic64_t			child_total_time_running;
+	atomic64_unchecked_t		child_total_time_enabled;
+	atomic64_unchecked_t		child_total_time_running;
 
 	/*
 	 * Protect attach/detach and child_list:
@@ -1090,9 +1090,9 @@ void perf_event_task_sched_out(struct task_struct *task, struct task_struct *nex
 }
 
 extern void perf_event_mmap(struct vm_area_struct *vma);
-extern struct perf_guest_info_callbacks *perf_guest_cbs;
-extern int perf_register_guest_info_callbacks(struct perf_guest_info_callbacks *callbacks);
-extern int perf_unregister_guest_info_callbacks(struct perf_guest_info_callbacks *callbacks);
+extern const struct perf_guest_info_callbacks *perf_guest_cbs;
+extern int perf_register_guest_info_callbacks(const struct perf_guest_info_callbacks *callbacks);
+extern int perf_unregister_guest_info_callbacks(const struct perf_guest_info_callbacks *callbacks);
 
 extern void perf_event_comm(struct task_struct *tsk);
 extern void perf_event_fork(struct task_struct *tsk);

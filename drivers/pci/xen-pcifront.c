@@ -187,6 +187,8 @@ static int pcifront_bus_read(struct pci_bus *bus, unsigned int devfn,
 	struct pcifront_sd *sd = bus->sysdata;
 	struct pcifront_device *pdev = pcifront_get_pdev(sd);
 
+	pax_track_stack();
+
 	if (verbose_request)
 		dev_info(&pdev->xdev->dev,
 			 "read dev=%04x:%02x:%02x.%01x - offset %x size %d\n",
@@ -226,6 +228,8 @@ static int pcifront_bus_write(struct pci_bus *bus, unsigned int devfn,
 	struct pcifront_sd *sd = bus->sysdata;
 	struct pcifront_device *pdev = pcifront_get_pdev(sd);
 
+	pax_track_stack();
+
 	if (verbose_request)
 		dev_info(&pdev->xdev->dev,
 			 "write dev=%04x:%02x:%02x.%01x - "
@@ -236,7 +240,7 @@ static int pcifront_bus_write(struct pci_bus *bus, unsigned int devfn,
 	return errno_to_pcibios_err(do_pci_op(pdev, &op));
 }
 
-struct pci_ops pcifront_bus_ops = {
+const struct pci_ops pcifront_bus_ops = {
 	.read = pcifront_bus_read,
 	.write = pcifront_bus_write,
 };
@@ -257,6 +261,8 @@ static int pci_frontend_enable_msix(struct pci_dev *dev,
 	struct pcifront_sd *sd = dev->bus->sysdata;
 	struct pcifront_device *pdev = pcifront_get_pdev(sd);
 	struct msi_desc *entry;
+
+	pax_track_stack();
 
 	if (nvec > SH_INFO_MAX_VEC) {
 		dev_err(&dev->dev, "too much vector for pci frontend: %x."
@@ -309,6 +315,8 @@ static void pci_frontend_disable_msix(struct pci_dev *dev)
 	struct pcifront_sd *sd = dev->bus->sysdata;
 	struct pcifront_device *pdev = pcifront_get_pdev(sd);
 
+	pax_track_stack();
+
 	err = do_pci_op(pdev, &op);
 
 	/* What should do for error ? */
@@ -327,6 +335,8 @@ static int pci_frontend_enable_msi(struct pci_dev *dev, int vector[])
 	};
 	struct pcifront_sd *sd = dev->bus->sysdata;
 	struct pcifront_device *pdev = pcifront_get_pdev(sd);
+
+	pax_track_stack();
 
 	err = do_pci_op(pdev, &op);
 	if (likely(!err)) {
@@ -368,7 +378,7 @@ static void pci_frontend_disable_msi(struct pci_dev *dev)
 		printk(KERN_DEBUG "get fake response frombackend\n");
 }
 
-static struct xen_pci_frontend_ops pci_frontend_ops = {
+static const struct xen_pci_frontend_ops pci_frontend_ops = {
 	.enable_msi = pci_frontend_enable_msi,
 	.disable_msi = pci_frontend_disable_msi,
 	.enable_msix = pci_frontend_enable_msix,

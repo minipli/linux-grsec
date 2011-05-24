@@ -461,9 +461,12 @@ static noinline int __btrfs_cow_block(struct btrfs_trans_handle *trans,
 		free_extent_buffer(buf);
 		add_root_to_dirty_list(root);
 	} else {
-		if (root->root_key.objectid == BTRFS_TREE_RELOC_OBJECTID)
-			parent_start = parent->start;
-		else
+		if (root->root_key.objectid == BTRFS_TREE_RELOC_OBJECTID) {
+			if (parent)
+				parent_start = parent->start;
+			else
+				parent_start = 0;
+		} else
 			parent_start = 0;
 
 		WARN_ON(trans->transid != btrfs_header_generation(parent));
@@ -3647,7 +3650,6 @@ setup_items_for_insert(struct btrfs_trans_handle *trans,
 
 	ret = 0;
 	if (slot == 0) {
-		struct btrfs_disk_key disk_key;
 		btrfs_cpu_key_to_disk(&disk_key, cpu_key);
 		ret = fixup_low_keys(trans, root, path, &disk_key, 1);
 	}

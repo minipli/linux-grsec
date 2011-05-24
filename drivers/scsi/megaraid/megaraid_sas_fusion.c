@@ -2236,7 +2236,7 @@ void megasas_fusion_ocr_wq(struct work_struct *work)
 	megasas_reset_fusion(instance->host);
 }
 
-struct megasas_instance_template megasas_instance_template_fusion = {
+const struct megasas_instance_template megasas_instance_template_fusion = {
 	.fire_cmd = megasas_fire_cmd_fusion,
 	.enable_intr = megasas_enable_intr_fusion,
 	.disable_intr = megasas_disable_intr_fusion,

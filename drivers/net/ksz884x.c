@@ -6536,6 +6536,8 @@ static void netdev_get_ethtool_stats(struct net_device *dev,
 	int rc;
 	u64 counter[TOTAL_PORT_COUNTER_NUM];
 
+	pax_track_stack();
+
 	mutex_lock(&hw_priv->lock);
 	n = SWITCH_PORT_NUM;
 	for (i = 0, p = port->first_port; i < port->mib_port_cnt; i++, p++) {
@@ -6637,7 +6639,7 @@ static int netdev_set_rx_csum(struct net_device *dev, u32 data)
 	return 0;
 }
 
-static struct ethtool_ops netdev_ethtool_ops = {
+static const struct ethtool_ops netdev_ethtool_ops = {
 	.get_settings		= netdev_get_settings,
 	.set_settings		= netdev_set_settings,
 	.nway_reset		= netdev_nway_reset,

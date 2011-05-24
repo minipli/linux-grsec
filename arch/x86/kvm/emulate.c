@@ -89,7 +89,7 @@
 #define Src2ImmByte (2<<29)
 #define Src2One     (3<<29)
 #define Src2Imm     (4<<29)
-#define Src2Mask    (7<<29)
+#define Src2Mask    (7U<<29)
 
 #define X2(x...) x, x
 #define X3(x...) X2(x), x
@@ -190,6 +190,7 @@ struct group_dual {
 
 #define ____emulate_2op(_op, _src, _dst, _eflags, _x, _y, _suffix, _dsttype) \
 	do {								\
+		unsigned long _tmp;					\
 		__asm__ __volatile__ (					\
 			_PRE_EFLAGS("0", "4", "2")			\
 			_op _suffix " %"_x"3,%1; "			\
@@ -203,8 +204,6 @@ struct group_dual {
 /* Raw emulation: instruction has two explicit operands. */
 #define __emulate_2op_nobyte(_op,_src,_dst,_eflags,_wx,_wy,_lx,_ly,_qx,_qy) \
 	do {								\
-		unsigned long _tmp;					\
-									\
 		switch ((_dst).bytes) {					\
 		case 2:							\
 			____emulate_2op(_op,_src,_dst,_eflags,_wx,_wy,"w",u16);\
@@ -220,7 +219,6 @@ struct group_dual {
 
 #define __emulate_2op(_op,_src,_dst,_eflags,_bx,_by,_wx,_wy,_lx,_ly,_qx,_qy) \
 	do {								     \
-		unsigned long _tmp;					     \
 		switch ((_dst).bytes) {				             \
 		case 1:							     \
 			____emulate_2op(_op,_src,_dst,_eflags,_bx,_by,"b",u8); \

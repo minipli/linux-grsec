@@ -163,7 +163,7 @@ static u64 do_hypercall(u64 control, void *input, void *output)
 	u64 output_address = (output) ? virt_to_phys(output) : 0;
 	u32 output_address_hi = output_address >> 32;
 	u32 output_address_lo = output_address & 0xFFFFFFFF;
-	volatile void *hypercall_page = hv_context.hypercall_page;
+	volatile void *hypercall_page = ktva_ktla(hv_context.hypercall_page);
 
 	DPRINT_DBG(VMBUS, "Hypercall <control %llx input %p output %p>",
 		   control, input, output);

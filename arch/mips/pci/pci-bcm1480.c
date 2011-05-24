@@ -171,7 +171,7 @@ static int bcm1480_pcibios_write(struct pci_bus *bus, unsigned int devfn,
 	return PCIBIOS_SUCCESSFUL;
 }
 
-struct pci_ops bcm1480_pci_ops = {
+const struct pci_ops bcm1480_pci_ops = {
 	bcm1480_pcibios_read,
 	bcm1480_pcibios_write,
 };

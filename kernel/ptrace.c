@@ -117,7 +117,8 @@ int ptrace_check_attach(struct task_struct *child, int kill)
 	return ret;
 }
 
-int __ptrace_may_access(struct task_struct *task, unsigned int mode)
+static int __ptrace_may_access(struct task_struct *task, unsigned int mode,
+			       unsigned int log)
 {
 	const struct cred *cred = current_cred(), *tcred;
 
@@ -143,7 +144,8 @@ int __ptrace_may_access(struct task_struct *task, unsigned int mode)
 	     cred->gid == tcred->sgid &&
 	     cred->gid == tcred->gid))
 		goto ok;
-	if (ns_capable(tcred->user->user_ns, CAP_SYS_PTRACE))
+	if ((!log && ns_capable_nolog(tcred->user->user_ns, CAP_SYS_PTRACE)) ||
+	    (log && ns_capable(tcred->user->user_ns, CAP_SYS_PTRACE)))
 		goto ok;
 	rcu_read_unlock();
 	return -EPERM;
@@ -152,7 +154,9 @@ ok:
 	smp_rmb();
 	if (task->mm)
 		dumpable = get_dumpable(task->mm);
-	if (!dumpable && !task_ns_capable(task, CAP_SYS_PTRACE))
+	if (!dumpable &&
+		((!log && !task_ns_capable_nolog(task, CAP_SYS_PTRACE)) ||
+		 (log && !task_ns_capable(task, CAP_SYS_PTRACE))))
 		return -EPERM;
 
 	return security_ptrace_access_check(task, mode);
@@ -162,7 +166,16 @@ bool ptrace_may_access(struct task_struct *task, unsigned int mode)
 {
 	int err;
 	task_lock(task);
-	err = __ptrace_may_access(task, mode);
+	err = __ptrace_may_access(task, mode, 0);
+	task_unlock(task);
+	return !err;
+}
+
+bool ptrace_may_access_log(struct task_struct *task, unsigned int mode)
+{
+	int err;
+	task_lock(task);
+	err = __ptrace_may_access(task, mode, 1);
 	task_unlock(task);
 	return !err;
 }
@@ -189,7 +202,7 @@ static int ptrace_attach(struct task_struct *task)
 		goto out;
 
 	task_lock(task);
-	retval = __ptrace_may_access(task, PTRACE_MODE_ATTACH);
+	retval = __ptrace_may_access(task, PTRACE_MODE_ATTACH, 1);
 	task_unlock(task);
 	if (retval)
 		goto unlock_creds;
@@ -202,7 +215,7 @@ static int ptrace_attach(struct task_struct *task)
 		goto unlock_tasklist;
 
 	task->ptrace = PT_PTRACED;
-	if (task_ns_capable(task, CAP_SYS_PTRACE))
+	if (task_ns_capable_nolog(task, CAP_SYS_PTRACE))
 		task->ptrace |= PT_PTRACE_CAP;
 
 	__ptrace_link(task, current);
@@ -362,6 +375,8 @@ int ptrace_readdata(struct task_struct *tsk, unsigned long src, char __user *dst
 {
 	int copied = 0;
 
+	pax_track_stack();
+
 	while (len > 0) {
 		char buf[128];
 		int this_len, retval;
@@ -373,7 +388,7 @@ int ptrace_readdata(struct task_struct *tsk, unsigned long src, char __user *dst
 				break;
 			return -EIO;
 		}
-		if (copy_to_user(dst, buf, retval))
+		if (retval > sizeof(buf) || copy_to_user(dst, buf, retval))
 			return -EFAULT;
 		copied += retval;
 		src += retval;
@@ -386,6 +401,8 @@ int ptrace_readdata(struct task_struct *tsk, unsigned long src, char __user *dst
 int ptrace_writedata(struct task_struct *tsk, char __user *src, unsigned long dst, int len)
 {
 	int copied = 0;
+
+	pax_track_stack();
 
 	while (len > 0) {
 		char buf[128];
@@ -569,8 +586,10 @@ int ptrace_request(struct task_struct *child, long request,
 {
 	int ret = -EIO;
 	siginfo_t siginfo;
-	void __user *datavp = (void __user *) data;
+	void __user *datavp = (__force void __user *) data;
 	unsigned long __user *datalp = datavp;
+
+	pax_track_stack();
 
 	switch (request) {
 	case PTRACE_PEEKTEXT:
@@ -717,14 +736,21 @@ SYSCALL_DEFINE4(ptrace, long, request, long, pid, unsigned long, addr,
 		goto out;
 	}
 
+	if (gr_handle_ptrace(child, request)) {
+		ret = -EPERM;
+		goto out_put_task_struct;
+	}
+
 	if (request == PTRACE_ATTACH) {
 		ret = ptrace_attach(child);
 		/*
 		 * Some architectures need to do book-keeping after
 		 * a ptrace attach.
 		 */
-		if (!ret)
+		if (!ret) {
 			arch_ptrace_attach(child);
+			gr_audit_ptrace(child);
+		}
 		goto out_put_task_struct;
 	}
 
@@ -749,7 +775,7 @@ int generic_ptrace_peekdata(struct task_struct *tsk, unsigned long addr,
 	copied = access_process_vm(tsk, addr, &tmp, sizeof(tmp), 0);
 	if (copied != sizeof(tmp))
 		return -EIO;
-	return put_user(tmp, (unsigned long __user *)data);
+	return put_user(tmp, (__force unsigned long __user *)data);
 }
 
 int generic_ptrace_pokedata(struct task_struct *tsk, unsigned long addr,
@@ -771,6 +797,8 @@ int compat_ptrace_request(struct task_struct *child, compat_long_t request,
 	compat_ulong_t word;
 	siginfo_t siginfo;
 	int ret;
+
+	pax_track_stack();
 
 	switch (request) {
 	case PTRACE_PEEKTEXT:
@@ -859,14 +887,21 @@ asmlinkage long compat_sys_ptrace(compat_long_t request, compat_long_t pid,
 		goto out;
 	}
 
+	if (gr_handle_ptrace(child, request)) {
+		ret = -EPERM;
+		goto out_put_task_struct;
+	}
+
 	if (request == PTRACE_ATTACH) {
 		ret = ptrace_attach(child);
 		/*
 		 * Some architectures need to do book-keeping after
 		 * a ptrace attach.
 		 */
-		if (!ret)
+		if (!ret) {
 			arch_ptrace_attach(child);
+			gr_audit_ptrace(child);
+		}
 		goto out_put_task_struct;
 	}
 

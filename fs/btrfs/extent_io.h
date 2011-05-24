@@ -56,36 +56,36 @@ typedef	int (extent_submit_bio_hook_t)(struct inode *inode, int rw,
 				       struct bio *bio, int mirror_num,
 				       unsigned long bio_flags, u64 bio_offset);
 struct extent_io_ops {
-	int (*fill_delalloc)(struct inode *inode, struct page *locked_page,
+	int (* const fill_delalloc)(struct inode *inode, struct page *locked_page,
 			     u64 start, u64 end, int *page_started,
 			     unsigned long *nr_written);
-	int (*writepage_start_hook)(struct page *page, u64 start, u64 end);
-	int (*writepage_io_hook)(struct page *page, u64 start, u64 end);
+	int (* const writepage_start_hook)(struct page *page, u64 start, u64 end);
+	int (* const writepage_io_hook)(struct page *page, u64 start, u64 end);
 	extent_submit_bio_hook_t *submit_bio_hook;
-	int (*merge_bio_hook)(struct page *page, unsigned long offset,
+	int (* const merge_bio_hook)(struct page *page, unsigned long offset,
 			      size_t size, struct bio *bio,
 			      unsigned long bio_flags);
-	int (*readpage_io_hook)(struct page *page, u64 start, u64 end);
-	int (*readpage_io_failed_hook)(struct bio *bio, struct page *page,
+	int (* const readpage_io_hook)(struct page *page, u64 start, u64 end);
+	int (* const readpage_io_failed_hook)(struct bio *bio, struct page *page,
 				       u64 start, u64 end,
 				       struct extent_state *state);
-	int (*writepage_io_failed_hook)(struct bio *bio, struct page *page,
+	int (* const writepage_io_failed_hook)(struct bio *bio, struct page *page,
 					u64 start, u64 end,
 				       struct extent_state *state);
-	int (*readpage_end_io_hook)(struct page *page, u64 start, u64 end,
+	int (* const readpage_end_io_hook)(struct page *page, u64 start, u64 end,
 				    struct extent_state *state);
-	int (*writepage_end_io_hook)(struct page *page, u64 start, u64 end,
+	int (* const writepage_end_io_hook)(struct page *page, u64 start, u64 end,
 				      struct extent_state *state, int uptodate);
-	int (*set_bit_hook)(struct inode *inode, struct extent_state *state,
+	int (* const set_bit_hook)(struct inode *inode, struct extent_state *state,
 			    int *bits);
-	int (*clear_bit_hook)(struct inode *inode, struct extent_state *state,
+	int (* const clear_bit_hook)(struct inode *inode, struct extent_state *state,
 			      int *bits);
-	int (*merge_extent_hook)(struct inode *inode,
+	int (* const merge_extent_hook)(struct inode *inode,
 				 struct extent_state *new,
 				 struct extent_state *other);
-	int (*split_extent_hook)(struct inode *inode,
+	int (* const split_extent_hook)(struct inode *inode,
 				 struct extent_state *orig, u64 split);
-	int (*write_cache_pages_lock_hook)(struct page *page);
+	int (* const write_cache_pages_lock_hook)(struct page *page);
 };
 
 struct extent_io_tree {
@@ -95,7 +95,7 @@ struct extent_io_tree {
 	u64 dirty_bytes;
 	spinlock_t lock;
 	spinlock_t buffer_lock;
-	struct extent_io_ops *ops;
+	const struct extent_io_ops *ops;
 };
 
 struct extent_state {

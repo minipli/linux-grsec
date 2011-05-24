@@ -393,6 +393,8 @@ static void max3110_con_receive(struct uart_max3110 *max)
 	int loop = 1, num, total = 0;
 	u8 recv_buf[512], *pbuf;
 
+	pax_track_stack();
+
 	pbuf = recv_buf;
 	do {
 		num = max3110_read_multi(max, pbuf);
@@ -726,7 +728,7 @@ static void serial_m3110_enable_ms(struct uart_port *port)
 {
 }
 
-struct uart_ops serial_m3110_ops = {
+const struct uart_ops serial_m3110_ops = {
 	.tx_empty	= serial_m3110_tx_empty,
 	.set_mctrl	= serial_m3110_set_mctrl,
 	.get_mctrl	= serial_m3110_get_mctrl,

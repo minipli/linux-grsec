@@ -271,7 +271,7 @@ static int __init early_parse_mem(char *p)
 }
 early_param("mem", early_parse_mem);
 
-unsigned int user_mode = HOME_SPACE_MODE;
+unsigned int user_mode = SECONDARY_SPACE_MODE;
 EXPORT_SYMBOL_GPL(user_mode);
 
 static int set_amode_and_uaccess(unsigned long user_amode,
@@ -300,17 +300,6 @@ static int set_amode_and_uaccess(unsigned long user_amode,
 	}
 }
 
-/*
- * Switch kernel/user addressing modes?
- */
-static int __init early_parse_switch_amode(char *p)
-{
-	if (user_mode != SECONDARY_SPACE_MODE)
-		user_mode = PRIMARY_SPACE_MODE;
-	return 0;
-}
-early_param("switch_amode", early_parse_switch_amode);
-
 static int __init early_parse_user_mode(char *p)
 {
 	if (p && strcmp(p, "primary") == 0)
@@ -326,20 +315,6 @@ static int __init early_parse_user_mode(char *p)
 	return 0;
 }
 early_param("user_mode", early_parse_user_mode);
-
-#ifdef CONFIG_S390_EXEC_PROTECT
-/*
- * Enable execute protection?
- */
-static int __init early_parse_noexec(char *p)
-{
-	if (!strncmp(p, "off", 3))
-		return 0;
-	user_mode = SECONDARY_SPACE_MODE;
-	return 0;
-}
-early_param("noexec", early_parse_noexec);
-#endif /* CONFIG_S390_EXEC_PROTECT */
 
 static void setup_addressing_mode(void)
 {

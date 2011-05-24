@@ -227,6 +227,6 @@ struct abx500_ops {
 	int (*startup_irq_enabled) (struct device *, unsigned int);
 };
 
-int abx500_register_ops(struct device *core_dev, struct abx500_ops *ops);
+int abx500_register_ops(struct device *core_dev, const struct abx500_ops *ops);
 void abx500_remove_ops(struct device *dev);
 #endif

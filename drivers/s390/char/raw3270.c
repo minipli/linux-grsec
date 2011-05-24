@@ -488,7 +488,7 @@ raw3270_init_irq(struct raw3270_view *view, struct raw3270_request *rq,
 	return RAW3270_IO_DONE;
 }
 
-static struct raw3270_fn raw3270_init_fn = {
+static const struct raw3270_fn raw3270_init_fn = {
 	.intv = raw3270_init_irq
 };
 
