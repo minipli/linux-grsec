@@ -51,7 +51,6 @@ void foo(void)
 	OFFSET(CPUINFO_x86_vendor_id, cpuinfo_x86, x86_vendor_id);
 	BLANK();
 
-	OFFSET(TI_task, thread_info, task);
 	OFFSET(TI_exec_domain, thread_info, exec_domain);
 	OFFSET(TI_flags, thread_info, flags);
 	OFFSET(TI_status, thread_info, status);
@@ -60,6 +59,8 @@ void foo(void)
 	OFFSET(TI_restart_block, thread_info, restart_block);
 	OFFSET(TI_sysenter_return, thread_info, sysenter_return);
 	OFFSET(TI_cpu, thread_info, cpu);
+	OFFSET(TI_lowest_stack, thread_info, lowest_stack);
+	DEFINE(TI_task_thread_sp0, offsetof(struct task_struct, thread.sp0) - offsetof(struct task_struct, tinfo));
 	BLANK();
 
 	OFFSET(GDS_size, desc_ptr, size);
@@ -99,6 +100,7 @@ void foo(void)
 
 	DEFINE(PAGE_SIZE_asm, PAGE_SIZE);
 	DEFINE(PAGE_SHIFT_asm, PAGE_SHIFT);
+	DEFINE(THREAD_SIZE_asm, THREAD_SIZE);
 	DEFINE(PTRS_PER_PTE, PTRS_PER_PTE);
 	DEFINE(PTRS_PER_PMD, PTRS_PER_PMD);
 	DEFINE(PTRS_PER_PGD, PTRS_PER_PGD);
@@ -115,6 +117,11 @@ void foo(void)
 	OFFSET(PV_CPU_iret, pv_cpu_ops, iret);
 	OFFSET(PV_CPU_irq_enable_sysexit, pv_cpu_ops, irq_enable_sysexit);
 	OFFSET(PV_CPU_read_cr0, pv_cpu_ops, read_cr0);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	OFFSET(PV_CPU_write_cr0, pv_cpu_ops, write_cr0);
+#endif
+
 #endif
 
 #ifdef CONFIG_XEN

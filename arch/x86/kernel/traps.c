@@ -69,12 +69,6 @@ asmlinkage int system_call(void);
 
 /* Do we ignore FPU interrupts ? */
 char ignore_fpu_irq;
-
-/*
- * The IDT has to be page-aligned to simplify the Pentium
- * F0 0F bug workaround.
- */
-gate_desc idt_table[NR_VECTORS] __page_aligned_data = { { { { 0, 0 } } }, };
 #endif
 
 DECLARE_BITMAP(used_vectors, NR_VECTORS);
@@ -112,19 +106,19 @@ static inline void preempt_conditional_cli(struct pt_regs *regs)
 static inline void
 die_if_kernel(const char *str, struct pt_regs *regs, long err)
 {
-	if (!user_mode_vm(regs))
+	if (!user_mode(regs))
 		die(str, regs, err);
 }
 #endif
 
 static void __kprobes
-do_trap(int trapnr, int signr, char *str, struct pt_regs *regs,
+do_trap(int trapnr, int signr, const char *str, struct pt_regs *regs,
 	long error_code, siginfo_t *info)
 {
 	struct task_struct *tsk = current;
 
 #ifdef CONFIG_X86_32
-	if (regs->flags & X86_VM_MASK) {
+	if (v8086_mode(regs)) {
 		/*
 		 * traps 0, 1, 3, 4, and 5 should be forwarded to vm86.
 		 * On nmi (interrupt 2), do_trap should not be called.
@@ -135,7 +129,7 @@ do_trap(int trapnr, int signr, char *str, struct pt_regs *regs,
 	}
 #endif
 
-	if (!user_mode(regs))
+	if (!user_mode_novm(regs))
 		goto kernel_trap;
 
 #ifdef CONFIG_X86_32
@@ -158,7 +152,7 @@ trap_signal:
 	    printk_ratelimit()) {
 		printk(KERN_INFO
 		       "%s[%d] trap %s ip:%lx sp:%lx error:%lx",
-		       tsk->comm, tsk->pid, str,
+		       tsk->comm, task_pid_nr(tsk), str,
 		       regs->ip, regs->sp, error_code);
 		print_vma_addr(" in ", regs->ip);
 		printk("\n");
@@ -175,8 +169,20 @@ kernel_trap:
 	if (!fixup_exception(regs)) {
 		tsk->thread.error_code = error_code;
 		tsk->thread.trap_no = trapnr;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		if (trapnr == 12 && ((regs->cs & 0xFFFF) == __KERNEL_CS || (regs->cs & 0xFFFF) == __KERNEXEC_KERNEL_CS))
+			str = "PAX: suspicious stack segment fault";
+#endif
+
 		die(str, regs, error_code);
 	}
+
+#ifdef CONFIG_PAX_REFCOUNT
+	if (trapnr == 4)
+		pax_report_refcount_overflow(regs);
+#endif
+
 	return;
 
 #ifdef CONFIG_X86_32
@@ -265,13 +271,29 @@ do_general_protection(struct pt_regs *regs, long error_code)
 	conditional_sti(regs);
 
 #ifdef CONFIG_X86_32
-	if (regs->flags & X86_VM_MASK)
+	if (v8086_mode(regs))
 		goto gp_in_vm86;
 #endif
 
 	tsk = current;
-	if (!user_mode(regs))
+	if (!user_mode_novm(regs))
 		goto gp_in_kernel;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_PAGEEXEC)
+	if (!nx_enabled && tsk->mm && (tsk->mm->pax_flags & MF_PAX_PAGEEXEC)) {
+		struct mm_struct *mm = tsk->mm;
+		unsigned long limit;
+
+		down_write(&mm->mmap_sem);
+		limit = mm->context.user_cs_limit;
+		if (limit < TASK_SIZE) {
+			track_exec_limit(mm, limit, TASK_SIZE, VM_EXEC);
+			up_write(&mm->mmap_sem);
+			return;
+		}
+		up_write(&mm->mmap_sem);
+	}
+#endif
 
 	tsk->thread.error_code = error_code;
 	tsk->thread.trap_no = 13;
@@ -305,6 +327,13 @@ gp_in_kernel:
 	if (notify_die(DIE_GPF, "general protection fault", regs,
 				error_code, 13, SIGSEGV) == NOTIFY_STOP)
 		return;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if ((regs->cs & 0xFFFF) == __KERNEL_CS || (regs->cs & 0xFFFF) == __KERNEXEC_KERNEL_CS)
+		die("PAX: suspicious general protection fault", regs, error_code);
+	else
+#endif
+
 	die("general protection fault", regs, error_code);
 }
 
@@ -558,7 +587,7 @@ dotraplinkage void __kprobes do_debug(struct pt_regs *regs, long error_code)
 	}
 
 #ifdef CONFIG_X86_32
-	if (regs->flags & X86_VM_MASK)
+	if (v8086_mode(regs))
 		goto debug_vm86;
 #endif
 
@@ -570,7 +599,7 @@ dotraplinkage void __kprobes do_debug(struct pt_regs *regs, long error_code)
 	 * kernel space (but re-enable TF when returning to user mode).
 	 */
 	if (condition & DR_STEP) {
-		if (!user_mode(regs))
+		if (!user_mode_novm(regs))
 			goto clear_TF_reenable;
 	}
 
@@ -757,7 +786,7 @@ do_simd_coprocessor_error(struct pt_regs *regs, long error_code)
 	 * Handle strange cache flush from user space exception
 	 * in all other cases.  This is undocumented behaviour.
 	 */
-	if (regs->flags & X86_VM_MASK) {
+	if (v8086_mode(regs)) {
 		handle_vm86_fault((struct kernel_vm86_regs *)regs, error_code);
 		return;
 	}
@@ -798,7 +827,7 @@ asmlinkage void __attribute__((weak)) smp_threshold_interrupt(void)
 void __math_state_restore(void)
 {
 	struct thread_info *thread = current_thread_info();
-	struct task_struct *tsk = thread->task;
+	struct task_struct *tsk = current;
 
 	/*
 	 * Paranoid restore. send a SIGSEGV if we fail to restore the state.
@@ -825,8 +854,7 @@ void __math_state_restore(void)
  */
 asmlinkage void math_state_restore(void)
 {
-	struct thread_info *thread = current_thread_info();
-	struct task_struct *tsk = thread->task;
+	struct task_struct *tsk = current;
 
 	if (!tsk_used_math(tsk)) {
 		local_irq_enable();

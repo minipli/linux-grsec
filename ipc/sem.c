@@ -671,6 +671,8 @@ static int semctl_main(struct ipc_namespace *ns, int semid, int semnum,
 	ushort* sem_io = fast_sem_io;
 	int nsems;
 
+	pax_track_stack();
+
 	sma = sem_lock_check(ns, semid);
 	if (IS_ERR(sma))
 		return PTR_ERR(sma);
@@ -1070,6 +1072,8 @@ SYSCALL_DEFINE4(semtimedop, int, semid, struct sembuf __user *, tsops,
 	struct sem_queue queue;
 	unsigned long jiffies_left = 0;
 	struct ipc_namespace *ns;
+
+	pax_track_stack();
 
 	ns = current->nsproxy->ipc_ns;
 

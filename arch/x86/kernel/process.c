@@ -51,16 +51,33 @@ void free_thread_xstate(struct task_struct *tsk)
 
 void free_thread_info(struct thread_info *ti)
 {
-	free_thread_xstate(ti->task);
 	free_pages((unsigned long)ti, get_order(THREAD_SIZE));
 }
 
+static struct kmem_cache *task_struct_cachep;
+
 void arch_task_cache_init(void)
 {
-        task_xstate_cachep =
-        	kmem_cache_create("task_xstate", xstate_size,
+	/* create a slab on which task_structs can be allocated */
+	task_struct_cachep =
+		kmem_cache_create("task_struct", sizeof(struct task_struct),
+			ARCH_MIN_TASKALIGN, SLAB_PANIC | SLAB_NOTRACK, NULL);
+
+	task_xstate_cachep =
+		kmem_cache_create("task_xstate", xstate_size,
 				  __alignof__(union thread_xstate),
-				  SLAB_PANIC | SLAB_NOTRACK, NULL);
+				  SLAB_PANIC | SLAB_NOTRACK | SLAB_USERCOPY, NULL);
+}
+
+struct task_struct *alloc_task_struct(void)
+{
+	return kmem_cache_alloc(task_struct_cachep, GFP_KERNEL);
+}
+
+void free_task_struct(struct task_struct *task)
+{
+	free_thread_xstate(task);
+	kmem_cache_free(task_struct_cachep, task);
 }
 
 /*
@@ -73,7 +90,7 @@ void exit_thread(void)
 	unsigned long *bp = t->io_bitmap_ptr;
 
 	if (bp) {
-		struct tss_struct *tss = &per_cpu(init_tss, get_cpu());
+		struct tss_struct *tss = init_tss + get_cpu();
 
 		t->io_bitmap_ptr = NULL;
 		clear_thread_flag(TIF_IO_BITMAP);
@@ -93,6 +110,9 @@ void flush_thread(void)
 
 	clear_tsk_thread_flag(tsk, TIF_DEBUG);
 
+#if defined(CONFIG_X86_32) && !defined(CONFIG_CC_STACKPROTECTOR) && !defined(CONFIG_PAX_MEMORY_UDEREF)
+	loadsegment(gs, 0);
+#endif
 	tsk->thread.debugreg0 = 0;
 	tsk->thread.debugreg1 = 0;
 	tsk->thread.debugreg2 = 0;
@@ -307,7 +327,7 @@ void default_idle(void)
 EXPORT_SYMBOL(default_idle);
 #endif
 
-void stop_this_cpu(void *dummy)
+__noreturn void stop_this_cpu(void *dummy)
 {
 	local_irq_disable();
 	/*
@@ -568,16 +588,35 @@ static int __init idle_setup(char *str)
 }
 early_param("idle", idle_setup);
 
-unsigned long arch_align_stack(unsigned long sp)
+#ifdef CONFIG_PAX_RANDKSTACK
+asmlinkage void pax_randomize_kstack(void)
 {
-	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
-		sp -= get_random_int() % 8192;
-	return sp & ~0xf;
-}
+	struct thread_struct *thread = &current->thread;
+	unsigned long time;
 
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long range_end = mm->brk + 0x02000000;
-	return randomize_range(mm->brk, range_end, 0) ? : mm->brk;
+	if (!randomize_va_space)
+		return;
+
+	rdtscl(time);
+
+	/* P4 seems to return a 0 LSB, ignore it */
+#ifdef CONFIG_MPENTIUM4
+	time &= 0x3EUL;
+	time <<= 2;
+#elif defined(CONFIG_X86_64)
+	time &= 0xFUL;
+	time <<= 4;
+#else
+	time &= 0x1FUL;
+	time <<= 3;
+#endif
+
+	thread->sp0 ^= time;
+	load_sp0(init_tss + smp_processor_id(), thread);
+
+#ifdef CONFIG_X86_64
+	percpu_write(kernel_stack, thread->sp0);
+#endif
 }
+#endif
 

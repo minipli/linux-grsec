@@ -97,6 +97,7 @@ static inline void mark_rodata_ro(void) { }
 #ifdef CONFIG_TC
 extern void tc_init(void);
 #endif
+extern void grsecurity_init(void);
 
 enum system_states system_state __read_mostly;
 EXPORT_SYMBOL(system_state);
@@ -182,6 +183,49 @@ static int __init set_reset_devices(char *str)
 }
 
 __setup("reset_devices", set_reset_devices);
+
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+extern char pax_enter_kernel_user[];
+extern char pax_exit_kernel_user[];
+extern pgdval_t clone_pgd_mask;
+#endif
+
+#if defined(CONFIG_X86) && defined(CONFIG_PAX_MEMORY_UDEREF)
+static int __init setup_pax_nouderef(char *str)
+{
+#ifdef CONFIG_X86_32
+	unsigned int cpu;
+	struct desc_struct *gdt;
+
+	for (cpu = 0; cpu < NR_CPUS; cpu++) {
+		gdt = get_cpu_gdt_table(cpu);
+		gdt[GDT_ENTRY_KERNEL_DS].type = 3;
+		gdt[GDT_ENTRY_KERNEL_DS].limit = 0xf;
+		gdt[GDT_ENTRY_DEFAULT_USER_CS].limit = 0xf;
+		gdt[GDT_ENTRY_DEFAULT_USER_DS].limit = 0xf;
+	}
+	asm("mov %0, %%ds; mov %0, %%es; mov %0, %%ss" : : "r" (__KERNEL_DS) : "memory");
+#else
+	memcpy(pax_enter_kernel_user, (unsigned char []){0xc3}, 1);
+	memcpy(pax_exit_kernel_user, (unsigned char []){0xc3}, 1);
+	clone_pgd_mask = ~(pgdval_t)0UL;
+#endif
+
+	return 0;
+}
+early_param("pax_nouderef", setup_pax_nouderef);
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+unsigned int pax_softmode;
+
+static int __init setup_pax_softmode(char *str)
+{
+	get_option(&str, &pax_softmode);
+	return 1;
+}
+__setup("pax_softmode=", setup_pax_softmode);
+#endif
 
 static char * argv_init[MAX_INIT_ARGS+2] = { "init", NULL, };
 char * envp_init[MAX_INIT_ENVS+2] = { "HOME=/", "TERM=linux", NULL, };
@@ -705,52 +749,53 @@ int initcall_debug;
 core_param(initcall_debug, initcall_debug, bool, 0644);
 
 static char msgbuf[64];
-static struct boot_trace_call call;
-static struct boot_trace_ret ret;
+static struct boot_trace_call trace_call;
+static struct boot_trace_ret trace_ret;
 
 int do_one_initcall(initcall_t fn)
 {
 	int count = preempt_count();
 	ktime_t calltime, delta, rettime;
+	const char *msg1 = "", *msg2 = "";
 
 	if (initcall_debug) {
-		call.caller = task_pid_nr(current);
-		printk("calling  %pF @ %i\n", fn, call.caller);
+		trace_call.caller = task_pid_nr(current);
+		printk("calling  %pF @ %i\n", fn, trace_call.caller);
 		calltime = ktime_get();
-		trace_boot_call(&call, fn);
+		trace_boot_call(&trace_call, fn);
 		enable_boot_trace();
 	}
 
-	ret.result = fn();
+	trace_ret.result = fn();
 
 	if (initcall_debug) {
 		disable_boot_trace();
 		rettime = ktime_get();
 		delta = ktime_sub(rettime, calltime);
-		ret.duration = (unsigned long long) ktime_to_ns(delta) >> 10;
-		trace_boot_ret(&ret, fn);
+		trace_ret.duration = (unsigned long long) ktime_to_ns(delta) >> 10;
+		trace_boot_ret(&trace_ret, fn);
 		printk("initcall %pF returned %d after %Ld usecs\n", fn,
-			ret.result, ret.duration);
+			trace_ret.result, trace_ret.duration);
 	}
 
 	msgbuf[0] = 0;
 
-	if (ret.result && ret.result != -ENODEV && initcall_debug)
-		sprintf(msgbuf, "error code %d ", ret.result);
+	if (trace_ret.result && trace_ret.result != -ENODEV && initcall_debug)
+		sprintf(msgbuf, "error code %d ", trace_ret.result);
 
 	if (preempt_count() != count) {
-		strlcat(msgbuf, "preemption imbalance ", sizeof(msgbuf));
+		msg1 = " preemption imbalance";
 		preempt_count() = count;
 	}
 	if (irqs_disabled()) {
-		strlcat(msgbuf, "disabled interrupts ", sizeof(msgbuf));
+		msg2 = " disabled interrupts";
 		local_irq_enable();
 	}
-	if (msgbuf[0]) {
-		printk("initcall %pF returned with %s\n", fn, msgbuf);
+	if (msgbuf[0] || *msg1 || *msg2) {
+		printk("initcall %pF returned with %s%s%s\n", fn, msgbuf, msg1, msg2);
 	}
 
-	return ret.result;
+	return trace_ret.result;
 }
 
 
@@ -893,10 +938,12 @@ static int __init kernel_init(void * unused)
 	if (!ramdisk_execute_command)
 		ramdisk_execute_command = "/init";
 
-	if (sys_access((const char __user *) ramdisk_execute_command, 0) != 0) {
+	if (sys_access((__force const char __user *) ramdisk_execute_command, 0) != 0) {
 		ramdisk_execute_command = NULL;
 		prepare_namespace();
 	}
+
+	grsecurity_init();
 
 	/*
 	 * Ok, we have completed the initial bootup, and
