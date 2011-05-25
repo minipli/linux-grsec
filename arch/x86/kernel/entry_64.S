@@ -385,7 +385,7 @@ ENDPROC(pax_exit_kernel_user)
 ENTRY(pax_erase_kstack)
 	push %rdi
 
-	mov %rsp, %rdi
+	lea -128(%rsp), %rdi
 	mov $0xB4DD00D54BADBABE5, %rax
 	std
 1:
