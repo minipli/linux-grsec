@@ -70,14 +70,6 @@ asmlinkage int system_call(void);
 
 /* Do we ignore FPU interrupts ? */
 char ignore_fpu_irq;
-
-/*
- * The IDT has to be page-aligned to simplify the Pentium
- * F0 0F bug workaround.. We have a special link segment
- * for this.
- */
-gate_desc idt_table[256]
-	__attribute__((__section__(".data.idt"))) = { { { { 0, 0 } } }, };
 #endif
 
 DECLARE_BITMAP(used_vectors, NR_VECTORS);
@@ -115,7 +107,7 @@ static inline void preempt_conditional_cli(struct pt_regs *regs)
 static inline void
 die_if_kernel(const char *str, struct pt_regs *regs, long err)
 {
-	if (!user_mode_vm(regs))
+	if (!user_mode(regs))
 		die(str, regs, err);
 }
 #endif
@@ -127,7 +119,7 @@ do_trap(int trapnr, int signr, char *str, struct pt_regs *regs,
 	struct task_struct *tsk = current;
 
 #ifdef CONFIG_X86_32
-	if (regs->flags & X86_VM_MASK) {
+	if (v8086_mode(regs)) {
 		/*
 		 * traps 0, 1, 3, 4, and 5 should be forwarded to vm86.
 		 * On nmi (interrupt 2), do_trap should not be called.
@@ -138,7 +130,7 @@ do_trap(int trapnr, int signr, char *str, struct pt_regs *regs,
 	}
 #endif
 
-	if (!user_mode(regs))
+	if (!user_mode_novm(regs))
 		goto kernel_trap;
 
 #ifdef CONFIG_X86_32
@@ -161,7 +153,7 @@ trap_signal:
 	    printk_ratelimit()) {
 		printk(KERN_INFO
 		       "%s[%d] trap %s ip:%lx sp:%lx error:%lx",
-		       tsk->comm, tsk->pid, str,
+		       tsk->comm, task_pid_nr(tsk), str,
 		       regs->ip, regs->sp, error_code);
 		print_vma_addr(" in ", regs->ip);
 		printk("\n");
@@ -180,6 +172,12 @@ kernel_trap:
 		tsk->thread.trap_no = trapnr;
 		die(str, regs, error_code);
 	}
+
+#ifdef CONFIG_PAX_REFCOUNT
+	if (trapnr == 4)
+		pax_report_refcount_overflow(regs);
+#endif
+
 	return;
 
 #ifdef CONFIG_X86_32
@@ -268,13 +266,29 @@ do_general_protection(struct pt_regs *regs, long error_code)
 	conditional_sti(regs);
 
 #ifdef CONFIG_X86_32
-	if (regs->flags & X86_VM_MASK)
+	if (v8086_mode(regs))
 		goto gp_in_vm86;
 #endif
 
 	tsk = current;
-	if (!user_mode(regs))
+	if (!user_mode_novm(regs))
 		goto gp_in_kernel;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_PAGEEXEC)
+	if (!nx_enabled && tsk->mm && (tsk->mm->pax_flags & MF_PAX_PAGEEXEC)) {
+		struct mm_struct *mm = tsk->mm;
+		unsigned long limit;
+
+		down_write(&mm->mmap_sem);
+		limit = mm->context.user_cs_limit;
+		if (limit < TASK_SIZE) {
+			track_exec_limit(mm, limit, TASK_SIZE, VM_EXEC);
+			up_write(&mm->mmap_sem);
+			return;
+		}
+		up_write(&mm->mmap_sem);
+	}
+#endif
 
 	tsk->thread.error_code = error_code;
 	tsk->thread.trap_no = 13;
@@ -308,6 +322,13 @@ gp_in_kernel:
 	if (notify_die(DIE_GPF, "general protection fault", regs,
 				error_code, 13, SIGSEGV) == NOTIFY_STOP)
 		return;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if ((regs->cs & 0xFFFF) == __KERNEL_CS)
+		die("PAX: suspicious general protection fault", regs, error_code);
+	else
+#endif
+
 	die("general protection fault", regs, error_code);
 }
 
@@ -554,7 +575,7 @@ dotraplinkage void __kprobes do_debug(struct pt_regs *regs, long error_code)
 	}
 
 #ifdef CONFIG_X86_32
-	if (regs->flags & X86_VM_MASK)
+	if (v8086_mode(regs))
 		goto debug_vm86;
 #endif
 
@@ -566,7 +587,7 @@ dotraplinkage void __kprobes do_debug(struct pt_regs *regs, long error_code)
 	 * kernel space (but re-enable TF when returning to user mode).
 	 */
 	if (condition & DR_STEP) {
-		if (!user_mode(regs))
+		if (!user_mode_novm(regs))
 			goto clear_TF_reenable;
 	}
 
@@ -753,7 +774,7 @@ do_simd_coprocessor_error(struct pt_regs *regs, long error_code)
 	 * Handle strange cache flush from user space exception
 	 * in all other cases.  This is undocumented behaviour.
 	 */
-	if (regs->flags & X86_VM_MASK) {
+	if (v8086_mode(regs)) {
 		handle_vm86_fault((struct kernel_vm86_regs *)regs, error_code);
 		return;
 	}
@@ -782,19 +803,14 @@ do_spurious_interrupt_bug(struct pt_regs *regs, long error_code)
 #ifdef CONFIG_X86_32
 unsigned long patch_espfix_desc(unsigned long uesp, unsigned long kesp)
 {
-	struct desc_struct *gdt = get_cpu_gdt_table(smp_processor_id());
 	unsigned long base = (kesp - uesp) & -THREAD_SIZE;
 	unsigned long new_kesp = kesp - base;
 	unsigned long lim_pages = (new_kesp | (THREAD_SIZE - 1)) >> PAGE_SHIFT;
-	__u64 desc = *(__u64 *)&gdt[GDT_ENTRY_ESPFIX_SS];
+	struct desc_struct ss;
 
 	/* Set up base for espfix segment */
-	desc &= 0x00f0ff0000000000ULL;
-	desc |=	((((__u64)base) << 16) & 0x000000ffffff0000ULL) |
-		((((__u64)base) << 32) & 0xff00000000000000ULL) |
-		((((__u64)lim_pages) << 32) & 0x000f000000000000ULL) |
-		(lim_pages & 0xffff);
-	*(__u64 *)&gdt[GDT_ENTRY_ESPFIX_SS] = desc;
+	pack_descriptor(&ss, base, lim_pages, 0x93, 0xC);
+	write_gdt_entry(get_cpu_gdt_table(smp_processor_id()), GDT_ENTRY_ESPFIX_SS, &ss, DESCTYPE_S);
 
 	return new_kesp;
 }

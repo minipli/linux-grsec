@@ -198,7 +198,7 @@ static unsigned long align_sigframe(unsigned long sp)
 	 * Align the stack pointer according to the i386 ABI,
 	 * i.e. so that on function entry ((sp + 4) & 15) == 0.
 	 */
-	sp = ((sp + 4) & -16ul) - 4;
+	sp = ((sp - 12) & -16ul) - 4;
 #else /* !CONFIG_X86_32 */
 	sp = round_down(sp, 16) - 8;
 #endif
@@ -308,9 +308,9 @@ __setup_frame(int sig, struct k_sigaction *ka, sigset_t *set,
 	}
 
 	if (current->mm->context.vdso)
-		restorer = VDSO32_SYMBOL(current->mm->context.vdso, sigreturn);
+		restorer = (void __user *)VDSO32_SYMBOL(current->mm->context.vdso, sigreturn);
 	else
-		restorer = &frame->retcode;
+		restorer = (void __user *)&frame->retcode;
 	if (ka->sa.sa_flags & SA_RESTORER)
 		restorer = ka->sa.sa_restorer;
 
@@ -378,7 +378,7 @@ static int __setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 		err |= __copy_to_user(&frame->uc.uc_sigmask, set, sizeof(*set));
 
 		/* Set up to return from userspace.  */
-		restorer = VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
+		restorer = (void __user *)VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
 		if (ka->sa.sa_flags & SA_RESTORER)
 			restorer = ka->sa.sa_restorer;
 		put_user_ex(restorer, &frame->pretcode);
@@ -790,7 +790,7 @@ static void do_signal(struct pt_regs *regs)
 	 * X86_32: vm86 regs switched out by assembly code before reaching
 	 * here, so testing against kernel CS suffices.
 	 */
-	if (!user_mode(regs))
+	if (!user_mode_novm(regs))
 		return;
 
 	if (current_thread_info()->status & TS_RESTORE_SIGMASK)

@@ -35,7 +35,7 @@ static struct inode *oprofilefs_get_inode(struct super_block *sb, int mode)
 }
 
 
-static struct super_operations s_ops = {
+static const struct super_operations s_ops = {
 	.statfs		= simple_statfs,
 	.drop_inode 	= generic_delete_inode,
 };
@@ -187,7 +187,7 @@ static const struct file_operations atomic_ro_fops = {
 
 
 int oprofilefs_create_ro_atomic(struct super_block *sb, struct dentry *root,
-	char const *name, atomic_t *val)
+	char const *name, atomic_unchecked_t *val)
 {
 	struct dentry *d = __oprofilefs_create_file(sb, root, name,
 						     &atomic_ro_fops, 0444);

@@ -472,7 +472,7 @@ static int secinfo_parse(char **mesg, char *buf, struct svc_export *exp)
 		 * probably discover the problem when someone fails to
 		 * authenticate.
 		 */
-		if (f->pseudoflavor < 0)
+		if ((s32)f->pseudoflavor < 0)
 			return -EINVAL;
 		err = get_int(mesg, &f->flags);
 		if (err)
@@ -1524,7 +1524,7 @@ static int e_show(struct seq_file *m, void *p)
 	return svc_export_show(m, &svc_export_cache, cp);
 }
 
-struct seq_operations nfs_exports_op = {
+const struct seq_operations nfs_exports_op = {
 	.start	= e_start,
 	.next	= e_next,
 	.stop	= e_stop,
