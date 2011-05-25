@@ -176,7 +176,7 @@ ENDPROC(native_usergs_sysret64)
 #endif /* CONFIG_PARAVIRT */
 
 	.macro ljmpq sel, off
-#if defined(CONFIG_MCORE2) || defined (CONFIG_MATOM)
+#if defined(CONFIG_MPSC) || defined(CONFIG_MCORE2) || defined (CONFIG_MATOM)
 	.byte 0x48; ljmp *1234f(%rip)
 	.pushsection .rodata
 	.align 16
@@ -266,6 +266,11 @@ ENDPROC(pax_exit_kernel)
 #ifdef CONFIG_PAX_RANDKSTACK
 	push %rax
 	call pax_randomize_kstack
+	pop %rax
+#endif
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+	push %rax
+	call pax_erase_kstack
 	pop %rax
 #endif
 	.endm
@@ -374,6 +379,37 @@ ENTRY(pax_exit_kernel_user)
 	pop %rdi
 	retq
 ENDPROC(pax_exit_kernel_user)
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+ENTRY(pax_erase_kstack)
+	push %rdi
+
+	lea -128(%rsp), %rdi
+	mov $0xB4DD00D54BADBABE5, %rax
+	std
+1:
+	mov %edi, %ecx
+	and $THREAD_SIZE_asm - 1, %ecx
+	shr $3, %ecx
+	repne scasq
+	jecxz 2f
+	sub $8, %ecx
+	jc 2f
+	mov $8, %ecx
+	repe scasq
+	jecxz 2f
+	jne 1b
+2:
+	cld
+	mov %esp, %ecx
+	sub %edi, %ecx
+	shr $3, %ecx
+	rep stosq
+
+	pop %rdi
+	ret
+ENDPROC(pax_erase_kstack)
 #endif
 
 .macro TRACE_IRQS_IRETQ offset=ARGOFFSET
