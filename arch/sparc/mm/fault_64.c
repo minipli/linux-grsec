@@ -394,7 +394,7 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 		unsigned int sethi, mov1, call, mov2;
 
 		err = get_user(sethi, (unsigned int *)regs->tpc);
-		err |= get_user(mov1, (unsigned int *)regs->tpc+4);
+		err |= get_user(mov1, (unsigned int *)(regs->tpc+4));
 		err |= get_user(call, (unsigned int *)(regs->tpc+8));
 		err |= get_user(mov2, (unsigned int *)(regs->tpc+12));
 
@@ -424,7 +424,7 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 		unsigned int sethi, sethi1, sethi2, or1, or2, sllx, jmpl, nop;
 
 		err = get_user(sethi, (unsigned int *)regs->tpc);
-		err |= get_user(sethi1, (unsigned int *)regs->tpc+4);
+		err |= get_user(sethi1, (unsigned int *)(regs->tpc+4));
 		err |= get_user(sethi2, (unsigned int *)(regs->tpc+8));
 		err |= get_user(or1, (unsigned int *)(regs->tpc+12));
 		err |= get_user(or2, (unsigned int *)(regs->tpc+16));
@@ -440,7 +440,7 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 		    (sethi2 & 0xFFC00000U) == 0x0B000000U &&
 		    (or1 & 0xFFFFE000U) == 0x82106000U &&
 		    (or2 & 0xFFFFE000U) == 0x8A116000U &&
-		    sllx == 0x83287020 &&
+		    sllx == 0x83287020U &&
 		    jmpl == 0x81C04005U &&
 		    nop == 0x01000000U)
 		{
@@ -460,7 +460,7 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 		unsigned int sethi, sethi1, sethi2, sllx, or,  jmpl, nop;
 
 		err = get_user(sethi, (unsigned int *)regs->tpc);
-		err |= get_user(sethi1, (unsigned int *)regs->tpc+4);
+		err |= get_user(sethi1, (unsigned int *)(regs->tpc+4));
 		err |= get_user(sethi2, (unsigned int *)(regs->tpc+8));
 		err |= get_user(sllx, (unsigned int *)(regs->tpc+12));
 		err |= get_user(or, (unsigned int *)(regs->tpc+16));
@@ -473,7 +473,7 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 		if ((sethi & 0xFFC00000U) == 0x03000000U &&
 		    (sethi1 & 0xFFC00000U) == 0x03000000U &&
 		    (sethi2 & 0xFFC00000U) == 0x0B000000U &&
-		    sllx == 0x83287020 &&
+		    sllx == 0x83287020U &&
 		    (or & 0xFFFFE000U) == 0x8A116000U &&
 		    jmpl == 0x81C04005U &&
 		    nop == 0x01000000U)
