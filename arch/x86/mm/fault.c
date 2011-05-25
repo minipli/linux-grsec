@@ -1527,7 +1527,7 @@ void pax_report_insns(void *pc, void *sp)
  * Safely write to address @dst from the buffer at @src.  If a kernel fault
  * happens, handle that and return -EFAULT.
  */
-long notrace __weak probe_kernel_write(void *dst, const void *src, size_t size)
+long notrace probe_kernel_write(void *dst, const void *src, size_t size)
 {
 	long ret;
 	mm_segment_t old_fs = get_fs();
