@@ -1521,7 +1521,7 @@ static int kvm_vcpu_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static struct file_operations kvm_vcpu_fops = {
+static struct file_operations kvm_vcpu_fops = {	/* cannot be const */
 	.release        = kvm_vcpu_release,
 	.unlocked_ioctl = kvm_vcpu_ioctl,
 	.compat_ioctl   = kvm_vcpu_ioctl,
@@ -1990,7 +1990,7 @@ static int kvm_vm_mmap(struct file *file, struct vm_area_struct *vma)
 	return 0;
 }
 
-static struct file_operations kvm_vm_fops = {
+static struct file_operations kvm_vm_fops = {	/* cannot be const */
 	.release        = kvm_vm_release,
 	.unlocked_ioctl = kvm_vm_ioctl,
 #ifdef CONFIG_COMPAT
@@ -2088,7 +2088,7 @@ out:
 	return r;
 }
 
-static struct file_operations kvm_chardev_ops = {
+static struct file_operations kvm_chardev_ops = {	/* cannot be const */
 	.unlocked_ioctl = kvm_dev_ioctl,
 	.compat_ioctl   = kvm_dev_ioctl,
 	.llseek		= noop_llseek,
@@ -2098,6 +2098,9 @@ static struct miscdevice kvm_dev = {
 	KVM_MINOR,
 	"kvm",
 	&kvm_chardev_ops,
+	{NULL, NULL},
+	NULL,
+	NULL
 };
 
 static void hardware_enable_nolock(void *junk)
@@ -2443,7 +2446,7 @@ static void kvm_sched_out(struct preempt_notifier *pn,
 	kvm_arch_vcpu_put(vcpu);
 }
 
-int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
+int kvm_init(const void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 		  struct module *module)
 {
 	int r;

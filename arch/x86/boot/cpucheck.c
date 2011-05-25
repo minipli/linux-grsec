@@ -74,7 +74,7 @@ static int has_fpu(void)
 	u16 fcw = -1, fsw = -1;
 	u32 cr0;
 
-	asm("movl %%cr0,%0" : "=r" (cr0));
+	asm volatile("movl %%cr0,%0" : "=r" (cr0));
 	if (cr0 & (X86_CR0_EM|X86_CR0_TS)) {
 		cr0 &= ~(X86_CR0_EM|X86_CR0_TS);
 		asm volatile("movl %0,%%cr0" : : "r" (cr0));
@@ -90,7 +90,7 @@ static int has_eflag(u32 mask)
 {
 	u32 f0, f1;
 
-	asm("pushfl ; "
+	asm volatile("pushfl ; "
 	    "pushfl ; "
 	    "popl %0 ; "
 	    "movl %0,%1 ; "
@@ -115,7 +115,7 @@ static void get_flags(void)
 		set_bit(X86_FEATURE_FPU, cpu.flags);
 
 	if (has_eflag(X86_EFLAGS_ID)) {
-		asm("cpuid"
+		asm volatile("cpuid"
 		    : "=a" (max_intel_level),
 		      "=b" (cpu_vendor[0]),
 		      "=d" (cpu_vendor[1]),
@@ -124,7 +124,7 @@ static void get_flags(void)
 
 		if (max_intel_level >= 0x00000001 &&
 		    max_intel_level <= 0x0000ffff) {
-			asm("cpuid"
+			asm volatile("cpuid"
 			    : "=a" (tfms),
 			      "=c" (cpu.flags[4]),
 			      "=d" (cpu.flags[0])
@@ -136,7 +136,7 @@ static void get_flags(void)
 				cpu.model += ((tfms >> 16) & 0xf) << 4;
 		}
 
-		asm("cpuid"
+		asm volatile("cpuid"
 		    : "=a" (max_amd_level)
 		    : "a" (0x80000000)
 		    : "ebx", "ecx", "edx");
@@ -144,7 +144,7 @@ static void get_flags(void)
 		if (max_amd_level >= 0x80000001 &&
 		    max_amd_level <= 0x8000ffff) {
 			u32 eax = 0x80000001;
-			asm("cpuid"
+			asm volatile("cpuid"
 			    : "+a" (eax),
 			      "=c" (cpu.flags[6]),
 			      "=d" (cpu.flags[1])
@@ -203,9 +203,9 @@ int check_cpu(int *cpu_level_ptr, int *req_level_ptr, u32 **err_flags_ptr)
 		u32 ecx = MSR_K7_HWCR;
 		u32 eax, edx;
 
-		asm("rdmsr" : "=a" (eax), "=d" (edx) : "c" (ecx));
+		asm volatile("rdmsr" : "=a" (eax), "=d" (edx) : "c" (ecx));
 		eax &= ~(1 << 15);
-		asm("wrmsr" : : "a" (eax), "d" (edx), "c" (ecx));
+		asm volatile("wrmsr" : : "a" (eax), "d" (edx), "c" (ecx));
 
 		get_flags();	/* Make sure it really did something */
 		err = check_flags();
@@ -218,9 +218,9 @@ int check_cpu(int *cpu_level_ptr, int *req_level_ptr, u32 **err_flags_ptr)
 		u32 ecx = MSR_VIA_FCR;
 		u32 eax, edx;
 
-		asm("rdmsr" : "=a" (eax), "=d" (edx) : "c" (ecx));
+		asm volatile("rdmsr" : "=a" (eax), "=d" (edx) : "c" (ecx));
 		eax |= (1<<1)|(1<<7);
-		asm("wrmsr" : : "a" (eax), "d" (edx), "c" (ecx));
+		asm volatile("wrmsr" : : "a" (eax), "d" (edx), "c" (ecx));
 
 		set_bit(X86_FEATURE_CX8, cpu.flags);
 		err = check_flags();
@@ -231,12 +231,12 @@ int check_cpu(int *cpu_level_ptr, int *req_level_ptr, u32 **err_flags_ptr)
 		u32 eax, edx;
 		u32 level = 1;
 
-		asm("rdmsr" : "=a" (eax), "=d" (edx) : "c" (ecx));
-		asm("wrmsr" : : "a" (~0), "d" (edx), "c" (ecx));
-		asm("cpuid"
+		asm volatile("rdmsr" : "=a" (eax), "=d" (edx) : "c" (ecx));
+		asm volatile("wrmsr" : : "a" (~0), "d" (edx), "c" (ecx));
+		asm volatile("cpuid"
 		    : "+a" (level), "=d" (cpu.flags[0])
 		    : : "ecx", "ebx");
-		asm("wrmsr" : : "a" (eax), "d" (edx), "c" (ecx));
+		asm volatile("wrmsr" : : "a" (eax), "d" (edx), "c" (ecx));
 
 		err = check_flags();
 	}
