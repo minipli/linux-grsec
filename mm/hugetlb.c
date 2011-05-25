@@ -1925,6 +1925,26 @@ static int unmap_ref_private(struct mm_struct *mm, struct vm_area_struct *vma,
 	return 1;
 }
 
+#ifdef CONFIG_PAX_SEGMEXEC
+static void pax_mirror_huge_pte(struct vm_area_struct *vma, unsigned long address, struct page *page_m)
+{
+	struct mm_struct *mm = vma->vm_mm;
+	struct vm_area_struct *vma_m;
+	unsigned long address_m;
+	pte_t *ptep_m;
+
+	vma_m = pax_find_mirror_vma(vma);
+	if (!vma_m)
+		return;
+
+	BUG_ON(address >= SEGMEXEC_TASK_SIZE);
+	address_m = address + SEGMEXEC_TASK_SIZE;
+	ptep_m = huge_pte_offset(mm, address_m & HPAGE_MASK);
+	get_page(page_m);
+	set_huge_pte_at(mm, address_m, ptep_m, make_huge_pte(vma_m, page_m, 0));
+}
+#endif
+
 static int hugetlb_cow(struct mm_struct *mm, struct vm_area_struct *vma,
 			unsigned long address, pte_t *ptep, pte_t pte,
 			struct page *pagecache_page)
@@ -1996,6 +2016,11 @@ retry_avoidcopy:
 		huge_ptep_clear_flush(vma, address, ptep);
 		set_huge_pte_at(mm, address, ptep,
 				make_huge_pte(vma, new_page, 1));
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		pax_mirror_huge_pte(vma, address, new_page);
+#endif
+
 		/* Make the old page be freed below */
 		new_page = old_page;
 	}
@@ -2127,6 +2152,10 @@ retry:
 				&& (vma->vm_flags & VM_SHARED)));
 	set_huge_pte_at(mm, address, ptep, new_pte);
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	pax_mirror_huge_pte(vma, address, page);
+#endif
+
 	if ((flags & FAULT_FLAG_WRITE) && !(vma->vm_flags & VM_SHARED)) {
 		/* Optimization, do the COW without a second fault */
 		ret = hugetlb_cow(mm, vma, address, ptep, new_pte, page);
@@ -2154,6 +2183,28 @@ int hugetlb_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	struct page *pagecache_page = NULL;
 	static DEFINE_MUTEX(hugetlb_instantiation_mutex);
 	struct hstate *h = hstate_vma(vma);
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	struct vm_area_struct *vma_m;
+
+	vma_m = pax_find_mirror_vma(vma);
+	if (vma_m) {
+		unsigned long address_m;
+
+		if (vma->vm_start > vma_m->vm_start) {
+			address_m = address;
+			address -= SEGMEXEC_TASK_SIZE;
+			vma = vma_m;
+			h = hstate_vma(vma);
+		} else
+			address_m = address + SEGMEXEC_TASK_SIZE;
+
+		if (!huge_pte_alloc(mm, address_m, huge_page_size(h)))
+			return VM_FAULT_OOM;
+		address_m &= HPAGE_MASK;
+		unmap_hugepage_range(vma, address_m, address_m + HPAGE_SIZE, NULL);
+	}
+#endif
 
 	ptep = huge_pte_alloc(mm, address, huge_page_size(h));
 	if (!ptep)
