@@ -1291,7 +1291,7 @@ static int subbuf_splice_actor(struct file *in,
 		return 0;
 
 	ret = *nonpad_ret = splice_to_pipe(pipe, &spd);
-	if (ret < 0 || ret < total_len)
+	if ((int)ret < 0 || ret < total_len)
 		return ret;
 
         if (read_start + ret == nonpad_end)

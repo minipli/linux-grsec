@@ -358,8 +358,8 @@ async_tx_init(void)
 err:
 	printk(KERN_ERR "async_tx: initialization failure\n");
 
-	while (--cap >= 0)
-		free_percpu(channel_table[cap]);
+	while (cap)
+		free_percpu(channel_table[--cap]);
 
 	return 1;
 }

@@ -555,6 +555,10 @@ static int mbind_range(struct vm_area_struct *vma, unsigned long start,
 	struct vm_area_struct *next;
 	int err;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	struct vm_area_struct *vma_m;
+#endif
+
 	err = 0;
 	for (; vma && vma->vm_start < end; vma = next) {
 		next = vma->vm_next;
@@ -566,6 +570,16 @@ static int mbind_range(struct vm_area_struct *vma, unsigned long start,
 			err = policy_vma(vma, new);
 		if (err)
 			break;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		vma_m = pax_find_mirror_vma(vma);
+		if (vma_m) {
+			err = policy_vma(vma_m, new);
+			if (err)
+				break;
+		}
+#endif
+
 	}
 	return err;
 }
@@ -951,6 +965,17 @@ static long do_mbind(unsigned long start, unsigned long len,
 
 	if (end < start)
 		return -EINVAL;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (mm->pax_flags & MF_PAX_SEGMEXEC) {
+		if (end > SEGMEXEC_TASK_SIZE)
+			return -EINVAL;
+	} else
+#endif
+
+	if (end > TASK_SIZE)
+		return -EINVAL;
+
 	if (end == start)
 		return 0;
 
