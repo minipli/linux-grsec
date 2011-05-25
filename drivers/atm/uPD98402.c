@@ -161,7 +161,7 @@ static int uPD98402_ioctl(struct atm_dev *dev,unsigned int cmd,void __user *arg)
 
 #define ADD_LIMITED(s,v) \
     { atomic_add_unchecked(GET(v),&PRIV(dev)->sonet_stats.s); \
-    if (atomic_read_uncheced(&PRIV(dev)->sonet_stats.s) < 0) \
+    if (atomic_read_unchecked(&PRIV(dev)->sonet_stats.s) < 0) \
 	atomic_set_unchecked(&PRIV(dev)->sonet_stats.s,INT_MAX); }
 
 
