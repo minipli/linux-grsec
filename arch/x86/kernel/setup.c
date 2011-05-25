@@ -783,14 +783,14 @@ void __init setup_arch(char **cmdline_p)
 
 	if (!boot_params.hdr.root_flags)
 		root_mountflags &= ~MS_RDONLY;
-	init_mm.start_code = (unsigned long) _text;
-	init_mm.end_code = (unsigned long) _etext;
+	init_mm.start_code = ktla_ktva((unsigned long) _text);
+	init_mm.end_code = ktla_ktva((unsigned long) _etext);
 	init_mm.end_data = (unsigned long) _edata;
 	init_mm.brk = _brk_end;
 
-	code_resource.start = virt_to_phys(_text);
-	code_resource.end = virt_to_phys(_etext)-1;
-	data_resource.start = virt_to_phys(_etext);
+	code_resource.start = virt_to_phys(ktla_ktva(_text));
+	code_resource.end = virt_to_phys(ktla_ktva(_etext))-1;
+	data_resource.start = virt_to_phys(_sdata);
 	data_resource.end = virt_to_phys(_edata)-1;
 	bss_resource.start = virt_to_phys(&__bss_start);
 	bss_resource.end = virt_to_phys(&__bss_stop)-1;

@@ -67,6 +67,7 @@ asmlinkage void ret_from_fork(void) __asm__("ret_from_fork");
 unsigned long thread_saved_pc(struct task_struct *tsk)
 {
 	return ((unsigned long *)tsk->thread.sp)[3];
+//XXX	return tsk->thread.eip;
 }
 
 #ifndef CONFIG_SMP
@@ -129,15 +130,14 @@ void __show_regs(struct pt_regs *regs, int all)
 	unsigned short ss, gs;
 	const char *board;
 
-	if (user_mode_vm(regs)) {
+	if (user_mode(regs)) {
 		sp = regs->sp;
 		ss = regs->ss & 0xffff;
-		gs = get_user_gs(regs);
 	} else {
 		sp = (unsigned long) (&regs->sp);
 		savesegment(ss, ss);
-		savesegment(gs, gs);
 	}
+	gs = get_user_gs(regs);
 
 	printk("\n");
 
@@ -210,10 +210,10 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 	regs.bx = (unsigned long) fn;
 	regs.dx = (unsigned long) arg;
 
-	regs.ds = __USER_DS;
-	regs.es = __USER_DS;
+	regs.ds = __KERNEL_DS;
+	regs.es = __KERNEL_DS;
 	regs.fs = __KERNEL_PERCPU;
-	regs.gs = __KERNEL_STACK_CANARY;
+	savesegment(gs, regs.gs);
 	regs.orig_ax = -1;
 	regs.ip = (unsigned long) kernel_thread_helper;
 	regs.cs = __KERNEL_CS | get_kernel_rpl();
@@ -247,7 +247,7 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	struct task_struct *tsk;
 	int err;
 
-	childregs = task_pt_regs(p);
+	childregs = task_stack_page(p) + THREAD_SIZE - sizeof(struct pt_regs) - 8;
 	*childregs = *regs;
 	childregs->ax = 0;
 	childregs->sp = sp;
@@ -346,7 +346,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	struct thread_struct *prev = &prev_p->thread,
 				 *next = &next_p->thread;
 	int cpu = smp_processor_id();
-	struct tss_struct *tss = &per_cpu(init_tss, cpu);
+	struct tss_struct *tss = init_tss + cpu;
 	bool preload_fpu;
 
 	/* never put a printk in __switch_to... printk() calls wake_up*() indirectly */
@@ -380,6 +380,10 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	 * running inside of a hypervisor layer.
 	 */
 	lazy_save_gs(prev->gs);
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	__set_fs(task_thread_info(next_p)->addr_limit);
+#endif
 
 	/*
 	 * Load the per-thread Thread-Local Storage descriptor.
@@ -497,3 +501,27 @@ unsigned long get_wchan(struct task_struct *p)
 	return 0;
 }
 
+#ifdef CONFIG_PAX_RANDKSTACK
+asmlinkage void pax_randomize_kstack(void)
+{
+	struct thread_struct *thread = &current->thread;
+	unsigned long time;
+
+	if (!randomize_va_space)
+		return;
+
+	rdtscl(time);
+
+	/* P4 seems to return a 0 LSB, ignore it */
+#ifdef CONFIG_MPENTIUM4
+	time &= 0x1EUL;
+	time <<= 2;
+#else
+	time &= 0xFUL;
+	time <<= 3;
+#endif
+
+	thread->sp0 ^= time;
+	load_sp0(init_tss + smp_processor_id(), thread);
+}
+#endif
