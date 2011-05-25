@@ -176,7 +176,7 @@ ENDPROC(native_usergs_sysret64)
 #endif /* CONFIG_PARAVIRT */
 
 	.macro ljmpq sel, off
-#if defined(CONFIG_MCORE2) || defined (CONFIG_MATOM)
+#if defined(CONFIG_MPSC) || defined(CONFIG_MCORE2) || defined (CONFIG_MATOM)
 	.byte 0x48; ljmp *1234f(%rip)
 	.pushsection .rodata
 	.align 16
@@ -266,6 +266,11 @@ ENDPROC(pax_exit_kernel)
 #ifdef CONFIG_PAX_RANDKSTACK
 	push %rax
 	call pax_randomize_kstack
+	pop %rax
+#endif
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+	push %rax
+	call pax_erase_kstack
 	pop %rax
 #endif
 	.endm
