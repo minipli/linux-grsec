@@ -784,7 +784,7 @@ __bad_area_nosemaphore(struct pt_regs *regs, unsigned long error_code,
 	struct mm_struct *mm = tsk->mm;
 
 #ifdef CONFIG_X86_64
-	if (mm && (error_code & PF_INSTR)) {
+	if (mm && (error_code & PF_INSTR) && mm->context.vdso) {
 		if (regs->ip == (unsigned long)vgettimeofday) {
 			regs->ip = (unsigned long)VDSO64_SYMBOL(mm->context.vdso, fallback_gettimeofday);
 			return;
@@ -803,7 +803,7 @@ __bad_area_nosemaphore(struct pt_regs *regs, unsigned long error_code,
 		unsigned long ip = regs->ip;
 
 		if (v8086_mode(regs))
-			ip = ((regs->cs & 0xffff) << 4) + (regs->ip & 0xffff);
+			ip = ((regs->cs & 0xffff) << 4) + (ip & 0xffff);
 
 		/*
 		 * It's possible to have interrupts off here:
@@ -812,7 +812,7 @@ __bad_area_nosemaphore(struct pt_regs *regs, unsigned long error_code,
 
 #ifdef CONFIG_PAX_PAGEEXEC
 		if ((mm->pax_flags & MF_PAX_PAGEEXEC) &&
-		    (((__supported_pte_mask & _PAGE_NX) && (error_code & PF_INSTR)) || (!(error_code & (PF_PROT | PF_WRITE)) && regs->ip == address))) {
+		    (((__supported_pte_mask & _PAGE_NX) && (error_code & PF_INSTR)) || (!(error_code & (PF_PROT | PF_WRITE)) && ip == address))) {
 
 #ifdef CONFIG_PAX_EMUTRAMP
 			switch (pax_handle_fetch_fault(regs)) {
@@ -821,13 +821,13 @@ __bad_area_nosemaphore(struct pt_regs *regs, unsigned long error_code,
 			}
 #endif
 
-			pax_report_fault(regs, (void *)regs->ip, (void *)regs->sp);
+			pax_report_fault(regs, (void *)ip, (void *)regs->sp);
 			do_group_exit(SIGKILL);
 		}
 #endif
 
 #ifdef CONFIG_PAX_SEGMEXEC
-		if ((mm->pax_flags & MF_PAX_SEGMEXEC) && !(error_code & (PF_PROT | PF_WRITE)) && (regs->ip + SEGMEXEC_TASK_SIZE == address)) {
+		if ((mm->pax_flags & MF_PAX_SEGMEXEC) && !(error_code & (PF_PROT | PF_WRITE)) && (ip + SEGMEXEC_TASK_SIZE == address)) {
 
 #ifdef CONFIG_PAX_EMUTRAMP
 			switch (pax_handle_fetch_fault(regs)) {
@@ -836,7 +836,7 @@ __bad_area_nosemaphore(struct pt_regs *regs, unsigned long error_code,
 			}
 #endif
 
-			pax_report_fault(regs, (void *)regs->ip, (void *)regs->sp);
+			pax_report_fault(regs, (void *)ip, (void *)regs->sp);
 			do_group_exit(SIGKILL);
 		}
 #endif
