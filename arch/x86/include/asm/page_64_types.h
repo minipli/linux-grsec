@@ -89,6 +89,4 @@ extern void init_extra_mapping_wb(unsigned long phys, unsigned long size);
 #define pfn_valid(pfn)          ((pfn) < max_pfn)
 #endif
 
-#define nx_enabled (1)
-
 #endif /* _ASM_X86_PAGE_64_DEFS_H */

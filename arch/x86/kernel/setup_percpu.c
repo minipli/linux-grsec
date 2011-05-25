@@ -383,7 +383,9 @@ void __init setup_per_cpu_areas(void)
 	delta = (unsigned long)pcpu_base_addr - (unsigned long)__per_cpu_start;
 	for_each_possible_cpu(cpu) {
 #ifdef CONFIG_CC_STACKPROTECTOR
+#ifdef CONFIG_x86_32
 		unsigned long canary = per_cpu(stack_canary, cpu);
+#endif
 #endif
 		per_cpu_offset(cpu) = delta + cpu * pcpu_unit_size;
 		per_cpu(this_cpu_off, cpu) = per_cpu_offset(cpu);
@@ -413,8 +415,10 @@ void __init setup_per_cpu_areas(void)
 #endif
 #endif
 #ifdef CONFIG_CC_STACKPROTECTOR
+#ifdef CONFIG_x86_32
 		if (cpu == boot_cpu_id)
 			per_cpu(stack_canary, cpu) = canary;
+#endif
 #endif
 		/*
 		 * Up to this point, the boot CPU has been using .data.init
