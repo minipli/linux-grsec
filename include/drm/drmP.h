@@ -783,7 +783,7 @@ struct drm_driver {
 	void (*gem_free_object) (struct drm_gem_object *obj);
 
 	/* Driver private ops for this object */
-	struct vm_operations_struct *gem_vm_ops;
+	const struct vm_operations_struct *gem_vm_ops;
 
 	int major;
 	int minor;
@@ -886,7 +886,7 @@ struct drm_device {
 
 	/** \name Usage Counters */
 	/*@{ */
-	int open_count;			/**< Outstanding files open */
+	atomic_t open_count;		/**< Outstanding files open */
 	atomic_t ioctl_count;		/**< Outstanding IOCTLs pending */
 	atomic_t vma_count;		/**< Outstanding vma areas open */
 	int buf_use;			/**< Buffers in use -- cannot alloc */
@@ -897,7 +897,7 @@ struct drm_device {
 	/*@{ */
 	unsigned long counters;
 	enum drm_stat_type types[15];
-	atomic_t counts[15];
+	atomic_unchecked_t counts[15];
 	/*@} */
 
 	struct list_head filelist;

@@ -284,9 +284,9 @@ int ftrace_update_ftrace_func(ftrace_func_t func)
 	unsigned char old[MCOUNT_INSN_SIZE], *new;
 	int ret;
 
-	memcpy(old, &ftrace_call, MCOUNT_INSN_SIZE);
+	memcpy(old, (void *)ktla_ktva((unsigned long)ftrace_call), MCOUNT_INSN_SIZE);
 	new = ftrace_call_replace(ip, (unsigned long)func);
-	ret = ftrace_modify_code(ip, old, new);
+	ret = ftrace_modify_code(ktla_ktva(ip), old, new);
 
 	return ret;
 }

@@ -1158,7 +1158,7 @@ static int wait_task_zombie(struct task_struct *p, int options,
 
 	if (unlikely(options & WNOWAIT)) {
 		int exit_code = p->exit_code;
-		int why, status;
+		int why;
 
 		get_task_struct(p);
 		read_unlock(&tasklist_lock);

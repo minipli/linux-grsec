@@ -54,7 +54,7 @@ u64 _paravirt_ident_64(u64 x)
 	return x;
 }
 
-static void __init default_banner(void)
+static void default_banner(void)
 {
 	printk(KERN_INFO "Booting paravirtualized kernel on %s\n",
 	       pv_info.name);
@@ -183,7 +183,7 @@ unsigned paravirt_patch_insns(void *insnbuf, unsigned len,
 	if (insn_len > len || start == NULL)
 		insn_len = len;
 	else
-		memcpy(insnbuf, start, insn_len);
+		memcpy(insnbuf, ktla_ktva(start), insn_len);
 
 	return insn_len;
 }
@@ -313,21 +313,21 @@ void arch_flush_lazy_cpu_mode(void)
 	preempt_enable();
 }
 
-struct pv_info pv_info = {
+struct pv_info pv_info __read_only = {
 	.name = "bare hardware",
 	.paravirt_enabled = 0,
 	.kernel_rpl = 0,
 	.shared_kernel_pmd = 1,	/* Only used when CONFIG_X86_PAE is set */
 };
 
-struct pv_init_ops pv_init_ops = {
+struct pv_init_ops pv_init_ops __read_only = {
 	.patch = native_patch,
 	.banner = default_banner,
 	.arch_setup = paravirt_nop,
 	.memory_setup = machine_specific_memory_setup,
 };
 
-struct pv_time_ops pv_time_ops = {
+struct pv_time_ops pv_time_ops __read_only = {
 	.time_init = hpet_time_init,
 	.get_wallclock = native_get_wallclock,
 	.set_wallclock = native_set_wallclock,
@@ -335,7 +335,7 @@ struct pv_time_ops pv_time_ops = {
 	.get_tsc_khz = native_calibrate_tsc,
 };
 
-struct pv_irq_ops pv_irq_ops = {
+struct pv_irq_ops pv_irq_ops __read_only = {
 	.init_IRQ = native_init_IRQ,
 	.save_fl = __PV_IS_CALLEE_SAVE(native_save_fl),
 	.restore_fl = __PV_IS_CALLEE_SAVE(native_restore_fl),
@@ -348,7 +348,7 @@ struct pv_irq_ops pv_irq_ops = {
 #endif
 };
 
-struct pv_cpu_ops pv_cpu_ops = {
+struct pv_cpu_ops pv_cpu_ops __read_only = {
 	.cpuid = native_cpuid,
 	.get_debugreg = native_get_debugreg,
 	.set_debugreg = native_set_debugreg,
@@ -410,7 +410,7 @@ struct pv_cpu_ops pv_cpu_ops = {
 	},
 };
 
-struct pv_apic_ops pv_apic_ops = {
+struct pv_apic_ops pv_apic_ops __read_only = {
 #ifdef CONFIG_X86_LOCAL_APIC
 	.setup_boot_clock = setup_boot_APIC_clock,
 	.setup_secondary_clock = setup_secondary_APIC_clock,
@@ -426,7 +426,7 @@ struct pv_apic_ops pv_apic_ops = {
 #define PTE_IDENT	__PV_IS_CALLEE_SAVE(_paravirt_ident_64)
 #endif
 
-struct pv_mmu_ops pv_mmu_ops = {
+struct pv_mmu_ops pv_mmu_ops __read_only = {
 #ifndef CONFIG_X86_64
 	.pagetable_setup_start = native_pagetable_setup_start,
 	.pagetable_setup_done = native_pagetable_setup_done,
