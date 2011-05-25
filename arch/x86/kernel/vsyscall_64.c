@@ -84,6 +84,7 @@ void update_vsyscall(struct timespec *wall_time, struct clocksource *clock)
 	pax_open_kernel(cr0);
 	write_seqlock_irqsave(&vsyscall_gtod_data.lock, flags);
 	/* copy vsyscall data */
+	strlcpy(vsyscall_gtod_data.clock.name, clock->name, sizeof vsyscall_gtod_data.clock.name);
 	vsyscall_gtod_data.clock.vread = clock->vread;
 	vsyscall_gtod_data.clock.cycle_last = clock->cycle_last;
 	vsyscall_gtod_data.clock.mask = clock->mask;
