@@ -377,9 +377,9 @@ ENTRY(startup_32_smp)
 
 	btsl $_PAGE_BIT_NX-32,pa(__supported_pte_mask+4)
 	movl $1,pa(nx_enabled)
+#endif
 
 6:
-#endif
 
 /*
  * Enable paging
