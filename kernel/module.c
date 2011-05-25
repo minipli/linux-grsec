@@ -367,8 +367,6 @@ EXPORT_SYMBOL_GPL(find_module);
 
 #ifdef CONFIG_HAVE_DYNAMIC_PER_CPU_AREA
 
-EXPORT_SYMBOL(__per_cpu_load);
-
 static void *percpu_modalloc(unsigned long size, unsigned long align,
 			     const char *name)
 {
@@ -430,8 +428,6 @@ static inline unsigned int block_size(int val)
 		return -val;
 	return val;
 }
-
-EXPORT_SYMBOL(__per_cpu_load);
 
 static void *percpu_modalloc(unsigned long size, unsigned long align,
 			     const char *name)
