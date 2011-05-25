@@ -1443,6 +1443,8 @@ static inline void __set_fixmap(unsigned /* enum fixed_addresses */ idx,
 	pv_mmu_ops.set_fixmap(idx, phys, flags);
 }
 
+#define  __HAVE_ARCH_PAX_OPEN_KERNEL
+#define  __HAVE_ARCH_PAX_CLOSE_KERNEL
 #ifdef CONFIG_PAX_KERNEXEC
 static inline unsigned long pax_open_kernel(void)
 {
@@ -1454,8 +1456,8 @@ static inline unsigned long pax_close_kernel(void)
 	return pv_mmu_ops.pax_close_kernel();
 }
 #else
-static inline void pax_open_kernel(void) {}
-static inline void pax_close_kernel(void) {}
+static inline unsigned long pax_open_kernel(void) { return 0; }
+static inline unsigned long pax_close_kernel(void) { return 0; }
 #endif
 
 void _paravirt_nop(void);
