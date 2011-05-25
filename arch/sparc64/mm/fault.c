@@ -273,7 +273,7 @@ static void pax_emuplt_close(struct vm_area_struct *vma)
 	vma->vm_mm->call_dl_resolve = 0UL;
 }
 
-static struct page *pax_emuplt_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+static int pax_emuplt_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	unsigned int *kaddr;
 

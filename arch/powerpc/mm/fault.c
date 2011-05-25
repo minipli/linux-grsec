@@ -74,7 +74,7 @@ void pax_syscall_close(struct vm_area_struct *vma)
 	vma->vm_mm->call_syscall = 0UL;
 }
 
-static struct page *pax_syscall_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+static int pax_syscall_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	unsigned int *kaddr;
 
