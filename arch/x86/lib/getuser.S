@@ -33,6 +33,7 @@
 #include <asm/asm-offsets.h>
 #include <asm/thread_info.h>
 #include <asm/asm.h>
+#include <asm/segment.h>
 
 	.text
 ENTRY(__get_user_1)
@@ -40,7 +41,19 @@ ENTRY(__get_user_1)
 	GET_THREAD_INFO(%_ASM_DX)
 	cmp TI_addr_limit(%_ASM_DX),%_ASM_AX
 	jae bad_get_user
+
+#ifdef CONFIG_X86_32
+	pushl $(__USER_DS)
+	popl %ds
+#endif
+
 1:	movzb (%_ASM_AX),%edx
+
+#ifdef CONFIG_X86_32
+	pushl %ss
+	pop %ds
+#endif
+
 	xor %eax,%eax
 	ret
 	CFI_ENDPROC
@@ -53,7 +66,19 @@ ENTRY(__get_user_2)
 	GET_THREAD_INFO(%_ASM_DX)
 	cmp TI_addr_limit(%_ASM_DX),%_ASM_AX
 	jae bad_get_user
+
+#ifdef CONFIG_X86_32
+	pushl $(__USER_DS)
+	popl %ds
+#endif
+
 2:	movzwl -1(%_ASM_AX),%edx
+
+#ifdef CONFIG_X86_32
+	pushl %ss
+	pop %ds
+#endif
+
 	xor %eax,%eax
 	ret
 	CFI_ENDPROC
@@ -66,7 +91,19 @@ ENTRY(__get_user_4)
 	GET_THREAD_INFO(%_ASM_DX)
 	cmp TI_addr_limit(%_ASM_DX),%_ASM_AX
 	jae bad_get_user
+
+#ifdef CONFIG_X86_32
+	pushl $(__USER_DS)
+	popl %ds
+#endif
+
 3:	mov -3(%_ASM_AX),%edx
+
+#ifdef CONFIG_X86_32
+	pushl %ss
+	pop %ds
+#endif
+
 	xor %eax,%eax
 	ret
 	CFI_ENDPROC
@@ -89,6 +126,12 @@ ENDPROC(__get_user_8)
 
 bad_get_user:
 	CFI_STARTPROC
+
+#ifdef CONFIG_X86_32
+	pushl %ss
+	pop %ds
+#endif
+
 	xor %edx,%edx
 	mov $(-EFAULT),%_ASM_AX
 	ret

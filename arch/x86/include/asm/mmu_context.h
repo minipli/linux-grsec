@@ -34,11 +34,17 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 			     struct task_struct *tsk)
 {
 	unsigned cpu = smp_processor_id();
+#if defined(CONFIG_X86_32) && defined(CONFIG_SMP)
+	int tlbstate = TLBSTATE_OK;
+#endif
 
 	if (likely(prev != next)) {
 		/* stop flush ipis for the previous mm */
 		cpu_clear(cpu, prev->cpu_vm_mask);
 #ifdef CONFIG_SMP
+#ifdef CONFIG_X86_32
+		tlbstate = percpu_read(cpu_tlbstate.state);
+#endif
 		percpu_write(cpu_tlbstate.state, TLBSTATE_OK);
 		percpu_write(cpu_tlbstate.active_mm, next);
 #endif
@@ -52,6 +58,26 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 		 */
 		if (unlikely(prev->context.ldt != next->context.ldt))
 			load_LDT_nolock(&next->context);
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_PAGEEXEC) && defined(CONFIG_SMP)
+		if (!nx_enabled) {
+			smp_mb__before_clear_bit();
+			cpu_clear(cpu, prev->context.cpu_user_cs_mask);
+			smp_mb__after_clear_bit();
+			cpu_set(cpu, next->context.cpu_user_cs_mask);
+		}
+#endif
+
+#if defined(CONFIG_X86_32) && (defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC))
+		if (unlikely(prev->context.user_cs_base != next->context.user_cs_base ||
+			     prev->context.user_cs_limit != next->context.user_cs_limit
+#ifdef CONFIG_SMP
+			     || tlbstate != TLBSTATE_OK
+#endif
+			    ))
+			set_user_cs(next->context.user_cs_base, next->context.user_cs_limit, cpu);
+#endif
+
 	}
 #ifdef CONFIG_SMP
 	else {
@@ -65,6 +91,19 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 			 */
 			load_cr3(next->pgd);
 			load_LDT_nolock(&next->context);
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_PAGEEXEC)
+			if (!nx_enabled)
+				cpu_set(cpu, next->context.cpu_user_cs_mask);
+#endif
+
+#if defined(CONFIG_X86_32) && (defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC))
+#ifdef CONFIG_PAX_PAGEEXEC
+			if (!((next->pax_flags & MF_PAX_PAGEEXEC) && nx_enabled))
+#endif
+				set_user_cs(next->context.user_cs_base, next->context.user_cs_limit, cpu);
+#endif
+
 		}
 	}
 #endif

@@ -727,7 +727,11 @@ do_rest:
 		(unsigned long)task_stack_page(c_idle.idle) -
 		KERNEL_STACK_OFFSET + THREAD_SIZE;
 #endif
+
+	pax_open_kernel();
 	early_gdt_descr.address = (unsigned long)get_cpu_gdt_table(cpu);
+	pax_close_kernel();
+
 	initial_code = (unsigned long)start_secondary;
 	stack_start.sp = (void *) c_idle.idle->thread.sp;
 

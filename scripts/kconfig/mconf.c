@@ -361,7 +361,7 @@ static char filename[PATH_MAX+1];
 static void set_config_filename(const char *config_filename)
 {
 	static char menu_backtitle[PATH_MAX+128];
-	int size;
+	unsigned int size;
 	struct symbol *sym;
 
 	sym = sym_lookup("KERNELVERSION", 0);
