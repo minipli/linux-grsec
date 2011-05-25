@@ -304,7 +304,7 @@ struct kmem_list3 {
  * Need this for bootstrapping a per node allocator.
  */
 #define NUM_INIT_LISTS (3 * MAX_NUMNODES)
-struct kmem_list3 __initdata initkmem_list3[NUM_INIT_LISTS];
+struct kmem_list3 initkmem_list3[NUM_INIT_LISTS];
 #define	CACHE_CACHE 0
 #define	SIZE_AC MAX_NUMNODES
 #define	SIZE_L3 (2 * MAX_NUMNODES)
@@ -653,14 +653,14 @@ struct cache_names {
 static struct cache_names __initdata cache_names[] = {
 #define CACHE(x) { .name = "size-" #x, .name_dma = "size-" #x "(DMA)" },
 #include <linux/kmalloc_sizes.h>
-	{NULL,}
+	{NULL, NULL}
 #undef CACHE
 };
 
 static struct arraycache_init initarray_cache __initdata =
-    { {0, BOOT_CPUCACHE_ENTRIES, 1, 0} };
+    { {0, BOOT_CPUCACHE_ENTRIES, 1, 0}, {NULL} };
 static struct arraycache_init initarray_generic =
-    { {0, BOOT_CPUCACHE_ENTRIES, 1, 0} };
+    { {0, BOOT_CPUCACHE_ENTRIES, 1, 0}, {NULL} };
 
 /* internal cache of cache description objs */
 static struct kmem_cache cache_cache = {
@@ -2996,7 +2996,7 @@ retry:
 		 * there must be at least one object available for
 		 * allocation.
 		 */
-		BUG_ON(slabp->inuse < 0 || slabp->inuse >= cachep->num);
+		BUG_ON(slabp->inuse >= cachep->num);
 
 		while (slabp->inuse < cachep->num && batchcount--) {
 			STATS_INC_ALLOCED(cachep);

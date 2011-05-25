@@ -43,7 +43,7 @@
 #endif
 
 #define PERCPU_ENOUGH_ROOM						\
-	(__per_cpu_end - __per_cpu_start + PERCPU_MODULE_RESERVE)
+	((unsigned long)(__per_cpu_end - __per_cpu_start + PERCPU_MODULE_RESERVE))
 #endif	/* PERCPU_ENOUGH_ROOM */
 
 /*

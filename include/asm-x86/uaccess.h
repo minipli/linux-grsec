@@ -10,6 +10,7 @@
 #include <linux/string.h>
 #include <asm/asm.h>
 #include <asm/page.h>
+#include <asm/segment.h>
 
 #define VERIFY_READ 0
 #define VERIFY_WRITE 1
@@ -29,7 +30,12 @@
 
 #define get_ds()	(KERNEL_DS)
 #define get_fs()	(current_thread_info()->addr_limit)
+#ifdef CONFIG_X86_32
+void __set_fs(mm_segment_t x, int cpu);
+void set_fs(mm_segment_t x);
+#else
 #define set_fs(x)	(current_thread_info()->addr_limit = (x))
+#endif
 
 #define segment_eq(a, b)	((a).seg == (b).seg)
 
@@ -97,6 +103,7 @@ struct exception_table_entry {
 };
 
 extern int fixup_exception(struct pt_regs *regs);
+#define ARCH_HAS_SORT_EXTABLE
 
 /*
  * These are the main single-value transfer routines.  They automatically
@@ -186,9 +193,12 @@ extern int __get_user_bad(void);
 
 #ifdef CONFIG_X86_32
 #define __put_user_u64(x, addr, err)					\
-	asm volatile("1:	movl %%eax,0(%2)\n"			\
-		     "2:	movl %%edx,4(%2)\n"			\
+	asm volatile("		movw %w5,%%ds\n"			\
+		     "1:	movl %%eax,%%ds:0(%2)\n"		\
+		     "2:	movl %%edx,%%ds:4(%2)\n"		\
 		     "3:\n"						\
+		     "		pushl %%ss\n"				\
+		     "		popl %%ds\n"				\
 		     ".section .fixup,\"ax\"\n"				\
 		     "4:	movl %3,%0\n"				\
 		     "	jmp 3b\n"					\
@@ -196,7 +206,8 @@ extern int __get_user_bad(void);
 		     _ASM_EXTABLE(1b, 4b)				\
 		     _ASM_EXTABLE(2b, 4b)				\
 		     : "=r" (err)					\
-		     : "A" (x), "r" (addr), "i" (-EFAULT), "0" (err))
+		     : "A" (x), "r" (addr), "i" (-EFAULT), "0" (err),	\
+		       "r"(__USER_DS))
 
 #define __put_user_x8(x, ptr, __ret_pu)				\
 	asm volatile("call __put_user_8" : "=a" (__ret_pu)	\
@@ -336,6 +347,22 @@ do {									\
 	}								\
 } while (0)
 
+#ifdef CONFIG_X86_32
+#define __get_user_asm(x, addr, err, itype, rtype, ltype, errret)	\
+	asm volatile("		movw %w5,%%ds\n"			\
+		     "1:	mov"itype" %%ds:%2,%"rtype"1\n"		\
+		     "2:\n"						\
+		     "		pushl %%ss\n"				\
+		     "		popl %%ds\n"				\
+		     ".section .fixup,\"ax\"\n"				\
+		     "3:	movl %3,%0\n"				\
+		     "	xor"itype" %"rtype"1,%"rtype"1\n"		\
+		     "	jmp 2b\n"					\
+		     ".previous\n"					\
+		     _ASM_EXTABLE(1b, 3b)				\
+		     : "=r" (err), ltype (x)				\
+		     : "m" (__m(addr)), "i" (errret), "0" (err), "r"(__USER_DS))
+#else
 #define __get_user_asm(x, addr, err, itype, rtype, ltype, errret)	\
 	asm volatile("1:	mov"itype" %2,%"rtype"1\n"		\
 		     "2:\n"						\
@@ -347,6 +374,7 @@ do {									\
 		     _ASM_EXTABLE(1b, 3b)				\
 		     : "=r" (err), ltype(x)				\
 		     : "m" (__m(addr)), "i" (errret), "0" (err))
+#endif
 
 #define __put_user_nocheck(x, ptr, size)			\
 ({								\
@@ -373,6 +401,22 @@ struct __large_struct { unsigned long buf[100]; };
  * we do not write to any memory gcc knows about, so there are no
  * aliasing issues.
  */
+#ifdef CONFIG_X86_32
+#define __put_user_asm(x, addr, err, itype, rtype, ltype, errret)	\
+	asm volatile("		movw %w5,%%ds\n"			\
+		     "1:	mov"itype" %"rtype"1,%%ds:%2\n"		\
+		     "2:\n"						\
+		     "		pushl %%ss\n"				\
+		     "		popl %%ds\n"				\
+		     ".section .fixup,\"ax\"\n"				\
+		     "3:	movl %3,%0\n"				\
+		     "	jmp 2b\n"					\
+		     ".previous\n"					\
+		     _ASM_EXTABLE(1b, 3b)				\
+		     : "=r"(err)					\
+		     : ltype (x), "m" (__m(addr)), "i" (errret), "0" (err),\
+		       "r"(__USER_DS))
+#else
 #define __put_user_asm(x, addr, err, itype, rtype, ltype, errret)	\
 	asm volatile("1:	mov"itype" %"rtype"1,%2\n"		\
 		     "2:\n"						\
@@ -383,6 +427,7 @@ struct __large_struct { unsigned long buf[100]; };
 		     _ASM_EXTABLE(1b, 3b)				\
 		     : "=r"(err)					\
 		     : ltype(x), "m" (__m(addr)), "i" (errret), "0" (err))
+#endif
 /**
  * __get_user: - Get a simple variable from user space, with less checking.
  * @x:   Variable to store result.
@@ -447,6 +492,7 @@ extern struct movsl_mask {
 # include "uaccess_32.h"
 #else
 # define ARCH_HAS_SEARCH_EXTABLE
+# define ARCH_HAS_SORT_EXTABLE
 # include "uaccess_64.h"
 #endif
 

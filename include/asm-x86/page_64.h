@@ -49,6 +49,9 @@
 #define __START_KERNEL		(__START_KERNEL_map + __PHYSICAL_START)
 #define __START_KERNEL_map	_AC(0xffffffff80000000, UL)
 
+#define ktla_ktva(addr)		(addr)
+#define ktva_ktla(addr)		(addr)
+
 /* See Documentation/x86_64/mm.txt for a description of the memory map. */
 #define __PHYSICAL_MASK_SHIFT	46
 #define __VIRTUAL_MASK_SHIFT	48
@@ -101,5 +104,6 @@ extern void init_extra_mapping_wb(unsigned long phys, unsigned long size);
 #define pfn_valid(pfn)          ((pfn) < max_pfn)
 #endif
 
+#define nx_enabled (1)
 
 #endif /* _X86_64_PAGE_H */

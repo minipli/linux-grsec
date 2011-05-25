@@ -91,6 +91,10 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 		struct mm_struct *mm = vma->vm_mm;
 		struct anon_vma *allocated;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+		struct vm_area_struct *vma_m;
+#endif
+
 		anon_vma = find_mergeable_anon_vma(vma);
 		allocated = NULL;
 		if (!anon_vma) {
@@ -104,6 +108,15 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 		/* page_table_lock to protect against threads */
 		spin_lock(&mm->page_table_lock);
 		if (likely(!vma->anon_vma)) {
+
+#ifdef CONFIG_PAX_SEGMEXEC
+			vma_m = pax_find_mirror_vma(vma);
+			if (vma_m) {
+				vma_m->anon_vma = anon_vma;
+				__anon_vma_link(vma_m);
+			}
+#endif
+
 			vma->anon_vma = anon_vma;
 			list_add_tail(&vma->anon_vma_node, &anon_vma->head);
 			allocated = NULL;
