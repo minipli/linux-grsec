@@ -1635,7 +1635,7 @@ static struct dmi_system_id __initdata acpi_dmi_table[] = {
 		     DMI_MATCH(DMI_PRODUCT_NAME, "HP Compaq 6715b"),
 		     },
 	 },
-	{}
+	{ NULL, NULL, {{0, NULL}}, NULL}
 };
 
 /*

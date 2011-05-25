@@ -115,7 +115,7 @@ static struct vmcs_config {
 	u32 vmentry_ctrl;
 } vmcs_config;
 
-struct vmx_capability {
+static struct vmx_capability {
 	u32 ept;
 	u32 vpid;
 } vmx_capability;
@@ -484,9 +484,23 @@ static void reload_tss(void)
 	struct descriptor_table gdt;
 	struct desc_struct *descs;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	kvm_get_gdt(&gdt);
 	descs = (void *)gdt.base;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	descs[GDT_ENTRY_TSS].type = 9; /* available TSS */
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	load_TR_desc();
 }
 
@@ -3069,7 +3083,7 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		(vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) &
 		 (GUEST_INTR_STATE_STI | GUEST_INTR_STATE_MOV_SS)) == 0;
 
-	asm("mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS));
+	asm("mov %0, %%ds; mov %0, %%es" : : "r"(__KERNEL_DS));
 	vmx->launched = 1;
 
 	intr_info = vmcs_read32(VM_EXIT_INTR_INFO);

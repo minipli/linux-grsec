@@ -25,8 +25,6 @@
 struct mm_struct;
 struct vm_area_struct;
 
-extern pgd_t swapper_pg_dir[1024];
-
 static inline void pgtable_cache_init(void) { }
 static inline void check_pgt_cache(void) { }
 void paging_init(void);
@@ -43,6 +41,11 @@ void paging_init(void);
 # define PMD_MASK	(~(PMD_SIZE - 1))
 #else
 # include <asm/pgtable-2level-defs.h>
+#endif
+
+extern pgd_t swapper_pg_dir[PTRS_PER_PGD];
+#ifdef CONFIG_X86_PAE
+extern pmd_t swapper_pm_dir[PTRS_PER_PGD][PTRS_PER_PMD];
 #endif
 
 #define PGDIR_SIZE	(1UL << PGDIR_SHIFT)
@@ -81,7 +84,7 @@ void paging_init(void);
 #undef TEST_ACCESS_OK
 
 /* The boot page tables (all created as a single array) */
-extern unsigned long pg0[];
+extern pte_t pg0[];
 
 #define pte_present(x)	((x).pte_low & (_PAGE_PRESENT | _PAGE_PROTNONE))
 
@@ -172,6 +175,9 @@ do {						\
 #define update_mmu_cache(vma, address, pte) do { } while (0)
 
 #endif /* !__ASSEMBLY__ */
+
+#define HAVE_ARCH_UNMAPPED_AREA
+#define HAVE_ARCH_UNMAPPED_AREA_TOPDOWN
 
 /*
  * kern_addr_valid() is (1) for FLATMEM and (0) for

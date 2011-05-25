@@ -28,7 +28,7 @@ void (*pm_power_off)(void);
 EXPORT_SYMBOL(pm_power_off);
 
 static const struct desc_ptr no_idt = {};
-static int reboot_mode;
+static unsigned short reboot_mode;
 enum reboot_type reboot_type = BOOT_KBD;
 int reboot_force;
 
@@ -193,7 +193,7 @@ static struct dmi_system_id __initdata reboot_dmi_table[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "HP Compaq"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {{0, NULL}}, NULL}
 };
 
 static int __init reboot_init(void)
@@ -209,12 +209,12 @@ core_initcall(reboot_init);
    controller to pulse the CPU reset line, which is more thorough, but
    doesn't work with at least one type of 486 motherboard.  It is easy
    to stop this code working; hence the copious comments. */
-static const unsigned long long
-real_mode_gdt_entries [3] =
+static struct desc_struct
+real_mode_gdt_entries [3] __read_only =
 {
-	0x0000000000000000ULL,	/* Null descriptor */
-	0x00009b000000ffffULL,	/* 16-bit real-mode 64k code at 0x00000000 */
-	0x000093000100ffffULL	/* 16-bit real-mode 64k data at 0x00000100 */
+	{{{0x00000000, 0x00000000}}},	/* Null descriptor */
+	{{{0x0000ffff, 0x00009b00}}},	/* 16-bit real-mode 64k code at 0x00000000 */
+	{{{0x0100ffff, 0x00009300}}}	/* 16-bit real-mode 64k data at 0x00000100 */
 };
 
 static const struct desc_ptr
@@ -263,7 +263,7 @@ static const unsigned char jump_to_bios [] =
  * specified by the code and length parameters.
  * We assume that length will aways be less that 100!
  */
-void machine_real_restart(const unsigned char *code, int length)
+void machine_real_restart(const unsigned char *code, unsigned int length)
 {
 	local_irq_disable();
 
@@ -283,8 +283,8 @@ void machine_real_restart(const unsigned char *code, int length)
 	/* Remap the kernel at virtual address zero, as well as offset zero
 	   from the kernel segment.  This assumes the kernel segment starts at
 	   virtual address PAGE_OFFSET. */
-	memcpy(swapper_pg_dir, swapper_pg_dir + KERNEL_PGD_BOUNDARY,
-		sizeof(swapper_pg_dir [0]) * KERNEL_PGD_PTRS);
+	clone_pgd_range(swapper_pg_dir, swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			min_t(unsigned long, KERNEL_PGD_PTRS, KERNEL_PGD_BOUNDARY));
 
 	/*
 	 * Use `swapper_pg_dir' as our page directory.
@@ -296,16 +296,15 @@ void machine_real_restart(const unsigned char *code, int length)
 	   boot)".  This seems like a fairly standard thing that gets set by
 	   REBOOT.COM programs, and the previous reset routine did this
 	   too. */
-	*((unsigned short *)0x472) = reboot_mode;
+	*(unsigned short *)(__va(0x472)) = reboot_mode;
 
 	/* For the switch to real mode, copy some code to low memory.  It has
 	   to be in the first 64k because it is running in 16-bit mode, and it
 	   has to have the same physical and virtual address, because it turns
 	   off paging.  Copy it near the end of the first page, out of the way
 	   of BIOS variables. */
-	memcpy((void *)(0x1000 - sizeof(real_mode_switch) - 100),
-		real_mode_switch, sizeof (real_mode_switch));
-	memcpy((void *)(0x1000 - 100), code, length);
+	memcpy(__va(0x1000 - sizeof (real_mode_switch) - 100), real_mode_switch, sizeof (real_mode_switch));
+	memcpy(__va(0x1000 - 100), code, length);
 
 	/* Set up the IDT for real mode. */
 	load_idt(&real_mode_idt);

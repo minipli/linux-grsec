@@ -535,6 +535,7 @@ int ia32_setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 		__NR_ia32_rt_sigreturn,
 		0x80cd,
 		0,
+		0
 	};
 
 	frame = get_sigframe(ka, regs, sizeof(*frame));
