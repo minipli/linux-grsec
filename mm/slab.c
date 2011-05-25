@@ -4439,6 +4439,8 @@ module_init(slab_proc_init);
 
 void check_object_size(const void *ptr, unsigned long n, bool to)
 {
+
+#ifdef CONFIG_PAX_USERCOPY
 	struct page *page;
 	int size;
 
@@ -4469,6 +4471,8 @@ report:
 		pax_report_leak_to_user(ptr, n);
 	else
 		pax_report_overflow_from_user(ptr, n);
+#endif
+
 }
 EXPORT_SYMBOL(check_object_size);
 
