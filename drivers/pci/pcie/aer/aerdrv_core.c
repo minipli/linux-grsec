@@ -663,7 +663,7 @@ static void aer_isr_one_error(struct pcie_device *p_device,
 		struct aer_err_source *e_src)
 {
 	struct device *s_device;
-	struct aer_err_info e_info = {0, 0, 0,};
+	struct aer_err_info e_info = {0, 0, 0, {0, 0, 0, 0}};
 	int i;
 	u16 id;
 

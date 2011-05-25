@@ -41,7 +41,7 @@ static int vesa_probe(void)
 
 	ax = 0x4f00;
 	di = (size_t)&vginfo;
-	asm(INT10
+	asm volatile(INT10
 	    : "+a" (ax), "+D" (di), "=m" (vginfo)
 	    : : "ebx", "ecx", "edx", "esi");
 
@@ -68,7 +68,7 @@ static int vesa_probe(void)
 		ax = 0x4f01;
 		cx = mode;
 		di = (size_t)&vminfo;
-		asm(INT10
+		asm volatile(INT10
 		    : "+a" (ax), "+c" (cx), "+D" (di), "=m" (vminfo)
 		    : : "ebx", "edx", "esi");
 
@@ -123,7 +123,7 @@ static int vesa_set_mode(struct mode_info *mode)
 	ax = 0x4f01;
 	cx = vesa_mode;
 	di = (size_t)&vminfo;
-	asm(INT10
+	asm volatile(INT10
 	    : "+a" (ax), "+c" (cx), "+D" (di), "=m" (vminfo)
 	    : : "ebx", "edx", "esi");
 
@@ -203,19 +203,20 @@ static void vesa_dac_set_8bits(void)
 /* Save the VESA protected mode info */
 static void vesa_store_pm_info(void)
 {
-	u16 ax, bx, di, es;
+	u16 ax, bx, cx, di, es;
 
 	ax = 0x4f0a;
-	bx = di = 0;
-	asm("pushw %%es; "INT10"; movw %%es,%0; popw %%es"
-	    : "=d" (es), "+a" (ax), "+b" (bx), "+D" (di)
-	    : : "ecx", "esi");
+	bx = cx = di = 0;
+	asm volatile("pushw %%es; "INT10"; movw %%es,%0; popw %%es"
+	    : "=d" (es), "+a" (ax), "+b" (bx), "+c" (cx), "+D" (di)
+	    : : "esi");
 
 	if (ax != 0x004f)
 		return;
 
 	boot_params.screen_info.vesapm_seg = es;
 	boot_params.screen_info.vesapm_off = di;
+	boot_params.screen_info.vesapm_size = cx;
 }
 
 /*
@@ -269,7 +270,7 @@ void vesa_store_edid(void)
 	/* Note: The VBE DDC spec is different from the main VESA spec;
 	   we genuinely have to assume all registers are destroyed here. */
 
-	asm("pushw %%es; movw %2,%%es; "INT10"; popw %%es"
+	asm volatile("pushw %%es; movw %2,%%es; "INT10"; popw %%es"
 	    : "+a" (ax), "+b" (bx)
 	    :  "c" (cx), "D" (di)
 	    : "esi");
@@ -285,7 +286,7 @@ void vesa_store_edid(void)
 	cx = 0;			/* Controller 0 */
 	dx = 0;			/* EDID block number */
 	di =(size_t) &boot_params.edid_info; /* (ES:)Pointer to block */
-	asm(INT10
+	asm volatile(INT10
 	    : "+a" (ax), "+b" (bx), "+d" (dx), "=m" (boot_params.edid_info)
 	    : "c" (cx), "D" (di)
 	    : "esi");

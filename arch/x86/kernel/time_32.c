@@ -49,20 +49,30 @@ unsigned long profile_pc(struct pt_regs *regs)
 	if (!v8086_mode(regs) && SEGMENT_IS_KERNEL_CODE(regs->cs) &&
 	    in_lock_functions(pc)) {
 #ifdef CONFIG_FRAME_POINTER
-		return *(unsigned long *)(regs->bp + 4);
+		return ktla_ktva(*(unsigned long *)(regs->bp + 4));
 #else
 		unsigned long *sp = (unsigned long *)&regs->sp;
 
 		/* Return address is either directly at stack pointer
 		   or above a saved flags. Eflags has bits 22-31 zero,
 		   kernel addresses don't. */
+
+#ifdef CONFIG_PAX_KERNEXEC
+		return ktla_ktva(sp[0]);
+#else
 		if (sp[0] >> 22)
 			return sp[0];
 		if (sp[1] >> 22)
 			return sp[1];
 #endif
+
+#endif
 	}
 #endif
+
+	if (!v8086_mode(regs) && SEGMENT_IS_KERNEL_CODE(regs->cs))
+		pc = ktla_ktva(pc);
+
 	return pc;
 }
 EXPORT_SYMBOL(profile_pc);
