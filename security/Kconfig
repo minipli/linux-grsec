@@ -453,6 +453,9 @@ config PAX_USERCOPY
 	  kernel heap during kernel to userland copies (if the kernel heap
 	  object is otherwise fully initialized) and prevents kernel heap
 	  overflows during userland to kernel copies.
+
+	  Since this has a negligible performance impact, you should enable
+	  this feature.
 endmenu
 
 endmenu
