@@ -94,7 +94,7 @@ execute_on_irq_stack(int overflow, struct irq_desc *desc, int irq)
 		return 0;
 
 	/* build the stack frame on the IRQ stack */
-	isp = (u32 *) ((char *)irqctx + sizeof(*irqctx));
+	isp = (u32 *) ((char *)irqctx + sizeof(*irqctx) - 8);
 	irqctx->tinfo.task = curctx->tinfo.task;
 	irqctx->tinfo.previous_esp = current_stack_pointer;
 
@@ -106,6 +106,10 @@ execute_on_irq_stack(int overflow, struct irq_desc *desc, int irq)
 		(irqctx->tinfo.preempt_count & ~SOFTIRQ_MASK) |
 		(curctx->tinfo.preempt_count & SOFTIRQ_MASK);
 
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	__set_fs(irqctx->tinfo.addr_limit);
+#endif
+
 	if (unlikely(overflow))
 		call_on_stack(print_stack_overflow, isp);
 
@@ -116,6 +120,11 @@ execute_on_irq_stack(int overflow, struct irq_desc *desc, int irq)
 		     :  "0" (irq),   "1" (desc),  "2" (isp),
 			"D" (desc->handle_irq)
 		     : "memory", "cc", "ecx");
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	__set_fs(curctx->tinfo.addr_limit);
+#endif
+
 	return 1;
 }
 
@@ -175,9 +184,18 @@ asmlinkage void do_softirq(void)
 		irqctx->tinfo.previous_esp = current_stack_pointer;
 
 		/* build the stack frame on the softirq stack */
-		isp = (u32 *) ((char *)irqctx + sizeof(*irqctx));
+		isp = (u32 *) ((char *)irqctx + sizeof(*irqctx) - 8);
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+		__set_fs(irqctx->tinfo.addr_limit);
+#endif
 
 		call_on_stack(__do_softirq, isp);
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+		__set_fs(curctx->addr_limit);
+#endif
+
 		/*
 		 * Shouldnt happen, we returned above if in_interrupt():
 		 */
