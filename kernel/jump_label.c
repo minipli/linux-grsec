@@ -53,18 +53,11 @@ static void jump_label_swap(void *a, void *b, int size)
 {
 	struct jump_entry t;
 
-#ifdef CONFIG_PAX_KERNEXEC
-	pax_open_kernel();
-#endif
-
 	t = *(struct jump_entry *)a;
+	pax_open_kernel();
 	*(struct jump_entry *)a = *(struct jump_entry *)b;
 	*(struct jump_entry *)b = t;
-
-#ifdef CONFIG_PAX_KERNEXEC
 	pax_close_kernel();
-#endif
-
 }
 
 static int jump_label_cmp(const void *a, const void *b)
@@ -425,8 +418,11 @@ static void remove_jump_label_module_init(struct module *mod)
 				count = e_module->nr_entries;
 				iter = e_module->table;
 				while (count--) {
-					if (within_module_init(iter->code, mod))
+					if (within_module_init(iter->code, mod)) {
+						pax_open_kernel();
 						iter->key = 0;
+						pax_close_kernel();
+					}
 					iter++;
 				}
 			}
