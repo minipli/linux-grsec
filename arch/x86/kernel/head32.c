@@ -12,10 +12,11 @@
 #include <asm/sections.h>
 #include <asm/e820.h>
 #include <asm/bios_ebda.h>
+#include <asm/boot.h>
 
 void __init i386_start_kernel(void)
 {
-	reserve_early(__pa_symbol(&_text), __pa_symbol(&_end), "TEXT DATA BSS");
+	reserve_early(LOAD_PHYSICAL_ADDR, __pa_symbol(&_end), "TEXT DATA BSS");
 
 #ifdef CONFIG_BLK_DEV_INITRD
 	/* Reserve INITRD */

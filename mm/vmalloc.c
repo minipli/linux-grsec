@@ -98,19 +98,36 @@ static int vmap_pte_range(pmd_t *pmd, unsigned long addr,
 			unsigned long end, pgprot_t prot, struct page ***pages)
 {
 	pte_t *pte;
+	int ret = -ENOMEM;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
 
 	pte = pte_alloc_kernel(pmd, addr);
 	if (!pte)
 		return -ENOMEM;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	do {
 		struct page *page = **pages;
 		WARN_ON(!pte_none(*pte));
 		if (!page)
-			return -ENOMEM;
+			goto out;
 		set_pte_at(&init_mm, addr, pte, mk_pte(page, prot));
 		(*pages)++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
-	return 0;
+	ret = 0;
+out:
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
+	return ret;
 }
 
 static inline int vmap_pmd_range(pud_t *pud, unsigned long addr,
@@ -215,6 +232,16 @@ __get_vm_area_node(unsigned long size, unsigned long flags, unsigned long start,
 	unsigned long addr;
 
 	BUG_ON(in_interrupt());
+
+#if defined(CONFIG_MODULES) && defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if (flags & VM_KERNEXEC) {
+		if (start != VMALLOC_START || end != VMALLOC_END)
+			return NULL;
+		start = (unsigned long)MODULES_VADDR;
+		end = (unsigned long)MODULES_END;
+	}
+#endif
+
 	if (flags & VM_IOREMAP) {
 		int bit = fls(size);
 
@@ -248,20 +275,15 @@ __get_vm_area_node(unsigned long size, unsigned long flags, unsigned long start,
 					     (unsigned long)tmp->addr, align);
 			continue;
 		}
-		if ((size + addr) < addr)
-			goto out;
 		if (size + addr <= (unsigned long)tmp->addr)
-			goto found;
+			break;
 		addr = ALIGN(tmp->size + (unsigned long)tmp->addr, align);
-		if (addr > end - size)
-			goto out;
 	}
 	if ((size + addr) < addr)
 		goto out;
 	if (addr > end - size)
 		goto out;
 
-found:
 	area->next = *p;
 	*p = area;
 
@@ -466,6 +488,11 @@ void *vmap(struct page **pages, unsigned int count,
 	if (count > num_physpages)
 		return NULL;
 
+#if defined(CONFIG_MODULES) && defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if (!(pgprot_val(prot) & _PAGE_NX))
+		flags |= VM_KERNEXEC;
+#endif
+
 	area = get_vm_area_caller((count << PAGE_SHIFT), flags,
 					__builtin_return_address(0));
 	if (!area)
@@ -560,6 +587,13 @@ static void *__vmalloc_node(unsigned long size, gfp_t gfp_mask, pgprot_t prot,
 	if (!size || (size >> PAGE_SHIFT) > num_physpages)
 		return NULL;
 
+#if defined(CONFIG_MODULES) && defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if (!(pgprot_val(prot) & _PAGE_NX))
+		area = __get_vm_area_node(size, VM_ALLOC | VM_KERNEXEC, VMALLOC_START, VMALLOC_END,
+						node, gfp_mask, caller);
+	else
+#endif
+
 	area = __get_vm_area_node(size, VM_ALLOC, VMALLOC_START, VMALLOC_END,
 						node, gfp_mask, caller);
 
@@ -651,7 +685,7 @@ EXPORT_SYMBOL(vmalloc_node);
 
 void *vmalloc_exec(unsigned long size)
 {
-	return __vmalloc(size, GFP_KERNEL | __GFP_HIGHMEM, PAGE_KERNEL_EXEC);
+	return __vmalloc(size, GFP_KERNEL | __GFP_HIGHMEM | __GFP_ZERO, PAGE_KERNEL_EXEC);
 }
 
 #if defined(CONFIG_64BIT) && defined(CONFIG_ZONE_DMA32)
