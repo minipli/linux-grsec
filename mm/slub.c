@@ -2924,8 +2924,8 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	struct kmem_cache *s;
 	unsigned long offset;
 
-	if (!n)
-		return;
+//	if (!n)
+//		return;
 
 	if (ZERO_OR_NULL_PTR(ptr))
 		goto report;
