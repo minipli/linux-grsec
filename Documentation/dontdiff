@@ -3,6 +3,7 @@
 *.bin
 *.cpio
 *.csp
+*.dbg
 *.dsp
 *.dvi
 *.elf
@@ -49,6 +50,10 @@
 53c700_d.h
 CVS
 ChangeSet
+GPATH
+GRTAGS
+GSYMS
+GTAGS
 Image
 Kerntypes
 Module.markers
@@ -76,6 +81,7 @@ btfixupprep
 build
 bvmlinux
 bzImage*
+capflags.c
 classlist.h*
 comp*.log
 compile.h*
@@ -103,9 +109,11 @@ gen_crc32table
 gen_init_cpio
 genksyms
 *_gray256.c
+hash
 ihex2fw
 ikconfig.h*
 initramfs_data.cpio
+initramfs_data.cpio.bz2
 initramfs_data.cpio.gz
 initramfs_list
 kallsyms
@@ -164,6 +172,7 @@ setup
 setup.bin
 setup.elf
 sImage
+slabinfo
 sm_tbl*
 split-include
 syscalltab.h
@@ -187,12 +196,16 @@ version.h*
 vmlinux
 vmlinux-*
 vmlinux.aout
+vmlinux.bin.all
+vmlinux.bin.bz2
 vmlinux.lds
+vmlinux.relocs
 vsyscall.lds
 vsyscall_32.lds
 wanxlfw.inc
 uImage
 unifdef
+utsrelease.h
 wakeup.bin
 wakeup.elf
 wakeup.lds

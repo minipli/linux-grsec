@@ -16,9 +16,11 @@
 
 extern pud_t level3_kernel_pgt[512];
 extern pud_t level3_ident_pgt[512];
+extern pud_t level3_vmalloc_pgt[512];
+extern pud_t level3_vmemmap_pgt[512];
 extern pmd_t level2_kernel_pgt[512];
 extern pmd_t level2_fixmap_pgt[512];
-extern pmd_t level2_ident_pgt[512];
+extern pmd_t level2_ident_pgt[512*4];
 extern pgd_t init_level4_pgt[];
 
 #define swapper_pg_dir init_level4_pgt
@@ -78,7 +80,19 @@ static inline pte_t native_ptep_get_and_clear(pte_t *xp)
 
 static inline void native_set_pmd(pmd_t *pmdp, pmd_t pmd)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	*pmdp = pmd;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 static inline void native_pmd_clear(pmd_t *pmd)

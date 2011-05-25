@@ -203,7 +203,7 @@ static int EplLinIoctl(struct inode *pDeviceFile_p, struct file *pInstance_p,
 module_init(EplLinInit);
 module_exit(EplLinExit);
 
-static struct file_operations EplLinFileOps_g = {
+static const struct file_operations EplLinFileOps_g = {
 	.owner = THIS_MODULE,
 	.open = EplLinOpen,
 	.release = EplLinRelease,

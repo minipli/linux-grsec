@@ -42,7 +42,7 @@ static ssize_t ima_show_htable_violations(struct file *filp,
 	return ima_show_htable_value(buf, count, ppos, &ima_htable.violations);
 }
 
-static struct file_operations ima_htable_violations_ops = {
+static const struct file_operations ima_htable_violations_ops = {
 	.read = ima_show_htable_violations
 };
 
@@ -54,7 +54,7 @@ static ssize_t ima_show_measurements_count(struct file *filp,
 
 }
 
-static struct file_operations ima_measurements_count_ops = {
+static const struct file_operations ima_measurements_count_ops = {
 	.read = ima_show_measurements_count
 };
 
@@ -145,7 +145,7 @@ static int ima_measurements_show(struct seq_file *m, void *v)
 	return 0;
 }
 
-static struct seq_operations ima_measurments_seqops = {
+static const struct seq_operations ima_measurments_seqops = {
 	.start = ima_measurements_start,
 	.next = ima_measurements_next,
 	.stop = ima_measurements_stop,
@@ -157,7 +157,7 @@ static int ima_measurements_open(struct inode *inode, struct file *file)
 	return seq_open(file, &ima_measurments_seqops);
 }
 
-static struct file_operations ima_measurements_ops = {
+static const struct file_operations ima_measurements_ops = {
 	.open = ima_measurements_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
@@ -220,7 +220,7 @@ static int ima_ascii_measurements_show(struct seq_file *m, void *v)
 	return 0;
 }
 
-static struct seq_operations ima_ascii_measurements_seqops = {
+static const struct seq_operations ima_ascii_measurements_seqops = {
 	.start = ima_measurements_start,
 	.next = ima_measurements_next,
 	.stop = ima_measurements_stop,
@@ -232,7 +232,7 @@ static int ima_ascii_measurements_open(struct inode *inode, struct file *file)
 	return seq_open(file, &ima_ascii_measurements_seqops);
 }
 
-static struct file_operations ima_ascii_measurements_ops = {
+static const struct file_operations ima_ascii_measurements_ops = {
 	.open = ima_ascii_measurements_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
@@ -309,7 +309,7 @@ static int ima_release_policy(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static struct file_operations ima_measure_policy_ops = {
+static const struct file_operations ima_measure_policy_ops = {
 	.open = ima_open_policy,
 	.write = ima_write_policy,
 	.release = ima_release_policy
