@@ -181,6 +181,11 @@ ENTRY(secondary_startup_64)
 	btl	$20,%edi		/* No Execute supported? */
 	jnc     1f
 	btsl	$_EFER_NX, %eax
+	movq	$(init_level4_pgt), %rdi
+	addq	phys_base(%rip), %rdi
+	btsq	$_PAGE_BIT_NX, 8*258(%rdi)
+	btsq	$_PAGE_BIT_NX, 8*388(%rdi)
+	btsq	$_PAGE_BIT_NX, 8*452(%rdi)
 1:	wrmsr				/* Make changes effective */
 
 	/* Setup cr0 */
@@ -250,6 +255,9 @@ ENTRY(secondary_startup_64)
 	pushq	%rax		# target address in negative space
 	lretq
 
+bad_address:
+	jmp bad_address
+
 	/* SMP bootup changes these two */
 	__REFDATA
 	.align	8
@@ -260,10 +268,7 @@ ENTRY(secondary_startup_64)
 	ENTRY(init_rsp)
 	.quad  init_thread_union+THREAD_SIZE-8
 
-bad_address:
-	jmp bad_address
-
-	.section ".init.text","ax"
+	__INIT
 #ifdef CONFIG_EARLY_PRINTK
 	.globl early_idt_handlers
 early_idt_handlers:
@@ -308,18 +313,23 @@ ENTRY(early_idt_handler)
 #endif /* EARLY_PRINTK */
 1:	hlt
 	jmp 1b
+	.previous
 
 #ifdef CONFIG_EARLY_PRINTK
+	__INITDATA
 early_recursion_flag:
 	.long 0
+	.previous
 
+	.section .rodata,"a",@progbits
 early_idt_msg:
 	.asciz "PANIC: early exception %02lx rip %lx:%lx error %lx cr2 %lx\n"
 early_idt_ripmsg:
 	.asciz "RIP %s\n"
-#endif /* CONFIG_EARLY_PRINTK */
 	.previous
+#endif /* CONFIG_EARLY_PRINTK */
 
+	.section .rodata,"a",@progbits
 .balign PAGE_SIZE
 
 #define NEXT_PAGE(name) \
@@ -344,13 +354,23 @@ NEXT_PAGE(init_level4_pgt)
 	.quad	level3_ident_pgt - __START_KERNEL_map + _KERNPG_TABLE
 	.fill	257,8,0
 	.quad	level3_ident_pgt - __START_KERNEL_map + _KERNPG_TABLE
-	.fill	252,8,0
+	.fill	129,8,0
+	.quad	level3_vmalloc_pgt - __START_KERNEL_map + _KERNPG_TABLE
+	.fill	63,8,0
+	.quad	level3_vmemmap_pgt - __START_KERNEL_map + _KERNPG_TABLE
+	.fill	58,8,0
 	/* (2^48-(2*1024*1024*1024))/(2^39) = 511 */
 	.quad	level3_kernel_pgt - __START_KERNEL_map + _PAGE_TABLE
 
 NEXT_PAGE(level3_ident_pgt)
 	.quad	level2_ident_pgt - __START_KERNEL_map + _KERNPG_TABLE
 	.fill	511,8,0
+
+NEXT_PAGE(level3_vmalloc_pgt)
+	.fill	512,8,0
+
+NEXT_PAGE(level3_vmemmap_pgt)
+	.fill	512,8,0
 
 NEXT_PAGE(level3_kernel_pgt)
 	.fill	510,8,0
@@ -393,36 +413,18 @@ NEXT_PAGE(level2_spare_pgt)
 #undef PMDS
 #undef NEXT_PAGE
 
-	.data
-	.align 16
-	.globl cpu_gdt_descr
-cpu_gdt_descr:
-	.word	gdt_end-cpu_gdt_table-1
-gdt:
-	.quad	cpu_gdt_table
-#ifdef CONFIG_SMP
-	.rept	NR_CPUS-1
-	.word	0
-	.quad	0
-	.endr
-#endif
-
-ENTRY(phys_base)
-	/* This must match the first entry in level2_kernel_pgt */
-	.quad   0x0000000000000000
-
 /* We need valid kernel segments for data and code in long mode too
  * IRET will check the segment types  kkeil 2000/10/28
  * Also sysret mandates a special GDT layout 
  */
-		 		
-	.section .data.page_aligned, "aw"
+
 	.align PAGE_SIZE
 
 /* The TLS descriptors are currently at a different place compared to i386.
    Hopefully nobody expects them at a fixed place (Wine?) */
 	
 ENTRY(cpu_gdt_table)
+	.rept NR_CPUS
 	.quad	0x0000000000000000	/* NULL descriptor */
 	.quad	0x00cf9b000000ffff	/* __KERNEL32_CS */
 	.quad	0x00af9b000000ffff	/* __KERNEL_CS */
@@ -435,15 +437,24 @@ ENTRY(cpu_gdt_table)
 	.quad	0,0			/* LDT */
 	.quad   0,0,0			/* three TLS descriptors */ 
 	.quad	0x0000f40000000000	/* node/CPU stored in limit */
-gdt_end:	
 	/* asm/segment.h:GDT_ENTRIES must match this */	
 	/* This should be a multiple of the cache line size */
-	/* GDTs of other CPUs are now dynamically allocated */
 
 	/* zero the remaining page */
 	.fill PAGE_SIZE / 8 - GDT_ENTRIES,8,0
+	.endr
 
-	.section .bss, "aw", @nobits
+	.align 16
+	.globl cpu_gdt_descr
+cpu_gdt_descr:
+	.word	GDT_SIZE-1
+gdt:
+	.quad	cpu_gdt_table
+
+ENTRY(phys_base)
+	/* This must match the first entry in level2_kernel_pgt */
+	.quad   0x0000000000000000
+
 	.align L1_CACHE_BYTES
 ENTRY(idt_table)
 	.skip 256 * 16

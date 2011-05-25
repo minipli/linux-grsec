@@ -154,7 +154,7 @@ void __init xen_smp_prepare_boot_cpu(void)
 
 	/* We've switched to the "real" per-cpu gdt, so make sure the
 	   old memory can be recycled */
-	make_lowmem_page_readwrite(&per_cpu__gdt_page);
+	make_lowmem_page_readwrite(get_cpu_gdt_table(smp_processor_id()));
 
 	for_each_possible_cpu(cpu) {
 		cpus_clear(per_cpu(cpu_sibling_map, cpu));
@@ -218,7 +218,7 @@ static __cpuinit int
 cpu_initialize_context(unsigned int cpu, struct task_struct *idle)
 {
 	struct vcpu_guest_context *ctxt;
-	struct gdt_page *gdt = &per_cpu(gdt_page, cpu);
+	struct desc_struct *gdt = get_cpu_gdt_table(cpu);
 
 	if (cpu_test_and_set(cpu, xen_cpu_initialized_map))
 		return 0;
@@ -228,8 +228,8 @@ cpu_initialize_context(unsigned int cpu, struct task_struct *idle)
 		return -ENOMEM;
 
 	ctxt->flags = VGCF_IN_KERNEL;
-	ctxt->user_regs.ds = __USER_DS;
-	ctxt->user_regs.es = __USER_DS;
+	ctxt->user_regs.ds = __KERNEL_DS;
+	ctxt->user_regs.es = __KERNEL_DS;
 	ctxt->user_regs.fs = __KERNEL_PERCPU;
 	ctxt->user_regs.gs = 0;
 	ctxt->user_regs.ss = __KERNEL_DS;
@@ -242,11 +242,11 @@ cpu_initialize_context(unsigned int cpu, struct task_struct *idle)
 
 	ctxt->ldt_ents = 0;
 
-	BUG_ON((unsigned long)gdt->gdt & ~PAGE_MASK);
-	make_lowmem_page_readonly(gdt->gdt);
+	BUG_ON((unsigned long)gdt & ~PAGE_MASK);
+	make_lowmem_page_readonly(gdt);
 
-	ctxt->gdt_frames[0] = virt_to_mfn(gdt->gdt);
-	ctxt->gdt_ents      = ARRAY_SIZE(gdt->gdt);
+	ctxt->gdt_frames[0] = virt_to_mfn(gdt);
+	ctxt->gdt_ents      = GDT_ENTRIES;
 
 	ctxt->user_regs.cs = __KERNEL_CS;
 	ctxt->user_regs.esp = idle->thread.sp0 - sizeof(struct pt_regs);
