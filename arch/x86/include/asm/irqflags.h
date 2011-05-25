@@ -158,7 +158,7 @@ static inline unsigned long __raw_local_irq_save(void)
 	jnz 1f;			\
 	movl %edx, %esi;	\
 	orl $X86_CR0_WP, %esi;	\
-	movl %esi, %cr0		\
+	movl %esi, %cr0;	\
 1:
 
 #endif
