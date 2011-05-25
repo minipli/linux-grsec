@@ -474,9 +474,23 @@ static void reload_tss(void)
 	struct descriptor_table gdt;
 	struct desc_struct *descs;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	get_gdt(&gdt);
 	descs = (void *)gdt.base;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	descs[GDT_ENTRY_TSS].type = 9; /* available TSS */
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	load_TR_desc();
 }
 
@@ -2951,7 +2965,7 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 	vcpu->arch.interrupt_window_open =
 		(vmcs_read32(GUEST_INTERRUPTIBILITY_INFO) & 3) == 0;
 
-	asm("mov %0, %%ds; mov %0, %%es" : : "r"(__USER_DS));
+	asm("mov %0, %%ds; mov %0, %%es" : : "r"(__KERNEL_DS));
 	vmx->launched = 1;
 
 	intr_info = vmcs_read32(VM_EXIT_INTR_INFO);
