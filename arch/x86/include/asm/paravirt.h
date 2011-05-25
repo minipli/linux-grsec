@@ -1557,7 +1557,7 @@ static inline unsigned long __raw_local_irq_save(void)
 #define PV_RESTORE_REGS popl %edx; popl %ecx; popl %edi; popl %eax
 #define PARA_PATCH(struct, off)        ((PARAVIRT_PATCH_##struct + (off)) / 4)
 #define PARA_SITE(ptype, clobbers, ops) _PVSITE(ptype, clobbers, ops, .long, 4)
-#define PARA_INDIRECT(addr)	*%cs:addr
+#define PARA_INDIRECT(addr)	*%ss:addr
 #endif
 
 #define INTERRUPT_RETURN						\
