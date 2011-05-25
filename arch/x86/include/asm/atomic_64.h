@@ -579,7 +579,8 @@ static inline int atomic_add_unless(atomic_t *v, int a, int u)
 		asm volatile("addl %2,%0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-			     "into\n0:\n"
+			     "jno 0f\n"
+			     "int $4\n0:\n"
 			     _ASM_EXTABLE(0b, 0b)
 #endif
 
