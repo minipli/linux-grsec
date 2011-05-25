@@ -181,10 +181,10 @@ asmlinkage long sys_setpriority(int which, int who, int niceval)
 				if ((who != current->uid) && !(user = find_user(who)))
 					goto out_unlock;	/* No processes for this user */
 
-			do_each_thread(g, p)
+			do_each_thread(g, p) {
 				if (p->uid == who)
 					error = set_one_prio(p, niceval, error);
-			while_each_thread(g, p);
+			} while_each_thread(g, p);
 			if (who != current->uid)
 				free_uid(user);		/* For find_user() */
 			break;
@@ -243,13 +243,13 @@ asmlinkage long sys_getpriority(int which, int who)
 				if ((who != current->uid) && !(user = find_user(who)))
 					goto out_unlock;	/* No processes for this user */
 
-			do_each_thread(g, p)
+			do_each_thread(g, p) {
 				if (p->uid == who) {
 					niceval = 20 - task_nice(p);
 					if (niceval > retval)
 						retval = niceval;
 				}
-			while_each_thread(g, p);
+			} while_each_thread(g, p);
 			if (who != current->uid)
 				free_uid(user);		/* for find_user() */
 			break;
@@ -1655,7 +1655,7 @@ asmlinkage long sys_prctl(int option, unsigned long arg2, unsigned long arg3,
 			error = get_dumpable(current->mm);
 			break;
 		case PR_SET_DUMPABLE:
-			if (arg2 < 0 || arg2 > 1) {
+			if (arg2 > 1) {
 				error = -EINVAL;
 				break;
 			}
