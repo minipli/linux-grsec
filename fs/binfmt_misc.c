@@ -113,8 +113,10 @@ static int load_misc_binary(struct linux_binprm *bprm, struct pt_regs *regs)
 	struct files_struct *files = NULL;
 
 	retval = -ENOEXEC;
-	if (!enabled)
+	if (!enabled || bprm->misc)
 		goto _ret;
+
+	bprm->misc++;
 
 	/* to keep locking time low, we copy the interpreter string */
 	read_lock(&entries_lock);
@@ -720,7 +722,7 @@ static int bm_fill_super(struct super_block * sb, void * data, int silent)
 	static struct tree_descr bm_files[] = {
 		[2] = {"status", &bm_status_operations, S_IWUSR|S_IRUGO},
 		[3] = {"register", &bm_register_operations, S_IWUSR},
-		/* last one */ {""}
+		/* last one */ {"", NULL, 0}
 	};
 	int err = simple_fill_super(sb, 0x42494e4d, bm_files);
 	if (!err)

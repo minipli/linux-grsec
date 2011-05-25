@@ -20,8 +20,8 @@
 #include <linux/proc_fs.h>
 #include <linux/bitops.h>
 #include <linux/kexec.h>
+#include <linux/a.out.h>
 
-#include <asm/a.out.h>
 #include <asm/dma.h>
 #include <asm/ia32.h>
 #include <asm/io.h>
@@ -128,6 +128,19 @@ ia64_init_addr_space (void)
 		vma->vm_start = current->thread.rbs_bot & PAGE_MASK;
 		vma->vm_end = vma->vm_start + PAGE_SIZE;
 		vma->vm_flags = VM_DATA_DEFAULT_FLAGS|VM_GROWSUP|VM_ACCOUNT;
+
+#ifdef CONFIG_PAX_PAGEEXEC
+		if (current->mm->pax_flags & MF_PAX_PAGEEXEC) {
+			vma->vm_flags &= ~VM_EXEC;
+
+#ifdef CONFIG_PAX_MPROTECT
+			if (current->mm->pax_flags & MF_PAX_MPROTECT)
+				vma->vm_flags &= ~VM_MAYEXEC;
+#endif
+
+		}
+#endif
+
 		vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
 		down_write(&current->mm->mmap_sem);
 		if (insert_vm_struct(current->mm, vma)) {
