@@ -361,6 +361,8 @@ EXPORT_SYMBOL(warn_slowpath);
  */
 void __stack_chk_fail(void)
 {
+	print_symbol("stack corrupted in: %s\n", (unsigned long)__builtin_return_address(0));
+	dump_stack();
 	panic("stack-protector: Kernel stack is corrupted");
 }
 EXPORT_SYMBOL(__stack_chk_fail);
