@@ -120,7 +120,7 @@ extern struct vm_struct *vmlist;
 ({								\
 	void *___retval;					\
 	intoverflow_t ___x = (intoverflow_t)x;			\
-	if (WARN(___x > ULONG_MAX, "vmalloc overflow\n"))	\
+	if (WARN(___x > ULONG_MAX, "vmalloc size overflow\n"))	\
 		___retval = NULL;				\
 	else							\
 		___retval = vmalloc((unsigned long)___x);	\
