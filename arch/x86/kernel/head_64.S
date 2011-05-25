@@ -89,14 +89,17 @@ startup_64:
 	 */
 	addq	%rbp, init_level4_pgt + 0(%rip)
 	addq	%rbp, init_level4_pgt + (L4_PAGE_OFFSET*8)(%rip)
+	addq	%rbp, init_level4_pgt + (L4_VMALLOC_START*8)(%rip)
+	addq	%rbp, init_level4_pgt + (L4_VMEMMAP_START*8)(%rip)
 	addq	%rbp, init_level4_pgt + (L4_START_KERNEL*8)(%rip)
 
 	addq	%rbp, level3_ident_pgt + 0(%rip)
 
-	addq	%rbp, level3_kernel_pgt + (510*8)(%rip)
-	addq	%rbp, level3_kernel_pgt + (511*8)(%rip)
+	addq	%rbp, level3_kernel_pgt + (L3_START_KERNEL*8)(%rip)
+	addq	%rbp, level3_kernel_pgt + (L3_START_KERNEL*8+8)(%rip)
 
 	addq	%rbp, level2_fixmap_pgt + (506*8)(%rip)
+	addq	%rbp, level2_fixmap_pgt + (507*8)(%rip)
 
 	/* Add an Identity mapping if I am above 1G */
 	leaq	_text(%rip), %rdi
@@ -191,11 +194,10 @@ ENTRY(secondary_startup_64)
 	btl	$20,%edi		/* No Execute supported? */
 	jnc     1f
 	btsl	$_EFER_NX, %eax
-	movq	$(init_level4_pgt), %rdi
-	addq	phys_base(%rip), %rdi
-	btsq	$_PAGE_BIT_NX, 8*258(%rdi)
-	btsq	$_PAGE_BIT_NX, 8*388(%rdi)
-	btsq	$_PAGE_BIT_NX, 8*452(%rdi)
+	leaq	init_level4_pgt(%rip), %rdi
+	btsq	$_PAGE_BIT_NX, 8*L4_PAGE_OFFSET(%rdi)
+	btsq	$_PAGE_BIT_NX, 8*L4_VMALLOC_START(%rdi)
+	btsq	$_PAGE_BIT_NX, 8*L4_VMEMMAP_START(%rdi)
 1:	wrmsr				/* Make changes effective */
 
 	/* Setup cr0 */
@@ -261,19 +263,19 @@ ENTRY(secondary_startup_64)
 	pushq	%rax		# target address in negative space
 	lretq
 
-bad_address:
-	jmp bad_address
-
 	/* SMP bootup changes these two */
 	__REFDATA
 	.align	8
 	ENTRY(initial_code)
 	.quad	x86_64_start_kernel
-	__FINITDATA
 
 	ENTRY(stack_start)
 	.quad  init_thread_union+THREAD_SIZE-8
 	.word  0
+	__FINITDATA
+
+bad_address:
+	jmp bad_address
 
 	__INIT
 #ifdef CONFIG_EARLY_PRINTK
@@ -388,10 +390,14 @@ NEXT_PAGE(level3_kernel_pgt)
 NEXT_PAGE(level2_fixmap_pgt)
 	.fill	506,8,0
 	.quad	level1_fixmap_pgt - __START_KERNEL_map + _PAGE_TABLE
-	/* 8MB reserved for vsyscalls + a 2MB hole = 4 + 1 entries */
-	.fill	5,8,0
+	.quad	level1_vsyscall_pgt - __START_KERNEL_map + _PAGE_TABLE
+	/* 6MB reserved for vsyscalls + a 2MB hole = 3 + 1 entries */
+	.fill	4,8,0
 
 NEXT_PAGE(level1_fixmap_pgt)
+	.fill	512,8,0
+
+NEXT_PAGE(level1_vsyscall_pgt)
 	.fill	512,8,0
 
 NEXT_PAGE(level2_ident_pgt)
