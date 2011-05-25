@@ -2066,7 +2066,7 @@ int split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 	struct vm_area_struct *new;
 
 #ifdef CONFIG_PAX_SEGMEXEC
-	struct vm_area_struct *new, *vma_m, *new_m = NULL;
+	struct vm_area_struct *vma_m, *new_m = NULL;
 	unsigned long addr_m = addr + SEGMEXEC_TASK_SIZE;
 #endif
 
@@ -2075,6 +2075,8 @@ int split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 		return -EINVAL;
 
 #ifdef CONFIG_PAX_SEGMEXEC
+	vma_m = pax_find_mirror_vma(vma);
+
 	if (mm->pax_flags & MF_PAX_SEGMEXEC) {
 		BUG_ON(vma->vm_end > SEGMEXEC_TASK_SIZE);
 		if (mm->map_count >= sysctl_max_map_count-1)
