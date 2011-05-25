@@ -82,7 +82,7 @@ static struct kmem_cache *vm_region_jar;
 struct rb_root nommu_region_tree = RB_ROOT;
 DECLARE_RWSEM(nommu_region_sem);
 
-struct vm_operations_struct generic_file_vm_ops = {
+const struct vm_operations_struct generic_file_vm_ops = {
 };
 
 /*
@@ -762,15 +762,6 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 	return NULL;
 }
 EXPORT_SYMBOL(find_vma);
-
-/*
- * find a VMA
- * - we don't extend stack VMAs under NOMMU conditions
- */
-struct vm_area_struct *find_extend_vma(struct mm_struct *mm, unsigned long addr)
-{
-	return find_vma(mm, addr);
-}
 
 /*
  * expand a stack to a given address

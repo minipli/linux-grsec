@@ -191,6 +191,21 @@ extern struct ctl_table epoll_table[];
 int sysctl_legacy_va_layout;
 #endif
 
+#ifdef CONFIG_PAX_SOFTMODE
+static ctl_table pax_table[] = {
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "softmode",
+		.data		= &pax_softmode,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0600,
+		.proc_handler	= &proc_dointvec,
+	},
+
+	{ .ctl_name = 0 }
+};
+#endif
+
 extern int prove_locking;
 extern int lock_stat;
 
@@ -1280,6 +1295,16 @@ static struct ctl_table vm_table[] = {
 		.proc_handler	= &scan_unevictable_handler,
 	},
 #endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 /*
  * NOTE: do not add new entries to this table unless you have read
  * Documentation/sysctl/ctl_unnumbered.txt

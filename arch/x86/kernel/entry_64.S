@@ -1073,7 +1073,8 @@ ENTRY(\sym)
 	TRACE_IRQS_OFF
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
-	PER_CPU(init_tss, %rbp)
+	imul $TSS_size, PER_CPU_VAR(cpu_number), %ebp
+	lea init_tss(%rbp), %rbp
 	subq $EXCEPTION_STKSZ, TSS_ist + (\ist - 1) * 8(%rbp)
 	call \do_sym
 	addq $EXCEPTION_STKSZ, TSS_ist + (\ist - 1) * 8(%rbp)
