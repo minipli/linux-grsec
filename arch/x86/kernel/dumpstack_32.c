@@ -112,11 +112,12 @@ void show_registers(struct pt_regs *regs)
 	 * When in-kernel, we also print out the stack and code at the
 	 * time of the fault..
 	 */
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		unsigned int code_prologue = code_bytes * 43 / 64;
 		unsigned int code_len = code_bytes;
 		unsigned char c;
 		u8 *ip;
+		unsigned long cs_base = get_desc_base(&get_cpu_gdt_table(smp_processor_id())[(0xffff & regs->cs) >> 3]);
 
 		printk(KERN_EMERG "Stack:\n");
 		show_stack_log_lvl(NULL, regs, &regs->sp,
@@ -124,10 +125,10 @@ void show_registers(struct pt_regs *regs)
 
 		printk(KERN_EMERG "Code: ");
 
-		ip = (u8 *)regs->ip - code_prologue;
+		ip = (u8 *)regs->ip - code_prologue + cs_base;
 		if (ip < (u8 *)PAGE_OFFSET || probe_kernel_address(ip, c)) {
 			/* try starting at IP */
-			ip = (u8 *)regs->ip;
+			ip = (u8 *)regs->ip + cs_base;
 			code_len = code_len - code_prologue + 1;
 		}
 		for (i = 0; i < code_len; i++, ip++) {
@@ -136,7 +137,7 @@ void show_registers(struct pt_regs *regs)
 				printk(" Bad EIP value.");
 				break;
 			}
-			if (ip == (u8 *)regs->ip)
+			if (ip == (u8 *)regs->ip + cs_base)
 				printk("<%02x> ", c);
 			else
 				printk("%02x ", c);
@@ -149,6 +150,7 @@ int is_valid_bugaddr(unsigned long ip)
 {
 	unsigned short ud2;
 
+	ip = ktla_ktva(ip);
 	if (ip < PAGE_OFFSET)
 		return 0;
 	if (probe_kernel_address((unsigned short *)ip, ud2))
