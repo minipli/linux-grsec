@@ -1717,7 +1717,7 @@ extern void __cleanup_signal(struct signal_struct *);
 extern void __cleanup_sighand(struct sighand_struct *);
 extern void exit_itimers(struct signal_struct *);
 
-extern NORET_TYPE void do_group_exit(int);
+extern NORET_TYPE void do_group_exit(int) ATTRIB_NORET;
 
 extern void daemonize(const char *, ...);
 extern int allow_signal(int);
