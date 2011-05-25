@@ -988,23 +988,28 @@ extern void default_banner(void);
 
 #ifdef CONFIG_PAX_KERNEXEC
 #define PAX_EXIT_KERNEL					\
-	cmpw $__KERNEXEC_KERNEL_CS, PT_CS(%esp);	\
-	jnz 1f;						\
 	push %eax; push %ecx;				\
+	mov %cs, %eax;					\
+	cmp $__KERNEXEC_KERNEL_CS, %eax;		\
+	jnz 2f;						\
 	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0);	\
 	btc $16, %eax;					\
-	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0);\
-	pop %ecx; pop %eax;				\
-1:
+	ljmp $__KERNEL_CS, $1f;				\
+1:	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0);\
+2:	pop %ecx; pop %eax;				\
 
 #define PAX_ENTER_KERNEL				\
 	push %eax; push %ecx;				\
 	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0);	\
 	bts $16, %eax;					\
-	jc 1f;						\
-	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0);\
-1:							\
-	pop %ecx; pop %eax;
+	jnc 1f;						\
+	mov %cs, %ecx;					\
+	cmp $__KERNEL_CS, %ecx;				\
+	jz 3f;						\
+	ljmp $__KERNEL_CS, $3f;				\
+1:	ljmp $__KERNEXEC_KERNEL_CS, $2f;		\
+2:	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0);\
+3:	pop %ecx; pop %eax;
 #else
 #define PAX_EXIT_KERNEL
 #define PAX_ENTER_KERNEL
