@@ -489,7 +489,7 @@ void *vmap(struct page **pages, unsigned int count,
 		return NULL;
 
 #if defined(CONFIG_MODULES) && defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
-	if (pgprot_val(prot) & _PAGE_NX)
+	if (!(pgprot_val(prot) & _PAGE_NX))
 		flags |= VM_KERNEXEC;
 #endif
 
