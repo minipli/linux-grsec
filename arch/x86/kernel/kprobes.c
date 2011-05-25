@@ -1420,7 +1420,7 @@ int __kprobes arch_optimize_kprobe(struct optimized_kprobe *op)
 			((long)op->kp.addr + RELATIVEJUMP_SIZE));
 
 	/* Backup instructions which will be replaced by jump address */
-	memcpy(op->optinsn.copied_insn, op->kp.addr + INT3_SIZE,
+	memcpy(op->optinsn.copied_insn, ktla_ktva(op->kp.addr) + INT3_SIZE,
 	       RELATIVE_ADDR_SIZE);
 
 	jmp_code[0] = RELATIVEJUMP_OPCODE;
