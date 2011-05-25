@@ -26,11 +26,20 @@
 
 #define gtod vdso_vsyscall_gtod_data
 
-notrace noinline long __vdso_fallback_gettime(long clock, struct timespec *ts)
+notrace noinline long __vdso_fallback_time(long *t)
+{
+	long secs;
+	asm volatile("syscall"
+		: "=a" (secs)
+		: "0" (__NR_time),"D" (t) : "r11", "cx", "memory");
+	return secs;
+}
+
+notrace static long vdso_fallback_gettime(long clock, struct timespec *ts)
 {
 	long ret;
 	asm("syscall" : "=a" (ret) :
-	    "0" (__NR_clock_gettime),"D" (clock), "S" (ts) : "memory");
+	    "0" (__NR_clock_gettime),"D" (clock), "S" (ts) : "r11", "cx", "memory");
 	return ret;
 }
 
@@ -111,7 +120,7 @@ notrace int __vdso_clock_gettime(clockid_t clock, struct timespec *ts)
 		case CLOCK_MONOTONIC:
 			return do_monotonic(ts);
 		}
-	return __vdso_fallback_gettime(clock, ts);
+	return vdso_fallback_gettime(clock, ts);
 }
 int clock_gettime(clockid_t, struct timespec *)
 	__attribute__((weak, alias("__vdso_clock_gettime")));
@@ -120,7 +129,7 @@ notrace noinline int __vdso_fallback_gettimeofday(struct timeval *tv, struct tim
 {
 	long ret;
 	asm("syscall" : "=a" (ret) :
-	    "0" (__NR_gettimeofday), "D" (tv), "S" (tz) : "memory");
+	    "0" (__NR_gettimeofday), "D" (tv), "S" (tz) : "r11", "cx", "memory");
 	return ret;
 }
 
