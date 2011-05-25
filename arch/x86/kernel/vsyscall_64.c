@@ -235,13 +235,13 @@ static ctl_table kernel_table2[] = {
 	  .data = &vsyscall_gtod_data.sysctl_enabled, .maxlen = sizeof(int),
 	  .mode = 0644,
 	  .proc_handler = vsyscall_sysctl_change },
-	{}
+	{ 0, NULL, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 static ctl_table kernel_root_table2[] = {
 	{ .ctl_name = CTL_KERN, .procname = "kernel", .mode = 0555,
 	  .child = kernel_table2 },
-	{}
+	{ 0, NULL, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 #endif
 
@@ -251,6 +251,11 @@ static void __cpuinit vsyscall_set_cpu(int cpu)
 {
 	unsigned long *d;
 	unsigned long node = 0;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 #ifdef CONFIG_NUMA
 	node = cpu_to_node(cpu);
 #endif
@@ -261,10 +266,20 @@ static void __cpuinit vsyscall_set_cpu(int cpu)
 	   in user space in vgetcpu.
 	   12 bits for the CPU and 8 bits for the node. */
 	d = (unsigned long *)(get_cpu_gdt_table(cpu) + GDT_ENTRY_PER_CPU);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	*d = 0x0f40000000000ULL;
 	*d |= cpu;
 	*d |= (node & 0xf) << 12;
 	*d |= (node >> 4) << 48;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 static void __cpuinit cpu_vsyscall_init(void *arg)
