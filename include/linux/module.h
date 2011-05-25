@@ -282,16 +282,16 @@ struct module
 	int (*init)(void);
 
 	/* If this is non-NULL, vfree after init() returns */
-	void *module_init;
+	void *module_init_rx, *module_init_rw;
 
 	/* Here is the actual code + data, vfree'd on unload. */
-	void *module_core;
+	void *module_core_rx, *module_core_rw;
 
 	/* Here are the sizes of the init and core sections */
-	unsigned int init_size, core_size;
+	unsigned int init_size_rw, core_size_rw;
 
 	/* The size of the executable code in each section.  */
-	unsigned int init_text_size, core_text_size;
+	unsigned int init_size_rx, core_size_rx;
 
 	/* The handle returned from unwind_add_table. */
 	void *unwind_info;

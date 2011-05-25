@@ -159,13 +159,8 @@ static inline void restore_fpu(struct task_struct *tsk)
 }
 
 /* We need a safe address that is cheap to find and that is already
-   in L1 during context switch. The best choices are unfortunately
-   different for UP and SMP */
-#ifdef CONFIG_SMP
-#define safe_address (__per_cpu_offset[0])
-#else
-#define safe_address (kstat_cpu(0).cpustat.user)
-#endif
+   in L1 during context switch. */
+#define safe_address (init_tss[smp_processor_id()].x86_tss.sp0)
 
 /*
  * These must be called with preempt disabled

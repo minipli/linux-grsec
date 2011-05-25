@@ -62,8 +62,10 @@ asmlinkage void ret_from_fork(void) __asm__("ret_from_fork");
 DEFINE_PER_CPU(struct task_struct *, current_task) = &init_task;
 EXPORT_PER_CPU_SYMBOL(current_task);
 
+#ifdef CONFIG_SMP
 DEFINE_PER_CPU(int, cpu_number);
 EXPORT_PER_CPU_SYMBOL(cpu_number);
+#endif
 
 /*
  * Return saved PC of a blocked thread.
@@ -71,6 +73,7 @@ EXPORT_PER_CPU_SYMBOL(cpu_number);
 unsigned long thread_saved_pc(struct task_struct *tsk)
 {
 	return ((unsigned long *)tsk->thread.sp)[3];
+//XXX	return tsk->thread.eip;
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
@@ -162,7 +165,7 @@ void __show_registers(struct pt_regs *regs, int all)
 	unsigned long sp;
 	unsigned short ss, gs;
 
-	if (user_mode_vm(regs)) {
+	if (user_mode(regs)) {
 		sp = regs->sp;
 		ss = regs->ss & 0xffff;
 		savesegment(gs, gs);
@@ -239,8 +242,8 @@ int kernel_thread(int (*fn)(void *), void * arg, unsigned long flags)
 	regs.bx = (unsigned long) fn;
 	regs.dx = (unsigned long) arg;
 
-	regs.ds = __USER_DS;
-	regs.es = __USER_DS;
+	regs.ds = __KERNEL_DS;
+	regs.es = __KERNEL_DS;
 	regs.fs = __KERNEL_PERCPU;
 	regs.orig_ax = -1;
 	regs.ip = (unsigned long) kernel_thread_helper;
@@ -262,7 +265,7 @@ void exit_thread(void)
 		struct task_struct *tsk = current;
 		struct thread_struct *t = &tsk->thread;
 		int cpu = get_cpu();
-		struct tss_struct *tss = &per_cpu(init_tss, cpu);
+		struct tss_struct *tss = init_tss + cpu;
 
 		kfree(t->io_bitmap_ptr);
 		t->io_bitmap_ptr = NULL;
@@ -283,6 +286,7 @@ void flush_thread(void)
 {
 	struct task_struct *tsk = current;
 
+	loadsegment(gs, 0);
 	tsk->thread.debugreg0 = 0;
 	tsk->thread.debugreg1 = 0;
 	tsk->thread.debugreg2 = 0;
@@ -322,7 +326,7 @@ int copy_thread(int nr, unsigned long clone_flags, unsigned long sp,
 	struct task_struct *tsk;
 	int err;
 
-	childregs = task_pt_regs(p);
+	childregs = task_stack_page(p) + THREAD_SIZE - sizeof(struct pt_regs) - 8;
 	*childregs = *regs;
 	childregs->ax = 0;
 	childregs->sp = sp;
@@ -351,6 +355,7 @@ int copy_thread(int nr, unsigned long clone_flags, unsigned long sp,
 	 * Set a new TLS for the child thread?
 	 */
 	if (clone_flags & CLONE_SETTLS)
+//XXX needs set_fs()?
 		err = do_set_thread_area(p, -1,
 			(struct user_desc __user *)childregs->si, 0);
 
@@ -550,7 +555,7 @@ struct task_struct * __switch_to(struct task_struct *prev_p, struct task_struct 
 	struct thread_struct *prev = &prev_p->thread,
 				 *next = &next_p->thread;
 	int cpu = smp_processor_id();
-	struct tss_struct *tss = &per_cpu(init_tss, cpu);
+	struct tss_struct *tss = init_tss + cpu;
 
 	/* never put a printk in __switch_to... printk() calls wake_up*() indirectly */
 
@@ -577,6 +582,11 @@ struct task_struct * __switch_to(struct task_struct *prev_p, struct task_struct 
 	 * running inside of a hypervisor layer.
 	 */
 	savesegment(gs, prev->gs);
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	if (!segment_eq(task_thread_info(prev_p)->addr_limit, task_thread_info(next_p)->addr_limit))
+		__set_fs(task_thread_info(next_p)->addr_limit, cpu);
+#endif
 
 	/*
 	 * Load the per-thread Thread-Local Storage descriptor.
@@ -716,15 +726,27 @@ unsigned long get_wchan(struct task_struct *p)
 	return 0;
 }
 
-unsigned long arch_align_stack(unsigned long sp)
+#ifdef CONFIG_PAX_RANDKSTACK
+asmlinkage void pax_randomize_kstack(void)
 {
-	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
-		sp -= get_random_int() % 8192;
-	return sp & ~0xf;
-}
+	struct thread_struct *thread = &current->thread;
+	unsigned long time;
 
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long range_end = mm->brk + 0x02000000;
-	return randomize_range(mm->brk, range_end, 0) ? : mm->brk;
+	if (!randomize_va_space)
+		return;
+
+	rdtscl(time);
+
+	/* P4 seems to return a 0 LSB, ignore it */
+#ifdef CONFIG_MPENTIUM4
+	time &= 0x1EUL;
+	time <<= 2;
+#else
+	time &= 0xFUL;
+	time <<= 3;
+#endif
+
+	thread->sp0 ^= time;
+	load_sp0(init_tss + smp_processor_id(), thread);
 }
+#endif
