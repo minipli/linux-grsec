@@ -49,6 +49,24 @@ void jump_label_unlock(void)
 	mutex_unlock(&jump_label_mutex);
 }
 
+static void jump_label_swap(void *a, void *b, int size)
+{
+	struct jump_entry t;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel();
+#endif
+
+	t = *(struct jump_entry *)a;
+	*(struct jump_entry *)a = *(struct jump_entry *)b;
+	*(struct jump_entry *)b = t;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel();
+#endif
+
+}
+
 static int jump_label_cmp(const void *a, const void *b)
 {
 	const struct jump_entry *jea = a;
@@ -70,7 +88,7 @@ sort_jump_label_entries(struct jump_entry *start, struct jump_entry *stop)
 
 	size = (((unsigned long)stop - (unsigned long)start)
 					/ sizeof(struct jump_entry));
-	sort(start, size, sizeof(struct jump_entry), jump_label_cmp, NULL);
+	sort(start, size, sizeof(struct jump_entry), jump_label_cmp, jump_label_swap);
 }
 
 static struct jump_label_entry *get_jump_label_entry(jump_label_t key)
