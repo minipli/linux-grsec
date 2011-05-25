@@ -3282,7 +3282,7 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 		".Llaunched: " __ex(ASM_VMX_VMRESUME) "\n\t"
 		".Lkvm_vmx_return: "
 
-#ifdef CONFIG_PAX_KERNEXEC
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
 		"ljmp %[cs],$.Lkvm_vmx_return2\n\t"
 		".Lkvm_vmx_return2: "
 #endif
@@ -3334,7 +3334,7 @@ static void vmx_vcpu_run(struct kvm_vcpu *vcpu, struct kvm_run *kvm_run)
 #endif
 		[cr2]"i"(offsetof(struct vcpu_vmx, vcpu.arch.cr2))
 
-#ifdef CONFIG_PAX_KERNEXEC
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
 		,[cs]"i"(__KERNEL_CS)
 #endif
 
