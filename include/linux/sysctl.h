@@ -165,7 +165,11 @@ enum
 	KERN_PANIC_ON_NMI=76, /* int: whether we will panic on an unrecovered */
 };
 
-
+#ifdef CONFIG_PAX_SOFTMODE
+enum {
+	PAX_SOFTMODE=1		/* PaX: disable/enable soft mode */
+};
+#endif
 
 /* CTL_VM names: */
 enum
@@ -981,6 +985,10 @@ typedef int proc_handler (struct ctl_table *ctl, int write, struct file * filp,
 
 extern int proc_dostring(struct ctl_table *, int, struct file *,
 			 void __user *, size_t *, loff_t *);
+extern int proc_dointvec_conv(struct ctl_table *, int, struct file *,
+			  void __user *, size_t *, loff_t *,
+			  int (*conv)(int *, unsigned long *, int *v, int, void *),
+			  void *);
 extern int proc_dointvec(struct ctl_table *, int, struct file *,
 			 void __user *, size_t *, loff_t *);
 extern int proc_dointvec_minmax(struct ctl_table *, int, struct file *,

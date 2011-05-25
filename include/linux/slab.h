@@ -73,10 +73,9 @@
  * ZERO_SIZE_PTR can be passed to kfree though in the same way that NULL can.
  * Both make kfree a no-op.
  */
-#define ZERO_SIZE_PTR ((void *)16)
+#define ZERO_SIZE_PTR ((void *)-1024L)
 
-#define ZERO_OR_NULL_PTR(x) ((unsigned long)(x) <= \
-				(unsigned long)ZERO_SIZE_PTR)
+#define ZERO_OR_NULL_PTR(x) (!(x) || (x) == ZERO_SIZE_PTR)
 
 /*
  * struct kmem_cache related prototypes
@@ -129,6 +128,7 @@ void * __must_check krealloc(const void *, size_t, gfp_t);
 void kfree(const void *);
 void kzfree(const void *);
 size_t ksize(const void *);
+void check_object_size(const void *ptr, unsigned long n, bool to);
 
 /*
  * Allocator specific definitions. These are mainly used to establish optimized

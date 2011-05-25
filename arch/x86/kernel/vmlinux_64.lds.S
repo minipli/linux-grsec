@@ -16,8 +16,8 @@ jiffies_64 = jiffies;
 _proxy_pda = 1;
 PHDRS {
 	text PT_LOAD FLAGS(5);	/* R_E */
-	data PT_LOAD FLAGS(7);	/* RWE */
-	user PT_LOAD FLAGS(7);	/* RWE */
+	user PT_LOAD FLAGS(5);	/* R_E */
+	data PT_LOAD FLAGS(6);	/* RW_ */
 	data.init PT_LOAD FLAGS(7);	/* RWE */
 	note PT_NOTE FLAGS(0);	/* ___ */
 }
@@ -41,6 +41,8 @@ SECTIONS
 	_etext = .;		/* End of text section */
   } :text = 0x9090
 
+  RO_DATA(PAGE_SIZE)
+
   NOTES :text :note
 
   . = ALIGN(16);		/* Exception table */
@@ -50,30 +52,9 @@ SECTIONS
   	__stop___ex_table = .;
   } :text = 0x9090
 
-  RODATA
-
-  . = ALIGN(PAGE_SIZE);		/* Align data segment to page size boundary */
-				/* Data */
-  .data : AT(ADDR(.data) - LOAD_OFFSET) {
-	DATA_DATA
-	CONSTRUCTORS
-	} :data
-
-  _edata = .;			/* End of data section */
-
-  . = ALIGN(PAGE_SIZE);
-  . = ALIGN(CONFIG_X86_L1_CACHE_BYTES);
-  .data.cacheline_aligned : AT(ADDR(.data.cacheline_aligned) - LOAD_OFFSET) {
-	*(.data.cacheline_aligned)
-  }
-  . = ALIGN(CONFIG_X86_INTERNODE_CACHE_BYTES);
-  .data.read_mostly : AT(ADDR(.data.read_mostly) - LOAD_OFFSET) {
-  	*(.data.read_mostly)
-  }
-
 #define VSYSCALL_ADDR (-10*1024*1024)
-#define VSYSCALL_PHYS_ADDR ((LOADADDR(.data.read_mostly) + SIZEOF(.data.read_mostly) + 4095) & ~(4095))
-#define VSYSCALL_VIRT_ADDR ((ADDR(.data.read_mostly) + SIZEOF(.data.read_mostly) + 4095) & ~(4095))
+#define VSYSCALL_PHYS_ADDR ((LOADADDR(__ex_table) + SIZEOF(__ex_table) + 4095) & ~(4095))
+#define VSYSCALL_VIRT_ADDR ((ADDR(__ex_table) + SIZEOF(__ex_table) + 4095) & ~(4095))
 
 #define VLOAD_OFFSET (VSYSCALL_ADDR - VSYSCALL_PHYS_ADDR)
 #define VLOAD(x) (ADDR(x) - VLOAD_OFFSET)
@@ -121,15 +102,45 @@ SECTIONS
 #undef VVIRT_OFFSET
 #undef VVIRT
 
+#ifdef CONFIG_PAX_KERNEXEC
+  . = ALIGN(2*1024*1024);	/* Align data segment to PMD size boundary */
+#else
+  . = ALIGN(PAGE_SIZE);		/* Align data segment to page size boundary */
+#endif
+				/* Data */
+  _data = .;
+  .data : AT(ADDR(.data) - LOAD_OFFSET) {
+	DATA_DATA
+	CONSTRUCTORS
+	} :data
+
+  . = ALIGN(PAGE_SIZE);
+  . = ALIGN(CONFIG_X86_L1_CACHE_BYTES);
+  .data.cacheline_aligned : AT(ADDR(.data.cacheline_aligned) - LOAD_OFFSET) {
+	*(.data.cacheline_aligned)
+  }
+  . = ALIGN(CONFIG_X86_INTERNODE_CACHE_BYTES);
+  .data.read_mostly : AT(ADDR(.data.read_mostly) - LOAD_OFFSET) {
+  	*(.data.read_mostly)
+  }
+
   . = ALIGN(THREAD_SIZE);	/* init_task */
   .data.init_task : AT(ADDR(.data.init_task) - LOAD_OFFSET) {
 	*(.data.init_task)
-  }:data.init
+  }
 
   . = ALIGN(PAGE_SIZE);
   .data.page_aligned : AT(ADDR(.data.page_aligned) - LOAD_OFFSET) {
 	*(.data.page_aligned)
   }
+
+  . = ALIGN(PAGE_SIZE);
+  __nosave_begin = .;
+  .data_nosave : AT(ADDR(.data_nosave) - LOAD_OFFSET) { *(.data.nosave) }
+  . = ALIGN(PAGE_SIZE);
+  __nosave_end = .;
+
+  _edata = .;			/* End of data section */
 
   /* might get freed after init */
   . = ALIGN(PAGE_SIZE);
@@ -137,7 +148,7 @@ SECTIONS
   __smp_locks = .;
   .smp_locks : AT(ADDR(.smp_locks) - LOAD_OFFSET) {
 	*(.smp_locks)
-  }
+  } :data.init
   __smp_locks_end = .;
   . = ALIGN(PAGE_SIZE);
   __smp_alt_end = .;
@@ -213,16 +224,11 @@ SECTIONS
   . = ALIGN(PAGE_SIZE);
   __init_end = .;
 
-  . = ALIGN(PAGE_SIZE);
-  __nosave_begin = .;
-  .data_nosave : AT(ADDR(.data_nosave) - LOAD_OFFSET) { *(.data.nosave) }
-  . = ALIGN(PAGE_SIZE);
-  __nosave_end = .;
-
   __bss_start = .;		/* BSS */
   .bss : AT(ADDR(.bss) - LOAD_OFFSET) {
 	*(.bss.page_aligned)
 	*(.bss)
+	. = ALIGN(2*1024*1024);
 	}
   __bss_stop = .;
 

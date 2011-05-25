@@ -187,6 +187,21 @@ extern struct ctl_table epoll_table[];
 int sysctl_legacy_va_layout;
 #endif
 
+#ifdef CONFIG_PAX_SOFTMODE
+static ctl_table pax_table[] = {
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "softmode",
+		.data		= &pax_softmode,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0600,
+		.proc_handler	= &proc_dointvec,
+	},
+
+	{ .ctl_name = 0 }
+};
+#endif
+
 extern int prove_locking;
 extern int lock_stat;
 
@@ -897,6 +912,16 @@ static struct ctl_table kern_table[] = {
 		.proc_handler	= &scan_unevictable_handler,
 	},
 #endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 /*
  * NOTE: do not add new entries to this table unless you have read
  * Documentation/sysctl/ctl_unnumbered.txt
@@ -2315,6 +2340,32 @@ static int do_proc_dointvec(struct ctl_table *table, int write, struct file *fil
  * @buffer: the user buffer
  * @lenp: the size of the user buffer
  * @ppos: file position
+ * @conv: conversion function
+ * @data: data for conversion function
+ *
+ * Reads/writes up to table->maxlen/sizeof(unsigned int) integer
+ * values from/to the user buffer, treated as an ASCII string. 
+ *
+ * Returns 0 on success.
+ */
+int proc_dointvec_conv(struct ctl_table *table, int write, struct file *filp,
+		  void __user *buffer, size_t *lenp, loff_t *ppos,
+		  int (*conv)(int *negp, unsigned long *lvalp, int *valp,
+			      int write, void *data),
+		  void *data)
+{
+	return __do_proc_dointvec(table->data, table, write, filp,
+			buffer, lenp, ppos, conv, data);
+}
+
+/**
+ * proc_dointvec - read a vector of integers
+ * @table: the sysctl table
+ * @write: %TRUE if this is a write to the sysctl file
+ * @filp: the file structure
+ * @buffer: the user buffer
+ * @lenp: the size of the user buffer
+ * @ppos: file position
  *
  * Reads/writes up to table->maxlen/sizeof(unsigned int) integer
  * values from/to the user buffer, treated as an ASCII string. 
@@ -2750,6 +2801,15 @@ static int proc_do_cad_pid(struct ctl_table *table, int write, struct file *filp
 
 int proc_dostring(struct ctl_table *table, int write, struct file *filp,
 		  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	return -ENOSYS;
+}
+
+int proc_dointvec_conv(struct ctl_table *table, int write, struct file *filp,
+		  void __user *buffer, size_t *lenp, loff_t *ppos,
+		  int (*conv)(int *negp, unsigned long *lvalp, int *valp,
+			      int write, void *data),
+		  void *data)
 {
 	return -ENOSYS;
 }

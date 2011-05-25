@@ -2,7 +2,6 @@
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/string.h>
-#include <linux/bootmem.h>
 #include <linux/bitops.h>
 #include <linux/module.h>
 #include <linux/kgdb.h>
@@ -61,59 +60,6 @@ cpumask_t cpu_sibling_setup_map;
 
 
 static struct cpu_dev *this_cpu __cpuinitdata;
-
-#ifdef CONFIG_X86_64
-/* We need valid kernel segments for data and code in long mode too
- * IRET will check the segment types  kkeil 2000/10/28
- * Also sysret mandates a special GDT layout
- */
-/* The TLS descriptors are currently at a different place compared to i386.
-   Hopefully nobody expects them at a fixed place (Wine?) */
-DEFINE_PER_CPU(struct gdt_page, gdt_page) = { .gdt = {
-	[GDT_ENTRY_KERNEL32_CS] = { { { 0x0000ffff, 0x00cf9b00 } } },
-	[GDT_ENTRY_KERNEL_CS] = { { { 0x0000ffff, 0x00af9b00 } } },
-	[GDT_ENTRY_KERNEL_DS] = { { { 0x0000ffff, 0x00cf9300 } } },
-	[GDT_ENTRY_DEFAULT_USER32_CS] = { { { 0x0000ffff, 0x00cffb00 } } },
-	[GDT_ENTRY_DEFAULT_USER_DS] = { { { 0x0000ffff, 0x00cff300 } } },
-	[GDT_ENTRY_DEFAULT_USER_CS] = { { { 0x0000ffff, 0x00affb00 } } },
-} };
-#else
-DEFINE_PER_CPU_PAGE_ALIGNED(struct gdt_page, gdt_page) = { .gdt = {
-	[GDT_ENTRY_KERNEL_CS] = { { { 0x0000ffff, 0x00cf9a00 } } },
-	[GDT_ENTRY_KERNEL_DS] = { { { 0x0000ffff, 0x00cf9200 } } },
-	[GDT_ENTRY_DEFAULT_USER_CS] = { { { 0x0000ffff, 0x00cffa00 } } },
-	[GDT_ENTRY_DEFAULT_USER_DS] = { { { 0x0000ffff, 0x00cff200 } } },
-	/*
-	 * Segments used for calling PnP BIOS have byte granularity.
-	 * They code segments and data segments have fixed 64k limits,
-	 * the transfer segment sizes are set at run time.
-	 */
-	/* 32-bit code */
-	[GDT_ENTRY_PNPBIOS_CS32] = { { { 0x0000ffff, 0x00409a00 } } },
-	/* 16-bit code */
-	[GDT_ENTRY_PNPBIOS_CS16] = { { { 0x0000ffff, 0x00009a00 } } },
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_DS] = { { { 0x0000ffff, 0x00009200 } } },
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_TS1] = { { { 0x00000000, 0x00009200 } } },
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_TS2] = { { { 0x00000000, 0x00009200 } } },
-	/*
-	 * The APM segments have byte granularity and their bases
-	 * are set at run time.  All have 64k limits.
-	 */
-	/* 32-bit code */
-	[GDT_ENTRY_APMBIOS_BASE] = { { { 0x0000ffff, 0x00409a00 } } },
-	/* 16-bit code */
-	[GDT_ENTRY_APMBIOS_BASE+1] = { { { 0x0000ffff, 0x00009a00 } } },
-	/* data */
-	[GDT_ENTRY_APMBIOS_BASE+2] = { { { 0x0000ffff, 0x00409200 } } },
-
-	[GDT_ENTRY_ESPFIX_SS] = { { { 0x00000000, 0x00c09200 } } },
-	[GDT_ENTRY_PERCPU] = { { { 0x00000000, 0x00000000 } } },
-} };
-#endif
-EXPORT_PER_CPU_SYMBOL_GPL(gdt_page);
 
 #ifdef CONFIG_X86_32
 static int cachesize_override __cpuinitdata = -1;
@@ -248,7 +194,7 @@ void switch_to_new_gdt(void)
 {
 	struct desc_ptr gdt_descr;
 
-	gdt_descr.address = (long)get_cpu_gdt_table(smp_processor_id());
+	gdt_descr.address = (unsigned long)get_cpu_gdt_table(smp_processor_id());
 	gdt_descr.size = GDT_SIZE - 1;
 	load_gdt(&gdt_descr);
 #ifdef CONFIG_X86_32
@@ -708,6 +654,10 @@ static void __cpuinit identify_cpu(struct cpuinfo_x86 *c)
 	 * we do "generic changes."
 	 */
 
+#if defined(CONFIG_PAX_SEGMEXEC) || defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+	setup_clear_cpu_cap(X86_FEATURE_SEP);
+#endif
+
 	/* If the model name is still unset, do table lookup. */
 	if (!c->x86_model_id[0]) {
 		char *p;
@@ -880,7 +830,7 @@ __setup("clearcpuid=", setup_disablecpuid);
 struct x8664_pda **_cpu_pda __read_mostly;
 EXPORT_SYMBOL(_cpu_pda);
 
-struct desc_ptr idt_descr = { 256 * 16 - 1, (unsigned long) idt_table };
+struct desc_ptr idt_descr __read_only = { 256 * 16 - 1, (unsigned long) idt_table };
 
 static char boot_cpu_stack[IRQSTACKSIZE] __page_aligned_bss;
 
@@ -979,7 +929,7 @@ struct pt_regs * __cpuinit idle_regs(struct pt_regs *regs)
 void __cpuinit cpu_init(void)
 {
 	int cpu = stack_smp_processor_id();
-	struct tss_struct *t = &per_cpu(init_tss, cpu);
+	struct tss_struct *t = init_tss + cpu;
 	struct orig_ist *orig_ist = &per_cpu(orig_ist, cpu);
 	unsigned long v;
 	char *estacks = NULL;
@@ -1100,7 +1050,7 @@ void __cpuinit cpu_init(void)
 {
 	int cpu = smp_processor_id();
 	struct task_struct *curr = current;
-	struct tss_struct *t = &per_cpu(init_tss, cpu);
+	struct tss_struct *t = init_tss + cpu;
 	struct thread_struct *thread = &curr->thread;
 
 	if (cpumask_test_and_set_cpu(cpu, cpu_initialized_mask)) {
