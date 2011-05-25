@@ -11,6 +11,41 @@
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
+#ifdef CONFIG_X86_32
+#define __futex_atomic_op1(insn, ret, oldval, uaddr, oparg)	\
+  __asm__ __volatile(						\
+	"movw	%w6, %%ds\n"					\
+"1:	" insn "\n"						\
+"2:	pushl	%%ss\n						\
+	popl	%%ds\n						\
+	.section .fixup,\"ax\"\n				\
+3:	mov	%3, %1\n					\
+	jmp	2b\n						\
+	.previous\n"						\
+	_ASM_EXTABLE(1b,3b)					\
+	: "=r" (oldval), "=r" (ret), "+m" (*uaddr)		\
+	: "i" (-EFAULT), "0" (oparg), "1" (0), "r" (__USER_DS))
+
+#define __futex_atomic_op2(insn, ret, oldval, uaddr, oparg)	\
+  __asm__ __volatile(						\
+"	movw	%w7, %%es\n					\
+1:	movl	%%es:%2, %0\n					\
+	movl	%0, %3\n"					\
+	insn "\n"						\
+"2:	lock; cmpxchgl %3, %%es:%2\n				\
+	jnz	1b\n						\
+3:	pushl	%%ss\n						\
+	popl	%%es\n						\
+	.section .fixup,\"ax\"\n				\
+4:	mov	%5, %1\n					\
+	jmp	3b\n						\
+	.previous\n"						\
+	_ASM_EXTABLE(1b,4b)					\
+	_ASM_EXTABLE(2b,4b)					\
+	: "=&a" (oldval), "=&r" (ret), "+m" (*uaddr),		\
+	  "=&r" (tem)						\
+	: "r" (oparg), "i" (-EFAULT), "1" (0), "r" (__USER_DS))
+#else
 #define __futex_atomic_op1(insn, ret, oldval, uaddr, oparg)	\
   __asm__ __volatile(						\
 "1:	" insn "\n"						\
@@ -38,6 +73,7 @@
 	: "=&a" (oldval), "=&r" (ret), "+m" (*uaddr),		\
 	  "=&r" (tem)						\
 	: "r" (oparg), "i" (-EFAULT), "1" (0))
+#endif
 
 static inline int
 futex_atomic_op_inuser(int encoded_op, int __user *uaddr)
@@ -64,11 +100,20 @@ futex_atomic_op_inuser(int encoded_op, int __user *uaddr)
 
 	switch (op) {
 	case FUTEX_OP_SET:
+#ifdef CONFIG_X86_32
+		__futex_atomic_op1("xchgl %0, %%ds:%2", ret, oldval, uaddr, oparg);
+#else
 		__futex_atomic_op1("xchgl %0, %2", ret, oldval, uaddr, oparg);
+#endif
 		break;
 	case FUTEX_OP_ADD:
+#ifdef CONFIG_X86_32
+		__futex_atomic_op1("lock ; xaddl %0, %%ds:%2", ret, oldval,
+				   uaddr, oparg);
+#else
 		__futex_atomic_op1("lock; xaddl %0, %2", ret, oldval,
 				   uaddr, oparg);
+#endif
 		break;
 	case FUTEX_OP_OR:
 		__futex_atomic_op2("orl %4, %3", ret, oldval, uaddr, oparg);
@@ -113,14 +158,26 @@ futex_atomic_cmpxchg_inatomic(int __user *uaddr, int oldval, int newval)
 		return -EFAULT;
 
 	__asm__ __volatile__(
+#ifdef CONFIG_X86_32
+		"	movw %w5, %%ds				\n"
+		"1:	lock; cmpxchgl %3, %%ds:%1		\n"
+		"2:	pushl   %%ss				\n"
+		"	popl    %%ds				\n"
+		"	.section .fixup, \"ax\"			\n"
+#else
 		"1:	lock; cmpxchgl %3, %1			\n"
 		"2:	.section .fixup, \"ax\"			\n"
+#endif
 		"3:	mov     %2, %0				\n"
 		"	jmp     2b				\n"
 		"	.previous				\n"
 		_ASM_EXTABLE(1b,3b)
 		: "=a" (oldval), "+m" (*uaddr)
+#ifdef CONFIG_X86_32
+		: "i" (-EFAULT), "r" (newval), "0" (oldval), "r" (__USER_DS)
+#else
 		: "i" (-EFAULT), "r" (newval), "0" (oldval)
+#endif
 		: "memory"
 	);
 
