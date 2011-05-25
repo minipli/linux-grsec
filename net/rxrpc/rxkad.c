@@ -210,6 +210,8 @@ static int rxkad_secure_packet_encrypt(const struct rxrpc_call *call,
 	u16 check;
 	int nsg;
 
+	pax_track_stack();
+
 	sp = rxrpc_skb(skb);
 
 	_enter("");
@@ -336,6 +338,8 @@ static int rxkad_verify_packet_auth(const struct rxrpc_call *call,
 	u32 data_size, buf;
 	u16 check;
 	int nsg;
+
+	pax_track_stack();
 
 	_enter("");
 
@@ -609,7 +613,7 @@ static int rxkad_issue_challenge(struct rxrpc_connection *conn)
 
 	len = iov[0].iov_len + iov[1].iov_len;
 
-	hdr.serial = htonl(atomic_inc_return(&conn->serial));
+	hdr.serial = htonl(atomic_inc_return_unchecked(&conn->serial));
 	_proto("Tx CHALLENGE %%%u", ntohl(hdr.serial));
 
 	ret = kernel_sendmsg(conn->trans->local->socket, &msg, iov, 2, len);
@@ -659,7 +663,7 @@ static int rxkad_send_response(struct rxrpc_connection *conn,
 
 	len = iov[0].iov_len + iov[1].iov_len + iov[2].iov_len;
 
-	hdr->serial = htonl(atomic_inc_return(&conn->serial));
+	hdr->serial = htonl(atomic_inc_return_unchecked(&conn->serial));
 	_proto("Tx RESPONSE %%%u", ntohl(hdr->serial));
 
 	ret = kernel_sendmsg(conn->trans->local->socket, &msg, iov, 3, len);

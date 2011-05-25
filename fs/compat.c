@@ -1098,7 +1098,7 @@ static ssize_t compat_do_readv_writev(int type, struct file *file,
 	 * verify all the pointers
 	 */
 	ret = -EINVAL;
-	if ((nr_segs > UIO_MAXIOV) || (nr_segs <= 0))
+	if (nr_segs > UIO_MAXIOV)
 		goto out;
 	if (!file->f_op)
 		goto out;
@@ -1710,6 +1710,8 @@ int compat_core_sys_select(int n, compat_ulong_t __user *inp,
 	int size, max_fds, ret = -EINVAL;
 	struct fdtable *fdt;
 	long stack_fds[SELECT_STACK_ALLOC/sizeof(long)];
+
+	pax_track_stack();
 
 	if (n < 0)
 		goto out_nofds;

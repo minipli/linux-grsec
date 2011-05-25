@@ -185,7 +185,7 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 	pipe_lock(pipe);
 
 	for (;;) {
-		if (!pipe->readers) {
+		if (!atomic_read(&pipe->readers)) {
 			send_sig(SIGPIPE, current, 0);
 			if (!ret)
 				ret = -EPIPE;
@@ -239,9 +239,9 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 			do_wakeup = 0;
 		}
 
-		pipe->waiting_writers++;
+		atomic_inc(&pipe->waiting_writers);
 		pipe_wait(pipe);
-		pipe->waiting_writers--;
+		atomic_dec(&pipe->waiting_writers);
 	}
 
 	pipe_unlock(pipe);
@@ -284,6 +284,8 @@ __generic_file_splice_read(struct file *in, loff_t *ppos,
 		.ops = &page_cache_pipe_buf_ops,
 		.spd_release = spd_release_page,
 	};
+
+	pax_track_stack();
 
 	index = *ppos >> PAGE_CACHE_SHIFT;
 	loff = *ppos & ~PAGE_CACHE_MASK;
@@ -521,7 +523,7 @@ static ssize_t kernel_readv(struct file *file, const struct iovec *vec,
 	old_fs = get_fs();
 	set_fs(get_ds());
 	/* The cast to a user pointer is valid due to the set_fs() */
-	res = vfs_readv(file, (const struct iovec __user *)vec, vlen, &pos);
+	res = vfs_readv(file, (__force const struct iovec __user *)vec, vlen, &pos);
 	set_fs(old_fs);
 
 	return res;
@@ -536,7 +538,7 @@ static ssize_t kernel_write(struct file *file, const char *buf, size_t count,
 	old_fs = get_fs();
 	set_fs(get_ds());
 	/* The cast to a user pointer is valid due to the set_fs() */
-	res = vfs_write(file, (const char __user *)buf, count, &pos);
+	res = vfs_write(file, (__force const char __user *)buf, count, &pos);
 	set_fs(old_fs);
 
 	return res;
@@ -565,6 +567,8 @@ ssize_t default_file_splice_read(struct file *in, loff_t *ppos,
 		.spd_release = spd_release_page,
 	};
 
+	pax_track_stack();
+
 	index = *ppos >> PAGE_CACHE_SHIFT;
 	offset = *ppos & ~PAGE_CACHE_MASK;
 	nr_pages = (len + offset + PAGE_CACHE_SIZE - 1) >> PAGE_CACHE_SHIFT;
@@ -578,7 +582,7 @@ ssize_t default_file_splice_read(struct file *in, loff_t *ppos,
 			goto err;
 
 		this_len = min_t(size_t, len, PAGE_CACHE_SIZE - offset);
-		vec[i].iov_base = (void __user *) page_address(page);
+		vec[i].iov_base = (__force void __user *) page_address(page);
 		vec[i].iov_len = this_len;
 		pages[i] = page;
 		spd.nr_pages++;
@@ -800,10 +804,10 @@ EXPORT_SYMBOL(splice_from_pipe_feed);
 int splice_from_pipe_next(struct pipe_inode_info *pipe, struct splice_desc *sd)
 {
 	while (!pipe->nrbufs) {
-		if (!pipe->writers)
+		if (!atomic_read(&pipe->writers))
 			return 0;
 
-		if (!pipe->waiting_writers && sd->num_spliced)
+		if (!atomic_read(&pipe->waiting_writers) && sd->num_spliced)
 			return 0;
 
 		if (sd->flags & SPLICE_F_NONBLOCK)
@@ -1140,7 +1144,7 @@ ssize_t splice_direct_to_actor(struct file *in, struct splice_desc *sd,
 		 * out of the pipe right after the splice_to_pipe(). So set
 		 * PIPE_READERS appropriately.
 		 */
-		pipe->readers = 1;
+		atomic_set(&pipe->readers, 1);
 
 		current->splice_pipe = pipe;
 	}
@@ -1592,6 +1596,8 @@ static long vmsplice_to_pipe(struct file *file, const struct iovec __user *iov,
 		.spd_release = spd_release_page,
 	};
 
+	pax_track_stack();
+
 	pipe = pipe_info(file->f_path.dentry->d_inode);
 	if (!pipe)
 		return -EBADF;
@@ -1700,9 +1706,9 @@ static int ipipe_prep(struct pipe_inode_info *pipe, unsigned int flags)
 			ret = -ERESTARTSYS;
 			break;
 		}
-		if (!pipe->writers)
+		if (!atomic_read(&pipe->writers))
 			break;
-		if (!pipe->waiting_writers) {
+		if (!atomic_read(&pipe->waiting_writers)) {
 			if (flags & SPLICE_F_NONBLOCK) {
 				ret = -EAGAIN;
 				break;
@@ -1734,7 +1740,7 @@ static int opipe_prep(struct pipe_inode_info *pipe, unsigned int flags)
 	pipe_lock(pipe);
 
 	while (pipe->nrbufs >= PIPE_BUFFERS) {
-		if (!pipe->readers) {
+		if (!atomic_read(&pipe->readers)) {
 			send_sig(SIGPIPE, current, 0);
 			ret = -EPIPE;
 			break;
@@ -1747,9 +1753,9 @@ static int opipe_prep(struct pipe_inode_info *pipe, unsigned int flags)
 			ret = -ERESTARTSYS;
 			break;
 		}
-		pipe->waiting_writers++;
+		atomic_inc(&pipe->waiting_writers);
 		pipe_wait(pipe);
-		pipe->waiting_writers--;
+		atomic_dec(&pipe->waiting_writers);
 	}
 
 	pipe_unlock(pipe);
@@ -1785,14 +1791,14 @@ retry:
 	pipe_double_lock(ipipe, opipe);
 
 	do {
-		if (!opipe->readers) {
+		if (!atomic_read(&opipe->readers)) {
 			send_sig(SIGPIPE, current, 0);
 			if (!ret)
 				ret = -EPIPE;
 			break;
 		}
 
-		if (!ipipe->nrbufs && !ipipe->writers)
+		if (!ipipe->nrbufs && !atomic_read(&ipipe->writers))
 			break;
 
 		/*
@@ -1892,7 +1898,7 @@ static int link_pipe(struct pipe_inode_info *ipipe,
 	pipe_double_lock(ipipe, opipe);
 
 	do {
-		if (!opipe->readers) {
+		if (!atomic_read(&opipe->readers)) {
 			send_sig(SIGPIPE, current, 0);
 			if (!ret)
 				ret = -EPIPE;
@@ -1937,7 +1943,7 @@ static int link_pipe(struct pipe_inode_info *ipipe,
 	 * return EAGAIN if we have the potential of some data in the
 	 * future, otherwise just return 0
 	 */
-	if (!ret && ipipe->waiting_writers && (flags & SPLICE_F_NONBLOCK))
+	if (!ret && atomic_read(&ipipe->waiting_writers) && (flags & SPLICE_F_NONBLOCK))
 		ret = -EAGAIN;
 
 	pipe_unlock(ipipe);
