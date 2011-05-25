@@ -84,60 +84,6 @@ static const struct cpu_dev __cpuinitconst default_cpu = {
 
 static const struct cpu_dev *this_cpu __cpuinitdata = &default_cpu;
 
-DEFINE_PER_CPU_PAGE_ALIGNED(struct gdt_page, gdt_page) = { .gdt = {
-#ifdef CONFIG_X86_64
-	/*
-	 * We need valid kernel segments for data and code in long mode too
-	 * IRET will check the segment types  kkeil 2000/10/28
-	 * Also sysret mandates a special GDT layout
-	 *
-	 * TLS descriptors are currently at a different place compared to i386.
-	 * Hopefully nobody expects them at a fixed place (Wine?)
-	 */
-	[GDT_ENTRY_KERNEL32_CS]		= { { { 0x0000ffff, 0x00cf9b00 } } },
-	[GDT_ENTRY_KERNEL_CS]		= { { { 0x0000ffff, 0x00af9b00 } } },
-	[GDT_ENTRY_KERNEL_DS]		= { { { 0x0000ffff, 0x00cf9300 } } },
-	[GDT_ENTRY_DEFAULT_USER32_CS]	= { { { 0x0000ffff, 0x00cffb00 } } },
-	[GDT_ENTRY_DEFAULT_USER_DS]	= { { { 0x0000ffff, 0x00cff300 } } },
-	[GDT_ENTRY_DEFAULT_USER_CS]	= { { { 0x0000ffff, 0x00affb00 } } },
-#else
-	[GDT_ENTRY_KERNEL_CS]		= { { { 0x0000ffff, 0x00cf9a00 } } },
-	[GDT_ENTRY_KERNEL_DS]		= { { { 0x0000ffff, 0x00cf9200 } } },
-	[GDT_ENTRY_DEFAULT_USER_CS]	= { { { 0x0000ffff, 0x00cffa00 } } },
-	[GDT_ENTRY_DEFAULT_USER_DS]	= { { { 0x0000ffff, 0x00cff200 } } },
-	/*
-	 * Segments used for calling PnP BIOS have byte granularity.
-	 * They code segments and data segments have fixed 64k limits,
-	 * the transfer segment sizes are set at run time.
-	 */
-	/* 32-bit code */
-	[GDT_ENTRY_PNPBIOS_CS32]	= { { { 0x0000ffff, 0x00409a00 } } },
-	/* 16-bit code */
-	[GDT_ENTRY_PNPBIOS_CS16]	= { { { 0x0000ffff, 0x00009a00 } } },
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_DS]		= { { { 0x0000ffff, 0x00009200 } } },
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_TS1]		= { { { 0x00000000, 0x00009200 } } },
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_TS2]		= { { { 0x00000000, 0x00009200 } } },
-	/*
-	 * The APM segments have byte granularity and their bases
-	 * are set at run time.  All have 64k limits.
-	 */
-	/* 32-bit code */
-	[GDT_ENTRY_APMBIOS_BASE]	= { { { 0x0000ffff, 0x00409a00 } } },
-	/* 16-bit code */
-	[GDT_ENTRY_APMBIOS_BASE+1]	= { { { 0x0000ffff, 0x00009a00 } } },
-	/* data */
-	[GDT_ENTRY_APMBIOS_BASE+2]	= { { { 0x0000ffff, 0x00409200 } } },
-
-	[GDT_ENTRY_ESPFIX_SS]		= { { { 0x0000ffff, 0x00cf9200 } } },
-	[GDT_ENTRY_PERCPU]		= { { { 0x0000ffff, 0x00cf9200 } } },
-	GDT_STACK_CANARY_INIT
-#endif
-} };
-EXPORT_PER_CPU_SYMBOL_GPL(gdt_page);
-
 static int __init x86_xsave_setup(char *s)
 {
 	setup_clear_cpu_cap(X86_FEATURE_XSAVE);
@@ -345,7 +291,7 @@ void switch_to_new_gdt(int cpu)
 {
 	struct desc_ptr gdt_descr;
 
-	gdt_descr.address = (long)get_cpu_gdt_table(cpu);
+	gdt_descr.address = (unsigned long)get_cpu_gdt_table(cpu);
 	gdt_descr.size = GDT_SIZE - 1;
 	load_gdt(&gdt_descr);
 	/* Reload the per-cpu base */
@@ -799,6 +745,10 @@ static void __cpuinit identify_cpu(struct cpuinfo_x86 *c)
 	/* Filter out anything that depends on CPUID levels we don't have */
 	filter_cpuid_features(c, true);
 
+#if defined(CONFIG_PAX_SEGMEXEC) || defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+	setup_clear_cpu_cap(X86_FEATURE_SEP);
+#endif
+
 	/* If the model name is still unset, do table lookup. */
 	if (!c->x86_model_id[0]) {
 		const char *p;
@@ -982,7 +932,7 @@ static __init int setup_disablecpuid(char *arg)
 __setup("clearcpuid=", setup_disablecpuid);
 
 #ifdef CONFIG_X86_64
-struct desc_ptr idt_descr = { 256 * 16 - 1, (unsigned long) idt_table };
+struct desc_ptr idt_descr __read_only = { 256 * 16 - 1, (unsigned long) idt_table };
 
 DEFINE_PER_CPU_FIRST(union irq_stack_union,
 		     irq_stack_union) __aligned(PAGE_SIZE);
@@ -1092,7 +1042,7 @@ void __cpuinit cpu_init(void)
 	int i;
 
 	cpu = stack_smp_processor_id();
-	t = &per_cpu(init_tss, cpu);
+	t = init_tss + cpu;
 	orig_ist = &per_cpu(orig_ist, cpu);
 
 #ifdef CONFIG_NUMA
@@ -1190,7 +1140,7 @@ void __cpuinit cpu_init(void)
 {
 	int cpu = smp_processor_id();
 	struct task_struct *curr = current;
-	struct tss_struct *t = &per_cpu(init_tss, cpu);
+	struct tss_struct *t = init_tss + cpu;
 	struct thread_struct *thread = &curr->thread;
 
 	if (cpumask_test_and_set_cpu(cpu, cpu_initialized_mask)) {

@@ -43,6 +43,9 @@
 #define atomic_dec_and_test(v) (atomic_sub_return(1, (v)) == 0)
 
 #define atomic_inc(v) atomic_add(1,(v))
+#define atomic_inc_unchecked(v) atomic_inc(v)
+#define atomic_add_unchecked(i,v) atomic_add((i),(v))
+#define atomic_sub_unchecked(i,v) atomic_sub((i),(v))
 #define atomic_dec(v) atomic_sub(1,(v))
 
 #if !defined(CONFIG_GUSA_RB) && !defined(CONFIG_CPU_SH4A)

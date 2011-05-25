@@ -227,7 +227,7 @@ static inline unsigned long get_limit(unsigned long segment)
 {
 	unsigned long __limit;
 	asm("lsll %1,%0" : "=r" (__limit) : "r" (segment));
-	return __limit + 1;
+	return __limit;
 }
 
 static inline void native_clts(void)
@@ -353,6 +353,23 @@ static inline void native_wbinvd(void)
 
 #define stts() write_cr0(read_cr0() | X86_CR0_TS)
 
+#define pax_open_kernel(cr0)		\
+do {					\
+	typecheck(unsigned long, cr0);	\
+	preempt_disable();		\
+	barrier();			\
+	cr0 = read_cr0();		\
+	write_cr0(cr0 & ~X86_CR0_WP);	\
+} while (0)
+
+#define pax_close_kernel(cr0)		\
+do {					\
+	typecheck(unsigned long, cr0);	\
+	write_cr0(cr0);			\
+	barrier();			\
+	preempt_enable_no_resched();	\
+} while (0)
+
 #endif /* __KERNEL__ */
 
 static inline void clflush(volatile void *__p)
@@ -367,7 +384,7 @@ void enable_hlt(void);
 
 void cpu_idle_wait(void);
 
-extern unsigned long arch_align_stack(unsigned long sp);
+#define arch_align_stack(x) ((x) & ~0xfUL)
 extern void free_init_pages(char *what, unsigned long begin, unsigned long end);
 
 void default_idle(void);

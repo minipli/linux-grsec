@@ -528,7 +528,7 @@ struct kvm_x86_ops {
 	u64 (*get_mt_mask)(struct kvm_vcpu *vcpu, gfn_t gfn, bool is_mmio);
 };
 
-extern struct kvm_x86_ops *kvm_x86_ops;
+extern const struct kvm_x86_ops *kvm_x86_ops;
 
 int kvm_mmu_module_init(void);
 void kvm_mmu_module_exit(void);

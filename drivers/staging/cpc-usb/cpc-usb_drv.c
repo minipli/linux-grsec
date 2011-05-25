@@ -104,7 +104,7 @@ static void cpcusb_read_interrupt_callback(struct urb *urb);
 
 static int cpcusb_setup_intrep(CPC_USB_T *card);
 
-static struct file_operations cpcusb_fops = {
+static const struct file_operations cpcusb_fops = {
 	/*
 	 * The owner field is part of the module-locking
 	 * mechanism. The idea is that the kernel knows
