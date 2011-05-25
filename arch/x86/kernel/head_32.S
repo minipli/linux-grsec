@@ -514,6 +514,9 @@ is386:	movl $2,%ecx		# set MP
 	jne 1f
 	movl $cpu_gdt_table,%eax
 	movl $stack_canary,%ecx
+#ifdef CONFIG_SMP
+	addl $__per_cpu_load,%ecx
+#endif
 	movw %cx, 8 * GDT_ENTRY_STACK_CANARY + 2(%eax)
 	shrl $16, %ecx
 	movb %cl, 8 * GDT_ENTRY_STACK_CANARY + 4(%eax)

@@ -366,8 +366,8 @@ SECTIONS
 	.smp_locks : AT(ADDR(.smp_locks) - LOAD_OFFSET) {
 		__smp_locks = .;
 		*(.smp_locks)
-		. = ALIGN(PAGE_SIZE);
 		__smp_locks_end = .;
+		. = ALIGN(PAGE_SIZE);
 	}
 
 	/* BSS */
