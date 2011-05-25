@@ -833,7 +833,7 @@ static int ioctl_standard_iw_point(struct iw_point *iwp, unsigned int cmd,
 	}
 
 	/* kzalloc() ensures NULL-termination for essid_compat. */
-	extra = kzalloc(extra_size, GFP_KERNEL);
+	extra = kzalloc(extra_size + essid_compat * descr->token_size, GFP_KERNEL);
 	if (!extra)
 		return -ENOMEM;
 
