@@ -314,6 +314,9 @@ config PAX_KERNEXEC
 	  that is, enabling this option will make it harder to inject
 	  and execute 'foreign' code in kernel memory itself.
 
+	  Note that on x86_64 kernels there is a known regression when
+	  this feature and KVM/VMX are both enabled in the host kernel.
+
 config PAX_KERNEXEC_MODULE_TEXT
 	int "Minimum amount of memory reserved for module code"
 	default "4"
@@ -444,7 +447,6 @@ config PAX_MEMORY_SANITIZE
 
 config PAX_MEMORY_STACKLEAK
 	bool "Sanitize kernel stack"
-	depends on BROKEN
 	help
 	  By saying Y here the kernel will erase the kernel stack before it
 	  returns from a system call.  This in turn reduces the information
@@ -456,7 +458,7 @@ config PAX_MEMORY_STACKLEAK
 	  cannot leak anymore.
 
 	  The tradeoff is performance impact, on a single CPU system kernel
-	  compilation sees a ?% slowdown, other systems and workloads may vary
+	  compilation sees a 1% slowdown, other systems and workloads may vary
 	  and you are advised to test this feature on your expected workload
 	  before deploying it.
 

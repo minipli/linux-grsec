@@ -281,7 +281,6 @@ ENTRY(pax_erase_kstack)
 
 	mov %esp, %edi
 	mov $0xB4DD00D5, %eax
-	mov $THREAD_SIZE_asm/2, %edx
 	std
 1:
 	mov %edi, %ecx

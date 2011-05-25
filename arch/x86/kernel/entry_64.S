@@ -381,6 +381,37 @@ ENTRY(pax_exit_kernel_user)
 ENDPROC(pax_exit_kernel_user)
 #endif
 
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+ENTRY(pax_erase_kstack)
+	push %rdi
+
+	mov %rsp, %rdi
+	mov $0xB4DD00D54BADBABE5, %rax
+	std
+1:
+	mov %edi, %ecx
+	and $THREAD_SIZE_asm - 1, %ecx
+	shr $3, %ecx
+	repne scasq
+	jecxz 2f
+	sub $8, %ecx
+	jc 2f
+	mov $8, %ecx
+	repe scasq
+	jecxz 2f
+	jne 1b
+2:
+	cld
+	mov %esp, %ecx
+	sub %edi, %ecx
+	shr $3, %ecx
+	rep stosq
+
+	pop %rdi
+	ret
+ENDPROC(pax_erase_kstack)
+#endif
+
 .macro TRACE_IRQS_IRETQ offset=ARGOFFSET
 #ifdef CONFIG_TRACE_IRQFLAGS
 	bt   $9,EFLAGS-\offset(%rsp)	/* interrupts off? */
