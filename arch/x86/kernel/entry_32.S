@@ -284,20 +284,23 @@ ENTRY(pax_erase_kstack)
 	lea -64(%esp), %edi
 	mov $0xB4DD00D5, %eax
 	std
-1:
-	mov %edi, %ecx
+
+1:	mov %edi, %ecx
 	and $THREAD_SIZE_asm - 1, %ecx
 	shr $2, %ecx
 	repne scasl
 	jecxz 2f
-	sub $16, %ecx
+
+	cmp $128+16, %ecx
 	jc 2f
+
+	sub $512, %edi
 	mov $16, %ecx
 	repe scasl
 	jecxz 2f
 	jne 1b
-2:
-	cld
+
+2:	cld
 	mov %esp, %ecx
 	sub %edi, %ecx
 	shr $2, %ecx

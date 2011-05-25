@@ -386,22 +386,25 @@ ENTRY(pax_erase_kstack)
 	push %rdi
 
 	lea -128(%rsp), %rdi
-	mov $0xB4DD00D54BADBABE5, %rax
+	mov $0xB4DD00D5BADBABE5, %rax
 	std
-1:
-	mov %edi, %ecx
+
+1:	mov %edi, %ecx
 	and $THREAD_SIZE_asm - 1, %ecx
 	shr $3, %ecx
 	repne scasq
 	jecxz 2f
-	sub $8, %ecx
+
+	cmp $64+8, %ecx
 	jc 2f
+
+	sub $512, %rdi
 	mov $8, %ecx
 	repe scasq
 	jecxz 2f
 	jne 1b
-2:
-	cld
+
+2:	cld
 	mov %esp, %ecx
 	sub %edi, %ecx
 	shr $3, %ecx
