@@ -600,7 +600,7 @@ out:
 	return err;
 }
 
-static int rawv6_send_hdrinc(struct sock *sk, void *from, int length,
+static int rawv6_send_hdrinc(struct sock *sk, void *from, unsigned int length,
 			struct flowi *fl, struct rt6_info *rt,
 			unsigned int flags)
 {
@@ -916,12 +916,15 @@ do_confirm:
 static int rawv6_seticmpfilter(struct sock *sk, int level, int optname,
 			       char __user *optval, int optlen)
 {
+	struct icmp6_filter filter;
+
 	switch (optname) {
 	case ICMPV6_FILTER:
 		if (optlen > sizeof(struct icmp6_filter))
 			optlen = sizeof(struct icmp6_filter);
-		if (copy_from_user(&raw6_sk(sk)->filter, optval, optlen))
+		if (copy_from_user(&filter, optval, optlen))
 			return -EFAULT;
+		raw6_sk(sk)->filter = filter;
 		return 0;
 	default:
 		return -ENOPROTOOPT;

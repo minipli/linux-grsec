@@ -23,6 +23,7 @@
 #include <linux/string.h>
 #include <linux/kobject.h>
 #include <linux/uio_driver.h>
+#include <asm/local.h>
 
 #define UIO_MAX_DEVICES 255
 
@@ -33,7 +34,7 @@ struct uio_device {
 	atomic_t		event;
 	struct fasync_struct	*async_queue;
 	wait_queue_head_t	wait;
-	int			vma_count;
+	local_t			vma_count;
 	struct uio_info		*info;
 	struct kobject		*map_dir;
 	struct kobject		*portio_dir;
@@ -129,7 +130,7 @@ static ssize_t map_type_show(struct kobject *kobj, struct attribute *attr,
 	return entry->show(mem, buf);
 }
 
-static struct sysfs_ops map_sysfs_ops = {
+static const struct sysfs_ops map_sysfs_ops = {
 	.show = map_type_show,
 };
 
@@ -217,7 +218,7 @@ static ssize_t portio_type_show(struct kobject *kobj, struct attribute *attr,
 	return entry->show(port, buf);
 }
 
-static struct sysfs_ops portio_sysfs_ops = {
+static const struct sysfs_ops portio_sysfs_ops = {
 	.show = portio_type_show,
 };
 
@@ -624,13 +625,13 @@ static int uio_find_mem_index(struct vm_area_struct *vma)
 static void uio_vma_open(struct vm_area_struct *vma)
 {
 	struct uio_device *idev = vma->vm_private_data;
-	idev->vma_count++;
+	local_inc(&idev->vma_count);
 }
 
 static void uio_vma_close(struct vm_area_struct *vma)
 {
 	struct uio_device *idev = vma->vm_private_data;
-	idev->vma_count--;
+	local_dec(&idev->vma_count);
 }
 
 static int uio_vma_fault(struct vm_area_struct *vma, struct vm_fault *vmf)

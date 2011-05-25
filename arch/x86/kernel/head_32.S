@@ -19,9 +19,16 @@
 #include <asm/setup.h>
 #include <asm/processor-flags.h>
 #include <asm/percpu.h>
+#include <asm/msr-index.h>
 
 /* Physical address */
 #define pa(X) ((X) - __PAGE_OFFSET)
+
+#ifdef CONFIG_PAX_KERNEXEC
+#define ta(X) (X)
+#else
+#define ta(X) ((X) - __PAGE_OFFSET)
+#endif
 
 /*
  * References to members of the new_cpu_data structure.
@@ -52,11 +59,7 @@
  * and small than max_low_pfn, otherwise will waste some page table entries
  */
 
-#if PTRS_PER_PMD > 1
-#define PAGE_TABLE_SIZE(pages) (((pages) / PTRS_PER_PMD) + PTRS_PER_PGD)
-#else
-#define PAGE_TABLE_SIZE(pages) ((pages) / PTRS_PER_PGD)
-#endif
+#define PAGE_TABLE_SIZE(pages) ((pages) / PTRS_PER_PTE)
 
 /* Enough space to fit pagetables for the low memory linear map */
 MAPPING_BEYOND_END = \
@@ -73,6 +76,12 @@ INIT_MAP_SIZE = PAGE_TABLE_SIZE(KERNEL_PAGES) * PAGE_SIZE_asm
 RESERVE_BRK(pagetables, INIT_MAP_SIZE)
 
 /*
+ * Real beginning of normal "text" segment
+ */
+ENTRY(stext)
+ENTRY(_stext)
+
+/*
  * 32-bit kernel entrypoint; only used by the boot CPU.  On entry,
  * %esi points to the real-mode code as a 32-bit pointer.
  * CS and DS must be 4 GB flat segments, but we don't depend on
@@ -80,6 +89,13 @@ RESERVE_BRK(pagetables, INIT_MAP_SIZE)
  * can.
  */
 __HEAD
+
+#ifdef CONFIG_PAX_KERNEXEC
+	jmp startup_32
+/* PaX: fill first page in .text with int3 to catch NULL derefs in kernel mode */
+.fill PAGE_SIZE-5,1,0xcc
+#endif
+
 ENTRY(startup_32)
 	/* test KEEP_SEGMENTS flag to see if the bootloader is asking
 		us to not reload segments */
@@ -96,6 +112,57 @@ ENTRY(startup_32)
 	movl %eax,%fs
 	movl %eax,%gs
 2:
+
+#ifdef CONFIG_SMP
+	movl $pa(cpu_gdt_table),%edi
+	movl $__per_cpu_load,%eax
+	movw %ax,__KERNEL_PERCPU + 2(%edi)
+	rorl $16,%eax
+	movb %al,__KERNEL_PERCPU + 4(%edi)
+	movb %ah,__KERNEL_PERCPU + 7(%edi)
+	movl $__per_cpu_end - 1,%eax
+	subl $__per_cpu_start,%eax
+	movw %ax,__KERNEL_PERCPU + 0(%edi)
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	movl $NR_CPUS,%ecx
+	movl $pa(cpu_gdt_table),%edi
+1:
+	movl $((((__PAGE_OFFSET-1) & 0xf0000000) >> 12) | 0x00c09700),GDT_ENTRY_KERNEL_DS * 8 + 4(%edi)
+	movl $((((__PAGE_OFFSET-1) & 0xf0000000) >> 12) | 0x00c0fb00),GDT_ENTRY_DEFAULT_USER_CS * 8 + 4(%edi)
+	movl $((((__PAGE_OFFSET-1) & 0xf0000000) >> 12) | 0x00c0f300),GDT_ENTRY_DEFAULT_USER_DS * 8 + 4(%edi)
+	addl $PAGE_SIZE_asm,%edi
+	loop 1b
+#endif
+
+#ifdef CONFIG_PAX_KERNEXEC
+	movl $pa(boot_gdt),%edi
+	movl $__LOAD_PHYSICAL_ADDR,%eax
+	movw %ax,__BOOT_CS + 2(%edi)
+	rorl $16,%eax
+	movb %al,__BOOT_CS + 4(%edi)
+	movb %ah,__BOOT_CS + 7(%edi)
+	rorl $16,%eax
+
+	ljmp $(__BOOT_CS),$1f
+1:
+
+	movl $NR_CPUS,%ecx
+	movl $pa(cpu_gdt_table),%edi
+	addl $__PAGE_OFFSET,%eax
+1:
+	movw %ax,__KERNEL_CS + 2(%edi)
+	movw %ax,__KERNEXEC_KERNEL_CS + 2(%edi)
+	rorl $16,%eax
+	movb %al,__KERNEL_CS + 4(%edi)
+	movb %al,__KERNEXEC_KERNEL_CS + 4(%edi)
+	movb %ah,__KERNEL_CS + 7(%edi)
+	movb %ah,__KERNEXEC_KERNEL_CS + 7(%edi)
+	rorl $16,%eax
+	addl $PAGE_SIZE_asm,%edi
+	loop 1b
+#endif
 
 /*
  * Clear BSS first so that there are no surprises...
@@ -140,9 +207,7 @@ ENTRY(startup_32)
 	cmpl $num_subarch_entries, %eax
 	jae bad_subarch
 
-	movl pa(subarch_entries)(,%eax,4), %eax
-	subl $__PAGE_OFFSET, %eax
-	jmp *%eax
+	jmp *pa(subarch_entries)(,%eax,4)
 
 bad_subarch:
 WEAK(lguest_entry)
@@ -154,10 +219,10 @@ WEAK(xen_entry)
 	__INITDATA
 
 subarch_entries:
-	.long default_entry		/* normal x86/PC */
-	.long lguest_entry		/* lguest hypervisor */
-	.long xen_entry			/* Xen hypervisor */
-	.long default_entry		/* Moorestown MID */
+	.long ta(default_entry)		/* normal x86/PC */
+	.long ta(lguest_entry)		/* lguest hypervisor */
+	.long ta(xen_entry)		/* Xen hypervisor */
+	.long ta(default_entry)		/* Moorestown MID */
 num_subarch_entries = (. - subarch_entries) / 4
 .previous
 #endif /* CONFIG_PARAVIRT */
@@ -218,8 +283,11 @@ default_entry:
 	movl %eax, pa(max_pfn_mapped)
 
 	/* Do early initialization of the fixmap area */
-	movl $pa(swapper_pg_fixmap)+PDE_IDENT_ATTR,%eax
-	movl %eax,pa(swapper_pg_pmd+0x1000*KPMDS-8)
+#ifdef CONFIG_COMPAT_VDSO
+	movl $pa(swapper_pg_fixmap)+PDE_IDENT_ATTR+_PAGE_USER,pa(swapper_pg_pmd+0x1000*KPMDS-8)
+#else
+	movl $pa(swapper_pg_fixmap)+PDE_IDENT_ATTR,pa(swapper_pg_pmd+0x1000*KPMDS-8)
+#endif
 #else	/* Not PAE */
 
 page_pde_offset = (__PAGE_OFFSET >> 20);
@@ -249,8 +317,11 @@ page_pde_offset = (__PAGE_OFFSET >> 20);
 	movl %eax, pa(max_pfn_mapped)
 
 	/* Do early initialization of the fixmap area */
-	movl $pa(swapper_pg_fixmap)+PDE_IDENT_ATTR,%eax
-	movl %eax,pa(swapper_pg_dir+0xffc)
+#ifdef CONFIG_COMPAT_VDSO
+	movl $pa(swapper_pg_fixmap)+PDE_IDENT_ATTR+_PAGE_USER,pa(swapper_pg_dir+0xffc)
+#else
+	movl $pa(swapper_pg_fixmap)+PDE_IDENT_ATTR,pa(swapper_pg_dir+0xffc)
+#endif
 #endif
 	jmp 3f
 /*
@@ -297,6 +368,7 @@ ENTRY(startup_32_smp)
 	orl %edx,%eax
 	movl %eax,%cr4
 
+#ifdef CONFIG_X86_PAE
 	btl $5, %eax		# check if PAE is enabled
 	jnc 6f
 
@@ -312,12 +384,16 @@ ENTRY(startup_32_smp)
 	jnc 6f
 
 	/* Setup EFER (Extended Feature Enable Register) */
-	movl $0xc0000080, %ecx
+	movl $MSR_EFER, %ecx
 	rdmsr
 
 	btsl $11, %eax
 	/* Make changes effective */
 	wrmsr
+
+	btsl $_PAGE_BIT_NX-32,pa(__supported_pte_mask+4)
+	movl $1,pa(nx_enabled)
+#endif
 
 6:
 
@@ -344,9 +420,7 @@ ENTRY(startup_32_smp)
 
 #ifdef CONFIG_SMP
 	cmpb $0, ready
-	jz  1f				/* Initial CPU cleans BSS */
-	jmp checkCPUtype
-1:
+	jnz checkCPUtype		/* Initial CPU cleans BSS */
 #endif /* CONFIG_SMP */
 
 /*
@@ -424,7 +498,7 @@ is386:	movl $2,%ecx		# set MP
 1:	movl $(__KERNEL_DS),%eax	# reload all the segment registers
 	movl %eax,%ss			# after changing gdt.
 
-	movl $(__USER_DS),%eax		# DS/ES contains default USER segment
+#	movl $(__KERNEL_DS),%eax	# DS/ES contains default KERNEL segment
 	movl %eax,%ds
 	movl %eax,%es
 
@@ -438,15 +512,22 @@ is386:	movl $2,%ecx		# set MP
 	 */
 	cmpb $0,ready
 	jne 1f
-	movl $per_cpu__gdt_page,%eax
+	movl $cpu_gdt_table,%eax
 	movl $per_cpu__stack_canary,%ecx
+#ifdef CONFIG_SMP
+	addl $__per_cpu_load,%ecx
+#endif
 	movw %cx, 8 * GDT_ENTRY_STACK_CANARY + 2(%eax)
 	shrl $16, %ecx
 	movb %cl, 8 * GDT_ENTRY_STACK_CANARY + 4(%eax)
 	movb %ch, 8 * GDT_ENTRY_STACK_CANARY + 7(%eax)
 1:
-#endif
 	movl $(__KERNEL_STACK_CANARY),%eax
+#elif defined(CONFIG_PAX_MEMORY_UDEREF)
+	movl $(__USER_DS),%eax
+#else
+	xorl %eax,%eax
+#endif
 	movl %eax,%gs
 
 	xorl %eax,%eax			# Clear LDT
@@ -457,10 +538,6 @@ is386:	movl $2,%ecx		# set MP
 #ifdef CONFIG_SMP
 	movb ready, %cl
 	movb $1, ready
-	cmpb $0,%cl		# the first CPU calls start_kernel
-	je   1f
-	movl (stack_start), %esp
-1:
 #endif /* CONFIG_SMP */
 	jmp *(initial_code)
 
@@ -546,22 +623,22 @@ early_page_fault:
 	jmp early_fault
 
 early_fault:
-	cld
 #ifdef CONFIG_PRINTK
+	cmpl $1,%ss:early_recursion_flag
+	je hlt_loop
+	incl %ss:early_recursion_flag
+	cld
 	pusha
 	movl $(__KERNEL_DS),%eax
 	movl %eax,%ds
 	movl %eax,%es
-	cmpl $2,early_recursion_flag
-	je hlt_loop
-	incl early_recursion_flag
 	movl %cr2,%eax
 	pushl %eax
 	pushl %edx		/* trapno */
 	pushl $fault_msg
 	call printk
+;	call dump_stack
 #endif
-	call dump_stack
 hlt_loop:
 	hlt
 	jmp hlt_loop
@@ -569,8 +646,11 @@ hlt_loop:
 /* This is the default interrupt "handler" :-) */
 	ALIGN
 ignore_int:
-	cld
 #ifdef CONFIG_PRINTK
+	cmpl $2,%ss:early_recursion_flag
+	je hlt_loop
+	incl %ss:early_recursion_flag
+	cld
 	pushl %eax
 	pushl %ecx
 	pushl %edx
@@ -579,9 +659,6 @@ ignore_int:
 	movl $(__KERNEL_DS),%eax
 	movl %eax,%ds
 	movl %eax,%es
-	cmpl $2,early_recursion_flag
-	je hlt_loop
-	incl early_recursion_flag
 	pushl 16(%esp)
 	pushl 24(%esp)
 	pushl 32(%esp)
@@ -610,31 +687,47 @@ ENTRY(initial_page_table)
 /*
  * BSS section
  */
-__PAGE_ALIGNED_BSS
-	.align PAGE_SIZE_asm
 #ifdef CONFIG_X86_PAE
+.section .swapper_pg_pmd,"a",@progbits
 swapper_pg_pmd:
 	.fill 1024*KPMDS,4,0
 #else
+.section .swapper_pg_dir,"a",@progbits
 ENTRY(swapper_pg_dir)
 	.fill 1024,4,0
 #endif
+.section .swapper_pg_fixmap,"a",@progbits
 swapper_pg_fixmap:
 	.fill 1024,4,0
 #ifdef CONFIG_X86_TRAMPOLINE
+.section .trampoline_pg_dir,"a",@progbits
 ENTRY(trampoline_pg_dir)
+#ifdef CONFIG_X86_PAE
+	.fill 4,8,0
+#else
 	.fill 1024,4,0
 #endif
+#endif
+
+.section .empty_zero_page,"a",@progbits
 ENTRY(empty_zero_page)
 	.fill 4096,1,0
+
+/*
+ * The IDT has to be page-aligned to simplify the Pentium
+ * F0 0F bug workaround.. We have a special link segment
+ * for this.
+ */
+.section .idt,"a",@progbits
+ENTRY(idt_table)
+	.fill 256,8,0
 
 /*
  * This starts the data section.
  */
 #ifdef CONFIG_X86_PAE
-__PAGE_ALIGNED_DATA
-	/* Page-aligned for the benefit of paravirt? */
-	.align PAGE_SIZE_asm
+.section .swapper_pg_dir,"a",@progbits
+
 ENTRY(swapper_pg_dir)
 	.long	pa(swapper_pg_pmd+PGD_IDENT_ATTR),0	/* low identity map */
 # if KPMDS == 3
@@ -653,15 +746,24 @@ ENTRY(swapper_pg_dir)
 #  error "Kernel PMDs should be 1, 2 or 3"
 # endif
 	.align PAGE_SIZE_asm		/* needs to be page-sized too */
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+ENTRY(cpu_pgd)
+	.rept NR_CPUS
+	.fill	4,8,0
+	.endr
+#endif
+
 #endif
 
 .data
 ENTRY(stack_start)
-	.long init_thread_union+THREAD_SIZE
+	.long init_thread_union+THREAD_SIZE-8
 	.long __BOOT_DS
 
 ready:	.byte 0
 
+.section .rodata,"a",@progbits
 early_recursion_flag:
 	.long 0
 
@@ -697,7 +799,7 @@ fault_msg:
 	.word 0				# 32 bit align gdt_desc.address
 boot_gdt_descr:
 	.word __BOOT_DS+7
-	.long boot_gdt - __PAGE_OFFSET
+	.long pa(boot_gdt)
 
 	.word 0				# 32-bit align idt_desc.address
 idt_descr:
@@ -708,7 +810,7 @@ idt_descr:
 	.word 0				# 32 bit align gdt_desc.address
 ENTRY(early_gdt_descr)
 	.word GDT_ENTRIES*8-1
-	.long per_cpu__gdt_page		/* Overwritten for secondary CPUs */
+	.long cpu_gdt_table		/* Overwritten for secondary CPUs */
 
 /*
  * The boot_gdt must mirror the equivalent in setup.S and is
@@ -717,5 +819,65 @@ ENTRY(early_gdt_descr)
 	.align L1_CACHE_BYTES
 ENTRY(boot_gdt)
 	.fill GDT_ENTRY_BOOT_CS,8,0
-	.quad 0x00cf9a000000ffff	/* kernel 4GB code at 0x00000000 */
-	.quad 0x00cf92000000ffff	/* kernel 4GB data at 0x00000000 */
+	.quad 0x00cf9b000000ffff	/* kernel 4GB code at 0x00000000 */
+	.quad 0x00cf93000000ffff	/* kernel 4GB data at 0x00000000 */
+
+	.align PAGE_SIZE_asm
+ENTRY(cpu_gdt_table)
+	.rept NR_CPUS
+	.quad 0x0000000000000000	/* NULL descriptor */
+	.quad 0x0000000000000000	/* 0x0b reserved */
+	.quad 0x0000000000000000	/* 0x13 reserved */
+	.quad 0x0000000000000000	/* 0x1b reserved */
+
+#ifdef CONFIG_PAX_KERNEXEC
+	.quad 0x00cf9b000000ffff	/* 0x20 alternate kernel 4GB code at 0x00000000 */
+#else
+	.quad 0x0000000000000000	/* 0x20 unused */
+#endif
+
+	.quad 0x0000000000000000	/* 0x28 unused */
+	.quad 0x0000000000000000	/* 0x33 TLS entry 1 */
+	.quad 0x0000000000000000	/* 0x3b TLS entry 2 */
+	.quad 0x0000000000000000	/* 0x43 TLS entry 3 */
+	.quad 0x0000000000000000	/* 0x4b reserved */
+	.quad 0x0000000000000000	/* 0x53 reserved */
+	.quad 0x0000000000000000	/* 0x5b reserved */
+
+	.quad 0x00cf9b000000ffff	/* 0x60 kernel 4GB code at 0x00000000 */
+	.quad 0x00cf93000000ffff	/* 0x68 kernel 4GB data at 0x00000000 */
+	.quad 0x00cffb000000ffff	/* 0x73 user 4GB code at 0x00000000 */
+	.quad 0x00cff3000000ffff	/* 0x7b user 4GB data at 0x00000000 */
+
+	.quad 0x0000000000000000	/* 0x80 TSS descriptor */
+	.quad 0x0000000000000000	/* 0x88 LDT descriptor */
+
+	/*
+	 * Segments used for calling PnP BIOS have byte granularity.
+	 * The code segments and data segments have fixed 64k limits,
+	 * the transfer segment sizes are set at run time.
+	 */
+	.quad 0x00409b000000ffff	/* 0x90 32-bit code */
+	.quad 0x00009b000000ffff	/* 0x98 16-bit code */
+	.quad 0x000093000000ffff	/* 0xa0 16-bit data */
+	.quad 0x0000930000000000	/* 0xa8 16-bit data */
+	.quad 0x0000930000000000	/* 0xb0 16-bit data */
+
+	/*
+	 * The APM segments have byte granularity and their bases
+	 * are set at run time.  All have 64k limits.
+	 */
+	.quad 0x00409b000000ffff	/* 0xb8 APM CS    code */
+	.quad 0x00009b000000ffff	/* 0xc0 APM CS 16 code (16 bit) */
+	.quad 0x004093000000ffff	/* 0xc8 APM DS    data */
+
+	.quad 0x00c0930000000000	/* 0xd0 - ESPFIX SS */
+	.quad 0x0040930000000000	/* 0xd8 - PERCPU */
+	.quad 0x0040910000000018	/* 0xe0 - STACK_CANARY */
+	.quad 0x0000000000000000	/* 0xe8 - PCIBIOS_CS */
+	.quad 0x0000000000000000	/* 0xf0 - PCIBIOS_DS */
+	.quad 0x0000000000000000	/* 0xf8 - GDT entry 31: double-fault TSS */
+
+	/* Be sure this is zeroed to avoid false validations in Xen */
+	.fill PAGE_SIZE_asm - GDT_SIZE,1,0
+	.endr
