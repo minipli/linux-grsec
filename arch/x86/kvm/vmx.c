@@ -519,22 +519,12 @@ static void reload_tss(void)
 	struct descriptor_table gdt;
 	struct desc_struct *descs;
 
-#ifdef CONFIG_PAX_KERNEXEC
-	unsigned long cr0;
-#endif
-
 	kvm_get_gdt(&gdt);
 	descs = (void *)gdt.base;
 
-#ifdef CONFIG_PAX_KERNEXEC
-	pax_open_kernel(cr0);
-#endif
-
+	pax_open_kernel();
 	descs[GDT_ENTRY_TSS].type = 9; /* available TSS */
-
-#ifdef CONFIG_PAX_KERNEXEC
-	pax_close_kernel(cr0);
-#endif
+	pax_close_kernel();
 
 	load_TR_desc();
 }
@@ -1335,11 +1325,6 @@ static __init int alloc_kvm_area(void)
 
 static __init int hardware_setup(void)
 {
-
-#ifdef CONFIG_PAX_KERNEXEC
-	unsigned long cr0;
-#endif
-
 	if (setup_vmcs_config(&vmcs_config) < 0)
 		return -EIO;
 
@@ -1356,17 +1341,9 @@ static __init int hardware_setup(void)
 		flexpriority_enabled = 0;
 
 	if (!cpu_has_vmx_tpr_shadow()) {
-
-#ifdef CONFIG_PAX_KERNEXEC
-		pax_open_kernel(cr0);
-#endif
-
+		pax_open_kernel();
 		*(void **)&kvm_x86_ops->update_cr8_intercept = NULL;
-
-#ifdef CONFIG_PAX_KERNEXEC
-		pax_close_kernel(cr0);
-#endif
-
+		pax_close_kernel();
 	}
 
 	return alloc_kvm_area();

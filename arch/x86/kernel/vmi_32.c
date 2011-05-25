@@ -108,42 +108,18 @@ static unsigned patch_internal(int call, unsigned len, void *insnbuf,
 	u64 reloc;
 	struct vmi_relocation_info *const rel = (struct vmi_relocation_info *)&reloc;
 
-#ifdef CONFIG_PAX_KERNEXEC
-	unsigned long cr0;
-#endif
-
 	reloc = call_vrom_long_func(vmi_rom, get_reloc,	call);
 	switch(rel->type) {
 		case VMI_RELOCATION_CALL_REL:
 			BUG_ON(len < 5);
-
-#ifdef CONFIG_PAX_KERNEXEC
-			pax_open_kernel(cr0);
-#endif
-
 			*(char *)insnbuf = MNEM_CALL;
 			patch_offset(insnbuf, ip, (unsigned long)rel->eip);
-
-#ifdef CONFIG_PAX_KERNEXEC
-			pax_close_kernel(cr0);
-#endif
-
 			return 5;
 
 		case VMI_RELOCATION_JUMP_REL:
 			BUG_ON(len < 5);
-
-#ifdef CONFIG_PAX_KERNEXEC
-			pax_open_kernel(cr0);
-#endif
-
 			*(char *)insnbuf = MNEM_JMP;
 			patch_offset(insnbuf, ip, (unsigned long)rel->eip);
-
-#ifdef CONFIG_PAX_KERNEXEC
-			pax_close_kernel(cr0);
-#endif
-
 			return 5;
 
 		case VMI_RELOCATION_NOP:
@@ -516,6 +492,14 @@ static void vmi_leave_lazy_mmu(void)
 	paravirt_leave_lazy_mmu();
 }
 
+static void vmi_pax_open_kernel(void)
+{
+}
+
+static void vmi_pax_close_kernel(void)
+{
+}
+
 static inline int __init check_vmi_rom(struct vrom_header *rom)
 {
 	struct pci_header *pci;
@@ -674,19 +658,11 @@ static inline int __init activate_vmi(void)
 	u64 reloc;
 	const struct vmi_relocation_info *rel = (struct vmi_relocation_info *)&reloc;
 
-#ifdef CONFIG_PAX_KERNEXEC
-	unsigned long cr0;
-#endif
-
 	if (call_vrom_func(vmi_rom, vmi_init) != 0) {
 		printk(KERN_ERR "VMI ROM failed to initialize!");
 		return 0;
 	}
 	savesegment(cs, kernel_cs);
-
-#ifdef CONFIG_PAX_KERNEXEC
-	pax_open_kernel(cr0);
-#endif
 
 	pv_info.paravirt_enabled = 1;
 	pv_info.kernel_rpl = kernel_cs & SEGMENT_RPL_MASK;
@@ -879,7 +855,8 @@ static inline int __init activate_vmi(void)
 	para_fill(pv_irq_ops.safe_halt, Halt);
 
 #ifdef CONFIG_PAX_KERNEXEC
-	pax_close_kernel(cr0);
+	pv_mmu_ops.pax_open_kernel = vmi_pax_open_kernel;
+	pv_mmu_ops.pax_close_kernel = vmi_pax_close_kernel;
 #endif
 
 	/*

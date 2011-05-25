@@ -2287,20 +2287,11 @@ static int handle_exit(struct kvm_run *kvm_run, struct kvm_vcpu *vcpu)
 static void reload_tss(struct kvm_vcpu *vcpu)
 {
 	int cpu = raw_smp_processor_id();
-
 	struct svm_cpu_data *svm_data = per_cpu(svm_data, cpu);
 
-#ifdef CONFIG_PAX_KERNEXEC
-	unsigned long cr0;
-
-	pax_open_kernel(cr0);
-#endif
-
+	pax_open_kernel();
 	svm_data->tss_desc->type = 9; /* available 32/64-bit TSS */
-
-#ifdef CONFIG_PAX_KERNEXEC
-	pax_close_kernel(cr0);
-#endif
+	pax_close_kernel();
 
 	load_TR_desc();
 }

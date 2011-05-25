@@ -489,21 +489,11 @@ void *__kprobes text_poke_early(void *addr, const void *opcode, size_t len)
 {
 	unsigned long flags;
 
-#ifdef CONFIG_PAX_KERNEXEC
-	unsigned long cr0;
-#endif
-
 	local_irq_save(flags);
 
-#ifdef CONFIG_PAX_KERNEXEC
-	pax_open_kernel(cr0);
-#endif
-
+	pax_open_kernel();
 	memcpy(ktla_ktva(addr), opcode, len);
-
-#ifdef CONFIG_PAX_KERNEXEC
-	pax_close_kernel(cr0);
-#endif
+	pax_close_kernel();
 
 	local_irq_restore(flags);
 	sync_core();
