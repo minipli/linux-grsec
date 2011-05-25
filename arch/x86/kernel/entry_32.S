@@ -739,6 +739,7 @@ work_resched:
 
 work_notifysig:				# deal with pending signals and
 					# notify-resume requests
+	movl %esp, %eax
 #ifdef CONFIG_VM86
 	testl $X86_EFLAGS_VM, PT_EFLAGS(%esp)
 	jz 1f				# returning to kernel-space or
