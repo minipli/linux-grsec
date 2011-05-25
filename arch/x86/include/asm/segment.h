@@ -88,7 +88,7 @@
 #define GDT_ENTRY_ESPFIX_SS		(GDT_ENTRY_KERNEL_BASE + 14)
 #define __ESPFIX_SS (GDT_ENTRY_ESPFIX_SS * 8)
 
-#define GDT_ENTRY_PERCPU			(GDT_ENTRY_KERNEL_BASE + 15)
+#define GDT_ENTRY_PERCPU		(GDT_ENTRY_KERNEL_BASE + 15)
 #ifdef CONFIG_SMP
 #define __KERNEL_PERCPU (GDT_ENTRY_PERCPU * 8)
 #else
@@ -101,6 +101,12 @@
 #else
 #define __KERNEL_STACK_CANARY		0
 #endif
+
+#define GDT_ENTRY_PCIBIOS_CS		(GDT_ENTRY_KERNEL_BASE + 17)
+#define __PCIBIOS_CS (GDT_ENTRY_PCIBIOS_CS * 8)
+
+#define GDT_ENTRY_PCIBIOS_DS		(GDT_ENTRY_KERNEL_BASE + 18)
+#define __PCIBIOS_DS (GDT_ENTRY_PCIBIOS_DS * 8)
 
 #define GDT_ENTRY_DOUBLEFAULT_TSS	31
 
@@ -139,7 +145,7 @@
  */
 
 /* Matches PNP_CS32 and PNP_CS16 (they must be consecutive) */
-#define SEGMENT_IS_PNP_CODE(x)   (((x) & 0xf4) == GDT_ENTRY_PNPBIOS_BASE * 8)
+#define SEGMENT_IS_PNP_CODE(x)   (((x) & 0xFFFCU) == PNP_CS32 || ((x) & 0xFFFCU) == PNP_CS16)
 
 
 #else

@@ -1435,7 +1435,7 @@ struct fiemap_extent_info {
 	unsigned int fi_flags;		/* Flags as passed from user */
 	unsigned int fi_extents_mapped;	/* Number of mapped extents */
 	unsigned int fi_extents_max;	/* Size of fiemap_extent array */
-	struct fiemap_extent *fi_extents_start; /* Start of fiemap_extent
+	struct fiemap_extent __user *fi_extents_start; /* Start of fiemap_extent
 						 * array */
 };
 int fiemap_fill_next_extent(struct fiemap_extent_info *info, u64 logical,
@@ -2430,7 +2430,7 @@ static int __fops ## _open(struct inode *inode, struct file *file)	\
 	__simple_attr_check_format(__fmt, 0ull);			\
 	return simple_attr_open(inode, file, __get, __set, __fmt);	\
 }									\
-static struct file_operations __fops = {				\
+static const struct file_operations __fops = {				\
 	.owner	 = THIS_MODULE,						\
 	.open	 = __fops ## _open,					\
 	.release = simple_attr_release,					\
