@@ -1427,7 +1427,7 @@ static struct pci_device_id yenta_table[] = {
 
 	/* match any cardbus bridge */
 	CB_ID(PCI_ANY_ID, PCI_ANY_ID, DEFAULT),
-	{ /* all zeroes */ }
+	{ 0, 0, 0, 0, 0, 0, 0 }
 };
 MODULE_DEVICE_TABLE(pci, yenta_table);
 
