@@ -4490,7 +4490,10 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	unsigned int objnr;
 	unsigned long offset;
 
-	if (n && ZERO_OR_NULL_PTR(ptr))
+	if (!n)
+		return;
+
+	if (ZERO_OR_NULL_PTR(ptr))
 		goto report;
 
 	if (!virt_addr_valid(ptr))
