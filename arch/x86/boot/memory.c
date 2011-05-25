@@ -30,7 +30,7 @@ static int detect_memory_e820(void)
 		/* Important: %edx and %esi are clobbered by some BIOSes,
 		   so they must be either used for the error output
 		   or explicitly marked clobbered. */
-		asm("int $0x15; setc %0"
+		asm volatile("int $0x15; setc %0"
 		    : "=d" (err), "+b" (next), "=a" (id), "+c" (size),
 		      "=m" (*desc)
 		    : "D" (desc), "d" (SMAP), "a" (0xe820)
@@ -66,7 +66,7 @@ static int detect_memory_e801(void)
 
 	bx = cx = dx = 0;
 	ax = 0xe801;
-	asm("stc; int $0x15; setc %0"
+	asm volatile("stc; int $0x15; setc %0"
 	    : "=m" (err), "+a" (ax), "+b" (bx), "+c" (cx), "+d" (dx));
 
 	if (err)
@@ -96,7 +96,7 @@ static int detect_memory_88(void)
 	u8 err;
 
 	ax = 0x8800;
-	asm("stc; int $0x15; setc %0" : "=bcdm" (err), "+a" (ax));
+	asm volatile("stc; int $0x15; setc %0" : "=bcdm" (err), "+a" (ax));
 
 	boot_params.screen_info.ext_mem_k = ax;
 

@@ -387,7 +387,7 @@ static void __user *get_sigframe(struct k_sigaction *ka, struct pt_regs *regs,
 	sp -= frame_size;
 	/* Align the stack pointer according to the i386 ABI,
 	 * i.e. so that on function entry ((sp + 4) & 15) == 0. */
-	sp = ((sp + 4) & -16ul) - 4;
+	sp = ((sp - 12) & -16ul) - 4;
 	return (void __user *) sp;
 }
 
@@ -464,7 +464,7 @@ int ia32_setup_frame(int sig, struct k_sigaction *ka,
 
 #if DEBUG_SIG
 	printk(KERN_DEBUG "SIG deliver (%s:%d): sp=%p pc=%lx ra=%u\n",
-	       current->comm, current->pid, frame, regs->ip, frame->pretcode);
+	       current->comm, task_pid_nr(current), frame, regs->ip, frame->pretcode);
 #endif
 
 	return 0;
@@ -488,7 +488,7 @@ int ia32_setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 		0xb8,
 		__NR_ia32_rt_sigreturn,
 		0x80cd,
-		0,
+		0
 	};
 
 	frame = get_sigframe(ka, regs, sizeof(*frame), &fpstate);
@@ -551,7 +551,7 @@ int ia32_setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 
 #if DEBUG_SIG
 	printk(KERN_DEBUG "SIG deliver (%s:%d): sp=%p pc=%lx ra=%u\n",
-	       current->comm, current->pid, frame, regs->ip, frame->pretcode);
+	       current->comm, task_pid_nr(current), frame, regs->ip, frame->pretcode);
 #endif
 
 	return 0;
