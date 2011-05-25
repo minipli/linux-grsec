@@ -146,6 +146,28 @@ static inline unsigned long __raw_local_irq_save(void)
 #define INTERRUPT_RETURN		iret
 #define ENABLE_INTERRUPTS_SYSEXIT	sti; sysexit
 #define GET_CR0_INTO_EAX		movl %cr0, %eax
+
+/* PaX: special register usage in entry_32.S, beware */
+#ifdef CONFIG_PAX_KERNEXEC
+#define PAX_EXIT_KERNEL				\
+	cmpw $__KERNEXEC_KERNEL_CS, PT_CS(%esp);\
+	jnz 1f;					\
+	movl %cr0, %esi;			\
+	btc $16, %esi;				\
+	movl %esi, %cr0;			\
+1:
+
+#define PAX_ENTER_KERNEL			\
+	movl %cr0, %esi;			\
+	bts $16, %esi;				\
+	jc 1f;					\
+	movl %esi, %cr0;			\
+1:
+#else
+#define PAX_EXIT_KERNEL
+#define PAX_ENTER_KERNEL
+#endif
+
 #endif
 
 

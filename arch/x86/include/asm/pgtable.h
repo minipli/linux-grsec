@@ -74,12 +74,61 @@ extern struct list_head pgd_list;
 
 #define arch_end_context_switch(prev)	do {} while(0)
 
+#define pax_open_kernel()	native_pax_open_kernel()
+#define pax_close_kernel()	native_pax_close_kernel()
 #endif	/* CONFIG_PARAVIRT */
+
+#define  __HAVE_ARCH_PAX_OPEN_KERNEL
+#define  __HAVE_ARCH_PAX_CLOSE_KERNEL
+
+#ifdef CONFIG_PAX_KERNEXEC
+static inline unsigned long native_pax_open_kernel(void)
+{
+	unsigned long cr0;
+
+	preempt_disable();
+	barrier();
+	cr0 = read_cr0();
+	BUG_ON(unlikely(!(cr0 & X86_CR0_WP)));
+
+#ifdef CONFIG_X86_32
+	asm volatile("ljmp %0,$1f; 1:\n\t" : : "i"(__KERNEXEC_KERNEL_CS), "m"(__force_order));
+#endif
+
+	write_cr0(cr0 & ~X86_CR0_WP);
+	return cr0;
+}
+
+static inline unsigned long native_pax_close_kernel(void)
+{
+	unsigned long cr0;
+
+	cr0 = read_cr0();
+	BUG_ON(unlikely(cr0 & X86_CR0_WP));
+
+#ifdef CONFIG_X86_32
+	asm volatile("ljmp %0,$1f; 1:\n\t" : : "i"(__KERNEL_CS), "m"(__force_order));
+#endif
+
+	write_cr0(cr0 | X86_CR0_WP);
+	barrier();
+	preempt_enable_no_resched();
+	return cr0;
+}
+#else
+static inline unsigned long native_pax_open_kernel(void) { return 0; }
+static inline unsigned long native_pax_close_kernel(void) { return 0; }
+#endif
 
 /*
  * The following only work if pte_present() is true.
  * Undefined behaviour if not..
  */
+static inline int pte_user(pte_t pte)
+{
+	return pte_val(pte) & _PAGE_USER;
+}
+
 static inline int pte_dirty(pte_t pte)
 {
 	return pte_flags(pte) & _PAGE_DIRTY;
@@ -167,9 +216,29 @@ static inline pte_t pte_wrprotect(pte_t pte)
 	return pte_clear_flags(pte, _PAGE_RW);
 }
 
+static inline pte_t pte_mkread(pte_t pte)
+{
+	return __pte(pte_val(pte) | _PAGE_USER);
+}
+
 static inline pte_t pte_mkexec(pte_t pte)
 {
-	return pte_clear_flags(pte, _PAGE_NX);
+#ifdef CONFIG_X86_PAE
+	if (__supported_pte_mask & _PAGE_NX)
+		return pte_clear_flags(pte, _PAGE_NX);
+	else
+#endif
+		return pte_set_flags(pte, _PAGE_USER);
+}
+
+static inline pte_t pte_exprotect(pte_t pte)
+{
+#ifdef CONFIG_X86_PAE
+	if (__supported_pte_mask & _PAGE_NX)
+		return pte_set_flags(pte, _PAGE_NX);
+	else
+#endif
+		return pte_clear_flags(pte, _PAGE_USER);
 }
 
 static inline pte_t pte_mkdirty(pte_t pte)
@@ -472,7 +541,7 @@ static inline pud_t *pud_offset(pgd_t *pgd, unsigned long address)
 
 static inline int pgd_bad(pgd_t pgd)
 {
-	return (pgd_flags(pgd) & ~_PAGE_USER) != _KERNPG_TABLE;
+	return (pgd_flags(pgd) & ~(_PAGE_USER | _PAGE_NX)) != _KERNPG_TABLE;
 }
 
 static inline int pgd_none(pgd_t pgd)
@@ -611,9 +680,12 @@ static inline void ptep_set_wrprotect(struct mm_struct *mm,
  * dst and src can be on the same page, but the range must not overlap,
  * and must not cross a page boundary.
  */
-static inline void clone_pgd_range(pgd_t *dst, pgd_t *src, int count)
+static inline void clone_pgd_range(pgd_t *dst, const pgd_t *src, int count)
 {
-       memcpy(dst, src, count * sizeof(pgd_t));
+	pax_open_kernel();
+	while (count--)
+		*dst++ = *src++;
+	pax_close_kernel();
 }
 
 
