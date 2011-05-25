@@ -1356,24 +1356,24 @@ static inline unsigned long __raw_local_irq_save(void)
 
 #define INTERRUPT_RETURN						\
 	PARA_SITE(PARA_PATCH(pv_cpu_ops, PV_CPU_iret), CLBR_NONE,	\
-		  jmp *%cs:pv_cpu_ops+PV_CPU_iret)
+		  jmp *%ss:pv_cpu_ops+PV_CPU_iret)
 
 #define DISABLE_INTERRUPTS(clobbers)					\
 	PARA_SITE(PARA_PATCH(pv_irq_ops, PV_IRQ_irq_disable), clobbers, \
 		  PV_SAVE_REGS;			\
-		  call *%cs:pv_irq_ops+PV_IRQ_irq_disable;		\
+		  call *%ss:pv_irq_ops+PV_IRQ_irq_disable;		\
 		  PV_RESTORE_REGS;)			\
 
 #define ENABLE_INTERRUPTS(clobbers)					\
 	PARA_SITE(PARA_PATCH(pv_irq_ops, PV_IRQ_irq_enable), clobbers,	\
 		  PV_SAVE_REGS;			\
-		  call *%cs:pv_irq_ops+PV_IRQ_irq_enable;		\
+		  call *%ss:pv_irq_ops+PV_IRQ_irq_enable;		\
 		  PV_RESTORE_REGS;)
 
 #define ENABLE_INTERRUPTS_SYSCALL_RET					\
 	PARA_SITE(PARA_PATCH(pv_cpu_ops, PV_CPU_irq_enable_syscall_ret),\
 		  CLBR_NONE,						\
-		  jmp *%cs:pv_cpu_ops+PV_CPU_irq_enable_syscall_ret)
+		  jmp *%ss:pv_cpu_ops+PV_CPU_irq_enable_syscall_ret)
 
 
 #ifdef CONFIG_X86_32

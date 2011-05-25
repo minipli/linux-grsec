@@ -19,7 +19,7 @@
 	.byte 0xe9	/* 32bit jump */
 	.long \orig-1f	/* by default jump to orig */
 1:
-	.section .altinstr_replacement,"ax"
+	.section .altinstr_replacement,"a"
 2:	.byte 0xe9	             /* near jump with 32bit immediate */
 	.long \alt-1b /* offset */   /* or alternatively to alt */
 	.previous
@@ -76,6 +76,8 @@ ENDPROC(copy_from_user)
 	/* must zero dest */
 bad_from_user:
 	CFI_STARTPROC
+	testl %edx,%edx
+	js bad_to_user
 	movl %edx,%ecx
 	xorl %eax,%eax
 	rep

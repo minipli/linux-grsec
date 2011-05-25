@@ -40,7 +40,7 @@ static void store_cursor_position(void)
 
 	ax = 0x0300;
 	bx = 0;
-	asm(INT10
+	asm volatile(INT10
 	    : "=d" (curpos), "+a" (ax), "+b" (bx)
 	    : : "ecx", "esi", "edi");
 
@@ -55,7 +55,7 @@ static void store_video_mode(void)
 	/* N.B.: the saving of the video page here is a bit silly,
 	   since we pretty much assume page 0 everywhere. */
 	ax = 0x0f00;
-	asm(INT10
+	asm volatile(INT10
 	    : "+a" (ax), "=b" (page)
 	    : : "ecx", "edx", "esi", "edi");
 
