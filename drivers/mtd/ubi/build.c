@@ -1104,7 +1104,7 @@ static int __init bytes_str_to_int(const char *str)
 	unsigned long result;
 
 	result = simple_strtoul(str, &endp, 0);
-	if (str == endp || result < 0) {
+	if (str == endp) {
 		printk(KERN_ERR "UBI error: incorrect bytes count: \"%s\"\n",
 		       str);
 		return -EINVAL;

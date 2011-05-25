@@ -93,6 +93,12 @@ DECLARE_PER_CPU(struct x8664_pda, pda);
 
 #define __my_cpu_offset x86_read_percpu(this_cpu_off)
 
+#include <asm-generic/sections.h>
+#include <linux/threads.h>
+#define __per_cpu_offset __per_cpu_offset
+extern unsigned long __per_cpu_offset[NR_CPUS];
+#define per_cpu_offset(x) (__per_cpu_offset[x] + (unsigned long)__per_cpu_start)
+
 /* fs segment starts at (positive) offset == __per_cpu_offset[cpu] */
 #define __percpu_seg "%%fs:"
 

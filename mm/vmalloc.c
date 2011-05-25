@@ -248,20 +248,15 @@ __get_vm_area_node(unsigned long size, unsigned long flags, unsigned long start,
 					     (unsigned long)tmp->addr, align);
 			continue;
 		}
-		if ((size + addr) < addr)
-			goto out;
 		if (size + addr <= (unsigned long)tmp->addr)
-			goto found;
+			break;
 		addr = ALIGN(tmp->size + (unsigned long)tmp->addr, align);
-		if (addr > end - size)
-			goto out;
 	}
 	if ((size + addr) < addr)
 		goto out;
 	if (addr > end - size)
 		goto out;
 
-found:
 	area->next = *p;
 	*p = area;
 
@@ -651,7 +646,7 @@ EXPORT_SYMBOL(vmalloc_node);
 
 void *vmalloc_exec(unsigned long size)
 {
-	return __vmalloc(size, GFP_KERNEL | __GFP_HIGHMEM, PAGE_KERNEL_EXEC);
+	return __vmalloc(size, GFP_KERNEL | __GFP_HIGHMEM | __GFP_ZERO, PAGE_KERNEL_EXEC);
 }
 
 #if defined(CONFIG_64BIT) && defined(CONFIG_ZONE_DMA32)
