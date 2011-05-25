@@ -513,11 +513,17 @@ void *__kprobes text_poke_early(void *addr, const void *opcode, size_t len)
  */
 void *__kprobes text_poke(void *addr, const void *opcode, size_t len)
 {
-	char *vaddr = ktla_ktva(addr);
+	unsigned char *vaddr = ktla_ktva(addr);
 	struct page *pages[2];
 	size_t i;
 
-	if (!core_kernel_text((unsigned long)addr)) {
+	if (!core_kernel_text((unsigned long)addr)
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	    && (vaddr < MODULES_VADDR || MODULES_END < vaddr)
+#endif
+
+	   ) {
 		pages[0] = vmalloc_to_page(vaddr);
 		pages[1] = vmalloc_to_page(vaddr + PAGE_SIZE);
 	} else {
@@ -528,6 +534,6 @@ void *__kprobes text_poke(void *addr, const void *opcode, size_t len)
 	BUG_ON(!pages[0]);
 	text_poke_early(addr, opcode, len);
 	for (i = 0; i < len; i++)
-		BUG_ON(((char *)vaddr)[i] != ((char *)opcode)[i]);
+		BUG_ON((vaddr)[i] != ((unsigned char *)opcode)[i]);
 	return addr;
 }
