@@ -214,7 +214,8 @@
 #ifdef CONFIG_PAX_KERNEXEC
 ENTRY(pax_enter_kernel)
 #ifdef CONFIG_PARAVIRT
-	push %eax; push %ecx
+	pushl %eax
+	pushl %ecx
 	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0)
 	mov %eax, %esi
 #else
@@ -236,14 +237,16 @@ ENTRY(pax_enter_kernel)
 #endif
 3:
 #ifdef CONFIG_PARAVIRT
-	pop %ecx; pop %eax
+	popl %ecx
+	popl %eax
 #endif
 	ret
 ENDPROC(pax_enter_kernel)
 
 ENTRY(pax_exit_kernel)
 #ifdef CONFIG_PARAVIRT
-	push %eax; push %ecx
+	pushl %eax
+	pushl %ecx
 #endif
 	mov %cs, %esi
 	cmp $__KERNEXEC_KERNEL_CS, %esi
@@ -265,7 +268,8 @@ ENTRY(pax_exit_kernel)
 #endif
 2:
 #ifdef CONFIG_PARAVIRT
-	pop %ecx; pop %eax
+	popl %ecx
+	popl %eax
 #endif
 	ret
 ENDPROC(pax_exit_kernel)
@@ -278,10 +282,15 @@ ENDPROC(pax_exit_kernel)
 .endm
 
 #ifdef CONFIG_PAX_MEMORY_STACKLEAK
+/*
+ * ebp: thread_info
+ * ecx, edx: can be clobbered
+ */
 ENTRY(pax_erase_kstack)
-	push %edi
+	pushl %edi
+	pushl %eax
 
-	lea -64(%esp), %edi
+	mov TI_lowest_stack(%ebp), %edi
 	mov $0xB4DD00D5, %eax
 	std
 
@@ -291,11 +300,10 @@ ENTRY(pax_erase_kstack)
 	repne scasl
 	jecxz 2f
 
-	cmp $128+16, %ecx
+	cmp $2*16, %ecx
 	jc 2f
 
-	sub $512, %edi
-	mov $16, %ecx
+	mov $2*16, %ecx
 	repe scasl
 	jecxz 2f
 	jne 1b
@@ -306,7 +314,12 @@ ENTRY(pax_erase_kstack)
 	shr $2, %ecx
 	rep stosl
 
-	pop %edi
+	mov TI_task_thread_sp0(%ebp), %edi
+	sub $128, %edi
+	mov %edi, TI_lowest_stack(%ebp)
+
+	popl %eax
+	popl %edi
 	ret
 ENDPROC(pax_erase_kstack)
 #endif
@@ -610,11 +623,7 @@ sysenter_exit:
 	popl_cfi %eax
 #endif
 
-#ifdef CONFIG_PAX_MEMORY_STACKLEAK
-	pushl_cfi %eax
-	call pax_erase_kstack
-	popl_cfi %eax
-#endif
+	pax_erase_kstack
 
 /* if something modifies registers it must also disable sysexit */
 	movl PT_EIP(%esp), %edx
@@ -711,9 +720,7 @@ syscall_exit:
 	call pax_randomize_kstack
 #endif
 
-#ifdef CONFIG_PAX_MEMORY_STACKLEAK
 	pax_erase_kstack
-#endif
 
 restore_all:
 	TRACE_IRQS_IRET

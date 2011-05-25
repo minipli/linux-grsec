@@ -34,6 +34,7 @@ struct thread_info {
 	mm_segment_t		addr_limit;
 	struct restart_block    restart_block;
 	void __user		*sysenter_return;
+	unsigned long		lowest_stack;
 	int			uaccess_err;
 };
 
