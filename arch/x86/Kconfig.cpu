@@ -390,7 +390,7 @@ config X86_TSC
 # generates cmov.
 config X86_CMOV
 	bool
-	depends on (MK8 || MK7 || MCORE2 || MPENTIUM4 || MPENTIUMM || MPENTIUMIII || MPENTIUMII || M686 || MVIAC3_2 || MVIAC7)
+	depends on (MK8 || MK7 || MCORE2 || MPSC || MPENTIUM4 || MPENTIUMM || MPENTIUMIII || MPENTIUMII || M686 || MVIAC3_2 || MVIAC7)
 	default y
 
 config X86_MINIMUM_CPU_FAMILY
