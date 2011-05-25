@@ -109,10 +109,14 @@ ENDPROC(native_irq_enable_sysexit)
 	call pax_randomize_kstack
 	popq %rax
 #endif
+	pax_erase_kstack
+	.endm
+
+.macro pax_erase_kstack
 #ifdef CONFIG_PAX_MEMORY_STACKLEAK
 	call pax_erase_kstack
 #endif
-	.endm
+.endm
 
 /*
  * 32bit SYSENTER instruction entry.
@@ -230,7 +234,7 @@ sysexit_from_sys_call:
 	movl $AUDIT_ARCH_I386,%edi	/* 1st arg: audit arch */
 	call audit_syscall_entry
 
-	call pax_erase_kstack
+	pax_erase_kstack
 
 	movl RAX-ARGOFFSET(%rsp),%eax	/* reload syscall number */
 	cmpq $(IA32_NR_syscalls-1),%rax
@@ -285,7 +289,7 @@ sysenter_tracesys:
 	movq	%rsp,%rdi        /* &pt_regs -> arg1 */
 	call	syscall_trace_enter
 
-	call pax_erase_kstack
+	pax_erase_kstack
 
 	LOAD_ARGS32 ARGOFFSET  /* reload args from stack in case ptrace changed it */
 	RESTORE_REST
@@ -418,7 +422,7 @@ cstar_tracesys:
 	movq %rsp,%rdi        /* &pt_regs -> arg1 */
 	call syscall_trace_enter
 
-	call pax_erase_kstack
+	pax_erase_kstack
 
 	LOAD_ARGS32 ARGOFFSET, 1  /* reload args from stack in case ptrace changed it */
 	RESTORE_REST
@@ -500,7 +504,7 @@ ia32_tracesys:
 	movq %rsp,%rdi        /* &pt_regs -> arg1 */
 	call syscall_trace_enter
 
-	call pax_erase_kstack
+	pax_erase_kstack
 
 	LOAD_ARGS32 ARGOFFSET  /* reload args from stack in case ptrace changed it */
 	RESTORE_REST
