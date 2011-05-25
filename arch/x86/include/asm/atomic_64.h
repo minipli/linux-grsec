@@ -570,17 +570,28 @@ static inline long atomic64_sub_return(long i, atomic64_t *v)
  */
 static inline int atomic_add_unless(atomic_t *v, int a, int u)
 {
-	int c, old;
+	int c, old, new;
 	c = atomic_read(v);
 	for (;;) {
-		if (unlikely(c == (u)))
+		if (unlikely(c == u))
 			break;
-		old = atomic_cmpxchg((v), c, c + (a));
+
+		asm volatile("addl %2,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+			     "into\n0:\n"
+			     _ASM_EXTABLE(0b, 0b)
+#endif
+
+			     : "=r" (new)
+			     : "0" (c), "ir" (a));
+
+		old = atomic_cmpxchg(v, c, new);
 		if (likely(old == c))
 			break;
 		c = old;
 	}
-	return c != (u);
+	return c != u;
 }
 
 #define atomic_inc_not_zero(v) atomic_add_unless((v), 1, 0)
@@ -596,17 +607,29 @@ static inline int atomic_add_unless(atomic_t *v, int a, int u)
  */
 static inline int atomic64_add_unless(atomic64_t *v, long a, long u)
 {
-	long c, old;
+	long c, old, new;
 	c = atomic64_read(v);
 	for (;;) {
-		if (unlikely(c == (u)))
+		if (unlikely(c == u))
 			break;
-		old = atomic64_cmpxchg((v), c, c + (a));
+
+		asm volatile("addq %2,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+			     "jno 0f\n"
+			     "int $4\n0:\n"
+			     _ASM_EXTABLE(0b, 0b)
+#endif
+
+			     : "=r" (new)
+			     : "0" (c), "er" (a));
+
+		old = atomic64_cmpxchg((v), c, new);
 		if (likely(old == c))
 			break;
 		c = old;
 	}
-	return c != (u);
+	return c != u;
 }
 
 /**
