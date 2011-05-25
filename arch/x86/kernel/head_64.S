@@ -185,6 +185,7 @@ ENTRY(secondary_startup_64)
 	addq	phys_base(%rip), %rdi
 	btsq	$_PAGE_BIT_NX, 8*258(%rdi)
 	btsq	$_PAGE_BIT_NX, 8*388(%rdi)
+	btsq	$_PAGE_BIT_NX, 8*452(%rdi)
 1:	wrmsr				/* Make changes effective */
 
 	/* Setup cr0 */
@@ -355,7 +356,9 @@ NEXT_PAGE(init_level4_pgt)
 	.quad	level3_ident_pgt - __START_KERNEL_map + _KERNPG_TABLE
 	.fill	129,8,0
 	.quad	level3_vmalloc_pgt - __START_KERNEL_map + _KERNPG_TABLE
-	.fill	122,8,0
+	.fill	63,8,0
+	.quad	level3_vmemmap_pgt - __START_KERNEL_map + _KERNPG_TABLE
+	.fill	58,8,0
 	/* (2^48-(2*1024*1024*1024))/(2^39) = 511 */
 	.quad	level3_kernel_pgt - __START_KERNEL_map + _PAGE_TABLE
 
@@ -364,6 +367,9 @@ NEXT_PAGE(level3_ident_pgt)
 	.fill	511,8,0
 
 NEXT_PAGE(level3_vmalloc_pgt)
+	.fill	512,8,0
+
+NEXT_PAGE(level3_vmemmap_pgt)
 	.fill	512,8,0
 
 NEXT_PAGE(level3_kernel_pgt)
