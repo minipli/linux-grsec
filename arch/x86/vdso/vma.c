@@ -123,7 +123,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int exstack)
 	if (ret)
 		goto up_fail;
 
-	current->mm->context.vdso = (void *)addr;
+	current->mm->context.vdso = addr;
 up_fail:
 	up_write(&mm->mmap_sem);
 	return ret;
