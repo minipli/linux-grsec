@@ -28,11 +28,10 @@ int direct_gbpages
 #endif
 ;
 
+#if defined(CONFIG_X86_32) && defined(CONFIG_X86_PAE)
 int nx_enabled;
 
-#if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
-static int disable_nx __cpuinitdata;
-
+#ifndef CONFIG_PAX_PAGEEXEC
 /*
  * noexec = on|off
  *
@@ -46,32 +45,26 @@ static int __init noexec_setup(char *str)
 	if (!str)
 		return -EINVAL;
 	if (!strncmp(str, "on", 2)) {
-		__supported_pte_mask |= _PAGE_NX;
-		disable_nx = 0;
+		nx_enabled = 1;
 	} else if (!strncmp(str, "off", 3)) {
-		disable_nx = 1;
-		__supported_pte_mask &= ~_PAGE_NX;
+		nx_enabled = 0;
 	}
 	return 0;
 }
 early_param("noexec", noexec_setup);
 #endif
+#endif
 
 #ifdef CONFIG_X86_PAE
 static void __init set_nx(void)
 {
-	unsigned int v[4], l, h;
+	if (!nx_enabled && cpu_has_nx) {
+		unsigned l, h;
 
-	if (cpu_has_pae && (cpuid_eax(0x80000000) > 0x80000001)) {
-		cpuid(0x80000001, &v[0], &v[1], &v[2], &v[3]);
-
-		if ((v[3] & (1 << 20)) && !disable_nx) {
-			rdmsr(MSR_EFER, l, h);
-			l |= EFER_NX;
-			wrmsr(MSR_EFER, l, h);
-			nx_enabled = 1;
-			__supported_pte_mask |= _PAGE_NX;
-		}
+		__supported_pte_mask &= ~_PAGE_NX;
+		rdmsr(MSR_EFER, l, h);
+		l &= ~EFER_NX;
+		wrmsr(MSR_EFER, l, h);
 	}
 }
 #else
@@ -86,7 +79,7 @@ void __cpuinit check_efer(void)
 	unsigned long efer;
 
 	rdmsrl(MSR_EFER, efer);
-	if (!(efer & EFER_NX) || disable_nx)
+	if (!(efer & EFER_NX) || !nx_enabled)
 		__supported_pte_mask &= ~_PAGE_NX;
 }
 #endif
@@ -394,7 +387,13 @@ unsigned long __init_refok init_memory_mapping(unsigned long start,
  */
 int devmem_is_allowed(unsigned long pagenr)
 {
-	if (pagenr <= 256)
+	if (!pagenr)
+		return 1;
+#ifdef CONFIG_VM86
+	if (pagenr < (ISA_START_ADDRESS >> PAGE_SHIFT))
+		return 1;
+#endif
+	if ((ISA_START_ADDRESS >> PAGE_SHIFT) <= pagenr && pagenr < (ISA_END_ADDRESS >> PAGE_SHIFT))
 		return 1;
 	if (iomem_is_exclusive(pagenr << PAGE_SHIFT))
 		return 0;
@@ -442,6 +441,83 @@ void free_init_pages(char *what, unsigned long begin, unsigned long end)
 
 void free_initmem(void)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+
+#ifdef CONFIG_X86_32
+	/* PaX: limit KERNEL_CS to actual size */
+	unsigned long addr, limit;
+	struct desc_struct d;
+	int cpu;
+
+	limit = paravirt_enabled() ? ktva_ktla(0xffffffff) : (unsigned long)&_etext;
+	limit = (limit - 1UL) >> PAGE_SHIFT;
+
+	memset(__LOAD_PHYSICAL_ADDR + PAGE_OFFSET, POISON_FREE_INITMEM, PAGE_SIZE);
+	for (cpu = 0; cpu < NR_CPUS; cpu++) {
+		pack_descriptor(&d, get_desc_base(&get_cpu_gdt_table(cpu)[GDT_ENTRY_KERNEL_CS]), limit, 0x9B, 0xC);
+		write_gdt_entry(get_cpu_gdt_table(cpu), GDT_ENTRY_KERNEL_CS, &d, DESCTYPE_S);
+	}
+
+	/* PaX: make KERNEL_CS read-only */
+	addr = PFN_ALIGN(ktla_ktva((unsigned long)&_text));
+	if (!paravirt_enabled())
+		set_memory_ro(addr, (PFN_ALIGN(_sdata) - addr) >> PAGE_SHIFT);
+/*
+		for (addr = ktla_ktva((unsigned long)&_text); addr < (unsigned long)&_sdata; addr += PMD_SIZE) {
+			pgd = pgd_offset_k(addr);
+			pud = pud_offset(pgd, addr);
+			pmd = pmd_offset(pud, addr);
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		}
+*/
+#ifdef CONFIG_X86_PAE
+	set_memory_nx(PFN_ALIGN(__init_begin), (PFN_ALIGN(__init_end) - PFN_ALIGN(__init_begin)) >> PAGE_SHIFT);
+	for (addr = (unsigned long)&__init_begin; addr < (unsigned long)&__init_end; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+#endif
+
+#ifdef CONFIG_MODULES
+	set_memory_4k((unsigned long)MODULES_EXEC_VADDR, (MODULES_EXEC_END - MODULES_EXEC_VADDR) >> PAGE_SHIFT);
+#endif
+
+#else
+	unsigned long addr, end;
+
+	/* PaX: make kernel code/rodata read-only, rest non-executable */
+	for (addr = __START_KERNEL_map; addr < __START_KERNEL_map + KERNEL_IMAGE_SIZE; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		if ((unsigned long)_text <= addr && addr < (unsigned long)_sdata)
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		else
+			set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+
+	addr = (unsigned long)__va(__pa(__START_KERNEL_map));
+	end = addr + KERNEL_IMAGE_SIZE;
+	for (; addr < end; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		if ((unsigned long)__va(__pa(_text)) <= addr && addr < (unsigned long)__va(__pa(_sdata)))
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		else
+			set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+#endif
+
+	flush_tlb_all();
+#endif
+
 	free_init_pages("unused kernel memory",
 			(unsigned long)(&__init_begin),
 			(unsigned long)(&__init_end));
