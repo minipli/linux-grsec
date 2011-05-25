@@ -401,7 +401,7 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	if (heap > ((-__PAGE_OFFSET-(512<<20)-1) & 0x7fffffff))
 		error("Destination address too large");
 #ifndef CONFIG_RELOCATABLE
-	if ((u32)output != __LOAD_PHYSICAL_ADDR)
+	if ((u32)output != ____LOAD_PHYSICAL_ADDR)
 		error("Wrong destination address");
 #endif
 #endif

@@ -422,7 +422,7 @@ static void show_fault_oops(struct pt_regs *regs, unsigned long error_code,
 #else
 	if (init_mm.start_code <= address && address < init_mm.end_code)
 #endif
-		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code",
+		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code\n",
 				 current->comm, task_pid_nr(current), current->uid, current->euid);
 #endif
 
