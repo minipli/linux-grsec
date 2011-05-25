@@ -7,6 +7,11 @@
 #ifdef CONFIG_X86_64
 #define __ALIGN .p2align 4,,15
 #define __ALIGN_STR ".p2align 4,,15"
+#else
+#ifdef CONFIG_X86_ALIGNMENT_16
+#define __ALIGN .align 16,0x90
+#define __ALIGN_STR ".align 16,0x90"
+#endif
 #endif
 
 #ifdef CONFIG_X86_32
@@ -50,11 +55,6 @@
 	__asmlinkage_protect_n(ret, "g" (arg1), "g" (arg2), "g" (arg3), \
 			      "g" (arg4), "g" (arg5), "g" (arg6))
 
-#endif
-
-#ifdef CONFIG_X86_ALIGNMENT_16
-#define __ALIGN .align 16,0x90
-#define __ALIGN_STR ".align 16,0x90"
 #endif
 
 #endif

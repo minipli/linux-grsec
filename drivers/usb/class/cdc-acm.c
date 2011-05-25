@@ -1383,7 +1383,7 @@ static struct usb_device_id acm_ids[] = {
 		USB_CDC_ACM_PROTO_AT_CDMA) },
 
 	/* NOTE:  COMM/ACM/0xff is likely MSFT RNDIS ... NOT a modem!! */
-	{ }
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 MODULE_DEVICE_TABLE (usb, acm_ids);
