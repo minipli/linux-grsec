@@ -53,6 +53,7 @@
 #include <linux/kmod.h>
 #include <linux/fsnotify.h>
 #include <linux/random.h>
+#include <linux/seq_file.h>
 
 #ifdef CONFIG_PAX_REFCOUNT
 #include <linux/kallsyms.h>
@@ -1616,6 +1617,10 @@ void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
 			path_exec = d_path(&vma_exec->vm_file->f_path, buffer_exec, PAGE_SIZE);
 			if (IS_ERR(path_exec))
 				path_exec = "<path too long>";
+			else {
+				mangle_path(buffer_exec, path_exec, "\t\n\\");
+				path_exec = buffer_exec;
+			}
 		}
 		if (vma_fault) {
 			start = vma_fault->vm_start;
@@ -1625,6 +1630,10 @@ void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
 				path_fault = d_path(&vma_fault->vm_file->f_path, buffer_fault, PAGE_SIZE);
 				if (IS_ERR(path_fault))
 					path_fault = "<path too long>";
+				else {
+					mangle_path(buffer_fault, path_fault, "\t\n\\");
+					path_fault = buffer_fault;
+				}
 			} else
 				path_fault = "<anonymous mapping>";
 		}

@@ -248,7 +248,7 @@ static void show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 	 */
 	if (file) {
 		pad_len_spaces(m, len);
-		seq_path(m, &file->f_path, "\n");
+		seq_path(m, &file->f_path, "\n\\");
 	} else {
 		const char *name = arch_vma_name(vma);
 		if (!name) {
