@@ -900,7 +900,7 @@ static const struct ata_xfer_ent {
 	{ ATA_SHIFT_PIO, ATA_NR_PIO_MODES, XFER_PIO_0 },
 	{ ATA_SHIFT_MWDMA, ATA_NR_MWDMA_MODES, XFER_MW_DMA_0 },
 	{ ATA_SHIFT_UDMA, ATA_NR_UDMA_MODES, XFER_UDMA_0 },
-	{ -1, },
+	{ -1, 0, 0 }
 };
 
 /**
@@ -3168,7 +3168,7 @@ static const struct ata_timing ata_timing[] = {
 	{ XFER_UDMA_5,     0,   0,   0,   0,   0,   0, 0,    0,  20 },
 	{ XFER_UDMA_6,     0,   0,   0,   0,   0,   0, 0,    0,  15 },
 
-	{ 0xFF }
+	{ 0xFF, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 #define ENOUGH(v, unit)		(((v)-1)/(unit)+1)
@@ -4393,7 +4393,7 @@ static const struct ata_blacklist_entry ata_device_blacklist [] = {
 	{ "PIONEER DVD-RW  DVRTD08",	"1.00",	ATA_HORKAGE_NOSETXFER },
 
 	/* End Marker */
-	{ }
+	{ NULL, NULL, 0 }
 };
 
 static int strn_pattern_cmp(const char *patt, const char *name, int wildchar)
@@ -4954,7 +4954,7 @@ void ata_qc_free(struct ata_queued_cmd *qc)
 	struct ata_port *ap;
 	unsigned int tag;
 
-	WARN_ON_ONCE(qc == NULL); /* ata_qc_from_tag _might_ return NULL */
+	BUG_ON(qc == NULL); /* ata_qc_from_tag _might_ return NULL */
 	ap = qc->ap;
 
 	qc->flags = 0;
@@ -4970,7 +4970,7 @@ void __ata_qc_complete(struct ata_queued_cmd *qc)
 	struct ata_port *ap;
 	struct ata_link *link;
 
-	WARN_ON_ONCE(qc == NULL); /* ata_qc_from_tag _might_ return NULL */
+	BUG_ON(qc == NULL); /* ata_qc_from_tag _might_ return NULL */
 	WARN_ON_ONCE(!(qc->flags & ATA_QCFLAG_ACTIVE));
 	ap = qc->ap;
 	link = qc->dev->link;
@@ -5981,7 +5981,7 @@ static void ata_host_stop(struct device *gendev, void *res)
  *	LOCKING:
  *	None.
  */
-static void ata_finalize_port_ops(struct ata_port_operations *ops)
+static void ata_finalize_port_ops(const struct ata_port_operations *ops)
 {
 	static DEFINE_SPINLOCK(lock);
 	const struct ata_port_operations *cur;
@@ -5993,6 +5993,7 @@ static void ata_finalize_port_ops(struct ata_port_operations *ops)
 		return;
 
 	spin_lock(&lock);
+	pax_open_kernel();
 
 	for (cur = ops->inherits; cur; cur = cur->inherits) {
 		void **inherit = (void **)cur;
@@ -6006,8 +6007,9 @@ static void ata_finalize_port_ops(struct ata_port_operations *ops)
 		if (IS_ERR(*pp))
 			*pp = NULL;
 
-	ops->inherits = NULL;
+	((struct ata_port_operations *)ops)->inherits = NULL;
 
+	pax_close_kernel();
 	spin_unlock(&lock);
 }
 
@@ -6104,7 +6106,7 @@ int ata_host_start(struct ata_host *host)
  */
 /* KILLME - the only user left is ipr */
 void ata_host_init(struct ata_host *host, struct device *dev,
-		   unsigned long flags, struct ata_port_operations *ops)
+		   unsigned long flags, const struct ata_port_operations *ops)
 {
 	spin_lock_init(&host->lock);
 	host->dev = dev;
@@ -6767,7 +6769,7 @@ static void ata_dummy_error_handler(struct ata_port *ap)
 	/* truly dummy */
 }
 
-struct ata_port_operations ata_dummy_port_ops = {
+const struct ata_port_operations ata_dummy_port_ops = {
 	.qc_prep		= ata_noop_qc_prep,
 	.qc_issue		= ata_dummy_qc_issue,
 	.error_handler		= ata_dummy_error_handler,
