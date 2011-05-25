@@ -22,6 +22,7 @@ PHDRS {
 #ifdef CONFIG_SMP
 	percpu PT_LOAD FLAGS(7);	/* RWE */
 #endif
+	data.init2 PT_LOAD FLAGS(7);	/* RWE */
 	note PT_NOTE FLAGS(0);	/* ___ */
 }
 SECTIONS
@@ -247,7 +248,7 @@ SECTIONS
 	*(.bss.page_aligned)
 	*(.bss)
 	__bss_stop = .;
-  }
+  } :data.init2
 
   .brk : AT(ADDR(.brk) - LOAD_OFFSET) {
 	. = ALIGN(PAGE_SIZE);
