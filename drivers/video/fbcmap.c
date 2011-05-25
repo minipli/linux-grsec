@@ -250,8 +250,7 @@ int fb_set_user_cmap(struct fb_cmap_user *cmap, struct fb_info *info)
 	int rc, size = cmap->len * sizeof(u16);
 	struct fb_cmap umap;
 
-	if (cmap->start < 0 || (!info->fbops->fb_setcolreg &&
-			        !info->fbops->fb_setcmap))
+	if (!info->fbops->fb_setcolreg && !info->fbops->fb_setcmap)
 		return -EINVAL;
 
 	memset(&umap, 0, sizeof(struct fb_cmap));

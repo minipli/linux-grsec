@@ -31,11 +31,11 @@ static struct fixed_range_block fixed_range_blocks[] = {
 	{ MTRRfix64K_00000_MSR, 1 }, /* one  64k MTRR  */
 	{ MTRRfix16K_80000_MSR, 2 }, /* two  16k MTRRs */
 	{ MTRRfix4K_C0000_MSR,  8 }, /* eight 4k MTRRs */
-	{}
+	{ 0, 0 }
 };
 
 static unsigned long smp_changes_mask;
-static struct mtrr_state mtrr_state = {};
+static struct mtrr_state mtrr_state;
 static int mtrr_state_set;
 u64 mtrr_tom2;
 

@@ -236,7 +236,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	setup_thread_stack(tsk, orig);
 
 #ifdef CONFIG_CC_STACKPROTECTOR
-	tsk->stack_canary = get_random_int();
+	tsk->stack_canary = pax_get_random_long();
 #endif
 
 	/* One for us, one for whoever does the "release_task()" (usually parent) */
@@ -273,8 +273,8 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 	mm->locked_vm = 0;
 	mm->mmap = NULL;
 	mm->mmap_cache = NULL;
-	mm->free_area_cache = oldmm->mmap_base;
-	mm->cached_hole_size = ~0UL;
+	mm->free_area_cache = oldmm->free_area_cache;
+	mm->cached_hole_size = oldmm->cached_hole_size;
 	mm->map_count = 0;
 	cpus_clear(mm->cpu_vm_mask);
 	mm->mm_rb = RB_ROOT;
@@ -311,6 +311,7 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 		tmp->vm_flags &= ~VM_LOCKED;
 		tmp->vm_mm = mm;
 		tmp->vm_next = NULL;
+		tmp->vm_mirror = NULL;
 		anon_vma_link(tmp);
 		file = tmp->vm_file;
 		if (file) {
@@ -358,6 +359,31 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 		if (retval)
 			goto out;
 	}
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (oldmm->pax_flags & MF_PAX_SEGMEXEC) {
+		struct vm_area_struct *mpnt_m;
+
+		for (mpnt = oldmm->mmap, mpnt_m = mm->mmap; mpnt; mpnt = mpnt->vm_next, mpnt_m = mpnt_m->vm_next) {
+			BUG_ON(!mpnt_m || mpnt_m->vm_mirror || mpnt->vm_mm != oldmm || mpnt_m->vm_mm != mm);
+
+			if (!mpnt->vm_mirror)
+				continue;
+
+			if (mpnt->vm_end <= SEGMEXEC_TASK_SIZE) {
+				BUG_ON(mpnt->vm_mirror->vm_mirror != mpnt);
+				mpnt->vm_mirror = mpnt_m;
+			} else {
+				BUG_ON(mpnt->vm_mirror->vm_mirror == mpnt || mpnt->vm_mirror->vm_mirror->vm_mm != mm);
+				mpnt_m->vm_mirror = mpnt->vm_mirror->vm_mirror;
+				mpnt_m->vm_mirror->vm_mirror = mpnt_m;
+				mpnt->vm_mirror->vm_mirror = mpnt;
+			}
+		}
+		BUG_ON(mpnt_m);
+	}
+#endif
+
 	/* a new mm has just been created */
 	arch_dup_mmap(oldmm, mm);
 	retval = 0;
@@ -527,9 +553,11 @@ void mm_release(struct task_struct *tsk, struct mm_struct *mm)
 #ifdef CONFIG_FUTEX
 	if (unlikely(tsk->robust_list))
 		exit_robust_list(tsk);
+	tsk->robust_list = NULL;
 #ifdef CONFIG_COMPAT
 	if (unlikely(tsk->compat_robust_list))
 		compat_exit_robust_list(tsk);
+	tsk->compat_robust_list = NULL;
 #endif
 #endif
 
@@ -551,7 +579,7 @@ void mm_release(struct task_struct *tsk, struct mm_struct *mm)
 	if (tsk->clear_child_tid
 	    && !(tsk->flags & PF_SIGNALED)
 	    && atomic_read(&mm->mm_users) > 1) {
-		u32 __user * tidptr = tsk->clear_child_tid;
+		pid_t __user * tidptr = tsk->clear_child_tid;
 		tsk->clear_child_tid = NULL;
 
 		/*
@@ -559,7 +587,7 @@ void mm_release(struct task_struct *tsk, struct mm_struct *mm)
 		 * not set up a proper pointer then tough luck.
 		 */
 		put_user(0, tidptr);
-		sys_futex(tidptr, FUTEX_WAKE, 1, NULL, NULL, 0);
+		sys_futex((u32 __user *)tidptr, FUTEX_WAKE, 1, NULL, NULL, 0);
 	}
 }
 

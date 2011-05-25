@@ -393,7 +393,7 @@ static void fb_do_show_logo(struct fb_info *info, struct fb_image *image,
 			image->dx += image->width + 8;
 		}
 	} else if (rotate == FB_ROTATE_UD) {
-		for (x = 0; x < num && image->dx >= 0; x++) {
+		for (x = 0; x < num && (__s32)image->dx >= 0; x++) {
 			info->fbops->fb_imageblit(info, image);
 			image->dx -= image->width + 8;
 		}
@@ -405,7 +405,7 @@ static void fb_do_show_logo(struct fb_info *info, struct fb_image *image,
 			image->dy += image->height + 8;
 		}
 	} else if (rotate == FB_ROTATE_CCW) {
-		for (x = 0; x < num && image->dy >= 0; x++) {
+		for (x = 0; x < num && (__s32)image->dy >= 0; x++) {
 			info->fbops->fb_imageblit(info, image);
 			image->dy -= image->height + 8;
 		}
@@ -1090,7 +1090,7 @@ static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			ret = -EINVAL;
 			break;
 		}
-		if (con2fb.framebuffer < 0 || con2fb.framebuffer >= FB_MAX) {
+		if (con2fb.framebuffer >= FB_MAX) {
 			ret = -EINVAL;
 			break;
 		}

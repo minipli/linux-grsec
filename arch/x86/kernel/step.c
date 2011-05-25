@@ -23,22 +23,20 @@ unsigned long convert_ip_to_linear(struct task_struct *child, struct pt_regs *re
 	 * and APM bios ones we just ignore here.
 	 */
 	if ((seg & SEGMENT_TI_MASK) == SEGMENT_LDT) {
-		u32 *desc;
+		struct desc_struct *desc;
 		unsigned long base;
 
-		seg &= ~7UL;
+		seg >>= 3;
 
 		mutex_lock(&child->mm->context.lock);
-		if (unlikely((seg >> 3) >= child->mm->context.size))
-			addr = -1L; /* bogus selector, access would fault */
+		if (unlikely(seg >= child->mm->context.size))
+			addr = -EINVAL;
 		else {
-			desc = child->mm->context.ldt + seg;
-			base = ((desc[0] >> 16) |
-				((desc[1] & 0xff) << 16) |
-				(desc[1] & 0xff000000));
+			desc = &child->mm->context.ldt[seg];
+			base = (desc->a >> 16) | ((desc->b & 0xff) << 16) | (desc->b & 0xff000000);
 
 			/* 16-bit code segment? */
-			if (!((desc[1] >> 22) & 1))
+			if (!((desc->b >> 22) & 1))
 				addr &= 0xffff;
 			addr += base;
 		}
@@ -53,6 +51,9 @@ static int is_setting_trap_flag(struct task_struct *child, struct pt_regs *regs)
 	int i, copied;
 	unsigned char opcode[15];
 	unsigned long addr = convert_ip_to_linear(child, regs);
+
+	if (addr == -EINVAL)
+		return 0;
 
 	copied = access_process_vm(child, addr, opcode, sizeof(opcode), 0);
 	for (i = 0; i < copied; i++) {
@@ -75,7 +76,7 @@ static int is_setting_trap_flag(struct task_struct *child, struct pt_regs *regs)
 
 #ifdef CONFIG_X86_64
 		case 0x40 ... 0x4f:
-			if (regs->cs != __USER_CS)
+			if ((regs->cs & 0xffff) != __USER_CS)
 				/* 32-bit mode: register increment */
 				return 0;
 			/* 64-bit mode: REX prefix */

@@ -122,6 +122,7 @@ int main(void)
 	ENTRY(cr8);
 	BLANK();
 #undef ENTRY
+	DEFINE(TSS_size, sizeof(struct tss_struct));
 	DEFINE(TSS_ist, offsetof(struct tss_struct, x86_tss.ist));
 	BLANK();
 	DEFINE(crypto_tfm_ctx_offset, offsetof(struct crypto_tfm, __crt_ctx));

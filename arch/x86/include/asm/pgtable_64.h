@@ -15,9 +15,12 @@
 
 extern pud_t level3_kernel_pgt[512];
 extern pud_t level3_ident_pgt[512];
+extern pud_t level3_vmalloc_pgt[512];
+extern pud_t level3_vmemmap_pgt[512];
 extern pmd_t level2_kernel_pgt[512];
 extern pmd_t level2_fixmap_pgt[512];
 extern pmd_t level2_ident_pgt[512];
+extern pte_t level1_fixmap_pgt[512];
 extern pgd_t init_level4_pgt[];
 
 #define swapper_pg_dir init_level4_pgt
@@ -106,7 +109,19 @@ static inline pte_t native_ptep_get_and_clear(pte_t *xp)
 
 static inline void native_set_pmd(pmd_t *pmdp, pmd_t pmd)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	*pmdp = pmd;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 static inline void native_pmd_clear(pmd_t *pmd)
@@ -158,17 +173,17 @@ static inline void native_pgd_clear(pgd_t *pgd)
 
 static inline int pgd_bad(pgd_t pgd)
 {
-	return (pgd_val(pgd) & ~(PTE_PFN_MASK | _PAGE_USER)) != _KERNPG_TABLE;
+	return (pgd_val(pgd) & ~(PTE_PFN_MASK | _PAGE_USER | _PAGE_NX)) != _KERNPG_TABLE;
 }
 
 static inline int pud_bad(pud_t pud)
 {
-	return (pud_val(pud) & ~(PTE_PFN_MASK | _PAGE_USER)) != _KERNPG_TABLE;
+	return (pud_val(pud) & ~(PTE_PFN_MASK | _PAGE_USER | _PAGE_NX)) != _KERNPG_TABLE;
 }
 
 static inline int pmd_bad(pmd_t pmd)
 {
-	return (pmd_val(pmd) & ~(PTE_PFN_MASK | _PAGE_USER)) != _KERNPG_TABLE;
+	return (pmd_val(pmd) & ~(PTE_PFN_MASK | _PAGE_USER | _PAGE_NX)) != _KERNPG_TABLE;
 }
 
 #define pte_none(x)	(!pte_val((x)))

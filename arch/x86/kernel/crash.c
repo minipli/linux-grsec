@@ -59,7 +59,7 @@ static int crash_nmi_callback(struct notifier_block *self,
 	local_irq_disable();
 
 #ifdef CONFIG_X86_32
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		crash_fixup_ss_esp(&fixed_regs, regs);
 		regs = &fixed_regs;
 	}

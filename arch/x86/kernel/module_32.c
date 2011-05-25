@@ -23,6 +23,9 @@
 #include <linux/kernel.h>
 #include <linux/bug.h>
 
+#include <asm/desc.h>
+#include <asm/pgtable.h>
+
 #if 0
 #define DEBUGP printk
 #else
@@ -33,9 +36,31 @@ void *module_alloc(unsigned long size)
 {
 	if (size == 0)
 		return NULL;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	return __vmalloc(size, GFP_KERNEL | __GFP_HIGHMEM | __GFP_ZERO, PAGE_KERNEL);
+#else
 	return vmalloc_exec(size);
+#endif
+
 }
 
+#ifdef CONFIG_PAX_KERNEXEC
+void *module_alloc_exec(unsigned long size)
+{
+	struct vm_struct *area;
+
+	if (size == 0)
+		return NULL;
+
+	area = __get_vm_area(size, VM_ALLOC, (unsigned long)&MODULES_VADDR, (unsigned long)&MODULES_END);
+	if (area)
+		return area->addr;
+
+	return NULL;
+}
+EXPORT_SYMBOL(module_alloc_exec);
+#endif
 
 /* Free memory returned from module_alloc */
 void module_free(struct module *mod, void *module_region)
@@ -44,6 +69,45 @@ void module_free(struct module *mod, void *module_region)
 	/* FIXME: If module_region == mod->init_region, trim exception
            table entries. */
 }
+
+#ifdef CONFIG_PAX_KERNEXEC
+void module_free_exec(struct module *mod, void *module_region)
+{
+	struct vm_struct **p, *tmp;
+
+	if (!module_region)
+		return;
+
+	if ((PAGE_SIZE-1) & (unsigned long)module_region) {
+		printk(KERN_ERR "Trying to module_free_exec() bad address (%p)\n", module_region);
+		WARN_ON(1);
+		return;
+	}
+
+	write_lock(&vmlist_lock);
+	for (p = &vmlist; (tmp = *p) != NULL; p = &tmp->next)
+		 if (tmp->addr == module_region)
+			break;
+
+	if (tmp) {
+		unsigned long cr0;
+
+		pax_open_kernel(cr0);
+		memset(tmp->addr, 0xCC, tmp->size);
+		pax_close_kernel(cr0);
+
+		*p = tmp->next;
+		kfree(tmp);
+	}
+	write_unlock(&vmlist_lock);
+
+	if (!tmp) {
+		printk(KERN_ERR "Trying to module_free_exec() nonexistent vm area (%p)\n",
+				module_region);
+		WARN_ON(1);
+	}
+}
+#endif
 
 /* We don't need anything special. */
 int module_frob_arch_sections(Elf_Ehdr *hdr,
@@ -63,14 +127,20 @@ int apply_relocate(Elf32_Shdr *sechdrs,
 	unsigned int i;
 	Elf32_Rel *rel = (void *)sechdrs[relsec].sh_addr;
 	Elf32_Sym *sym;
-	uint32_t *location;
+	uint32_t *plocation, location;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
 
 	DEBUGP("Applying relocate section %u to %u\n", relsec,
 	       sechdrs[relsec].sh_info);
 	for (i = 0; i < sechdrs[relsec].sh_size / sizeof(*rel); i++) {
 		/* This is where to make the change */
-		location = (void *)sechdrs[sechdrs[relsec].sh_info].sh_addr
-			+ rel[i].r_offset;
+		plocation = (void *)sechdrs[sechdrs[relsec].sh_info].sh_addr + rel[i].r_offset;
+		location = (uint32_t)plocation;
+		if (sechdrs[sechdrs[relsec].sh_info].sh_flags & SHF_EXECINSTR)
+			plocation = ktla_ktva((void *)plocation);
 		/* This is the symbol it is referring to.  Note that all
 		   undefined symbols have been resolved.  */
 		sym = (Elf32_Sym *)sechdrs[symindex].sh_addr
@@ -78,12 +148,32 @@ int apply_relocate(Elf32_Shdr *sechdrs,
 
 		switch (ELF32_R_TYPE(rel[i].r_info)) {
 		case R_386_32:
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_open_kernel(cr0);
+#endif
+
 			/* We add the value into the location given */
-			*location += sym->st_value;
+			*plocation += sym->st_value;
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_close_kernel(cr0);
+#endif
+
 			break;
 		case R_386_PC32:
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_open_kernel(cr0);
+#endif
+
 			/* Add the value, subtract its postition */
-			*location += sym->st_value - (uint32_t)location;
+			*plocation += sym->st_value - location;
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_close_kernel(cr0);
+#endif
+
 			break;
 		default:
 			printk(KERN_ERR "module %s: Unknown relocation: %u\n",

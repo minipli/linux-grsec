@@ -59,7 +59,7 @@ static struct pcie_port_service_id aer_id[] = {
 	.port_type 	= PCIE_RC_PORT,
 	.service_type 	= PCIE_PORT_SERVICE_AER,
 	},
-	{ /* end: all zeroes */ }
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 static struct pci_error_handlers aer_error_handlers = {

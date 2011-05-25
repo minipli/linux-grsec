@@ -40,7 +40,7 @@ void module_free(struct module *mod, void *module_region)
            table entries. */
 }
 
-void *module_alloc(unsigned long size)
+static void *__module_alloc(unsigned long size, pgprot_t prot)
 {
 	struct vm_struct *area;
 
@@ -54,8 +54,31 @@ void *module_alloc(unsigned long size)
 	if (!area)
 		return NULL;
 
-	return __vmalloc_area(area, GFP_KERNEL, PAGE_KERNEL_EXEC);
+	return __vmalloc_area(area, GFP_KERNEL | __GFP_ZERO, prot);
 }
+
+#ifdef CONFIG_PAX_KERNEXEC
+void *module_alloc(unsigned long size)
+{
+	return __module_alloc(size, PAGE_KERNEL);
+}
+
+void module_free_exec(struct module *mod, void *module_region)
+{
+	module_free(mod, module_region);
+}
+
+void *module_alloc_exec(unsigned long size)
+{
+	return __module_alloc(size, PAGE_KERNEL_RX);
+}
+#else
+void *module_alloc(unsigned long size)
+{
+	return __module_alloc(size, PAGE_KERNEL_EXEC);
+}
+#endif
+
 #endif
 
 /* We don't need anything special. */
@@ -77,7 +100,11 @@ int apply_relocate_add(Elf64_Shdr *sechdrs,
 	Elf64_Rela *rel = (void *)sechdrs[relsec].sh_addr;
 	Elf64_Sym *sym;
 	void *loc;
-	u64 val; 
+	u64 val;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
 
 	DEBUGP("Applying relocate section %u to %u\n", relsec,
 	       sechdrs[relsec].sh_info);
@@ -101,21 +128,61 @@ int apply_relocate_add(Elf64_Shdr *sechdrs,
 		case R_X86_64_NONE:
 			break;
 		case R_X86_64_64:
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_open_kernel(cr0);
+#endif
+
 			*(u64 *)loc = val;
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_close_kernel(cr0);
+#endif
+
 			break;
 		case R_X86_64_32:
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_open_kernel(cr0);
+#endif
+
 			*(u32 *)loc = val;
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_close_kernel(cr0);
+#endif
+
 			if (val != *(u32 *)loc)
 				goto overflow;
 			break;
 		case R_X86_64_32S:
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_open_kernel(cr0);
+#endif
+
 			*(s32 *)loc = val;
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_close_kernel(cr0);
+#endif
+
 			if ((s64)val != *(s32 *)loc)
 				goto overflow;
 			break;
 		case R_X86_64_PC32: 
 			val -= (u64)loc;
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_open_kernel(cr0);
+#endif
+
 			*(u32 *)loc = val;
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_close_kernel(cr0);
+#endif
+
 #if 0
 			if ((s64)val != *(s32 *)loc)
 				goto overflow; 
