@@ -1510,7 +1510,7 @@ free_dst:
 	goto out;
 }
 
-static int inline
+static inline int
 xfrm_dst_alloc_copy(void **target, void *src, int size)
 {
 	if (!*target) {
@@ -1522,7 +1522,7 @@ xfrm_dst_alloc_copy(void **target, void *src, int size)
 	return 0;
 }
 
-static int inline
+static inline int
 xfrm_dst_update_parent(struct dst_entry *dst, struct xfrm_selector *sel)
 {
 #ifdef CONFIG_XFRM_SUB_POLICY
@@ -1534,7 +1534,7 @@ xfrm_dst_update_parent(struct dst_entry *dst, struct xfrm_selector *sel)
 #endif
 }
 
-static int inline
+static inline int
 xfrm_dst_update_origin(struct dst_entry *dst, struct flowi *fl)
 {
 #ifdef CONFIG_XFRM_SUB_POLICY

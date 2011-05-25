@@ -116,14 +116,28 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 	struct anon_vma *anon_vma = vma->anon_vma;
 	struct anon_vma_chain *avc;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	struct anon_vma_chain *avc_m = NULL;
+#endif
+
 	might_sleep();
 	if (unlikely(!anon_vma)) {
 		struct mm_struct *mm = vma->vm_mm;
 		struct anon_vma *allocated;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+		struct vm_area_struct *vma_m;
+#endif
+
 		avc = anon_vma_chain_alloc();
 		if (!avc)
 			goto out_enomem;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		avc_m = anon_vma_chain_alloc();
+		if (!avc_m)
+			goto out_enomem_free_avc;
+#endif
 
 		anon_vma = find_mergeable_anon_vma(vma);
 		allocated = NULL;
@@ -143,6 +157,20 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 			avc->vma = vma;
 			list_add(&avc->same_vma, &vma->anon_vma_chain);
 			list_add(&avc->same_anon_vma, &anon_vma->head);
+
+#ifdef CONFIG_PAX_SEGMEXEC
+			vma_m = pax_find_mirror_vma(vma);
+			if (vma_m) {
+				BUG_ON(vma_m->anon_vma);
+				vma_m->anon_vma = anon_vma;
+				avc_m->anon_vma = anon_vma;
+				avc_m->vma = vma;
+				list_add(&avc_m->same_vma, &vma_m->anon_vma_chain);
+				list_add(&avc_m->same_anon_vma, &anon_vma->head);
+				avc_m = NULL;
+			}
+#endif
+
 			allocated = NULL;
 			avc = NULL;
 		}
@@ -151,12 +179,24 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 
 		if (unlikely(allocated))
 			anon_vma_free(allocated);
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if (unlikely(avc_m))
+			anon_vma_chain_free(avc_m);
+#endif
+
 		if (unlikely(avc))
 			anon_vma_chain_free(avc);
 	}
 	return 0;
 
  out_enomem_free_avc:
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (avc_m)
+		anon_vma_chain_free(avc_m);
+#endif
+
 	anon_vma_chain_free(avc);
  out_enomem:
 	return -ENOMEM;
