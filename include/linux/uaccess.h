@@ -76,11 +76,11 @@ static inline unsigned long __copy_from_user_nocache(void *to,
 		long ret;				\
 		mm_segment_t old_fs = get_fs();		\
 							\
-		set_fs(KERNEL_DS);			\
 		pagefault_disable();			\
+		set_fs(KERNEL_DS);			\
 		ret = __get_user(retval, (__force typeof(retval) __user *)(addr));		\
-		pagefault_enable();			\
 		set_fs(old_fs);				\
+		pagefault_enable();			\
 		ret;					\
 	})
 

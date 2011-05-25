@@ -148,6 +148,8 @@ static void __iomem *__ioremap(resource_size_t phys_addr, unsigned long size,
 		break;
 	}
 
+	prot = canon_pgprot(prot);
+
 	/*
 	 * Mappings have to be page-aligned
 	 */

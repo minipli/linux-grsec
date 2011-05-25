@@ -61,14 +61,14 @@ static const struct ieee80211_channel_range ieee80211_fcc_channels[] = {
 	{ 5180, 5240, 17, 6 } /* IEEE 802.11a, channels 36..48 */,
 	{ 5260, 5320, 23, 6 } /* IEEE 802.11a, channels 52..64 */,
 	{ 5745, 5825, 30, 6 } /* IEEE 802.11a, channels 149..165, outdoor */,
-	{ 0 }
+	{ 0, 0, 0, 0 }
 };
 
 static const struct ieee80211_channel_range ieee80211_mkk_channels[] = {
 	{ 2412, 2472, 20, 6 } /* IEEE 802.11b/g, channels 1..13 */,
 	{ 5170, 5240, 20, 6 } /* IEEE 802.11a, channels 34..48 */,
 	{ 5260, 5320, 20, 6 } /* IEEE 802.11a, channels 52..64 */,
-	{ 0 }
+	{ 0, 0, 0, 0 }
 };
 
 
