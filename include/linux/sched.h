@@ -95,6 +95,7 @@ struct exec_domain;
 struct futex_pi_state;
 struct robust_list_head;
 struct bio;
+struct linux_binprm;
 
 /*
  * List of flags we want to share for kernel threads,
@@ -1025,7 +1026,7 @@ struct sched_rt_entity {
 
 struct task_struct {
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
-	void *stack;
+	struct thread_info *stack;
 	atomic_t usage;
 	unsigned int flags;	/* per process flags, defined below */
 	unsigned int ptrace;
@@ -1095,10 +1096,9 @@ struct task_struct {
 	pid_t pid;
 	pid_t tgid;
 
-#ifdef CONFIG_CC_STACKPROTECTOR
 	/* Canary value for the -fstack-protector gcc feature */
 	unsigned long stack_canary;
-#endif
+
 	/* 
 	 * pointers to (original) parent process, youngest child, younger sibling,
 	 * older sibling, respectively.  (p->father can be replaced with 
@@ -1119,8 +1119,8 @@ struct task_struct {
 	struct list_head thread_group;
 
 	struct completion *vfork_done;		/* for vfork() */
-	int __user *set_child_tid;		/* CLONE_CHILD_SETTID */
-	int __user *clear_child_tid;		/* CLONE_CHILD_CLEARTID */
+	pid_t __user *set_child_tid;		/* CLONE_CHILD_SETTID */
+	pid_t __user *clear_child_tid;		/* CLONE_CHILD_CLEARTID */
 
 	unsigned int rt_priority;
 	cputime_t utime, stime, utimescaled, stimescaled;
@@ -1304,6 +1304,50 @@ struct task_struct {
 	struct latency_record latency_record[LT_SAVECOUNT];
 #endif
 };
+
+#define MF_PAX_PAGEEXEC		0x01000000	/* Paging based non-executable pages */
+#define MF_PAX_EMUTRAMP		0x02000000	/* Emulate trampolines */
+#define MF_PAX_MPROTECT		0x04000000	/* Restrict mprotect() */
+#define MF_PAX_RANDMMAP		0x08000000	/* Randomize mmap() base */
+/*#define MF_PAX_RANDEXEC		0x10000000*/	/* Randomize ET_EXEC base */
+#define MF_PAX_SEGMEXEC		0x20000000	/* Segmentation based non-executable pages */
+
+#ifdef CONFIG_PAX_SOFTMODE
+extern unsigned int pax_softmode;
+#endif
+
+extern int pax_check_flags(unsigned long *);
+
+/* if tsk != current then task_lock must be held on it */
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+static inline unsigned long pax_get_flags(struct task_struct *tsk)
+{
+	if (likely(tsk->mm))
+		return tsk->mm->pax_flags;
+	else
+		return 0UL;
+}
+
+/* if tsk != current then task_lock must be held on it */
+static inline long pax_set_flags(struct task_struct *tsk, unsigned long flags)
+{
+	if (likely(tsk->mm)) {
+		tsk->mm->pax_flags = flags;
+		return 0;
+	}
+	return -EINVAL;
+}
+#endif
+
+#ifdef CONFIG_PAX_HAVE_ACL_FLAGS
+extern void pax_set_initial_flags(struct linux_binprm *bprm);
+#elif defined(CONFIG_PAX_HOOK_ACL_FLAGS)
+extern void (*pax_set_initial_flags_func)(struct linux_binprm *bprm);
+#endif
+
+void pax_report_fault(struct pt_regs *regs, void *pc, void *sp);
+void pax_report_insns(void *pc, void *sp);
+void pax_report_refcount_overflow(struct pt_regs *regs);
 
 /*
  * Priority of a process goes from 0..MAX_PRIO-1, valid RT
@@ -1855,7 +1899,7 @@ extern void __cleanup_sighand(struct sighand_struct *);
 extern void exit_itimers(struct signal_struct *);
 extern void flush_itimer_signals(void);
 
-extern NORET_TYPE void do_group_exit(int);
+extern NORET_TYPE void do_group_exit(int) ATTRIB_NORET;
 
 extern void daemonize(const char *, ...);
 extern int allow_signal(int);
@@ -1957,8 +2001,8 @@ static inline void unlock_task_sighand(struct task_struct *tsk,
 
 #ifndef __HAVE_THREAD_FUNCTIONS
 
-#define task_thread_info(task)	((struct thread_info *)(task)->stack)
-#define task_stack_page(task)	((task)->stack)
+#define task_thread_info(task)	((task)->stack)
+#define task_stack_page(task)	((void *)(task)->stack)
 
 static inline void setup_thread_stack(struct task_struct *p, struct task_struct *org)
 {
@@ -2130,6 +2174,12 @@ extern void arch_pick_mmap_layout(struct mm_struct *mm);
 static inline void arch_pick_mmap_layout(struct mm_struct *mm)
 {
 	mm->mmap_base = TASK_UNMAPPED_BASE;
+
+#ifdef CONFIG_PAX_RANDMMAP
+	if (mm->pax_flags & MF_PAX_RANDMMAP)
+		mm->mmap_base += mm->delta_mmap;
+#endif
+
 	mm->get_unmapped_area = arch_get_unmapped_area;
 	mm->unmap_area = arch_unmap_area;
 }

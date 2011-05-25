@@ -847,15 +847,13 @@ static int __cpuinit do_boot_cpu(int apicid, int cpu)
 		.cpu = cpu,
 		.done = COMPLETION_INITIALIZER_ONSTACK(c_idle.done),
 	};
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	unsigned long cr0;
+#endif
+
 	INIT_WORK(&c_idle.work, do_fork_idle);
 #ifdef CONFIG_X86_64
-	/* allocate memory for gdts of secondary cpus. Hotplug is considered */
-	if (!cpu_gdt_descr[cpu].address &&
-		!(cpu_gdt_descr[cpu].address = get_zeroed_page(GFP_KERNEL))) {
-		printk(KERN_ERR "Failed to allocate GDT for CPU %d\n", cpu);
-		return -1;
-	}
-
 	/* Allocate node local memory for AP pdas */
 	if (cpu_pda(cpu) == &boot_cpu_pda[cpu]) {
 		struct x8664_pda *newpda, *pda;
@@ -905,7 +903,17 @@ do_rest:
 #ifdef CONFIG_X86_32
 	per_cpu(current_task, cpu) = c_idle.idle;
 	init_gdt(cpu);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	early_gdt_descr.address = (unsigned long)get_cpu_gdt_table(cpu);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	c_idle.idle->thread.ip = (unsigned long) start_secondary;
 	/* Stack for startup_32 can be just as for start_secondary onwards */
 	stack_start.sp = (void *) c_idle.idle->thread.sp;
@@ -913,7 +921,7 @@ do_rest:
 #else
 	cpu_pda(cpu)->pcurrent = c_idle.idle;
 	init_rsp = c_idle.idle->thread.sp;
-	load_sp0(&per_cpu(init_tss, cpu), &c_idle.idle->thread);
+	load_sp0(init_tss + cpu, &c_idle.idle->thread);
 	initial_code = (unsigned long)start_secondary;
 	clear_tsk_thread_flag(c_idle.idle, TIF_FORK);
 #endif

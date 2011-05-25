@@ -239,7 +239,7 @@ static struct pci_device_id snd_intel8x0m_ids[] = {
 	{ 0x1022, 0x746d, PCI_ANY_ID, PCI_ANY_ID, 0, 0, DEVICE_INTEL },	/* AMD8111 */
 	{ 0x10b9, 0x5455, PCI_ANY_ID, PCI_ANY_ID, 0, 0, DEVICE_ALI },   /* Ali5455 */
 #endif
-	{ 0, }
+	{ 0, 0, 0, 0, 0, 0, 0 }
 };
 
 MODULE_DEVICE_TABLE(pci, snd_intel8x0m_ids);
@@ -1257,7 +1257,7 @@ static struct shortname_table {
 	{ 0x5455, "ALi M5455" },
 	{ 0x746d, "AMD AMD8111" },
 #endif
-	{ 0 },
+	{ 0, NULL },
 };
 
 static int __devinit snd_intel8x0m_probe(struct pci_dev *pci,
