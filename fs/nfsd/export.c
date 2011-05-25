@@ -473,7 +473,7 @@ static int secinfo_parse(char **mesg, char *buf, struct svc_export *exp)
 		 * probably discover the problem when someone fails to
 		 * authenticate.
 		 */
-		if (f->pseudoflavor < 0)
+		if ((s32)f->pseudoflavor < 0)
 			return -EINVAL;
 		err = get_int(mesg, &f->flags);
 		if (err)

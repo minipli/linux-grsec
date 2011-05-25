@@ -371,7 +371,7 @@ static int ircomm_tty_open(struct tty_struct *tty, struct file *filp)
 	IRDA_DEBUG(2, "%s()\n", __func__ );
 
 	line = tty->index;
-	if ((line < 0) || (line >= IRCOMM_TTY_PORTS)) {
+	if (line >= IRCOMM_TTY_PORTS) {
 		return -ENODEV;
 	}
 
