@@ -632,7 +632,7 @@ static __always_inline int __do_follow_link(struct path *path, struct nameidata 
 	cookie = dentry->d_inode->i_op->follow_link(dentry, nd);
 	error = PTR_ERR(cookie);
 	if (!IS_ERR(cookie)) {
-		char *s = nd_get_link(nd);
+		const char *s = nd_get_link(nd);
 		error = 0;
 		if (s)
 			error = __vfs_follow_link(nd, s);

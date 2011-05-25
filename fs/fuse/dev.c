@@ -885,7 +885,7 @@ static int fuse_notify_inval_entry(struct fuse_conn *fc, unsigned int size,
 {
 	struct fuse_notify_inval_entry_out outarg;
 	int err = -EINVAL;
-	char buf[FUSE_NAME_MAX+1];
+	char *buf = NULL;
 	struct qstr name;
 
 	if (size < sizeof(outarg))
@@ -899,6 +899,11 @@ static int fuse_notify_inval_entry(struct fuse_conn *fc, unsigned int size,
 	if (outarg.namelen > FUSE_NAME_MAX)
 		goto err;
 
+	err = -ENOMEM;
+	buf = kmalloc(FUSE_NAME_MAX+1, GFP_KERNEL);
+	if (!buf)
+		goto err;
+
 	name.name = buf;
 	name.len = outarg.namelen;
 	err = fuse_copy_one(cs, buf, outarg.namelen + 1);
@@ -910,17 +915,15 @@ static int fuse_notify_inval_entry(struct fuse_conn *fc, unsigned int size,
 
 	down_read(&fc->killsb);
 	err = -ENOENT;
-	if (!fc->sb)
-		goto err_unlock;
-
-	err = fuse_reverse_inval_entry(fc->sb, outarg.parent, &name);
-
-err_unlock:
+	if (fc->sb)
+		err = fuse_reverse_inval_entry(fc->sb, outarg.parent, &name);
 	up_read(&fc->killsb);
+	kfree(buf);
 	return err;
 
 err:
 	fuse_copy_finish(cs);
+	kfree(buf);
 	return err;
 }
 

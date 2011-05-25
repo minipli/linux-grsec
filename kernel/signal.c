@@ -939,7 +939,7 @@ static void print_fatal_signal(struct pt_regs *regs, int signr)
 		for (i = 0; i < 16; i++) {
 			unsigned char insn;
 
-			if (get_user(insn, (unsigned char *)(regs->ip + i)))
+			if (get_user(insn, (unsigned char __user *)(regs->ip + i)))
 				break;
 			printk("%02x ", insn);
 		}
