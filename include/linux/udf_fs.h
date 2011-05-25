@@ -42,7 +42,7 @@
 		printk (f, ##a); \
 	} while (0)
 #else
-#define udf_debug(f, a...) /**/
+#define udf_debug(f, a...) do {} while (0)
 #endif
 
 #define udf_info(f, a...) \
