@@ -7421,7 +7421,7 @@ static struct ctl_table sd_ctl_dir[] = {
 		.procname	= "sched_domain",
 		.mode		= 0555,
 	},
-	{0, },
+	{ 0, NULL, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 static struct ctl_table sd_ctl_root[] = {
@@ -7431,7 +7431,7 @@ static struct ctl_table sd_ctl_root[] = {
 		.mode		= 0555,
 		.child		= sd_ctl_dir,
 	},
-	{0, },
+	{ 0, NULL, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 static struct ctl_table *sd_alloc_ctl_entry(int n)
