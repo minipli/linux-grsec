@@ -1688,7 +1688,7 @@ static inline unsigned long __raw_local_irq_save(void)
 
 #define PARA_PATCH(struct, off)        ((PARAVIRT_PATCH_##struct + (off)) / 4)
 #define PARA_SITE(ptype, clobbers, ops) _PVSITE(ptype, clobbers, ops, .long, 4)
-#define PARA_INDIRECT(addr)	*%cs:addr
+#define PARA_INDIRECT(addr)	*%ss:addr
 #endif
 
 #define INTERRUPT_RETURN						\
@@ -1717,6 +1717,18 @@ static inline unsigned long __raw_local_irq_save(void)
 	push %ecx; push %edx;				\
 	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0);	\
 	pop %edx; pop %ecx
+
+#define GET_CR0_INTO_EDX				\
+	push %eax; push %ecx;				\
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0);	\
+	mov %eax, %edx;					\
+	pop %ecx; pop %eax
+
+#define SET_CR0_FROM_EDX				\
+	push %eax; push %ecx;				\
+	mov %edx, %eax;					\
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0);\
+	pop %ecx; pop %eax
 
 #define ENABLE_INTERRUPTS_SYSEXIT					\
 	PARA_SITE(PARA_PATCH(pv_cpu_ops, PV_CPU_irq_enable_sysexit),	\

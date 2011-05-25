@@ -17,4 +17,14 @@
 #define MCL_CURRENT	1		/* lock all current mappings */
 #define MCL_FUTURE	2		/* lock all future mappings */
 
+#ifdef __KERNEL__
+#ifndef __ASSEMBLY__
+#ifdef CONFIG_X86_32
+#define arch_mmap_check	i386_mmap_check
+int i386_mmap_check(unsigned long addr, unsigned long len,
+		unsigned long flags);
+#endif
+#endif
+#endif
+
 #endif /* _ASM_X86_MMAN_H */
