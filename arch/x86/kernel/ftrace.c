@@ -174,7 +174,9 @@ void ftrace_nmi_enter(void)
 
 	if (atomic_inc_return(&nmi_running) & MOD_CODE_WRITE_FLAG) {
 		smp_rmb();
+		pax_open_kernel();
 		ftrace_mod_code();
+		pax_close_kernel();
 		atomic_inc(&nmi_update_count);
 	}
 	/* Must have previous changes seen before executions */
@@ -260,7 +262,7 @@ do_ftrace_mod_code(unsigned long ip, void *new_code)
 
 
 
-static unsigned char ftrace_nop[MCOUNT_INSN_SIZE];
+static unsigned char ftrace_nop[MCOUNT_INSN_SIZE] __read_only;
 
 static unsigned char *ftrace_nop_replace(void)
 {
@@ -272,6 +274,8 @@ ftrace_modify_code(unsigned long ip, unsigned char *old_code,
 		   unsigned char *new_code)
 {
 	unsigned char replaced[MCOUNT_INSN_SIZE];
+
+	ip = ktla_ktva(ip);
 
 	/*
 	 * Note: Due to modules and __init, code can
@@ -329,7 +333,7 @@ int ftrace_update_ftrace_func(ftrace_func_t func)
 	unsigned char old[MCOUNT_INSN_SIZE], *new;
 	int ret;
 
-	memcpy(old, &ftrace_call, MCOUNT_INSN_SIZE);
+	memcpy(old, (void *)ktla_ktva((unsigned long)ftrace_call), MCOUNT_INSN_SIZE);
 	new = ftrace_call_replace(ip, (unsigned long)func);
 	ret = ftrace_modify_code(ip, old, new);
 
@@ -382,15 +386,15 @@ int __init ftrace_dyn_arch_init(void *data)
 	switch (faulted) {
 	case 0:
 		pr_info("converting mcount calls to 0f 1f 44 00 00\n");
-		memcpy(ftrace_nop, ftrace_test_p6nop, MCOUNT_INSN_SIZE);
+		memcpy(ftrace_nop, ktla_ktva(ftrace_test_p6nop), MCOUNT_INSN_SIZE);
 		break;
 	case 1:
 		pr_info("converting mcount calls to 66 66 66 66 90\n");
-		memcpy(ftrace_nop, ftrace_test_nop5, MCOUNT_INSN_SIZE);
+		memcpy(ftrace_nop, ktla_ktva(ftrace_test_nop5), MCOUNT_INSN_SIZE);
 		break;
 	case 2:
 		pr_info("converting mcount calls to jmp . + 5\n");
-		memcpy(ftrace_nop, ftrace_test_jmp, MCOUNT_INSN_SIZE);
+		memcpy(ftrace_nop, ktla_ktva(ftrace_test_jmp), MCOUNT_INSN_SIZE);
 		break;
 	}
 
@@ -410,6 +414,8 @@ static int ftrace_mod_jmp(unsigned long ip,
 			  int old_offset, int new_offset)
 {
 	unsigned char code[MCOUNT_INSN_SIZE];
+
+	ip = ktla_ktva(ip);
 
 	if (probe_kernel_read(code, (void *)ip, MCOUNT_INSN_SIZE))
 		return -EFAULT;
