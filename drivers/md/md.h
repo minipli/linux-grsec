@@ -304,7 +304,7 @@ static inline void rdev_dec_pending(mdk_rdev_t *rdev, mddev_t *mddev)
 
 static inline void md_sync_acct(struct block_device *bdev, unsigned long nr_sectors)
 {
-        atomic_add(nr_sectors, &bdev->bd_contains->bd_disk->sync_io);
+	atomic_add_unchecked(nr_sectors, &bdev->bd_contains->bd_disk->sync_io);
 }
 
 struct mdk_personality
