@@ -371,7 +371,7 @@ static void parse_elf(void *output)
 		case PT_LOAD:
 #ifdef CONFIG_RELOCATABLE
 			dest = output;
-			dest += (phdr->p_paddr - LOAD_PHYSICAL_ADDR);
+			dest += (phdr->p_paddr - ____LOAD_PHYSICAL_ADDR);
 #else
 			dest = (void *)(phdr->p_paddr);
 #endif
@@ -423,7 +423,7 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	if (heap > ((-__PAGE_OFFSET-(512<<20)-1) & 0x7fffffff))
 		error("Destination address too large");
 #ifndef CONFIG_RELOCATABLE
-	if ((u32)output != LOAD_PHYSICAL_ADDR)
+	if ((u32)output != ____LOAD_PHYSICAL_ADDR)
 		error("Wrong destination address");
 #endif
 #endif
