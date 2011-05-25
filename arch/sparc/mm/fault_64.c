@@ -362,45 +362,18 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 	}
 
 	do { /* PaX: patched PLT emulation #3 */
-		unsigned int sethi, jmpl, nop;
+		unsigned int sethi, mov1, call, mov2;
 
 		err = get_user(sethi, (unsigned int *)regs->tpc);
-		err |= get_user(jmpl, (unsigned int *)(regs->tpc+4));
-		err |= get_user(nop, (unsigned int *)(regs->tpc+8));
+		err |= get_user(mov1, (unsigned int *)regs->tpc+4);
+		err |= get_user(call, (unsigned int *)(regs->tpc+8));
+		err |= get_user(mov2, (unsigned int *)(regs->tpc+12));
 
 		if (err)
 			break;
 
 		if ((sethi & 0xFFC00000U) == 0x03000000U &&
-		    (jmpl & 0xFFFFE000U) == 0x81C06000U &&
-		    nop == 0x01000000U)
-		{
-			unsigned long addr;
-
-			addr = (sethi & 0x003FFFFFU) << 10;
-			regs->u_regs[UREG_G1] = addr;
-			addr += (((jmpl | 0xFFFFFFFFFFFFE000UL) ^ 0x00001000UL) + 0x00001000UL);
-
-			if (test_thread_flag(TIF_32BIT))
-				addr &= 0xFFFFFFFFUL;
-
-			regs->tpc = addr;
-			regs->tnpc = addr+4;
-			return 2;
-		}
-	} while (0);
-
-	do { /* PaX: patched PLT emulation #4 */
-		unsigned int mov1, call, mov2;
-
-		err = get_user(mov1, (unsigned int *)regs->tpc);
-		err |= get_user(call, (unsigned int *)(regs->tpc+4));
-		err |= get_user(mov2, (unsigned int *)(regs->tpc+8));
-
-		if (err)
-			break;
-
-		if (mov1 == 0x8210000FU &&
+		    mov1 == 0x8210000FU &&
 		    (call & 0xC0000000U) == 0x40000000U &&
 		    mov2 == 0x9E100001U)
 		{
@@ -418,21 +391,23 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 		}
 	} while (0);
 
-	do { /* PaX: patched PLT emulation #5 */
-		unsigned int sethi1, sethi2, or1, or2, sllx, jmpl, nop;
+	do { /* PaX: patched PLT emulation #4 */
+		unsigned int sethi, sethi1, sethi2, or1, or2, sllx, jmpl, nop;
 
-		err = get_user(sethi1, (unsigned int *)regs->tpc);
-		err |= get_user(sethi2, (unsigned int *)(regs->tpc+4));
-		err |= get_user(or1, (unsigned int *)(regs->tpc+8));
-		err |= get_user(or2, (unsigned int *)(regs->tpc+12));
-		err |= get_user(sllx, (unsigned int *)(regs->tpc+16));
-		err |= get_user(jmpl, (unsigned int *)(regs->tpc+20));
-		err |= get_user(nop, (unsigned int *)(regs->tpc+24));
+		err = get_user(sethi, (unsigned int *)regs->tpc);
+		err |= get_user(sethi1, (unsigned int *)regs->tpc+4);
+		err |= get_user(sethi2, (unsigned int *)(regs->tpc+8));
+		err |= get_user(or1, (unsigned int *)(regs->tpc+12));
+		err |= get_user(or2, (unsigned int *)(regs->tpc+16));
+		err |= get_user(sllx, (unsigned int *)(regs->tpc+20));
+		err |= get_user(jmpl, (unsigned int *)(regs->tpc+24));
+		err |= get_user(nop, (unsigned int *)(regs->tpc+28));
 
 		if (err)
 			break;
 
-		if ((sethi1 & 0xFFC00000U) == 0x03000000U &&
+		if ((sethi & 0xFFC00000U) == 0x03000000U &&
+		    (sethi1 & 0xFFC00000U) == 0x03000000U &&
 		    (sethi2 & 0xFFC00000U) == 0x0B000000U &&
 		    (or1 & 0xFFFFE000U) == 0x82106000U &&
 		    (or2 & 0xFFFFE000U) == 0x8A116000U &&
@@ -452,20 +427,22 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 		}
 	} while (0);
 
-	do { /* PaX: patched PLT emulation #6 */
-		unsigned int sethi1, sethi2, sllx, or,  jmpl, nop;
+	do { /* PaX: patched PLT emulation #5 */
+		unsigned int sethi, sethi1, sethi2, sllx, or,  jmpl, nop;
 
-		err = get_user(sethi1, (unsigned int *)regs->tpc);
-		err |= get_user(sethi2, (unsigned int *)(regs->tpc+4));
-		err |= get_user(sllx, (unsigned int *)(regs->tpc+8));
-		err |= get_user(or, (unsigned int *)(regs->tpc+12));
-		err |= get_user(jmpl, (unsigned int *)(regs->tpc+16));
-		err |= get_user(nop, (unsigned int *)(regs->tpc+20));
+		err = get_user(sethi, (unsigned int *)regs->tpc);
+		err |= get_user(sethi1, (unsigned int *)regs->tpc+4);
+		err |= get_user(sethi2, (unsigned int *)(regs->tpc+8));
+		err |= get_user(sllx, (unsigned int *)(regs->tpc+12));
+		err |= get_user(or, (unsigned int *)(regs->tpc+16));
+		err |= get_user(jmpl, (unsigned int *)(regs->tpc+20));
+		err |= get_user(nop, (unsigned int *)(regs->tpc+24));
 
 		if (err)
 			break;
 
-		if ((sethi1 & 0xFFC00000U) == 0x03000000U &&
+		if ((sethi & 0xFFC00000U) == 0x03000000U &&
+		    (sethi1 & 0xFFC00000U) == 0x03000000U &&
 		    (sethi2 & 0xFFC00000U) == 0x0B000000U &&
 		    sllx == 0x83287020 &&
 		    (or & 0xFFFFE000U) == 0x8A116000U &&
@@ -605,13 +582,13 @@ emulate:
 			    jmpl == 0x89C14000U &&
 			    nop == 0x01000000U)
 			{
+				regs->u_regs[UREG_G1] = (sethi & 0x003FFFFFU) << 10;
 				regs->u_regs[UREG_G4] = ((sethi1 & 0x003FFFFFU) << 10) | (or1 & 0x000003FFU);
 				regs->u_regs[UREG_G4] <<= 32;
 				regs->u_regs[UREG_G5] = ((sethi2 & 0x003FFFFFU) << 10) | (or2 & 0x000003FFU);
 				regs->u_regs[UREG_G5] += regs->u_regs[UREG_G4];
 				regs->u_regs[UREG_G4] = addr + 24;
 				addr = regs->u_regs[UREG_G5];
-
 				regs->tpc = addr;
 				regs->tnpc = addr+4;
 				return 3;
@@ -646,7 +623,7 @@ emulate:
 	} while (0);
 #endif
 
-	do { /* PaX: patched PLT emulation #7, must be AFTER the unpatched PLT emulation */
+	do { /* PaX: patched PLT emulation #6, must be AFTER the unpatched PLT emulation */
 		unsigned int sethi, ba, nop;
 
 		err = get_user(sethi, (unsigned int *)regs->tpc);
@@ -685,7 +662,7 @@ void pax_report_insns(void *pc, void *sp)
 	unsigned long i;
 
 	printk(KERN_ERR "PAX: bytes at PC: ");
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < 8; i++) {
 		unsigned int c;
 		if (get_user(c, (unsigned int *)pc+i))
 			printk(KERN_CONT "???????? ");
