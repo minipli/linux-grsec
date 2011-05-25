@@ -231,7 +231,19 @@ static inline void native_set_ldt(const void *addr, unsigned int entries)
 
 static inline void native_load_tr_desc(void)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	asm volatile("ltr %w0"::"q" (GDT_ENTRY_TSS*8));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 static inline void native_load_gdt(const struct desc_ptr *dtr)

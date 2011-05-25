@@ -367,12 +367,12 @@ static void reload_tss(void)
 #endif
 
 	descs[GDT_ENTRY_TSS].type = 9; /* available TSS */
-	load_TR_desc();
 
 #ifdef CONFIG_PAX_KERNEXEC
 	pax_close_kernel(cr0);
 #endif
 
+	load_TR_desc();
 }
 
 static void load_transition_efer(struct vcpu_vmx *vmx)

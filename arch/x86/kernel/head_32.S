@@ -690,13 +690,14 @@ ENTRY(swapper_pg_dir)
 	.align PAGE_SIZE_asm		/* needs to be page-sized too */
 #endif
 
-.section .rodata,"a",@progbits
+.data
 ENTRY(stack_start)
 	.long init_thread_union+THREAD_SIZE-8
 	.long __BOOT_DS
 
 ready:	.byte 0
 
+.section .rodata,"a",@progbits
 early_recursion_flag:
 	.long 0
 

@@ -1337,12 +1337,12 @@ static void reload_tss(struct kvm_vcpu *vcpu)
 #endif
 
 	svm_data->tss_desc->type = 9; /* available 32/64-bit TSS */
-	load_TR_desc();
 
 #ifdef CONFIG_PAX_KERNEXEC
 	pax_close_kernel(cr0);
 #endif
 
+	load_TR_desc();
 }
 
 static void pre_svm_run(struct vcpu_svm *svm)
