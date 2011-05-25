@@ -47,7 +47,7 @@ static int detect_memory_e820(void)
 		   so they must be either used for the error output
 		   or explicitly marked clobbered.  Given that, assume there
 		   is something out there clobbering %ebp and %edi, too. */
-		asm("pushl %%ebp; int $0x15; popl %%ebp; setc %0"
+		asm volatile("pushl %%ebp; int $0x15; popl %%ebp; setc %0"
 		    : "=d" (err), "+b" (next), "=a" (id), "+c" (size),
 		      "=D" (edi), "+m" (buf)
 		    : "D" (&buf), "d" (SMAP), "a" (0xe820)
@@ -83,7 +83,7 @@ static int detect_memory_e801(void)
 
 	bx = cx = dx = 0;
 	ax = 0xe801;
-	asm("stc; int $0x15; setc %0"
+	asm volatile("stc; int $0x15; setc %0"
 	    : "=m" (err), "+a" (ax), "+b" (bx), "+c" (cx), "+d" (dx));
 
 	if (err)
@@ -113,7 +113,7 @@ static int detect_memory_88(void)
 	u8 err;
 
 	ax = 0x8800;
-	asm("stc; int $0x15; setc %0" : "=bcdm" (err), "+a" (ax));
+	asm volatile("stc; int $0x15; setc %0" : "=bcdm" (err), "+a" (ax));
 
 	boot_params.screen_info.ext_mem_k = ax;
 

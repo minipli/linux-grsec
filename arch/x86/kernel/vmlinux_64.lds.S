@@ -13,11 +13,11 @@
 OUTPUT_FORMAT("elf64-x86-64", "elf64-x86-64", "elf64-x86-64")
 OUTPUT_ARCH(i386:x86-64)
 ENTRY(phys_startup_64)
-jiffies_64 = jiffies;
+jiffies = jiffies_64;
 PHDRS {
 	text PT_LOAD FLAGS(5);	/* R_E */
-	data PT_LOAD FLAGS(7);	/* RWE */
-	user PT_LOAD FLAGS(7);	/* RWE */
+	data PT_LOAD FLAGS(6);	/* RW_ */
+	user PT_LOAD FLAGS(5);	/* R_E */
 	data.init PT_LOAD FLAGS(7);	/* RWE */
 #ifdef CONFIG_SMP
 	percpu PT_LOAD FLAGS(7);	/* RWE */
@@ -54,14 +54,18 @@ SECTIONS
   	__stop___ex_table = .;
   } :text = 0x9090
 
-  RODATA
+  RO_DATA(PAGE_SIZE)
 
+#ifdef CONFIG_PAX_KERNEXEC
+  . = ALIGN(2*1024*1024);	/* Align data segment to PMD size boundary */
+#else
   . = ALIGN(PAGE_SIZE);		/* Align data segment to page size boundary */
+#endif
 				/* Data */
   .data : AT(ADDR(.data) - LOAD_OFFSET) {
+	_data = .;
 	DATA_DATA
 	CONSTRUCTORS
-	_edata = .;			/* End of data section */
 	} :data
 
 
@@ -75,9 +79,28 @@ SECTIONS
   	*(.data.read_mostly)
   }
 
+  .data.init_task : AT(ADDR(.data.init_task) - LOAD_OFFSET) {
+	. = ALIGN(THREAD_SIZE);	/* init_task */
+	*(.data.init_task)
+  }
+
+  .data.page_aligned : AT(ADDR(.data.page_aligned) - LOAD_OFFSET) {
+	. = ALIGN(PAGE_SIZE);
+	*(.data.page_aligned)
+  }
+
+  .data_nosave : AT(ADDR(.data_nosave) - LOAD_OFFSET) {
+	. = ALIGN(PAGE_SIZE);
+	__nosave_begin = .;
+	*(.data.nosave)
+	. = ALIGN(PAGE_SIZE);
+	__nosave_end = .;
+	_edata = .;			/* End of data section */
+  }
+
 #define VSYSCALL_ADDR (-10*1024*1024)
-#define VSYSCALL_PHYS_ADDR ((LOADADDR(.data.read_mostly) + SIZEOF(.data.read_mostly) + 4095) & ~(4095))
-#define VSYSCALL_VIRT_ADDR ((ADDR(.data.read_mostly) + SIZEOF(.data.read_mostly) + 4095) & ~(4095))
+#define VSYSCALL_PHYS_ADDR ((LOADADDR(.data_nosave) + SIZEOF(.data_nosave) + 4095) & ~(4095))
+#define VSYSCALL_VIRT_ADDR ((ADDR(.data_nosave) + SIZEOF(.data_nosave) + 4095) & ~(4095))
 
 #define VLOAD_OFFSET (VSYSCALL_ADDR - VSYSCALL_PHYS_ADDR)
 #define VLOAD(x) (ADDR(x) - VLOAD_OFFSET)
@@ -108,10 +131,6 @@ SECTIONS
   .vgetcpu_mode : AT(VLOAD(.vgetcpu_mode)) { *(.vgetcpu_mode) }
   vgetcpu_mode = VVIRT(.vgetcpu_mode);
 
-  . = ALIGN(CONFIG_X86_L1_CACHE_BYTES);
-  .jiffies : AT(VLOAD(.jiffies)) { *(.jiffies) }
-  jiffies = VVIRT(.jiffies);
-
   .vsyscall_3 ADDR(.vsyscall_0) + 3072: AT(VLOAD(.vsyscall_3))
 		{ *(.vsyscall_3) }
 
@@ -125,16 +144,6 @@ SECTIONS
 #undef VVIRT_OFFSET
 #undef VVIRT
 
-  .data.init_task : AT(ADDR(.data.init_task) - LOAD_OFFSET) {
-	. = ALIGN(THREAD_SIZE);	/* init_task */
-	*(.data.init_task)
-  }:data.init
-
-  .data.page_aligned : AT(ADDR(.data.page_aligned) - LOAD_OFFSET) {
-	. = ALIGN(PAGE_SIZE);
-	*(.data.page_aligned)
-  }
-
   .smp_locks : AT(ADDR(.smp_locks) - LOAD_OFFSET) {
 	/* might get freed after init */
 	. = ALIGN(PAGE_SIZE);
@@ -144,7 +153,7 @@ SECTIONS
 	__smp_locks_end = .;
 	. = ALIGN(PAGE_SIZE);
 	__smp_alt_end = .;
-  }
+  }:data.init
 
   . = ALIGN(PAGE_SIZE);		/* Init code and data */
   __init_begin = .;	/* paired with __init_end */
@@ -233,27 +242,20 @@ SECTIONS
   . = ALIGN(PAGE_SIZE);
   __init_end = .;
 
-  .data_nosave : AT(ADDR(.data_nosave) - LOAD_OFFSET) {
-	. = ALIGN(PAGE_SIZE);
-	__nosave_begin = .;
-	*(.data.nosave)
-	. = ALIGN(PAGE_SIZE);
-	__nosave_end = .;
-  } :data.init2 /* use another section data.init2, see PERCPU_VADDR() above */
-
   .bss : AT(ADDR(.bss) - LOAD_OFFSET) {
 	. = ALIGN(PAGE_SIZE);
 	__bss_start = .;		/* BSS */
 	*(.bss.page_aligned)
 	*(.bss)
 	__bss_stop = .;
-  }
+  } :data.init2
 
   .brk : AT(ADDR(.brk) - LOAD_OFFSET) {
 	. = ALIGN(PAGE_SIZE);
 	__brk_base = . ;
  	. += 64 * 1024 ;	/* 64k alignment slop space */
 	*(.brk_reservation)	/* areas brk users have reserved */
+	. = ALIGN(2*1024*1024);
 	__brk_limit = . ;
   }
 
@@ -276,7 +278,6 @@ SECTIONS
   * for the boot processor.
   */
 #define INIT_PER_CPU(x) init_per_cpu__##x = per_cpu__##x + __per_cpu_load
-INIT_PER_CPU(gdt_page);
 INIT_PER_CPU(irq_stack_union);
 
 /*
