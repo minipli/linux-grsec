@@ -157,7 +157,7 @@
  * VDSO in the presence of CONFIG_COMPAT_VDSO
  */
 #define PTE_IDENT_ATTR	 0x063		/* PRESENT+RW+DIRTY+ACCESSED */
-#define PDE_IDENT_ATTR	 0x067		/* PRESENT+RW+USER+DIRTY+ACCESSED */
+#define PDE_IDENT_ATTR	 0x063		/* PRESENT+RW+DIRTY+ACCESSED */
 #define PGD_IDENT_ATTR	 0x001		/* PRESENT (no other attributes) */
 #endif
 
