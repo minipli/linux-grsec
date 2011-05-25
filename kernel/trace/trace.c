@@ -3965,10 +3965,9 @@ static const struct file_operations tracing_dyn_info_fops = {
 };
 #endif
 
-static struct dentry *d_tracer;
-
 struct dentry *tracing_init_dentry(void)
 {
+	static struct dentry *d_tracer;
 	static int once;
 
 	if (d_tracer)
@@ -3988,10 +3987,9 @@ struct dentry *tracing_init_dentry(void)
 	return d_tracer;
 }
 
-static struct dentry *d_percpu;
-
 struct dentry *tracing_dentry_percpu(void)
 {
+	static struct dentry *d_percpu;
 	static int once;
 	struct dentry *d_tracer;
 

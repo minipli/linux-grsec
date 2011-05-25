@@ -2796,7 +2796,11 @@ static void reload_tss(struct kvm_vcpu *vcpu)
 	int cpu = raw_smp_processor_id();
 
 	struct svm_cpu_data *sd = per_cpu(svm_data, cpu);
+
+	pax_open_kernel();
 	sd->tss_desc->type = 9; /* available 32/64-bit TSS */
+	pax_close_kernel();
+
 	load_TR_desc();
 }
 
@@ -3337,7 +3341,7 @@ static void svm_fpu_deactivate(struct kvm_vcpu *vcpu)
 	update_cr0_intercept(svm);
 }
 
-static struct kvm_x86_ops svm_x86_ops = {
+static const struct kvm_x86_ops svm_x86_ops = {
 	.cpu_has_kvm_support = has_svm,
 	.disabled_by_bios = is_disabled,
 	.hardware_setup = svm_hardware_setup,

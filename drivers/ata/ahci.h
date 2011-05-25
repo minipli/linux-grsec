@@ -298,7 +298,7 @@ struct ahci_host_priv {
 extern int ahci_ignore_sss;
 
 extern struct scsi_host_template ahci_sht;
-extern struct ata_port_operations ahci_ops;
+extern const struct ata_port_operations ahci_ops;
 
 void ahci_save_initial_config(struct device *dev,
 			      struct ahci_host_priv *hpriv,
