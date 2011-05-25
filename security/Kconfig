@@ -6,6 +6,15 @@ menu "Security options"
 
 menu "PaX"
 
+	config PAX_PER_CPU_PGD
+	bool
+
+	config TASK_SIZE_MAX_SHIFT
+	int
+	depends on X86_64
+	default 47 if !PAX_PER_CPU_PGD
+	default 42 if PAX_PER_CPU_PGD
+
 config PAX
 	bool "Enable various PaX features"
 	depends on ALPHA || ARM || AVR32 || IA64 || MIPS || PARISC || PPC || SPARC || X86
@@ -89,15 +98,6 @@ choice
 	config PAX_HOOK_ACL_FLAGS
 		bool 'hook'
 endchoice
-
-	config PAX_PER_CPU_PGD
-	bool
-
-	config TASK_SIZE_MAX_SHIFT
-	int
-	depends on X86_64
-	default 47 if !PAX_PER_CPU_PGD
-	default 42 if PAX_PER_CPU_PGD
 
 endmenu
 
