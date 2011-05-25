@@ -198,6 +198,8 @@ register unsigned long current_stack_pointer asm("esp") __used;
 #ifndef __ASSEMBLY__
 DECLARE_PER_CPU(unsigned long, kernel_stack);
 
+/* how to get the current stack pointer from C */
+register unsigned long current_stack_pointer asm("rsp") __used;
 #endif
 
 #endif /* !X86_32 */
