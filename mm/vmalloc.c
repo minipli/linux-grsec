@@ -98,19 +98,36 @@ static int vmap_pte_range(pmd_t *pmd, unsigned long addr,
 			unsigned long end, pgprot_t prot, struct page ***pages)
 {
 	pte_t *pte;
+	int ret = -ENOMEM;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
 
 	pte = pte_alloc_kernel(pmd, addr);
 	if (!pte)
 		return -ENOMEM;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	do {
 		struct page *page = **pages;
 		WARN_ON(!pte_none(*pte));
 		if (!page)
-			return -ENOMEM;
+			goto out;
 		set_pte_at(&init_mm, addr, pte, mk_pte(page, prot));
 		(*pages)++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
-	return 0;
+	ret = 0;
+out:
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
+	return ret;
 }
 
 static inline int vmap_pmd_range(pud_t *pud, unsigned long addr,
