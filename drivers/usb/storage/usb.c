@@ -139,7 +139,7 @@ static struct usb_device_id storage_usb_ids [] = {
 #undef COMPLIANT_DEV
 #undef USUAL_DEV
 	/* Terminating entry */
-	{ }
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 MODULE_DEVICE_TABLE (usb, storage_usb_ids);
@@ -182,7 +182,7 @@ static struct us_unusual_dev us_unusual_dev_list[] = {
 #	undef USUAL_DEV
 
 	/* Terminating entry */
-	{ NULL }
+	{ NULL, NULL, 0, 0, NULL }
 };
 
 

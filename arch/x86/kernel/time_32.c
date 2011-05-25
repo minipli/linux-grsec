@@ -47,22 +47,32 @@ unsigned long profile_pc(struct pt_regs *regs)
 	unsigned long pc = instruction_pointer(regs);
 
 #ifdef CONFIG_SMP
-	if (!user_mode_vm(regs) && in_lock_functions(pc)) {
+	if (!user_mode(regs) && in_lock_functions(pc)) {
 #ifdef CONFIG_FRAME_POINTER
-		return *(unsigned long *)(regs->bp + sizeof(long));
+		return ktla_ktva(*(unsigned long *)(regs->bp + sizeof(long)));
 #else
 		unsigned long *sp = (unsigned long *)&regs->sp;
 
 		/* Return address is either directly at stack pointer
 		   or above a saved flags. Eflags has bits 22-31 zero,
 		   kernel addresses don't. */
+
+#ifdef CONFIG_PAX_KERNEXEC
+		return ktla_ktva(sp[0]);
+#else
 		if (sp[0] >> 22)
 			return sp[0];
 		if (sp[1] >> 22)
 			return sp[1];
 #endif
+
+#endif
 	}
 #endif
+
+	if (!user_mode(regs))
+		pc = ktla_ktva(pc);
+
 	return pc;
 }
 EXPORT_SYMBOL(profile_pc);

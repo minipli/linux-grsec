@@ -142,7 +142,6 @@
 #include <linux/bitmap.h>
 
 typedef struct cpumask { DECLARE_BITMAP(bits, NR_CPUS); } cpumask_t;
-extern cpumask_t _unused_cpumask_arg_;
 
 #define cpu_set(cpu, dst) __cpu_set((cpu), &(dst))
 static inline void __cpu_set(int cpu, volatile cpumask_t *dstp)
