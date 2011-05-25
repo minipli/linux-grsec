@@ -500,6 +500,7 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 		{
 			unsigned long addr;
 			unsigned int save, call;
+			unsigned int sethi1, sethi2, or1, or2, sllx, add, jmpl;
 
 			if ((ba & 0xFFC00000U) == 0x30800000U)
 				addr = regs->tpc + 4 + ((((ba | 0xFFFFFFFFFFC00000UL) ^ 0x00200000UL) + 0x00200000UL) << 2);
@@ -577,6 +578,39 @@ emulate:
 
 				if (test_thread_flag(TIF_32BIT))
 					addr &= 0xFFFFFFFFUL;
+
+				regs->tpc = addr;
+				regs->tnpc = addr+4;
+				return 3;
+			}
+
+			/* PaX: 64-bit PLT stub */
+			err = get_user(sethi1, (unsigned int *)addr);
+			err |= get_user(sethi2, (unsigned int *)(addr+4));
+			err |= get_user(or1, (unsigned int *)(addr+8));
+			err |= get_user(or2, (unsigned int *)(addr+12));
+			err |= get_user(sllx, (unsigned int *)(addr+16));
+			err |= get_user(add, (unsigned int *)(addr+20));
+			err |= get_user(jmpl, (unsigned int *)(addr+24));
+			err |= get_user(nop, (unsigned int *)(addr+28));
+			if (err)
+				break;
+
+			if ((sethi1 & 0xFFC00000U) == 0x09000000U &&
+			    (sethi2 & 0xFFC00000U) == 0x0B000000U &&
+			    (or1 & 0xFFFFE000U) == 0x88112000U &&
+			    (or2 & 0xFFFFE000U) == 0x8A116000U &&
+			    sllx == 0x89293020U &&
+			    add == 0x8A010005U &&
+			    jmpl == 0x89C14000U &&
+			    nop == 0x01000000U)
+			{
+				regs->u_regs[UREG_G4] = ((sethi1 & 0x003FFFFFU) << 10) | (or1 & 0x000003FFU);
+				regs->u_regs[UREG_G4] <<= 32;
+				regs->u_regs[UREG_G5] = ((sethi2 & 0x003FFFFFU) << 10) | (or2 & 0x000003FFU);
+				regs->u_regs[UREG_G5] += regs->u_regs[UREG_G4];
+				regs->u_regs[UREG_G4] = addr + 24;
+				addr = regs->u_regs[UREG_G5];
 
 				regs->tpc = addr;
 				regs->tnpc = addr+4;
