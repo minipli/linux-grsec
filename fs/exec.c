@@ -625,11 +625,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 			goto out_unlock;
 	}
 
-	vm_flags = vma->vm_flags;
-
-#ifdef CONFIG_PAX_SEGMEXEC
-	vm_flags |= VM_STACK_FLAGS & (VM_EXEC | VM_MAYEXEC);
-#endif
+	vm_flags = VM_STACK_FLAGS;
 
 	/*
 	 * Adjust stack execute permissions; explicitly enable for
