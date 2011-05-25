@@ -12,6 +12,7 @@
 #include <linux/cpumask.h>
 #include <asm/segment.h>
 #include <asm/desc.h>
+#include <asm/e820.h>
 
 #ifdef CONFIG_X86_32
 #include <asm/pgtable.h>
@@ -20,7 +21,7 @@
 #include "realmode/wakeup.h"
 #include "sleep.h"
 
-unsigned long acpi_wakeup_address;
+unsigned long acpi_wakeup_address = 0x2000;
 unsigned long acpi_realmode_flags;
 
 /* address in low memory of the wakeup routine. */
@@ -101,8 +102,12 @@ int acpi_save_state_mem(void)
 	header->trampoline_segment = setup_trampoline() >> 4;
 #ifdef CONFIG_SMP
 	stack_start.sp = temp_stack + sizeof(temp_stack);
+
+	pax_open_kernel();
 	early_gdt_descr.address =
 			(unsigned long)get_cpu_gdt_table(smp_processor_id());
+	pax_close_kernel();
+
 	initial_gs = per_cpu_offset(smp_processor_id());
 #endif
 	initial_code = (unsigned long)wakeup_long64;

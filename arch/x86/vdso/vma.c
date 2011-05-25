@@ -58,7 +58,7 @@ static int __init init_vdso_vars(void)
 	if (!vbase)
 		goto oom;
 
-	if (memcmp(vbase, "\177ELF", 4)) {
+	if (memcmp(vbase, ELFMAG, SELFMAG)) {
 		printk("VDSO: I'm broken; not ELF\n");
 		vdso_enabled = 0;
 	}
@@ -118,7 +118,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 		goto up_fail;
 	}
 
-	current->mm->context.vdso = (void *)addr;
+	current->mm->context.vdso = addr;
 
 	ret = install_special_mapping(mm, addr, vdso_size,
 				      VM_READ|VM_EXEC|
@@ -126,7 +126,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 				      VM_ALWAYSDUMP,
 				      vdso_pages);
 	if (ret) {
-		current->mm->context.vdso = NULL;
+		current->mm->context.vdso = 0;
 		goto up_fail;
 	}
 
@@ -134,10 +134,3 @@ up_fail:
 	up_write(&mm->mmap_sem);
 	return ret;
 }
-
-static __init int vdso_setup(char *s)
-{
-	vdso_enabled = simple_strtoul(s, NULL, 0);
-	return 0;
-}
-__setup("vdso=", vdso_setup);
