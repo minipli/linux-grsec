@@ -14,6 +14,3 @@
 VEXTERN(jiffies)
 VEXTERN(vgetcpu_mode)
 VEXTERN(vsyscall_gtod_data)
-VEXTERN(vgettimeofday)
-VEXTERN(vtime)
-VEXTERN(vgetcpu)

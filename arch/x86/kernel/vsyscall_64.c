@@ -56,9 +56,6 @@
  * Try to keep this structure as small as possible to avoid cache line ping pongs
  */
 int __vgetcpu_mode __section_vgetcpu_mode;
-int (*__vgettimeofday)(struct timeval * tv, struct timezone * tz);
-time_t (*__vtime)(time_t *t);
-long (*__vgetcpu)(unsigned *cpu, unsigned *node, struct getcpu_cache *tcache);
 
 struct vsyscall_gtod_data __vsyscall_gtod_data __section_vsyscall_gtod_data =
 {

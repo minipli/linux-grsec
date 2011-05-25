@@ -921,15 +921,13 @@ bad_area_nosemaphore:
 #ifdef CONFIG_X86_64
 	if (mm && (error_code & PF_INSTR)) {
 		if (regs->ip == (unsigned long)vgettimeofday) {
-			regs->ip = (unsigned long)VDSO64_SYMBOL(mm->context.vdso, vgettimeofday);
+			regs->ip = (unsigned long)VDSO64_SYMBOL(mm->context.vdso, gettimeofday);
 			return;
-		}
-		if (regs->ip == (unsigned long)vtime) {
-			regs->ip = (unsigned long)VDSO64_SYMBOL(mm->context.vdso, vtime);
+		} else if (regs->ip == (unsigned long)vtime) {
+			regs->ip = (unsigned long)VDSO64_SYMBOL(mm->context.vdso, clock_gettime);
 			return;
-		}
-		if (regs->ip == (unsigned long)vgetcpu) {
-			regs->ip = (unsigned long)VDSO64_SYMBOL(mm->context.vdso, vgetcpu);
+		} else if (regs->ip == (unsigned long)vgetcpu) {
+			regs->ip = (unsigned long)VDSO64_SYMBOL(mm->context.vdso, getcpu);
 			return;
 		}
 	}

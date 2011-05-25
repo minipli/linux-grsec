@@ -42,11 +42,8 @@ extern struct timezone sys_tz;
 extern void map_vsyscall(void);
 
 extern int vgettimeofday(struct timeval * tv, struct timezone * tz);
-extern int (*__vgettimeofday)(struct timeval * tv, struct timezone * tz);
 extern time_t vtime(time_t *t);
-extern time_t (*__vtime)(time_t *t);
 extern long vgetcpu(unsigned *cpu, unsigned *node, struct getcpu_cache *tcache);
-extern long (*__vgetcpu)(unsigned *cpu, unsigned *node, struct getcpu_cache *tcache);
 #endif /* __KERNEL__ */
 
 #endif /* _ASM_X86_VSYSCALL_H */
