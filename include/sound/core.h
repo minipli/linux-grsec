@@ -406,9 +406,9 @@ void snd_verbose_printd(const char *file, int line, const char *format, ...)
 
 #else /* !CONFIG_SND_DEBUG */
 
-#define snd_printd(fmt, args...)	/* nothing */
+#define snd_printd(fmt, args...)	do {} while (0)
 #define snd_assert(expr, args...)	(void)(expr)
-#define snd_BUG()			/* nothing */
+#define snd_BUG()			do {} while (0)
 
 #endif /* CONFIG_SND_DEBUG */
 
@@ -422,7 +422,7 @@ void snd_verbose_printd(const char *file, int line, const char *format, ...)
  */
 #define snd_printdd(format, args...) snd_printk(format, ##args)
 #else
-#define snd_printdd(format, args...) /* nothing */
+#define snd_printdd(format, args...) do {} while (0)
 #endif
 
 

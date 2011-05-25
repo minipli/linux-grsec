@@ -471,7 +471,7 @@ pgprot_t phys_mem_access_prot(struct file *file, unsigned long pfn,
 	return vma_prot;
 }
 
-#ifdef CONFIG_NONPROMISC_DEVMEM
+#ifndef CONFIG_NONPROMISC_DEVMEM
 /* This check is done in drivers/char/mem.c in case of NONPROMISC_DEVMEM*/
 static inline int range_is_allowed(unsigned long pfn, unsigned long size)
 {

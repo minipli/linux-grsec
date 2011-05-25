@@ -378,9 +378,9 @@ setup_frame(int sig, struct k_sigaction *ka, sigset_t *set,
 	}
 
 	if (current->mm->context.vdso)
-		restorer = VDSO32_SYMBOL(current->mm->context.vdso, sigreturn);
+		restorer = (void __user *)VDSO32_SYMBOL(current->mm->context.vdso, sigreturn);
 	else
-		restorer = &frame->retcode;
+		restorer = (void __user *)&frame->retcode;
 	if (ka->sa.sa_flags & SA_RESTORER)
 		restorer = ka->sa.sa_restorer;
 
@@ -460,7 +460,7 @@ static int setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 		goto give_sigsegv;
 
 	/* Set up to return from userspace.  */
-	restorer = VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
+	restorer = (void __user *)VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
 	if (ka->sa.sa_flags & SA_RESTORER)
 		restorer = ka->sa.sa_restorer;
 	err |= __put_user(restorer, &frame->pretcode);
@@ -590,7 +590,7 @@ static void do_signal(struct pt_regs *regs)
 	 * X86_32: vm86 regs switched out by assembly code before reaching
 	 * here, so testing against kernel CS suffices.
 	 */
-	if (!user_mode(regs))
+	if (!user_mode_novm(regs))
 		return;
 
 	if (current_thread_info()->status & TS_RESTORE_SIGMASK)

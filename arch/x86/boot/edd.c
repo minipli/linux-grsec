@@ -76,7 +76,7 @@ static int get_edd_info(u8 devno, struct edd_info *ei)
 	ax = 0x4100;
 	bx = EDDMAGIC1;
 	dx = devno;
-	asm("pushfl; stc; int $0x13; setc %%al; popfl"
+	asm volatile("pushfl; stc; int $0x13; setc %%al; popfl"
 	    : "+a" (ax), "+b" (bx), "=c" (cx), "+d" (dx)
 	    : : "esi", "edi");
 
@@ -95,7 +95,7 @@ static int get_edd_info(u8 devno, struct edd_info *ei)
 	ei->params.length = sizeof(ei->params);
 	ax = 0x4800;
 	dx = devno;
-	asm("pushfl; int $0x13; popfl"
+	asm volatile("pushfl; int $0x13; popfl"
 	    : "+a" (ax), "+d" (dx), "=m" (ei->params)
 	    : "S" (&ei->params)
 	    : "ebx", "ecx", "edi");
@@ -106,7 +106,7 @@ static int get_edd_info(u8 devno, struct edd_info *ei)
 	ax = 0x0800;
 	dx = devno;
 	di = 0;
-	asm("pushw %%es; "
+	asm volatile("pushw %%es; "
 	    "movw %%di,%%es; "
 	    "pushfl; stc; int $0x13; setc %%al; popfl; "
 	    "popw %%es"
