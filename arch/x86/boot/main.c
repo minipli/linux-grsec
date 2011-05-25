@@ -73,7 +73,7 @@ static void keyboard_set_repeat(void)
  */
 static void query_ist(void)
 {
-	asm("int $0x15"
+	asm volatile("int $0x15"
 	    : "=a" (boot_params.ist_info.signature),
 	      "=b" (boot_params.ist_info.command),
 	      "=c" (boot_params.ist_info.event),

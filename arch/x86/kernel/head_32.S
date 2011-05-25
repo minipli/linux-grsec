@@ -19,6 +19,7 @@
 #include <asm/asm-offsets.h>
 #include <asm/setup.h>
 #include <asm/processor-flags.h>
+#include <asm/msr-index.h>
 
 /* Physical address */
 #define pa(X) ((X) - __PAGE_OFFSET)
@@ -64,15 +65,20 @@ LOW_PAGES = 1<<(32-PAGE_SHIFT_asm)
 LOW_PAGES = LOW_PAGES + 0x1000000
 #endif
 
-#if PTRS_PER_PMD > 1
-PAGE_TABLE_SIZE = (LOW_PAGES / PTRS_PER_PMD) + PTRS_PER_PGD
-#else
-PAGE_TABLE_SIZE = (LOW_PAGES / PTRS_PER_PGD)
-#endif
+PAGE_TABLE_SIZE = (LOW_PAGES / PTRS_PER_PTE)
 BOOTBITMAP_SIZE = LOW_PAGES / 8
 ALLOCATOR_SLOP = 4
 
 INIT_MAP_BEYOND_END = BOOTBITMAP_SIZE + (PAGE_TABLE_SIZE + ALLOCATOR_SLOP)*PAGE_SIZE_asm
+
+/*
+ * Real beginning of normal "text" segment
+ */
+ENTRY(stext)
+ENTRY(_stext)
+
+.section .text.startup,"ax",@progbits
+	ljmp $(__BOOT_CS),$phys_startup_32
 
 /*
  * 32-bit kernel entrypoint; only used by the boot CPU.  On entry,
@@ -82,6 +88,12 @@ INIT_MAP_BEYOND_END = BOOTBITMAP_SIZE + (PAGE_TABLE_SIZE + ALLOCATOR_SLOP)*PAGE_
  * can.
  */
 .section .text.head,"ax",@progbits
+
+#ifdef CONFIG_PAX_KERNEXEC
+/* PaX: fill first page in .text with int3 to catch NULL derefs in kernel mode */
+.fill 4096,1,0xcc
+#endif
+
 ENTRY(startup_32)
 	/* test KEEP_SEGMENTS flag to see if the bootloader is asking
 		us to not reload segments */
@@ -98,6 +110,43 @@ ENTRY(startup_32)
 	movl %eax,%fs
 	movl %eax,%gs
 2:
+
+	movl $__per_cpu_start,%eax
+	movw %ax,(cpu_gdt_table - __PAGE_OFFSET + __KERNEL_PERCPU + 2)
+	rorl $16,%eax
+	movb %al,(cpu_gdt_table - __PAGE_OFFSET + __KERNEL_PERCPU + 4)
+	movb %ah,(cpu_gdt_table - __PAGE_OFFSET + __KERNEL_PERCPU + 7)
+	movl $__per_cpu_end + PERCPU_MODULE_RESERVE - 1,%eax
+	subl $__per_cpu_start,%eax
+	movw %ax,(cpu_gdt_table - __PAGE_OFFSET + __KERNEL_PERCPU + 0)
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	/* check for VMware */
+	movl $0x564d5868,%eax
+	xorl %ebx,%ebx
+	movl $0xa,%ecx
+	movl $0x5658,%edx
+	in (%dx),%eax
+	cmpl $0x564d5868,%ebx
+	jz 1f
+
+	movl $((((__PAGE_OFFSET-1) & 0xf0000000) >> 12) | 0x00c09700),%eax
+	movl %eax,(cpu_gdt_table - __PAGE_OFFSET + GDT_ENTRY_KERNEL_DS * 8 + 4)
+1:
+#endif
+
+#ifdef CONFIG_PAX_KERNEXEC
+	movl $KERNEL_TEXT_OFFSET,%eax
+	movw %ax,(cpu_gdt_table - __PAGE_OFFSET + __KERNEL_CS + 2)
+	rorl $16,%eax
+	movb %al,(cpu_gdt_table - __PAGE_OFFSET + __KERNEL_CS + 4)
+	movb %ah,(cpu_gdt_table - __PAGE_OFFSET + __KERNEL_CS + 7)
+
+	movb %al,(boot_gdt - __PAGE_OFFSET + __BOOT_CS + 4)
+	movb %ah,(boot_gdt - __PAGE_OFFSET + __BOOT_CS + 7)
+	rorl $16,%eax
+	movw %ax,(boot_gdt - __PAGE_OFFSET + __BOOT_CS + 2)
+#endif
 
 /*
  * Clear BSS first so that there are no surprises...
@@ -142,9 +191,7 @@ ENTRY(startup_32)
 	cmpl $num_subarch_entries, %eax
 	jae bad_subarch
 
-	movl pa(subarch_entries)(,%eax,4), %eax
-	subl $__PAGE_OFFSET, %eax
-	jmp *%eax
+	jmp *pa(subarch_entries)(,%eax,4)
 
 bad_subarch:
 WEAK(lguest_entry)
@@ -156,9 +203,9 @@ WEAK(xen_entry)
 	__INITDATA
 
 subarch_entries:
-	.long default_entry		/* normal x86/PC */
-	.long lguest_entry		/* lguest hypervisor */
-	.long xen_entry			/* Xen hypervisor */
+	.long pa(default_entry)		/* normal x86/PC */
+	.long pa(lguest_entry)		/* lguest hypervisor */
+	.long pa(xen_entry)		/* Xen hypervisor */
 num_subarch_entries = (. - subarch_entries) / 4
 .previous
 #endif /* CONFIG_PARAVIRT */
@@ -172,7 +219,7 @@ num_subarch_entries = (. - subarch_entries) / 4
  *
  * Note that the stack is not yet set up!
  */
-#define PTE_ATTR	0x007		/* PRESENT+RW+USER */
+#define PTE_ATTR	0x067		/* PRESENT+RW+USER+DIRTY+ACCESSED */
 #define PDE_ATTR	0x067		/* PRESENT+RW+USER+DIRTY+ACCESSED */
 #define PGD_ATTR	0x001		/* PRESENT (no other attributes) */
 
@@ -221,8 +268,7 @@ default_entry:
 	movl %edi,pa(init_pg_tables_end)
 
 	/* Do early initialization of the fixmap area */
-	movl $pa(swapper_pg_fixmap)+PDE_ATTR,%eax
-	movl %eax,pa(swapper_pg_pmd+0x1000*KPMDS-8)
+	movl $pa(swapper_pg_fixmap)+PDE_ATTR,pa(swapper_pg_pmd+0x1000*KPMDS-8)
 #else	/* Not PAE */
 
 page_pde_offset = (__PAGE_OFFSET >> 20);
@@ -251,8 +297,7 @@ page_pde_offset = (__PAGE_OFFSET >> 20);
 	movl %edi,pa(init_pg_tables_end)
 
 	/* Do early initialization of the fixmap area */
-	movl $pa(swapper_pg_fixmap)+PDE_ATTR,%eax
-	movl %eax,pa(swapper_pg_dir+0xffc)
+	movl $pa(swapper_pg_fixmap)+PDE_ATTR,pa(swapper_pg_dir+0xffc)
 #endif
 	jmp 3f
 /*
@@ -316,12 +361,15 @@ ENTRY(startup_32_smp)
 	jnc 6f
 
 	/* Setup EFER (Extended Feature Enable Register) */
-	movl $0xc0000080, %ecx
+	movl $MSR_EFER, %ecx
 	rdmsr
 
 	btsl $11, %eax
 	/* Make changes effective */
 	wrmsr
+
+	btsl $63-32,pa(__supported_pte_mask+4)
+	movl $1,pa(nx_enabled)
 
 6:
 
@@ -348,9 +396,7 @@ ENTRY(startup_32_smp)
 
 #ifdef CONFIG_SMP
 	cmpb $0, ready
-	jz  1f				/* Initial CPU cleans BSS */
-	jmp checkCPUtype
-1:
+	jnz checkCPUtype		/* Initial CPU cleans BSS */
 #endif /* CONFIG_SMP */
 
 /*
@@ -427,11 +473,11 @@ is386:	movl $2,%ecx		# set MP
 	ljmp $(__KERNEL_CS),$1f
 1:	movl $(__KERNEL_DS),%eax	# reload all the segment registers
 	movl %eax,%ss			# after changing gdt.
-	movl %eax,%fs			# gets reset once there's real percpu
-
-	movl $(__USER_DS),%eax		# DS/ES contains default USER segment
 	movl %eax,%ds
 	movl %eax,%es
+
+	movl $(__KERNEL_PERCPU), %eax
+	movl %eax,%fs			# set this cpu's percpu
 
 	xorl %eax,%eax			# Clear GS and LDT
 	movl %eax,%gs
@@ -443,11 +489,7 @@ is386:	movl $2,%ecx		# set MP
 	movb ready, %cl
 	movb $1, ready
 	cmpb $0,%cl		# the first CPU calls start_kernel
-	je   1f
-	movl $(__KERNEL_PERCPU), %eax
-	movl %eax,%fs		# set this cpu's percpu
-	jmp initialize_secondary # all other CPUs call initialize_secondary
-1:
+	jne initialize_secondary # all other CPUs call initialize_secondary
 #endif /* CONFIG_SMP */
 	jmp i386_start_kernel
 
@@ -533,15 +575,15 @@ early_page_fault:
 	jmp early_fault
 
 early_fault:
-	cld
 #ifdef CONFIG_PRINTK
+	cmpl $2,%ss:early_recursion_flag
+	je hlt_loop
+	incl %ss:early_recursion_flag
+	cld
 	pusha
 	movl $(__KERNEL_DS),%eax
 	movl %eax,%ds
 	movl %eax,%es
-	cmpl $2,early_recursion_flag
-	je hlt_loop
-	incl early_recursion_flag
 	movl %cr2,%eax
 	pushl %eax
 	pushl %edx		/* trapno */
@@ -551,8 +593,8 @@ early_fault:
 #else
 	call printk
 #endif
-#endif
 	call dump_stack
+#endif
 hlt_loop:
 	hlt
 	jmp hlt_loop
@@ -560,8 +602,11 @@ hlt_loop:
 /* This is the default interrupt "handler" :-) */
 	ALIGN
 ignore_int:
-	cld
 #ifdef CONFIG_PRINTK
+	cmpl $2,%ss:early_recursion_flag
+	je hlt_loop
+	incl %ss:early_recursion_flag
+	cld
 	pushl %eax
 	pushl %ecx
 	pushl %edx
@@ -570,9 +615,6 @@ ignore_int:
 	movl $(__KERNEL_DS),%eax
 	movl %eax,%ds
 	movl %eax,%es
-	cmpl $2,early_recursion_flag
-	je hlt_loop
-	incl early_recursion_flag
 	pushl 16(%esp)
 	pushl 24(%esp)
 	pushl 32(%esp)
@@ -592,36 +634,41 @@ ignore_int:
 #endif
 	iret
 
-.section .text
-/*
- * Real beginning of normal "text" segment
- */
-ENTRY(stext)
-ENTRY(_stext)
-
 /*
  * BSS section
  */
-.section ".bss.page_aligned","wa"
-	.align PAGE_SIZE_asm
 #ifdef CONFIG_X86_PAE
+.section .swapper_pg_pmd,"a",@progbits
 swapper_pg_pmd:
 	.fill 1024*KPMDS,4,0
 #else
+.section .swapper_pg_dir,"a",@progbits
 ENTRY(swapper_pg_dir)
 	.fill 1024,4,0
 #endif
 swapper_pg_fixmap:
 	.fill 1024,4,0
+
+.section .empty_zero_page,"a",@progbits
 ENTRY(empty_zero_page)
 	.fill 4096,1,0
+
+/*
+ * The IDT has to be page-aligned to simplify the Pentium
+ * F0 0F bug workaround.. We have a special link segment
+ * for this.
+ */
+.section .idt,"a",@progbits
+ENTRY(idt_table)
+	.fill 256,8,0
+
 /*
  * This starts the data section.
  */
+.data
+
 #ifdef CONFIG_X86_PAE
-.section ".data.page_aligned","wa"
-	/* Page-aligned for the benefit of paravirt? */
-	.align PAGE_SIZE_asm
+.section .swapper_pg_dir,"a",@progbits
 ENTRY(swapper_pg_dir)
 	.long	pa(swapper_pg_pmd+PGD_ATTR),0		/* low identity map */
 # if KPMDS == 3
@@ -644,11 +691,12 @@ ENTRY(swapper_pg_dir)
 
 .data
 ENTRY(stack_start)
-	.long init_thread_union+THREAD_SIZE
+	.long init_thread_union+THREAD_SIZE-8
 	.long __BOOT_DS
 
 ready:	.byte 0
 
+.section .rodata,"a",@progbits
 early_recursion_flag:
 	.long 0
 
@@ -695,7 +743,7 @@ idt_descr:
 	.word 0				# 32 bit align gdt_desc.address
 ENTRY(early_gdt_descr)
 	.word GDT_ENTRIES*8-1
-	.long per_cpu__gdt_page		/* Overwritten for secondary CPUs */
+	.long cpu_gdt_table		/* Overwritten for secondary CPUs */
 
 /*
  * The boot_gdt must mirror the equivalent in setup.S and is
@@ -704,5 +752,61 @@ ENTRY(early_gdt_descr)
 	.align L1_CACHE_BYTES
 ENTRY(boot_gdt)
 	.fill GDT_ENTRY_BOOT_CS,8,0
-	.quad 0x00cf9a000000ffff	/* kernel 4GB code at 0x00000000 */
-	.quad 0x00cf92000000ffff	/* kernel 4GB data at 0x00000000 */
+	.quad 0x00cf9b000000ffff	/* kernel 4GB code at 0x00000000 */
+	.quad 0x00cf93000000ffff	/* kernel 4GB data at 0x00000000 */
+
+	.align PAGE_SIZE_asm
+ENTRY(cpu_gdt_table)
+	.quad 0x0000000000000000	/* NULL descriptor */
+	.quad 0x0000000000000000	/* 0x0b reserved */
+	.quad 0x0000000000000000	/* 0x13 reserved */
+	.quad 0x0000000000000000	/* 0x1b reserved */
+	.quad 0x0000000000000000	/* 0x20 unused */
+	.quad 0x0000000000000000	/* 0x28 unused */
+	.quad 0x0000000000000000	/* 0x33 TLS entry 1 */
+	.quad 0x0000000000000000	/* 0x3b TLS entry 2 */
+	.quad 0x0000000000000000	/* 0x43 TLS entry 3 */
+	.quad 0x0000000000000000	/* 0x4b reserved */
+	.quad 0x0000000000000000	/* 0x53 reserved */
+	.quad 0x0000000000000000	/* 0x5b reserved */
+
+	.quad 0x00cf9b000000ffff	/* 0x60 kernel 4GB code at 0x00000000 */
+	.quad 0x00cf93000000ffff	/* 0x68 kernel 4GB data at 0x00000000 */
+	.quad 0x00cffb000000ffff	/* 0x73 user 4GB code at 0x00000000 */
+	.quad 0x00cff3000000ffff	/* 0x7b user 4GB data at 0x00000000 */
+
+	.quad 0x0000000000000000	/* 0x80 TSS descriptor */
+	.quad 0x0000000000000000	/* 0x88 LDT descriptor */
+
+	/*
+	 * Segments used for calling PnP BIOS have byte granularity.
+	 * The code segments and data segments have fixed 64k limits,
+	 * the transfer segment sizes are set at run time.
+	 */
+	.quad 0x00409b000000ffff	/* 0x90 32-bit code */
+	.quad 0x00009b000000ffff	/* 0x98 16-bit code */
+	.quad 0x000093000000ffff	/* 0xa0 16-bit data */
+	.quad 0x0000930000000000	/* 0xa8 16-bit data */
+	.quad 0x0000930000000000	/* 0xb0 16-bit data */
+
+	/*
+	 * The APM segments have byte granularity and their bases
+	 * are set at run time.  All have 64k limits.
+	 */
+	.quad 0x00409b000000ffff	/* 0xb8 APM CS    code */
+	.quad 0x00009b000000ffff	/* 0xc0 APM CS 16 code (16 bit) */
+	.quad 0x004093000000ffff	/* 0xc8 APM DS    data */
+
+	.quad 0x00c0930000000000	/* 0xd0 - ESPFIX SS */
+	.quad 0x0040930000000000	/* 0xd8 - PERCPU */
+	.quad 0x0000000000000000	/* 0xe0 - PCIBIOS_CS */
+	.quad 0x0000000000000000	/* 0xe8 - PCIBIOS_DS */
+	.quad 0x0000000000000000	/* 0xf0 - unused */
+	.quad 0x0000000000000000	/* 0xf8 - GDT entry 31: double-fault TSS */
+
+	/* Be sure this is zeroed to avoid false validations in Xen */
+	.fill PAGE_SIZE_asm - GDT_ENTRIES,1,0
+
+#ifdef CONFIG_SMP
+	.fill (NR_CPUS-1) * (PAGE_SIZE_asm),1,0 /* other CPU's GDT */
+#endif
