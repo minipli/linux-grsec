@@ -153,7 +153,7 @@ static inline int __down_read_trylock(struct rw_semaphore *sem)
 #endif
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1:\n"
-		     LOCK_PREFIX "subl %3,%2\n"
+		     "subl %3,%2\n"
 		     "jmp 0b\n"
 		     ".popsection\n"
 		     _ASM_EXTABLE(0b, 1b)
