@@ -88,6 +88,11 @@ void __init x86_64_start_kernel(char * real_mode_data)
 	/* Make NULL pointers segfault */
 	zap_identity_mappings();
 
+	for (i = 0; i < NR_CPUS; i++)
+		cpu_pda(i) = &boot_cpu_pda[i];
+
+	pda_init(0);
+
 	/* Cleanup the over mapped high alias */
 	cleanup_highmap();
 
@@ -102,10 +107,6 @@ void __init x86_64_start_kernel(char * real_mode_data)
 
 	early_printk("Kernel alive\n");
 
- 	for (i = 0; i < NR_CPUS; i++)
- 		cpu_pda(i) = &boot_cpu_pda[i];
-
-	pda_init(0);
 	copy_bootdata(__va(real_mode_data));
 
 	reserve_early(__pa_symbol(&_text), __pa_symbol(&_end), "TEXT DATA BSS");
