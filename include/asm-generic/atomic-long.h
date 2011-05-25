@@ -400,7 +400,7 @@ static inline void pax_refcount_needs_these_functions(void)
 #define atomic_sub_unchecked(i, v) atomic_sub((i), (v))
 #define atomic_inc_unchecked(v) atomic_inc(v)
 #define atomic_inc_return_unchecked(v) atomic_inc_return(v)
-#define atomic_add_return_unchecked(v) atomic_add_return(v)
+#define atomic_add_return_unchecked(i, v) atomic_add_return((i), (v))
 
 #define atomic_long_read_unchecked(v) atomic_long_read(v)
 #define atomic_long_set_unchecked(v, i) atomic_long_set((v), (i))
