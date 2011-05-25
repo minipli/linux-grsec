@@ -1265,7 +1265,7 @@ struct block_device_operations {
 						unsigned long long);
 	int (* const revalidate_disk) (struct gendisk *);
 	int (*const getgeo)(struct block_device *, struct hd_geometry *);
-	const struct module *owner;
+	struct module * const owner;
 };
 
 extern int __blkdev_driver_ioctl(struct block_device *, fmode_t, unsigned int,

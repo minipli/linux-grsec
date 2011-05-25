@@ -4503,9 +4503,11 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 
 	page = virt_to_head_page(ptr);
 
-	if (!PageSlab(page))
-		/* TODO: check for stack based ptr */
+	if (!PageSlab(page)) {
+		if (object_is_on_stack(ptr, n) == -1)
+			goto report;
 		return;
+	}
 
 	cachep = page_get_cache(page);
 	slabp = page_get_slab(page);

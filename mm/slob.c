@@ -569,8 +569,11 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 		return;
 
 	sp = slob_page(ptr);
-	if (!PageSlab((struct page*)sp))
+	if (!PageSlab((struct page*)sp)) {
+		if (object_is_on_stack(ptr, n) == -1)
+			goto report;
 		return;
+	}
 
 	if (sp->size) {
 		base = page_address(&sp->page);

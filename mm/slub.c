@@ -2933,9 +2933,11 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 
 	page = get_object_page(ptr);
 
-	if (!page)
-		/* TODO: check for stack based ptr */
+	if (!page) {
+		if (object_is_on_stack(ptr, n) == -1)
+			goto report;
 		return;
+	}
 
 	s = page->slab;
 	offset = (ptr - page_address(page)) % s->size;

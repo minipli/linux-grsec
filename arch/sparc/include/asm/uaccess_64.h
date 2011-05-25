@@ -214,7 +214,7 @@ copy_from_user(void *to, const void __user *from, unsigned long size)
 {
 	unsigned long ret;
 
-	if ((long)size < 0)
+	if ((long)size < 0 || size > INT_MAX)
 		return size;
 
 	if (!__builtin_constant_p(size))
@@ -237,7 +237,7 @@ copy_to_user(void __user *to, const void *from, unsigned long size)
 {
 	unsigned long ret;
 
-	if ((long)size < 0)
+	if ((long)size < 0 || size > INT_MAX)
 		return size;
 
 	if (!__builtin_constant_p(size))
