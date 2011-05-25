@@ -34,7 +34,7 @@ static u32 kexec_pmd1[1024] PAGE_ALIGNED;
 static u32 kexec_pte0[1024] PAGE_ALIGNED;
 static u32 kexec_pte1[1024] PAGE_ALIGNED;
 
-static void set_idt(void *newidt, __u16 limit)
+static void set_idt(struct desc_struct *newidt, __u16 limit)
 {
 	struct desc_ptr curidt;
 
@@ -46,7 +46,7 @@ static void set_idt(void *newidt, __u16 limit)
 }
 
 
-static void set_gdt(void *newgdt, __u16 limit)
+static void set_gdt(struct desc_struct *newgdt, __u16 limit)
 {
 	struct desc_ptr curgdt;
 
@@ -145,7 +145,7 @@ void machine_kexec(struct kimage *image)
 	}
 
 	control_page = page_address(image->control_code_page);
-	memcpy(control_page, relocate_kernel, KEXEC_CONTROL_CODE_MAX_SIZE);
+	memcpy(control_page, (void *)ktla_ktva((unsigned long)relocate_kernel), KEXEC_CONTROL_CODE_MAX_SIZE);
 
 	relocate_kernel_ptr = control_page;
 	page_list[PA_CONTROL_PAGE] = __pa(control_page);
