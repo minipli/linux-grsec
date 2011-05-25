@@ -180,7 +180,7 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	}
 
 	*tsk = *orig;
-	tsk->stack = (union thread_union *)ti;
+	tsk->stack = ti;
 
 	err = prop_local_init_single(&tsk->dirties);
 	if (err) {
