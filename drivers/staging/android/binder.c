@@ -3579,7 +3579,7 @@ static int binder_read_proc_transaction_log(
 	return len < count ? len  : count;
 }
 
-static struct file_operations binder_fops = {
+static const struct file_operations binder_fops = {
 	.owner = THIS_MODULE,
 	.poll = binder_poll,
 	.unlocked_ioctl = binder_ioctl,

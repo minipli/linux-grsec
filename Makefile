@@ -231,8 +231,8 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wstrict-prototypes -O2 -fomit-frame-pointer
-HOSTCXXFLAGS = -O2
+HOSTCFLAGS   = -Wall -W -Wno-unused -Wno-sign-compare -Wstrict-prototypes -O2 -fomit-frame-pointer -fno-delete-null-pointer-checks
+HOSTCXXFLAGS = -O2 -fno-delete-null-pointer-checks
 
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
@@ -573,7 +573,7 @@ KBUILD_CFLAGS += $(call cc-option,-Wdeclaration-after-statement,)
 KBUILD_CFLAGS += $(call cc-option,-Wno-pointer-sign,)
 
 # disable invalid "can't wrap" optimizations for signed / pointers
-KBUILD_CFLAGS	+= $(call cc-option,-fwrapv)
+KBUILD_CFLAGS	+= $(call cc-option,-fno-strict-overflow)
 
 # revert to pre-gcc-4.4 behaviour of .eh_frame
 KBUILD_CFLAGS	+= $(call cc-option,-fno-dwarf2-cfi-asm)

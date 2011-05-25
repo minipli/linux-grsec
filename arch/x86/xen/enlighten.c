@@ -454,7 +454,7 @@ static void xen_write_idt_entry(gate_desc *dt, int entrynum, const gate_desc *g)
 
 	preempt_disable();
 
-	start = __get_cpu_var(idt_desc).address;
+	start = (unsigned long)__get_cpu_var(idt_desc).address;
 	end = start + __get_cpu_var(idt_desc).size + 1;
 
 	xen_mc_flush();

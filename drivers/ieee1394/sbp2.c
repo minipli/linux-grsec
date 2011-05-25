@@ -290,7 +290,7 @@ static const struct ieee1394_device_id sbp2_id_table[] = {
 	 .match_flags	= IEEE1394_MATCH_SPECIFIER_ID | IEEE1394_MATCH_VERSION,
 	 .specifier_id	= SBP2_UNIT_SPEC_ID_ENTRY & 0xffffff,
 	 .version	= SBP2_SW_VERSION_ENTRY & 0xffffff},
-	{}
+	{ 0, 0, 0, 0, 0, 0 }
 };
 MODULE_DEVICE_TABLE(ieee1394, sbp2_id_table);
 
@@ -2111,7 +2111,7 @@ MODULE_DESCRIPTION("IEEE-1394 SBP-2 protocol driver");
 MODULE_SUPPORTED_DEVICE(SBP2_DEVICE_NAME);
 MODULE_LICENSE("GPL");
 
-static int sbp2_module_init(void)
+static int __init sbp2_module_init(void)
 {
 	int ret;
 

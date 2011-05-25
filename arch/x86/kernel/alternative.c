@@ -400,7 +400,7 @@ void apply_paravirt(struct paravirt_patch_site *start,
 
 		BUG_ON(p->len > MAX_PATCH_LEN);
 		/* prep the buffer with the original instructions */
-		memcpy(insnbuf, p->instr, p->len);
+		memcpy(insnbuf, ktla_ktva(p->instr), p->len);
 		used = pv_init_ops.patch(p->instrtype, p->clobbers, insnbuf,
 					 (unsigned long)p->instr, p->len);
 
@@ -485,11 +485,26 @@ void __init alternative_instructions(void)
  * instructions. And on the local CPU you need to be protected again NMI or MCE
  * handlers seeing an inconsistent instruction while you patch.
  */
-void *text_poke_early(void *addr, const void *opcode, size_t len)
+void *__kprobes text_poke_early(void *addr, const void *opcode, size_t len)
 {
 	unsigned long flags;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	local_irq_save(flags);
-	memcpy(addr, opcode, len);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
+	memcpy(ktla_ktva(addr), opcode, len);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	local_irq_restore(flags);
 	sync_core();
 	/* Could also do a CLFLUSH here to speed up CPU recovery; but
@@ -512,35 +527,27 @@ void *text_poke_early(void *addr, const void *opcode, size_t len)
  */
 void *__kprobes text_poke(void *addr, const void *opcode, size_t len)
 {
-	unsigned long flags;
-	char *vaddr;
+	unsigned char *vaddr = ktla_ktva(addr);
 	struct page *pages[2];
-	int i;
+	size_t i;
 
-	if (!core_kernel_text((unsigned long)addr)) {
-		pages[0] = vmalloc_to_page(addr);
-		pages[1] = vmalloc_to_page(addr + PAGE_SIZE);
+	if (!core_kernel_text((unsigned long)addr)
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_MODULES) && defined(CONFIG_PAX_KERNEXEC)
+	    && (vaddr < MODULES_VADDR || MODULES_END < vaddr)
+#endif
+
+	   ) {
+		pages[0] = vmalloc_to_page(vaddr);
+		pages[1] = vmalloc_to_page(vaddr + PAGE_SIZE);
 	} else {
-		pages[0] = virt_to_page(addr);
+		pages[0] = virt_to_page(vaddr);
 		WARN_ON(!PageReserved(pages[0]));
-		pages[1] = virt_to_page(addr + PAGE_SIZE);
+		pages[1] = virt_to_page(vaddr + PAGE_SIZE);
 	}
 	BUG_ON(!pages[0]);
-	local_irq_save(flags);
-	set_fixmap(FIX_TEXT_POKE0, page_to_phys(pages[0]));
-	if (pages[1])
-		set_fixmap(FIX_TEXT_POKE1, page_to_phys(pages[1]));
-	vaddr = (char *)fix_to_virt(FIX_TEXT_POKE0);
-	memcpy(&vaddr[(unsigned long)addr & ~PAGE_MASK], opcode, len);
-	clear_fixmap(FIX_TEXT_POKE0);
-	if (pages[1])
-		clear_fixmap(FIX_TEXT_POKE1);
-	local_flush_tlb();
-	sync_core();
-	/* Could also do a CLFLUSH here to speed up CPU recovery; but
-	   that causes hangs on some VIA CPUs. */
+	text_poke_early(addr, opcode, len);
 	for (i = 0; i < len; i++)
-		BUG_ON(((char *)addr)[i] != ((char *)opcode)[i]);
-	local_irq_restore(flags);
+		BUG_ON(((char *)vaddr)[i] != ((char *)opcode)[i]);
 	return addr;
 }
