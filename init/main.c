@@ -187,6 +187,17 @@ static int __init set_reset_devices(char *str)
 
 __setup("reset_devices", set_reset_devices);
 
+#ifdef CONFIG_PAX_SOFTMODE
+unsigned int pax_softmode;
+
+static int __init setup_pax_softmode(char *str)
+{
+	get_option(&str, &pax_softmode);
+	return 1;
+}
+__setup("pax_softmode=", setup_pax_softmode);
+#endif
+
 static char * argv_init[MAX_INIT_ARGS+2] = { "init", NULL, };
 char * envp_init[MAX_INIT_ENVS+2] = { "HOME=/", "TERM=linux", NULL, };
 static const char *panic_later, *panic_param;
@@ -668,7 +679,7 @@ static void __init do_initcalls(void)
 
 	for (call = __initcall_start; call < __initcall_end; call++) {
 		ktime_t t0, t1, delta;
-		char *msg = NULL;
+		char *msg1 = NULL, *msg2 = NULL;
 		char msgbuf[40];
 		int result;
 
@@ -697,23 +708,23 @@ static void __init do_initcalls(void)
 				(unsigned long) *call);
 		}
 
-		if (result && result != -ENODEV && initcall_debug) {
-			sprintf(msgbuf, "error code %d", result);
-			msg = msgbuf;
-		}
+		msgbuf[0] = 0;
+		if (result && result != -ENODEV && initcall_debug)
+			sprintf(msgbuf, " error code %d", result);
 		if (preempt_count() != count) {
-			msg = "preemption imbalance";
+			msg1 = " preemption imbalance";
 			preempt_count() = count;
 		}
 		if (irqs_disabled()) {
-			msg = "disabled interrupts";
+			msg2 = " disabled interrupts";
 			local_irq_enable();
 		}
-		if (msg) {
+		if (msgbuf[0] || msg1 || msg2) {
 			printk(KERN_WARNING "initcall at 0x%p", *call);
 			print_fn_descriptor_symbol(": %s()",
 					(unsigned long) *call);
-			printk(": returned with %s\n", msg);
+			printk(": returned with%s%s%s\n",
+			       msgbuf[0] ? msgbuf : "", msg1 ? msg1 : "", msg2 ? msg2 : "");
 		}
 	}
 

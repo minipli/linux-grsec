@@ -166,6 +166,8 @@ static inline void play_dead(void)
 void cpu_idle(void)
 {
 	current_thread_info()->status |= TS_POLLING;
+	current->stack_canary = pax_get_random_long();
+	write_pda(stack_canary, current->stack_canary);
 	/* endless idle loop with no priority at all */
 	while (1) {
 		tick_nohz_stop_sched_tick();
@@ -379,7 +381,7 @@ void exit_thread(void)
 	struct thread_struct *t = &me->thread;
 
 	if (me->thread.io_bitmap_ptr) {
-		struct tss_struct *tss = &per_cpu(init_tss, get_cpu());
+		struct tss_struct *tss = init_tss + get_cpu();
 
 		kfree(t->io_bitmap_ptr);
 		t->io_bitmap_ptr = NULL;
@@ -603,7 +605,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	struct thread_struct *prev = &prev_p->thread,
 				 *next = &next_p->thread;
 	int cpu = smp_processor_id();
-	struct tss_struct *tss = &per_cpu(init_tss, cpu);
+	struct tss_struct *tss = init_tss + cpu;
 
 	/* we're going to use this soon, after a few expensive things */
 	if (next_p->fpu_counter>5)
@@ -678,7 +680,6 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	write_pda(kernelstack,
 	(unsigned long)task_stack_page(next_p) + THREAD_SIZE - PDA_STACKOFFSET);
 #ifdef CONFIG_CC_STACKPROTECTOR
-	write_pda(stack_canary, next_p->stack_canary);
 	/*
 	 * Build time only check to make sure the stack_canary is at
 	 * offset 40 in the pda; this is a gcc ABI requirement
@@ -888,17 +889,4 @@ long do_arch_prctl(struct task_struct *task, int code, unsigned long addr)
 long sys_arch_prctl(int code, unsigned long addr)
 {
 	return do_arch_prctl(current, code, addr);
-}
-
-unsigned long arch_align_stack(unsigned long sp)
-{
-	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
-		sp -= get_random_int() % 8192;
-	return sp & ~0xf;
-}
-
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long range_end = mm->brk + 0x02000000;
-	return randomize_range(mm->brk, range_end, 0) ? : mm->brk;
 }

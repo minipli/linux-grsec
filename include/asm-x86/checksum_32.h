@@ -30,6 +30,12 @@ asmlinkage __wsum csum_partial(const void *buff, int len, __wsum sum);
 asmlinkage __wsum csum_partial_copy_generic(const void *src, void *dst,
 						  int len, __wsum sum, int *src_err_ptr, int *dst_err_ptr);
 
+asmlinkage __wsum csum_partial_copy_generic_to_user(const void *src, void *dst,
+						  int len, __wsum sum, int *src_err_ptr, int *dst_err_ptr);
+
+asmlinkage __wsum csum_partial_copy_generic_from_user(const void *src, void *dst,
+						  int len, __wsum sum, int *src_err_ptr, int *dst_err_ptr);
+
 /*
  *	Note: when you get a NULL pointer exception here this means someone
  *	passed in an incorrect kernel address to one of these functions.
@@ -49,7 +55,7 @@ __wsum csum_partial_copy_from_user(const void __user *src, void *dst,
 						int len, __wsum sum, int *err_ptr)
 {
 	might_sleep();
-	return csum_partial_copy_generic((__force void *)src, dst,
+	return csum_partial_copy_generic_from_user((__force void *)src, dst,
 					len, sum, err_ptr, NULL);
 }
 
@@ -180,7 +186,7 @@ static __inline__ __wsum csum_and_copy_to_user(const void *src,
 {
 	might_sleep();
 	if (access_ok(VERIFY_WRITE, dst, len))
-		return csum_partial_copy_generic(src, (__force void *)dst, len, sum, NULL, err_ptr);
+		return csum_partial_copy_generic_to_user(src, (__force void *)dst, len, sum, NULL, err_ptr);
 
 	if (len)
 		*err_ptr = -EFAULT;

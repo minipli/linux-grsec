@@ -69,6 +69,16 @@ extern pgprot_t PAGE_SHARED;
 #define PAGE_COPY      __pgprot(BTFIXUP_INT(page_copy))
 #define PAGE_READONLY  __pgprot(BTFIXUP_INT(page_readonly))
 
+#ifdef CONFIG_PAX_PAGEEXEC
+extern pgprot_t PAGE_SHARED_NOEXEC;
+# define PAGE_COPY_NOEXEC	__pgprot(BTFIXUP_INT(page_copy_noexec))
+# define PAGE_READONLY_NOEXEC	__pgprot(BTFIXUP_INT(page_readonly_noexec))
+#else
+# define PAGE_SHARED_NOEXEC	PAGE_SHARED
+# define PAGE_COPY_NOEXEC	PAGE_COPY
+# define PAGE_READONLY_NOEXEC	PAGE_READONLY
+#endif
+
 extern unsigned long page_kernel;
 
 #ifdef MODULE

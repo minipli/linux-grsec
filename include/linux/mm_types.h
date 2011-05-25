@@ -154,6 +154,8 @@ struct vm_area_struct {
 #ifdef CONFIG_NUMA
 	struct mempolicy *vm_policy;	/* NUMA policy for the VMA */
 #endif
+
+	struct vm_area_struct *vm_mirror;/* PaX: mirror vma or NULL */
 };
 
 struct mm_struct {
@@ -225,6 +227,24 @@ struct mm_struct {
 #ifdef CONFIG_CGROUP_MEM_RES_CTLR
 	struct mem_cgroup *mem_cgroup;
 #endif
+
+#if defined(CONFIG_PAX_EI_PAX) || defined(CONFIG_PAX_PT_PAX_FLAGS) || defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+	unsigned long pax_flags;
+#endif
+
+#ifdef CONFIG_PAX_DLRESOLVE
+	unsigned long call_dl_resolve;
+#endif
+
+#if defined(CONFIG_PPC32) && defined(CONFIG_PAX_EMUSIGRT)
+	unsigned long call_syscall;
+#endif
+
+#ifdef CONFIG_PAX_ASLR
+	unsigned long delta_mmap;		/* randomized offset */
+	unsigned long delta_stack;		/* randomized offset */
+#endif
+
 };
 
 #endif /* _LINUX_MM_TYPES_H */
