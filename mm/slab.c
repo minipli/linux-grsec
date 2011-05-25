@@ -1552,7 +1552,7 @@ void __init kmem_cache_init(void)
 			sizes->cs_cachep = kmem_cache_create(names->name,
 					sizes->cs_size,
 					ARCH_KMALLOC_MINALIGN,
-					ARCH_KMALLOC_FLAGS|SLAB_PANIC,
+					ARCH_KMALLOC_FLAGS|SLAB_PANIC|SLAB_USERCOPY,
 					NULL);
 		}
 #ifdef CONFIG_ZONE_DMA
@@ -4548,9 +4548,9 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 {
 
 #ifdef CONFIG_PAX_USERCOPY
-	struct kmem_cache *cachep;
-	struct slab *slabp;
 	struct page *page;
+	struct kmem_cache *cachep = NULL;
+	struct slab *slabp;
 	unsigned int objnr;
 	unsigned long offset;
 
@@ -4572,6 +4572,9 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	}
 
 	cachep = page_get_cache(page);
+	if (!(cachep->flags & SLAB_USERCOPY))
+		goto report;
+
 	slabp = page_get_slab(page);
 	objnr = obj_to_index(cachep, slabp, ptr);
 	BUG_ON(objnr >= cachep->num);
@@ -4580,10 +4583,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 		return;
 
 report:
-	if (to)
-		pax_report_leak_to_user(ptr, n);
-	else
-		pax_report_overflow_from_user(ptr, n);
+	pax_report_usercopy(ptr, n, to, cachep ? cachep->name : NULL);
 #endif
 
 }
