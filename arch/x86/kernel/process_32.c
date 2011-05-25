@@ -134,12 +134,11 @@ void __show_regs(struct pt_regs *regs, int all)
 	if (user_mode(regs)) {
 		sp = regs->sp;
 		ss = regs->ss & 0xffff;
-		gs = get_user_gs(regs);
 	} else {
 		sp = kernel_stack_pointer(regs);
 		savesegment(ss, ss);
-		savesegment(gs, gs);
 	}
+	gs = get_user_gs(regs);
 
 	show_regs_common();
 
@@ -235,7 +234,6 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	 * Set a new TLS for the child thread?
 	 */
 	if (clone_flags & CLONE_SETTLS)
-//XXX needs set_fs()?
 		err = do_set_thread_area(p, -1,
 			(struct user_desc __user *)childregs->si, 0);
 
