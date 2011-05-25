@@ -28,11 +28,10 @@ int direct_gbpages
 #endif
 ;
 
-#ifdef CONFIG_X86_32
+#if defined(CONFIG_X86_32) && defined(CONFIG_X86_PAE)
 int nx_enabled;
-#endif
 
-#if (defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)) && !defined(CONFIG_PAX_PAGEEXEC)
+#ifndef CONFIG_PAX_PAGEEXEC
 /*
  * noexec = on|off
  *
@@ -53,6 +52,7 @@ static int __init noexec_setup(char *str)
 	return 0;
 }
 early_param("noexec", noexec_setup);
+#endif
 #endif
 
 #ifdef CONFIG_X86_PAE
@@ -460,7 +460,7 @@ void free_initmem(void)
 #endif
 	limit = (limit - 1UL) >> PAGE_SHIFT;
 
-	memset(KERNEL_TEXT_OFFSET, POISON_FREE_INITMEM, PAGE_SIZE);
+	memset(__LOAD_PHYSICAL_ADDR, POISON_FREE_INITMEM, PAGE_SIZE);
 	for (cpu = 0; cpu < NR_CPUS; cpu++) {
 		pack_descriptor(&d, get_desc_base(&get_cpu_gdt_table(cpu)[GDT_ENTRY_KERNEL_CS]), limit, 0x9B, 0xC);
 		write_gdt_entry(get_cpu_gdt_table(cpu), GDT_ENTRY_KERNEL_CS, &d, DESCTYPE_S);
