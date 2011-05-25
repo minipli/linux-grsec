@@ -197,7 +197,11 @@ void __init setup_per_cpu_areas(void)
 				cpu, node, __pa(ptr));
 		}
 #endif
+#ifdef CONFIG_X86_32
+		__per_cpu_offset[cpu] = ptr - __per_cpu_start;
+#else
 		per_cpu_offset(cpu) = ptr - __per_cpu_start;
+#endif
 		memcpy(ptr, __per_cpu_start, __per_cpu_end - __per_cpu_start);
 	}
 

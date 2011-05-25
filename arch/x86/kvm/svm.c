@@ -1525,7 +1525,19 @@ static void reload_tss(struct kvm_vcpu *vcpu)
 	int cpu = raw_smp_processor_id();
 
 	struct svm_cpu_data *svm_data = per_cpu(svm_data, cpu);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	svm_data->tss_desc->type = 9; /* available 32/64-bit TSS */
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	load_TR_desc();
 }
 
@@ -1936,7 +1948,7 @@ static int svm_get_mt_mask_shift(void)
 	return 0;
 }
 
-static struct kvm_x86_ops svm_x86_ops = {
+static const struct kvm_x86_ops svm_x86_ops = {
 	.cpu_has_kvm_support = has_svm,
 	.disabled_by_bios = is_disabled,
 	.hardware_setup = svm_hardware_setup,
