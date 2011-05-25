@@ -761,7 +761,11 @@ do_rest:
 		(unsigned long)task_stack_page(c_idle.idle) -
 		KERNEL_STACK_OFFSET + THREAD_SIZE;
 #endif
+
+	pax_open_kernel();
 	early_gdt_descr.address = (unsigned long)get_cpu_gdt_table(cpu);
+	pax_close_kernel();
+
 	initial_code = (unsigned long)start_secondary;
 	stack_start.sp = (void *) c_idle.idle->thread.sp;
 
@@ -893,6 +897,12 @@ int __cpuinit native_cpu_up(unsigned int cpu)
 	mtrr_save_state();
 
 	per_cpu(cpu_state, cpu) = CPU_UP_PREPARE;
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	clone_pgd_range(get_cpu_pgd(cpu) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+#endif
 
 #ifdef CONFIG_X86_32
 	/* init low mem mapping */
