@@ -235,7 +235,7 @@ static inline void map_compat_vdso(int map)
 void enable_sep_cpu(void)
 {
 	int cpu = get_cpu();
-	struct tss_struct *tss = &per_cpu(init_tss, cpu);
+	struct tss_struct *tss = init_tss + cpu;
 
 	if (!boot_cpu_has(X86_FEATURE_SEP)) {
 		put_cpu();
@@ -258,7 +258,7 @@ static int __init gate_vma_init(void)
 	gate_vma.vm_start = FIXADDR_USER_START;
 	gate_vma.vm_end = FIXADDR_USER_END;
 	gate_vma.vm_flags = VM_READ | VM_MAYREAD | VM_EXEC | VM_MAYEXEC;
-	gate_vma.vm_page_prot = __P101;
+	gate_vma.vm_page_prot = vm_get_page_prot(gate_vma.vm_flags);
 	/*
 	 * Make sure the vDSO gets into every core dump.
 	 * Dumping its contents makes post-mortem fully interpretable later
@@ -336,7 +336,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int exstack)
 	if (compat)
 		addr = VDSO_HIGH_BASE;
 	else {
-		addr = get_unmapped_area(NULL, 0, PAGE_SIZE, 0, 0);
+		addr = get_unmapped_area(NULL, 0, PAGE_SIZE, 0, MAP_EXECUTABLE);
 		if (IS_ERR_VALUE(addr)) {
 			ret = addr;
 			goto up_fail;
@@ -363,7 +363,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int exstack)
 			goto up_fail;
 	}
 
-	current->mm->context.vdso = (void *)addr;
+	current->mm->context.vdso = addr;
 	current_thread_info()->sysenter_return =
 		VDSO32_SYMBOL(addr, SYSENTER_RETURN);
 
@@ -389,7 +389,7 @@ static ctl_table abi_table2[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec
 	},
-	{}
+	{ 0, NULL, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 static ctl_table abi_root_table2[] = {
@@ -399,7 +399,7 @@ static ctl_table abi_root_table2[] = {
 		.mode = 0555,
 		.child = abi_table2
 	},
-	{}
+	{ 0, NULL, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 static __init int ia32_binfmt_init(void)
@@ -414,8 +414,14 @@ __initcall(ia32_binfmt_init);
 
 const char *arch_vma_name(struct vm_area_struct *vma)
 {
-	if (vma->vm_mm && vma->vm_start == (long)vma->vm_mm->context.vdso)
+	if (vma->vm_mm && vma->vm_start == vma->vm_mm->context.vdso)
 		return "[vdso]";
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (vma->vm_mm && vma->vm_mirror && vma->vm_mirror->vm_start == vma->vm_mm->context.vdso)
+		return "[vdso]";
+#endif
+
 	return NULL;
 }
 
@@ -424,7 +430,7 @@ struct vm_area_struct *get_gate_vma(struct task_struct *tsk)
 	struct mm_struct *mm = tsk->mm;
 
 	/* Check to see if this task was created in compat vdso mode */
-	if (mm && mm->context.vdso == (void *)VDSO_HIGH_BASE)
+	if (mm && mm->context.vdso == VDSO_HIGH_BASE)
 		return &gate_vma;
 	return NULL;
 }

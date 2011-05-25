@@ -559,13 +559,6 @@ static int __cpuinit do_boot_cpu(int cpu, int apicid)
 	};
 	INIT_WORK(&c_idle.work, do_fork_idle);
 
-	/* allocate memory for gdts of secondary cpus. Hotplug is considered */
-	if (!cpu_gdt_descr[cpu].address &&
-		!(cpu_gdt_descr[cpu].address = get_zeroed_page(GFP_KERNEL))) {
-		printk(KERN_ERR "Failed to allocate GDT for CPU %d\n", cpu);
-		return -1;
-	}
-
 	/* Allocate node local memory for AP pdas */
 	if (cpu_pda(cpu) == &boot_cpu_pda[cpu]) {
 		struct x8664_pda *newpda, *pda;
@@ -624,7 +617,7 @@ do_rest:
 	start_rip = setup_trampoline();
 
 	init_rsp = c_idle.idle->thread.sp;
-	load_sp0(&per_cpu(init_tss, cpu), &c_idle.idle->thread);
+	load_sp0(init_tss + cpu, &c_idle.idle->thread);
 	initial_code = start_secondary;
 	clear_tsk_thread_flag(c_idle.idle, TIF_FORK);
 
