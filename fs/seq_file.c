@@ -386,7 +386,7 @@ int seq_printf(struct seq_file *m, const char *f, ...)
 }
 EXPORT_SYMBOL(seq_printf);
 
-static char *mangle_path(char *s, char *p, char *esc)
+char *mangle_path(char *s, char *p, char *esc)
 {
 	while (s <= p) {
 		char c = *p++;
@@ -405,6 +405,7 @@ static char *mangle_path(char *s, char *p, char *esc)
 	}
 	return NULL;
 }
+EXPORT_SYMBOL(mangle_path);
 
 /*
  * return the absolute path of 'dentry' residing in mount 'mnt'.

@@ -693,7 +693,10 @@ static struct early_res early_res[MAX_EARLY_RES] __initdata = {
 	 */
 	{ TRAMPOLINE_BASE, TRAMPOLINE_BASE + PAGE_SIZE, "TRAMPOLINE" },
 #endif
-	{}
+#ifdef CONFIG_VM86
+	{ PAGE_SIZE, ISA_START_ADDRESS, "V86 mode memory", 1 },
+#endif
+	{ 0, 0, {0}, 0 }
 };
 
 static int __init find_overlapped_early(u64 start, u64 end)

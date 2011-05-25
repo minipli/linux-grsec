@@ -361,7 +361,7 @@ static void add_ibs_begin(struct oprofile_cpu_buffer *cpu_buf, int code,
 		if (ibs_cookie == NO_COOKIE)
 			offset = rip;
 		if (ibs_cookie == INVALID_COOKIE) {
-			atomic_inc(&oprofile_stats.sample_lost_no_mapping);
+			atomic_inc_unchecked(&oprofile_stats.sample_lost_no_mapping);
 			offset = rip;
 		}
 		if (ibs_cookie != last_cookie) {
@@ -408,7 +408,7 @@ static int add_us_sample(struct mm_struct *mm, struct op_sample *s)
 	cookie = lookup_dcookie(mm, s->eip, &offset);
 
 	if (cookie == INVALID_COOKIE) {
-		atomic_inc(&oprofile_stats.sample_lost_no_mapping);
+		atomic_inc_unchecked(&oprofile_stats.sample_lost_no_mapping);
 		return 0;
 	}
 
@@ -436,7 +436,7 @@ add_sample(struct mm_struct *mm, struct op_sample *s, int in_kernel)
 	} else if (mm) {
 		return add_us_sample(mm, s);
 	} else {
-		atomic_inc(&oprofile_stats.sample_lost_no_mm);
+		atomic_inc_unchecked(&oprofile_stats.sample_lost_no_mm);
 	}
 	return 0;
 }
@@ -619,7 +619,7 @@ void sync_buffer(int cpu)
 			   !add_sample(mm, s, in_kernel)) {
 			if (state == sb_bt_start) {
 				state = sb_bt_ignore;
-				atomic_inc(&oprofile_stats.bt_lost_no_mapping);
+				atomic_inc_unchecked(&oprofile_stats.bt_lost_no_mapping);
 			}
 		}
 

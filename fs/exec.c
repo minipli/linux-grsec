@@ -52,6 +52,7 @@
 #include <linux/tracehook.h>
 #include <linux/kmod.h>
 #include <linux/random.h>
+#include <linux/seq_file.h>
 
 #ifdef CONFIG_PAX_REFCOUNT
 #include <linux/kallsyms.h>
@@ -1619,6 +1620,14 @@ void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
 			path_exec = d_path(&vma_exec->vm_file->f_path, buffer_exec, PAGE_SIZE);
 			if (IS_ERR(path_exec))
 				path_exec = "<path too long>";
+			else {
+				path_exec = mangle_path(buffer_exec, path_exec, "\t\n\\");
+				if (path_exec) {
+					*path_exec = 0;
+					path_exec = buffer_exec;
+				} else
+					path_exec = "<path too long>";
+			}
 		}
 		if (vma_fault) {
 			start = vma_fault->vm_start;
@@ -1628,6 +1637,14 @@ void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
 				path_fault = d_path(&vma_fault->vm_file->f_path, buffer_fault, PAGE_SIZE);
 				if (IS_ERR(path_fault))
 					path_fault = "<path too long>";
+				else {
+					path_fault = mangle_path(buffer_fault, path_fault, "\t\n\\");
+					if (path_fault) {
+						*path_fault = 0;
+						path_fault = buffer_fault;
+					} else
+						path_fault = "<path too long>";
+				}
 			} else
 				path_fault = "<anonymous mapping>";
 		}
