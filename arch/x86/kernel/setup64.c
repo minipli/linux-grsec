@@ -36,14 +36,12 @@ struct x8664_pda *_cpu_pda[NR_CPUS] __read_mostly;
 EXPORT_SYMBOL(_cpu_pda);
 struct x8664_pda boot_cpu_pda[NR_CPUS] __cacheline_aligned;
 
-struct desc_ptr idt_descr = { 256 * 16 - 1, (unsigned long) idt_table };
+struct desc_ptr idt_descr __read_only = { 256 * 16 - 1, (unsigned long) idt_table };
 
 char boot_cpu_stack[IRQSTACKSIZE] __attribute__((section(".bss.page_aligned")));
 
 unsigned long __supported_pte_mask __read_mostly = ~0UL;
 EXPORT_SYMBOL_GPL(__supported_pte_mask);
-
-static int do_not_nx __cpuinitdata = 0;
 
 /* noexec=on|off
 Control non executable mappings for 64bit processes.
@@ -57,16 +55,14 @@ static int __init nonx_setup(char *str)
 		return -EINVAL;
 	if (!strncmp(str, "on", 2)) {
                 __supported_pte_mask |= _PAGE_NX; 
- 		do_not_nx = 0; 
 	} else if (!strncmp(str, "off", 3)) {
-		do_not_nx = 1;
 		__supported_pte_mask &= ~_PAGE_NX;
         }
 	return 0;
 } 
 early_param("noexec", nonx_setup);
 
-int force_personality32 = 0; 
+int force_personality32;
 
 /* noexec32=on|off
 Control non executable heap for 32bit processes.
@@ -226,7 +222,7 @@ void __cpuinit check_efer(void)
 	unsigned long efer;
 
 	rdmsrl(MSR_EFER, efer); 
-        if (!(efer & EFER_NX) || do_not_nx) { 
+        if (!(efer & EFER_NX)) {
                 __supported_pte_mask &= ~_PAGE_NX; 
         }       
 }
@@ -249,12 +245,13 @@ DEFINE_PER_CPU(struct orig_ist, orig_ist);
 void __cpuinit cpu_init (void)
 {
 	int cpu = stack_smp_processor_id();
-	struct tss_struct *t = &per_cpu(init_tss, cpu);
+	struct tss_struct *t = init_tss + cpu;
 	struct orig_ist *orig_ist = &per_cpu(orig_ist, cpu);
 	unsigned long v; 
 	char *estacks = NULL; 
 	struct task_struct *me;
 	int i;
+	struct desc_ptr cpu_gdt_descr = { .size = GDT_SIZE - 1, .address = (unsigned long)get_cpu_gdt_table(cpu)};
 
 	/* CPU 0 is initialised in head64.c */
 	if (cpu != 0) {
@@ -272,14 +269,12 @@ void __cpuinit cpu_init (void)
 	clear_in_cr4(X86_CR4_VME|X86_CR4_PVI|X86_CR4_TSD|X86_CR4_DE);
 
 	/*
-	 * Initialize the per-CPU GDT with the boot GDT,
-	 * and set up the GDT descriptor:
+	 * Initialize the per-CPU GDT with the boot GDT:
 	 */
 	if (cpu)
-		memcpy(get_cpu_gdt_table(cpu), cpu_gdt_table, GDT_SIZE);
+		memcpy(get_cpu_gdt_table(cpu), get_cpu_gdt_table(0), GDT_SIZE);
 
-	cpu_gdt_descr[cpu].size = GDT_SIZE;
-	load_gdt((const struct desc_ptr *)&cpu_gdt_descr[cpu]);
+	load_gdt(&cpu_gdt_descr);
 	load_idt((const struct desc_ptr *)&idt_descr);
 
 	memset(me->thread.tls_array, 0, GDT_ENTRY_TLS_ENTRIES * 8);
