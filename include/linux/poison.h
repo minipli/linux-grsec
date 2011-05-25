@@ -7,8 +7,8 @@
  * under normal circumstances, used to verify that nobody uses
  * non-initialized list entries.
  */
-#define LIST_POISON1  ((void *) 0x00100100)
-#define LIST_POISON2  ((void *) 0x00200200)
+#define LIST_POISON1  ((void *) (long)0xFFFFFF01)
+#define LIST_POISON2  ((void *) (long)0xFFFFFF02)
 
 /********** include/linux/timer.h **********/
 /*
