@@ -125,10 +125,6 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 		struct mm_struct *mm = vma->vm_mm;
 		struct anon_vma *allocated;
 
-#ifdef CONFIG_PAX_SEGMEXEC
-		struct vm_area_struct *vma_m;
-#endif
-
 		avc = anon_vma_chain_alloc();
 		if (!avc)
 			goto out_enomem;
@@ -154,7 +150,8 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 		if (likely(!vma->anon_vma)) {
 
 #ifdef CONFIG_PAX_SEGMEXEC
-			vma_m = pax_find_mirror_vma(vma);
+			struct vm_area_struct *vma_m = pax_find_mirror_vma(vma);
+
 			if (vma_m) {
 				BUG_ON(vma_m->anon_vma);
 				vma_m->anon_vma = anon_vma;
@@ -219,7 +216,7 @@ static void anon_vma_chain_link(struct vm_area_struct *vma,
  * Attach the anon_vmas from src to dst.
  * Returns 0 on success, -ENOMEM on failure.
  */
-int anon_vma_clone(struct vm_area_struct *dst, struct vm_area_struct *src)
+int anon_vma_clone(struct vm_area_struct *dst, const struct vm_area_struct *src)
 {
 	struct anon_vma_chain *avc, *pavc;
 
@@ -241,7 +238,7 @@ int anon_vma_clone(struct vm_area_struct *dst, struct vm_area_struct *src)
  * the corresponding VMA in the parent process is attached to.
  * Returns 0 on success, non-zero on failure.
  */
-int anon_vma_fork(struct vm_area_struct *vma, struct vm_area_struct *pvma)
+int anon_vma_fork(struct vm_area_struct *vma, const struct vm_area_struct *pvma)
 {
 	struct anon_vma_chain *avc;
 	struct anon_vma *anon_vma;
