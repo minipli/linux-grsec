@@ -401,6 +401,8 @@ int do_select(int n, fd_set_bits *fds, struct timespec *end_time)
 	int retval, i, timed_out = 0;
 	unsigned long slack = 0;
 
+	stackleak_probe(table);
+
 	rcu_read_lock();
 	retval = max_select_fd(n, fds);
 	rcu_read_unlock();
@@ -820,6 +822,9 @@ int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
 	struct poll_list *const head = (struct poll_list *)stack_pps;
  	struct poll_list *walk = head;
  	unsigned long todo = nfds;
+
+	stackleak_probe(table);
+	stackleak_probe(stack_pps);
 
 	if (nfds > current->signal->rlim[RLIMIT_NOFILE].rlim_cur)
 		return -EINVAL;

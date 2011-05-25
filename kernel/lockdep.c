@@ -421,20 +421,20 @@ static struct stack_trace lockdep_init_trace = {
 /*
  * Various lockdep statistics:
  */
-atomic_t chain_lookup_hits;
-atomic_t chain_lookup_misses;
-atomic_t hardirqs_on_events;
-atomic_t hardirqs_off_events;
-atomic_t redundant_hardirqs_on;
-atomic_t redundant_hardirqs_off;
-atomic_t softirqs_on_events;
-atomic_t softirqs_off_events;
-atomic_t redundant_softirqs_on;
-atomic_t redundant_softirqs_off;
-atomic_t nr_unused_locks;
-atomic_t nr_cyclic_checks;
-atomic_t nr_find_usage_forwards_checks;
-atomic_t nr_find_usage_backwards_checks;
+atomic_unchecked_t chain_lookup_hits;
+atomic_unchecked_t chain_lookup_misses;
+atomic_unchecked_t hardirqs_on_events;
+atomic_unchecked_t hardirqs_off_events;
+atomic_unchecked_t redundant_hardirqs_on;
+atomic_unchecked_t redundant_hardirqs_off;
+atomic_unchecked_t softirqs_on_events;
+atomic_unchecked_t softirqs_off_events;
+atomic_unchecked_t redundant_softirqs_on;
+atomic_unchecked_t redundant_softirqs_off;
+atomic_unchecked_t nr_unused_locks;
+atomic_unchecked_t nr_cyclic_checks;
+atomic_unchecked_t nr_find_usage_forwards_checks;
+atomic_unchecked_t nr_find_usage_backwards_checks;
 #endif
 
 /*
@@ -577,6 +577,10 @@ static int static_obj(void *obj)
 	int i;
 #endif
 
+#ifdef CONFIG_PAX_KERNEXEC
+	start = ktla_ktva(start);
+#endif
+
 	/*
 	 * static variable?
 	 */
@@ -592,8 +596,7 @@ static int static_obj(void *obj)
 	 */
 	for_each_possible_cpu(i) {
 		start = (unsigned long) &__per_cpu_start + per_cpu_offset(i);
-		end   = (unsigned long) &__per_cpu_start + PERCPU_ENOUGH_ROOM
-					+ per_cpu_offset(i);
+		end   = start + PERCPU_ENOUGH_ROOM;
 
 		if ((addr >= start) && (addr < end))
 			return 1;
@@ -710,6 +713,7 @@ register_lock_class(struct lockdep_map *lock, unsigned int subclass, int force)
 	if (!static_obj(lock->key)) {
 		debug_locks_off();
 		printk("INFO: trying to register non-static key.\n");
+		printk("lock:%pS key:%pS.\n", lock, lock->key);
 		printk("the code is fine but needs lockdep annotation.\n");
 		printk("turning off the locking correctness validator.\n");
 		dump_stack();
@@ -2751,7 +2755,7 @@ static int __lock_acquire(struct lockdep_map *lock, unsigned int subclass,
 		if (!class)
 			return 0;
 	}
-	debug_atomic_inc((atomic_t *)&class->ops);
+	debug_atomic_inc((atomic_unchecked_t *)&class->ops);
 	if (very_verbose(class)) {
 		printk("\nacquire class [%p] %s", class->key, class->name);
 		if (class->name_version > 1)
