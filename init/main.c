@@ -195,6 +195,7 @@ static int __init setup_pax_nouderef(char *str)
 	}
 	asm("mov %0, %%ds" : : "r" (__KERNEL_DS) : "memory");
 	asm("mov %0, %%es" : : "r" (__KERNEL_DS) : "memory");
+	asm("mov %0, %%ss" : : "r" (__KERNEL_DS) : "memory");
 
 	return 0;
 }
