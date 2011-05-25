@@ -2386,7 +2386,7 @@ static long bcm_char_ioctl(struct file *filp, UINT cmd, ULONG arg)
 }
 
 
-static struct file_operations bcm_fops = {
+static const struct file_operations bcm_fops = {
 	.owner    = THIS_MODULE,
 	.open     = bcm_char_open,
 	.release  = bcm_char_release,
