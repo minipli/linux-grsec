@@ -3,6 +3,7 @@
 *.bin
 *.cpio
 *.css
+*.dbg
 *.dvi
 *.eps
 *.gif
@@ -183,11 +184,14 @@ version.h*
 vmlinux
 vmlinux-*
 vmlinux.aout
-vmlinux*.lds*
+vmlinux.bin.all
+vmlinux*.lds
+vmlinux.relocs
 vmlinux*.scr
-vsyscall.lds
+vsyscall*.lds
 wanxlfw.inc
 uImage
 unifdef
+utsrelease.h
 zImage*
 zconf.hash.c

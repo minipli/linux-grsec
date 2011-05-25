@@ -22,7 +22,7 @@
 #define PER_CPU_VAR(var)	%fs:per_cpu__##var
 #else /* ! SMP */
 #define PER_CPU(var, reg)			\
-	movl $per_cpu__##var, reg
+	movl per_cpu__##var, reg
 #define PER_CPU_VAR(var)	per_cpu__##var
 #endif	/* SMP */
 
@@ -42,12 +42,12 @@
  */
 #ifdef CONFIG_SMP
 /* Same as generic implementation except for optimized local access. */
-#define __GENERIC_PER_CPU
 
 /* This is used for other cpus to find our section. */
 extern unsigned long __per_cpu_offset[];
+extern void setup_per_cpu_areas(void);
 
-#define per_cpu_offset(x) (__per_cpu_offset[x])
+#define per_cpu_offset(x) (__per_cpu_offset[x] - (unsigned long)__per_cpu_start)
 
 /* Separate out the type, so (int[3], foo) works. */
 #define DECLARE_PER_CPU(type, name) extern __typeof__(type) per_cpu__##name
@@ -64,11 +64,11 @@ DECLARE_PER_CPU(unsigned long, this_cpu_off);
 
 /* var is in discarded region: offset to particular copy we want */
 #define per_cpu(var, cpu) (*({				\
-	extern int simple_indentifier_##var(void);	\
+	extern int simple_identifier_##var(void);	\
 	RELOC_HIDE(&per_cpu__##var, __per_cpu_offset[cpu]); }))
 
 #define __raw_get_cpu_var(var) (*({					\
-	extern int simple_indentifier_##var(void);			\
+	extern int simple_identifier_##var(void);			\
 	RELOC_HIDE(&per_cpu__##var, x86_read_percpu(this_cpu_off));	\
 }))
 
@@ -79,7 +79,7 @@ DECLARE_PER_CPU(unsigned long, this_cpu_off);
 do {								\
 	unsigned int __i;					\
 	for_each_possible_cpu(__i)				\
-		memcpy((pcpudst)+__per_cpu_offset[__i],		\
+		memcpy((pcpudst)+per_cpu_offset(__i),		\
 		       (src), (size));				\
 } while (0)
 

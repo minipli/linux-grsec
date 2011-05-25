@@ -90,7 +90,6 @@ static inline pte_t native_make_pte(unsigned long long val)
 typedef struct { unsigned long pte_low; } pte_t;
 typedef struct { unsigned long pgd; } pgd_t;
 typedef struct { unsigned long pgprot; } pgprot_t;
-#define boot_pte_t pte_t /* or would you rather have a typedef */
 
 static inline unsigned long native_pgd_val(pgd_t pgd)
 {
@@ -175,6 +174,18 @@ extern int page_is_ram(unsigned long pagenr);
 #define __PAGE_OFFSET		((unsigned long)CONFIG_PAGE_OFFSET)
 #endif
 
+#ifdef CONFIG_PAX_KERNEXEC
+#ifndef __ASSEMBLY__
+extern unsigned char MODULES_VADDR[];
+extern unsigned char MODULES_END[];
+extern unsigned char KERNEL_TEXT_OFFSET[];
+#define ktla_ktva(addr)		(addr + (unsigned long)KERNEL_TEXT_OFFSET)
+#define ktva_ktla(addr)		(addr - (unsigned long)KERNEL_TEXT_OFFSET)
+#endif
+#else
+#define ktla_ktva(addr)		(addr)
+#define ktva_ktla(addr)		(addr)
+#endif
 
 #define PAGE_OFFSET		((unsigned long)__PAGE_OFFSET)
 #define VMALLOC_RESERVE		((unsigned long)__VMALLOC_RESERVE)
@@ -196,6 +207,10 @@ extern int page_is_ram(unsigned long pagenr);
 	(VM_READ | VM_WRITE | \
 	((current->personality & READ_IMPLIES_EXEC) ? VM_EXEC : 0 ) | \
 		 VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC)
+
+#ifdef CONFIG_PAX_PAGEEXEC
+#define CONFIG_ARCH_TRACK_EXEC_LIMIT 1
+#endif
 
 #include <asm-generic/memory_model.h>
 #include <asm-generic/page.h>

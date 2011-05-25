@@ -26,10 +26,14 @@
 #include <linux/uaccess.h>
 #include <linux/kdebug.h>
 #include <linux/kprobes.h>
+#include <linux/unistd.h>
+#include <linux/compiler.h>
+#include <linux/binfmts.h>
 
 #include <asm/system.h>
 #include <asm/desc.h>
 #include <asm/segment.h>
+#include <asm/tlbflush.h>
 
 extern void die(const char *,struct pt_regs *,long);
 
@@ -39,7 +43,7 @@ static inline int notify_page_fault(struct pt_regs *regs)
 	int ret = 0;
 
 	/* kprobe_running() needs smp_processor_id() */
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		preempt_disable();
 		if (kprobe_running() && kprobe_fault_handler(regs, 14))
 			ret = 1;
@@ -74,7 +78,8 @@ static inline unsigned long get_segment_eip(struct pt_regs *regs,
 {
 	unsigned long eip = regs->eip;
 	unsigned seg = regs->xcs & 0xffff;
-	u32 seg_ar, seg_limit, base, *desc;
+	u32 seg_ar, seg_limit, base;
+	struct desc_struct *desc;
 
 	/* Unlikely, but must come before segment checks. */
 	if (unlikely(regs->eflags & VM_MASK)) {
@@ -88,7 +93,7 @@ static inline unsigned long get_segment_eip(struct pt_regs *regs,
 	
 	/* By far the most common cases. */
 	if (likely(SEGMENT_IS_FLAT_CODE(seg)))
-		return eip;
+		return seg == __KERNEL_CS ? ktla_ktva(eip) : eip;
 
 	/* Check the segment exists, is within the current LDT/GDT size,
 	   that kernel/user (ring 0..3) has the appropriate privilege,
@@ -103,21 +108,24 @@ static inline unsigned long get_segment_eip(struct pt_regs *regs,
 	/* Get the GDT/LDT descriptor base. 
 	   When you look for races in this code remember that
 	   LDT and other horrors are only used in user space. */
-	if (seg & (1<<2)) {
+	if (seg & SEGMENT_LDT) {
 		/* Must lock the LDT while reading it. */
 		mutex_lock(&current->mm->context.lock);
-		desc = current->mm->context.ldt;
-		desc = (void *)desc + (seg & ~7);
+		if ((seg >> 3) >= current->mm->context.size) {
+			mutex_unlock(&current->mm->context.lock);
+			*eip_limit = 0;
+			return 1;	 /* So that returned eip > *eip_limit. */
+		}
+		desc = &current->mm->context.ldt[seg >> 3];
 	} else {
 		/* Must disable preemption while reading the GDT. */
- 		desc = (u32 *)get_cpu_gdt_table(get_cpu());
-		desc = (void *)desc + (seg & ~7);
+		desc = &get_cpu_gdt_table(get_cpu())[seg >> 3];
 	}
 
 	/* Decode the code segment base from the descriptor */
-	base = get_desc_base((unsigned long *)desc);
+	base = get_desc_base(desc);
 
-	if (seg & (1<<2)) { 
+	if (seg & SEGMENT_LDT) {
 		mutex_unlock(&current->mm->context.lock);
 	} else
 		put_cpu();
@@ -216,6 +224,30 @@ static noinline void force_sig_info_fault(int si_signo, int si_code,
 
 fastcall void do_invalid_op(struct pt_regs *, unsigned long);
 
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+static int pax_handle_fetch_fault(struct pt_regs *regs);
+#endif
+
+#ifdef CONFIG_PAX_PAGEEXEC
+static inline pmd_t * pax_get_pmd(struct mm_struct *mm, unsigned long address)
+{
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+
+	pgd = pgd_offset(mm, address);
+	if (!pgd_present(*pgd))
+		return NULL;
+	pud = pud_offset(pgd, address);
+	if (!pud_present(*pud))
+		return NULL;
+	pmd = pmd_offset(pud, address);
+	if (!pmd_present(*pmd))
+		return NULL;
+	return pmd;
+}
+#endif
+
 static inline pmd_t *vmalloc_sync_one(pgd_t *pgd, unsigned long address)
 {
 	unsigned index = pgd_index(address);
@@ -299,19 +331,26 @@ fastcall void __kprobes do_page_fault(struct pt_regs *regs,
 	struct task_struct *tsk;
 	struct mm_struct *mm;
 	struct vm_area_struct * vma;
-	unsigned long address;
 	int write, si_code;
 	int fault;
+	pte_t *pte;
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	pmd_t *pmd;
+	spinlock_t *ptl;
+	unsigned char pte_mask;
+#endif
+
+	/* get the address */
+	const unsigned long address = read_cr2();
 
 	/*
 	 * We can fault from pretty much anywhere, with unknown IRQ state.
 	 */
 	trace_hardirqs_fixup();
 
-	/* get the address */
-        address = read_cr2();
-
 	tsk = current;
+	mm = tsk->mm;
 
 	si_code = SEGV_MAPERR;
 
@@ -348,14 +387,12 @@ fastcall void __kprobes do_page_fault(struct pt_regs *regs,
 	if (regs->eflags & (X86_EFLAGS_IF|VM_MASK))
 		local_irq_enable();
 
-	mm = tsk->mm;
-
 	/*
 	 * If we're in an interrupt, have no user context or are running in an
 	 * atomic region then we must not take the fault..
 	 */
 	if (in_atomic() || !mm)
-		goto bad_area_nosemaphore;
+		goto bad_area_nopax;
 
 	/* When running in the kernel we expect faults to occur only to
 	 * addresses in user space.  All other faults represent errors in the
@@ -375,9 +412,103 @@ fastcall void __kprobes do_page_fault(struct pt_regs *regs,
 	if (!down_read_trylock(&mm->mmap_sem)) {
 		if ((error_code & 4) == 0 &&
 		    !search_exception_tables(regs->eip))
-			goto bad_area_nosemaphore;
+			goto bad_area_nopax;
 		down_read(&mm->mmap_sem);
 	}
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	if (nx_enabled || (error_code & 5) != 5 || (regs->eflags & X86_EFLAGS_VM) ||
+	    !(mm->pax_flags & MF_PAX_PAGEEXEC))
+		goto not_pax_fault;
+
+	/* PaX: it's our fault, let's handle it if we can */
+
+	/* PaX: take a look at read faults before acquiring any locks */
+	if (unlikely(!(error_code & 2) && (regs->eip == address))) {
+		/* instruction fetch attempt from a protected page in user mode */
+		up_read(&mm->mmap_sem);
+
+#ifdef CONFIG_PAX_EMUTRAMP
+		switch (pax_handle_fetch_fault(regs)) {
+		case 2:
+			return;
+		}
+#endif
+
+		pax_report_fault(regs, (void *)regs->eip, (void *)regs->esp);
+		do_group_exit(SIGKILL);
+	}
+
+	pmd = pax_get_pmd(mm, address);
+	if (unlikely(!pmd))
+		goto not_pax_fault;
+
+	pte = pte_offset_map_lock(mm, pmd, address, &ptl);
+	if (unlikely(!(pte_val(*pte) & _PAGE_PRESENT) || pte_user(*pte))) {
+		pte_unmap_unlock(pte, ptl);
+		goto not_pax_fault;
+	}
+
+	if (unlikely((error_code & 2) && !pte_write(*pte))) {
+		/* write attempt to a protected page in user mode */
+		pte_unmap_unlock(pte, ptl);
+		goto not_pax_fault;
+	}
+
+#ifdef CONFIG_SMP
+	if (likely(address > get_limit(regs->xcs) && cpu_isset(smp_processor_id(), mm->context.cpu_user_cs_mask)))
+#else
+	if (likely(address > get_limit(regs->xcs)))
+#endif
+	{
+		set_pte(pte, pte_mkread(*pte));
+		__flush_tlb_one(address);
+		pte_unmap_unlock(pte, ptl);
+		up_read(&mm->mmap_sem);
+		return;
+	}
+
+	pte_mask = _PAGE_ACCESSED | _PAGE_USER | ((error_code & 2) << (_PAGE_BIT_DIRTY-1));
+
+	/*
+	 * PaX: fill DTLB with user rights and retry
+	 */
+	__asm__ __volatile__ (
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+		"movw %w4,%%es\n"
+#endif
+		"orb %2,(%1)\n"
+#if defined(CONFIG_M586) || defined(CONFIG_M586TSC)
+/*
+ * PaX: let this uncommented 'invlpg' remind us on the behaviour of Intel's
+ * (and AMD's) TLBs. namely, they do not cache PTEs that would raise *any*
+ * page fault when examined during a TLB load attempt. this is true not only
+ * for PTEs holding a non-present entry but also present entries that will
+ * raise a page fault (such as those set up by PaX, or the copy-on-write
+ * mechanism). in effect it means that we do *not* need to flush the TLBs
+ * for our target pages since their PTEs are simply not in the TLBs at all.
+
+ * the best thing in omitting it is that we gain around 15-20% speed in the
+ * fast path of the page fault handler and can get rid of tracing since we
+ * can no longer flush unintended entries.
+ */
+		"invlpg (%0)\n"
+#endif
+		"testb $0,%%es:(%0)\n"
+		"xorb %3,(%1)\n"
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+		"pushl %%ss\n"
+		"popl %%es\n"
+#endif
+		:
+		: "r" (address), "r" (pte), "q" (pte_mask), "i" (_PAGE_USER), "r" (__USER_DS)
+		: "memory", "cc");
+	pte_unmap_unlock(pte, ptl);
+	up_read(&mm->mmap_sem);
+	return;
+
+not_pax_fault:
+#endif
 
 	vma = find_vma(mm, address);
 	if (!vma)
@@ -396,6 +527,12 @@ fastcall void __kprobes do_page_fault(struct pt_regs *regs,
 		if (address + 65536 + 32 * sizeof(unsigned long) < regs->esp)
 			goto bad_area;
 	}
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((mm->pax_flags & MF_PAX_SEGMEXEC) && vma->vm_end - SEGMEXEC_TASK_SIZE - 1 < address - SEGMEXEC_TASK_SIZE - 1)
+		goto bad_area;
+#endif
+
 	if (expand_stack(vma, address))
 		goto bad_area;
 /*
@@ -405,6 +542,8 @@ fastcall void __kprobes do_page_fault(struct pt_regs *regs,
 good_area:
 	si_code = SEGV_ACCERR;
 	write = 0;
+	if (nx_enabled && (error_code & 16) && !(vma->vm_flags & VM_EXEC))
+		goto bad_area;
 	switch (error_code & 3) {
 		default:	/* 3: write, present */
 				/* fall through */
@@ -458,6 +597,49 @@ bad_area:
 	up_read(&mm->mmap_sem);
 
 bad_area_nosemaphore:
+
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+	if (mm && (error_code & 4) && !(regs->eflags & X86_EFLAGS_VM)) {
+		/*
+		 * It's possible to have interrupts off here.
+		 */
+		local_irq_enable();
+
+#ifdef CONFIG_PAX_PAGEEXEC
+		if ((mm->pax_flags & MF_PAX_PAGEEXEC) &&
+		    ((nx_enabled && ((error_code & 16) || !(error_code & 3)) && (regs->eip == address)))) {
+
+#ifdef CONFIG_PAX_EMUTRAMP
+			switch (pax_handle_fetch_fault(regs)) {
+			case 2:
+				return;
+			}
+#endif
+
+			pax_report_fault(regs, (void *)regs->eip, (void *)regs->esp);
+			do_group_exit(SIGKILL);
+		}
+#endif
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if ((mm->pax_flags & MF_PAX_SEGMEXEC) && !(error_code & 3) && (regs->eip + SEGMEXEC_TASK_SIZE == address)) {
+
+#ifdef CONFIG_PAX_EMUTRAMP
+			switch (pax_handle_fetch_fault(regs)) {
+			case 2:
+				return;
+			}
+#endif
+
+			pax_report_fault(regs, (void *)regs->eip, (void *)regs->esp);
+			do_group_exit(SIGKILL);
+		}
+#endif
+
+	}
+#endif
+
+bad_area_nopax:
 	/* User mode accesses just cause a SIGSEGV */
 	if (error_code & 4) {
 		/*
@@ -495,7 +677,7 @@ bad_area_nosemaphore:
 	if (boot_cpu_data.f00f_bug) {
 		unsigned long nr;
 		
-		nr = (address - idt_descr.address) >> 3;
+		nr = (address - (unsigned long)idt_descr.address) >> 3;
 
 		if (nr == 6) {
 			do_invalid_op(regs, 0);
@@ -528,18 +710,30 @@ no_context:
 		__typeof__(pte_val(__pte(0))) page;
 
 #ifdef CONFIG_X86_PAE
-		if (error_code & 16) {
-			pte_t *pte = lookup_address(address);
+		if (nx_enabled && (error_code & 16)) {
+			pte = lookup_address(address);
 
 			if (pte && pte_present(*pte) && !pte_exec_kernel(*pte))
 				printk(KERN_CRIT "kernel tried to execute "
 					"NX-protected page - exploit attempt? "
-					"(uid: %d)\n", current->uid);
+					"(uid: %d, task: %s, pid: %d)\n",
+					tsk->uid, tsk->comm, task_pid_nr(tsk));
 		}
 #endif
 		if (address < PAGE_SIZE)
 			printk(KERN_ALERT "BUG: unable to handle kernel NULL "
 					"pointer dereference");
+
+#ifdef CONFIG_PAX_KERNEXEC
+#ifdef CONFIG_MODULES
+		else if (init_mm.start_code <= address && address < (unsigned long)MODULES_END)
+#else
+		else if (init_mm.start_code <= address && address < init_mm.end_code)
+#endif
+			printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code",
+					 tsk->comm, task_pid_nr(tsk), tsk->uid, tsk->euid);
+#endif
+
 		else
 			printk(KERN_ALERT "BUG: unable to handle kernel paging"
 					" request");
@@ -585,7 +779,7 @@ no_context:
 	tsk->thread.error_code = error_code;
 	die("Oops", regs, error_code);
 	bust_spinlocks(0);
-	do_exit(SIGKILL);
+	do_group_exit(SIGKILL);
 
 /*
  * We ran out of memory, or some other thing happened to us that made
@@ -657,3 +851,92 @@ void vmalloc_sync_all(void)
 			start = address + PGDIR_SIZE;
 	}
 }
+
+#ifdef CONFIG_PAX_EMUTRAMP
+/*
+ * PaX: decide what to do with offenders (regs->eip = fault address)
+ *
+ * returns 1 when task should be killed
+ *         2 when gcc trampoline was detected
+ */
+static int pax_handle_fetch_fault(struct pt_regs *regs)
+{
+	int err;
+
+	if (regs->eflags & X86_EFLAGS_VM)
+		return 1;
+
+	if (!(current->mm->pax_flags & MF_PAX_EMUTRAMP))
+		return 1;
+
+	do { /* PaX: gcc trampoline emulation #1 */
+		unsigned char mov1, mov2;
+		unsigned short jmp;
+		unsigned long addr1, addr2;
+
+		err = get_user(mov1, (unsigned char __user *)regs->eip);
+		err |= get_user(addr1, (unsigned long __user *)(regs->eip + 1));
+		err |= get_user(mov2, (unsigned char __user *)(regs->eip + 5));
+		err |= get_user(addr2, (unsigned long __user *)(regs->eip + 6));
+		err |= get_user(jmp, (unsigned short __user *)(regs->eip + 10));
+
+		if (err)
+			break;
+
+		if (mov1 == 0xB9 && mov2 == 0xB8 && jmp == 0xE0FF) {
+			regs->ecx = addr1;
+			regs->eax = addr2;
+			regs->eip = addr2;
+			return 2;
+		}
+	} while (0);
+
+	do { /* PaX: gcc trampoline emulation #2 */
+		unsigned char mov, jmp;
+		unsigned long addr1, addr2;
+
+		err = get_user(mov, (unsigned char __user *)regs->eip);
+		err |= get_user(addr1, (unsigned long __user *)(regs->eip + 1));
+		err |= get_user(jmp, (unsigned char __user *)(regs->eip + 5));
+		err |= get_user(addr2, (unsigned long __user *)(regs->eip + 6));
+
+		if (err)
+			break;
+
+		if (mov == 0xB9 && jmp == 0xE9) {
+			regs->ecx = addr1;
+			regs->eip += addr2 + 10;
+			return 2;
+		}
+	} while (0);
+
+	return 1; /* PaX in action */
+}
+#endif
+
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+void pax_report_insns(void *pc, void *sp)
+{
+	long i;
+
+	printk(KERN_ERR "PAX: bytes at PC: ");
+	for (i = 0; i < 20; i++) {
+		unsigned char c;
+		if (get_user(c, (unsigned char __user *)pc+i))
+			printk("?? ");
+		else
+			printk("%02x ", c);
+	}
+	printk("\n");
+
+	printk(KERN_ERR "PAX: bytes at SP-4: ");
+	for (i = -1; i < 20; i++) {
+		unsigned long c;
+		if (get_user(c, (unsigned long __user *)sp+i))
+			printk("???????? ");
+		else
+			printk("%08lx ", c);
+	}
+	printk("\n");
+}
+#endif

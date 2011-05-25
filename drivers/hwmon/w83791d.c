@@ -289,8 +289,8 @@ static int w83791d_attach_adapter(struct i2c_adapter *adapter);
 static int w83791d_detect(struct i2c_adapter *adapter, int address, int kind);
 static int w83791d_detach_client(struct i2c_client *client);
 
-static int w83791d_read(struct i2c_client *client, u8 register);
-static int w83791d_write(struct i2c_client *client, u8 register, u8 value);
+static int w83791d_read(struct i2c_client *client, u8 reg);
+static int w83791d_write(struct i2c_client *client, u8 reg, u8 value);
 static struct w83791d_data *w83791d_update_device(struct device *dev);
 
 #ifdef DEBUG

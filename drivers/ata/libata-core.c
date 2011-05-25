@@ -489,7 +489,7 @@ static const struct ata_xfer_ent {
 	{ ATA_SHIFT_PIO, ATA_BITS_PIO, XFER_PIO_0 },
 	{ ATA_SHIFT_MWDMA, ATA_BITS_MWDMA, XFER_MW_DMA_0 },
 	{ ATA_SHIFT_UDMA, ATA_BITS_UDMA, XFER_UDMA_0 },
-	{ -1, },
+	{ -1, 0, 0 },
 };
 
 /**
@@ -2814,7 +2814,7 @@ static const struct ata_timing ata_timing[] = {
 
 /*	{ XFER_PIO_SLOW, 120, 290, 240, 960, 290, 240, 960,   0 }, */
 
-	{ 0xFF }
+	{ 0xFF, 0, 0, 0, 0, 0, 0, 0, 0 }
 };
 
 #define ENOUGH(v, unit)		(((v)-1)/(unit)+1)
@@ -4178,7 +4178,7 @@ static const struct ata_blacklist_entry ata_device_blacklist [] = {
 	{ "TSSTcorp CDDVDW SH-S202N", "SB01",	  ATA_HORKAGE_IVB, },
 
 	/* End Marker */
-	{ }
+	{ NULL, NULL, 0 }
 };
 
 static int strn_pattern_cmp(const char *patt, const char *name, int wildchar)

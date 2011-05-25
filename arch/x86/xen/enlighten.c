@@ -298,7 +298,7 @@ static void xen_set_ldt(const void *addr, unsigned entries)
 static void xen_load_gdt(const struct Xgt_desc_struct *dtr)
 {
 	unsigned long *frames;
-	unsigned long va = dtr->address;
+	unsigned long va = (unsigned long)dtr->address;
 	unsigned int size = dtr->size + 1;
 	unsigned pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
 	int f;
@@ -313,7 +313,7 @@ static void xen_load_gdt(const struct Xgt_desc_struct *dtr)
 	mcs = xen_mc_entry(sizeof(*frames) * pages);
 	frames = mcs.args;
 
-	for (f = 0; va < dtr->address + size; va += PAGE_SIZE, f++) {
+	for (f = 0; va < (unsigned long)dtr->address + size; va += PAGE_SIZE, f++) {
 		frames[f] = virt_to_mfn(va);
 		make_lowmem_page_readonly((void *)va);
 	}
@@ -407,7 +407,7 @@ static void xen_write_idt_entry(struct desc_struct *dt, int entrynum,
 
 	preempt_disable();
 
-	start = __get_cpu_var(idt_desc).address;
+	start = (unsigned long)__get_cpu_var(idt_desc).address;
 	end = start + __get_cpu_var(idt_desc).size + 1;
 
 	xen_mc_flush();

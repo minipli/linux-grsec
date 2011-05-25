@@ -55,7 +55,8 @@ struct irq_desc irq_desc[NR_IRQS] __cacheline_aligned_in_smp = {
 		.depth = 1,
 		.lock = __SPIN_LOCK_UNLOCKED(irq_desc->lock),
 #ifdef CONFIG_SMP
-		.affinity = CPU_MASK_ALL
+		.affinity = CPU_MASK_ALL,
+		.cpu = 0,
 #endif
 	}
 };

@@ -124,6 +124,13 @@ static inline void clear_highpage(struct page *page)
 	kunmap_atomic(kaddr, KM_USER0);
 }
 
+static inline void sanitize_highpage(struct page *page)
+{
+	void *kaddr = kmap_atomic(page, KM_CLEARPAGE);
+	clear_page(kaddr);
+	kunmap_atomic(kaddr, KM_CLEARPAGE);
+}
+
 /*
  * Same but also flushes aliased cache contents to RAM.
  *
@@ -132,14 +139,14 @@ static inline void clear_highpage(struct page *page)
  */
 #define zero_user_page(page, offset, size, km_type)		\
 	do {							\
-		void *kaddr;					\
+		void *__kaddr;					\
 								\
 		BUG_ON((offset) + (size) > PAGE_SIZE);		\
 								\
-		kaddr = kmap_atomic(page, km_type);		\
-		memset((char *)kaddr + (offset), 0, (size));	\
+		__kaddr = kmap_atomic(page, km_type);		\
+		memset((char *)__kaddr + (offset), 0, (size));	\
 		flush_dcache_page(page);			\
-		kunmap_atomic(kaddr, (km_type));		\
+		kunmap_atomic(__kaddr, (km_type));		\
 	} while (0)
 
 static inline void __deprecated memclear_highpage_flush(struct page *page,

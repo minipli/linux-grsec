@@ -94,6 +94,9 @@ extern unsigned long phys_base;
 #define __START_KERNEL_map	_AC(0xffffffff80000000, UL)
 #define __PAGE_OFFSET           _AC(0xffff810000000000, UL)
 
+#define ktla_ktva(addr)		(addr)
+#define ktva_ktla(addr)		(addr)
+
 /* to align the pointer to the (next) page boundary */
 #define PAGE_ALIGN(addr)	(((addr)+PAGE_SIZE-1)&PAGE_MASK)
 

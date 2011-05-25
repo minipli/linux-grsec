@@ -114,7 +114,7 @@ ENDPROC(__memcpy)
 	/* Some CPUs run faster using the string copy instructions.
 	   It is also a lot simpler. Use this when possible */
 
-	.section .altinstr_replacement,"ax"
+	.section .altinstr_replacement,"a"
 1:	.byte 0xeb				/* jmp <disp8> */
 	.byte (memcpy_c - memcpy) - (2f - 1b)	/* offset */
 2:

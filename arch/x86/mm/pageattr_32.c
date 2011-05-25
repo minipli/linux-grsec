@@ -13,6 +13,7 @@
 #include <asm/tlbflush.h>
 #include <asm/pgalloc.h>
 #include <asm/sections.h>
+#include <asm/desc.h>
 
 static DEFINE_SPINLOCK(cpa_lock);
 static struct list_head df_list = LIST_HEAD_INIT(df_list);
@@ -37,16 +38,16 @@ pte_t *lookup_address(unsigned long address)
 } 
 
 static struct page *split_large_page(unsigned long address, pgprot_t prot,
-					pgprot_t ref_prot)
+					pgprot_t ref_prot, unsigned long flags)
 { 
 	int i; 
 	unsigned long addr;
 	struct page *base;
 	pte_t *pbase;
 
-	spin_unlock_irq(&cpa_lock);
+	spin_unlock_irqrestore(&cpa_lock, flags);
 	base = alloc_pages(GFP_KERNEL, 0);
-	spin_lock_irq(&cpa_lock);
+	spin_lock_irqsave(&cpa_lock, flags);
 	if (!base) 
 		return NULL;
 
@@ -99,7 +100,18 @@ static void set_pmd_pte(pte_t *kpte, unsigned long address, pte_t pte)
 	struct page *page;
 	unsigned long flags;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	set_pte_atomic(kpte, pte); 	/* change init_mm */
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	if (SHARED_KERNEL_PMD)
 		return;
 
@@ -126,7 +138,7 @@ static inline void revert_page(struct page *kpte_page, unsigned long address)
 	pte_t *linear;
 
 	ref_prot =
-	((address & LARGE_PAGE_MASK) < (unsigned long)&_etext)
+	((address & LARGE_PAGE_MASK) < ktla_ktva((unsigned long)&_etext))
 		? PAGE_KERNEL_LARGE_EXEC : PAGE_KERNEL_LARGE;
 
 	linear = (pte_t *)
@@ -143,7 +155,7 @@ static inline void save_page(struct page *kpte_page)
 }
 
 static int
-__change_page_attr(struct page *page, pgprot_t prot)
+__change_page_attr(struct page *page, pgprot_t prot, unsigned long flags)
 { 
 	pte_t *kpte; 
 	unsigned long address;
@@ -167,13 +179,20 @@ __change_page_attr(struct page *page, pgprot_t prot)
 			struct page *split;
 
 			ref_prot =
-			((address & LARGE_PAGE_MASK) < (unsigned long)&_etext)
+			((address & LARGE_PAGE_MASK) < ktla_ktva((unsigned long)&_etext))
 				? PAGE_KERNEL_EXEC : PAGE_KERNEL;
-			split = split_large_page(address, prot, ref_prot);
+			split = split_large_page(address, prot, ref_prot, flags);
 			if (!split)
 				return -ENOMEM;
-			set_pmd_pte(kpte,address,mk_pte(split, ref_prot));
-			kpte_page = split;
+			if (pte_huge(*kpte)) {
+				set_pmd_pte(kpte,address,mk_pte(split, ref_prot));
+				kpte_page = split;
+			} else {
+				__free_pages(split, 0);
+				kpte = lookup_address(address);
+				kpte_page = virt_to_page(kpte);
+				set_pte_atomic(kpte, mk_pte(page, prot));
+			}
 		}
 		page_private(kpte_page)++;
 	} else if (!pte_huge(*kpte)) {
@@ -225,7 +244,7 @@ int change_page_attr(struct page *page, int numpages, pgprot_t prot)
 
 	spin_lock_irqsave(&cpa_lock, flags);
 	for (i = 0; i < numpages; i++, page++) { 
-		err = __change_page_attr(page, prot);
+		err = __change_page_attr(page, prot, flags);
 		if (err) 
 			break; 
 	} 	

@@ -39,17 +39,18 @@ struct task_struct;
 extern void send_sigtrap(struct task_struct *tsk, struct pt_regs *regs, int error_code);
 
 /*
- * user_mode_vm(regs) determines whether a register set came from user mode.
+ * user_mode(regs) determines whether a register set came from user mode.
  * This is true if V8086 mode was enabled OR if the register set was from
  * protected mode with RPL-3 CS value.  This tricky test checks that with
  * one comparison.  Many places in the kernel can bypass this full check
- * if they have already ruled out V8086 mode, so user_mode(regs) can be used.
+ * if they have already ruled out V8086 mode, so user_mode_novm(regs) can
+ * be used.
  */
-static inline int user_mode(struct pt_regs *regs)
+static inline int user_mode_novm(struct pt_regs *regs)
 {
 	return (regs->xcs & SEGMENT_RPL_MASK) == USER_RPL;
 }
-static inline int user_mode_vm(struct pt_regs *regs)
+static inline int user_mode(struct pt_regs *regs)
 {
 	return ((regs->xcs & SEGMENT_RPL_MASK) | (regs->eflags & VM_MASK)) >= USER_RPL;
 }

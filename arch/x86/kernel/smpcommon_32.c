@@ -3,6 +3,7 @@
  */
 #include <linux/module.h>
 #include <asm/smp.h>
+#include <asm/sections.h>
 
 DEFINE_PER_CPU(unsigned long, this_cpu_off);
 EXPORT_PER_CPU_SYMBOL(this_cpu_off);
@@ -14,10 +15,29 @@ __cpuinit void init_gdt(int cpu)
 {
 	struct desc_struct *gdt = get_cpu_gdt_table(cpu);
 
-	pack_descriptor((u32 *)&gdt[GDT_ENTRY_PERCPU].a,
-			(u32 *)&gdt[GDT_ENTRY_PERCPU].b,
-			__per_cpu_offset[cpu], 0xFFFFF,
-			0x80 | DESCTYPE_S | 0x2, 0x8);
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
+	if (cpu)
+		memcpy(gdt, cpu_gdt_table, GDT_SIZE);
+
+	if (PERCPU_ENOUGH_ROOM <= 64*1024*1024)
+		pack_descriptor((__u32 *)&gdt[GDT_ENTRY_PERCPU].a,
+				(__u32 *)&gdt[GDT_ENTRY_PERCPU].b,
+				__per_cpu_offset[cpu], PERCPU_ENOUGH_ROOM-1,
+				0x80 | DESCTYPE_S | 0x3, 0x4);
+	else
+		pack_descriptor((__u32 *)&gdt[GDT_ENTRY_PERCPU].a,
+				(__u32 *)&gdt[GDT_ENTRY_PERCPU].b,
+				__per_cpu_offset[cpu], ((PERCPU_ENOUGH_ROOM-1) >> PAGE_SHIFT),
+				0x80 | DESCTYPE_S | 0x3, 0xC);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
 
 	per_cpu(this_cpu_off, cpu) = __per_cpu_offset[cpu];
 	per_cpu(cpu_number, cpu) = cpu;

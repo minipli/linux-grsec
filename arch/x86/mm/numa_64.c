@@ -19,7 +19,7 @@
 #include <asm/acpi.h>
 
 #ifndef Dprintk
-#define Dprintk(x...)
+#define Dprintk(x...) do {} while (0)
 #endif
 
 struct pglist_data *node_data[MAX_NUMNODES] __read_mostly;

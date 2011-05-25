@@ -68,11 +68,12 @@ static dev_t try_name(char *name, int part)
 
 	/* read device number from .../dev */
 
-	sprintf(path, "/sys/block/%s/dev", name);
-	fd = sys_open(path, 0, 0);
+	if (sizeof path <= snprintf(path, sizeof path, "/sys/block/%s/dev", name))
+		goto fail;
+	fd = sys_open((char __user *)path, 0, 0);
 	if (fd < 0)
 		goto fail;
-	len = sys_read(fd, buf, 32);
+	len = sys_read(fd, (char __user *)buf, 32);
 	sys_close(fd);
 	if (len <= 0 || len == 32 || buf[len - 1] != '\n')
 		goto fail;
@@ -98,11 +99,12 @@ static dev_t try_name(char *name, int part)
 		return res;
 
 	/* otherwise read range from .../range */
-	sprintf(path, "/sys/block/%s/range", name);
-	fd = sys_open(path, 0, 0);
+	if (sizeof path <= snprintf(path, sizeof path, "/sys/block/%s/range", name))
+		goto fail;
+	fd = sys_open((char __user *)path, 0, 0);
 	if (fd < 0)
 		goto fail;
-	len = sys_read(fd, buf, 32);
+	len = sys_read(fd, (char __user *)buf, 32);
 	sys_close(fd);
 	if (len <= 0 || len == 32 || buf[len - 1] != '\n')
 		goto fail;
@@ -145,8 +147,8 @@ dev_t name_to_dev_t(char *name)
 	int part;
 
 #ifdef CONFIG_SYSFS
-	int mkdir_err = sys_mkdir("/sys", 0700);
-	if (sys_mount("sysfs", "/sys", "sysfs", 0, NULL) < 0)
+	int mkdir_err = sys_mkdir((char __user *)"/sys", 0700);
+	if (sys_mount((char __user *)"sysfs", (char __user *)"/sys", (char __user *)"sysfs", 0, NULL) < 0)
 		goto out;
 #endif
 
@@ -198,10 +200,10 @@ dev_t name_to_dev_t(char *name)
 	res = try_name(s, part);
 done:
 #ifdef CONFIG_SYSFS
-	sys_umount("/sys", 0);
+	sys_umount((char __user *)"/sys", 0);
 out:
 	if (!mkdir_err)
-		sys_rmdir("/sys");
+		sys_rmdir((char __user *)"/sys");
 #endif
 	return res;
 fail:
@@ -281,11 +283,11 @@ static void __init get_fs_names(char *page)
 
 static int __init do_mount_root(char *name, char *fs, int flags, void *data)
 {
-	int err = sys_mount(name, "/root", fs, flags, data);
+	int err = sys_mount((char __user *)name, (char __user *)"/root", (char __user *)fs, flags, (void __user *)data);
 	if (err)
 		return err;
 
-	sys_chdir("/root");
+	sys_chdir((char __user *)"/root");
 	ROOT_DEV = current->fs->pwdmnt->mnt_sb->s_dev;
 	printk("VFS: Mounted root (%s filesystem)%s.\n",
 	       current->fs->pwdmnt->mnt_sb->s_type->name,
@@ -371,18 +373,18 @@ void __init change_floppy(char *fmt, ...)
 	va_start(args, fmt);
 	vsprintf(buf, fmt, args);
 	va_end(args);
-	fd = sys_open("/dev/root", O_RDWR | O_NDELAY, 0);
+	fd = sys_open((char __user *)"/dev/root", O_RDWR | O_NDELAY, 0);
 	if (fd >= 0) {
 		sys_ioctl(fd, FDEJECT, 0);
 		sys_close(fd);
 	}
 	printk(KERN_NOTICE "VFS: Insert %s and press ENTER\n", buf);
-	fd = sys_open("/dev/console", O_RDWR, 0);
+	fd = sys_open((char __user *)"/dev/console", O_RDWR, 0);
 	if (fd >= 0) {
 		sys_ioctl(fd, TCGETS, (long)&termios);
 		termios.c_lflag &= ~ICANON;
 		sys_ioctl(fd, TCSETSF, (long)&termios);
-		sys_read(fd, &c, 1);
+		sys_read(fd, (char __user *)&c, 1);
 		termios.c_lflag |= ICANON;
 		sys_ioctl(fd, TCSETSF, (long)&termios);
 		sys_close(fd);
@@ -468,8 +470,8 @@ void __init prepare_namespace(void)
 
 	mount_root();
 out:
-	sys_mount(".", "/", NULL, MS_MOVE, NULL);
-	sys_chroot(".");
+	sys_mount((char __user *)".", (char __user *)"/", NULL, MS_MOVE, NULL);
+	sys_chroot((char __user *)".");
 	security_sb_post_mountroot();
 }
 

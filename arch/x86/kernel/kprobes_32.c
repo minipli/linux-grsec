@@ -55,9 +55,24 @@ static __always_inline void set_jmp_op(void *from, void *to)
 		char op;
 		long raddr;
 	} __attribute__((packed)) *jop;
-	jop = (struct __arch_jmp_op *)from;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
+	jop = (struct __arch_jmp_op *)(ktla_ktva(from));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	jop->raddr = (long)(to) - ((long)(from) + 5);
 	jop->op = RELATIVEJUMP_INSTRUCTION;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 /*
@@ -159,14 +174,28 @@ static int __kprobes is_IF_modifier(kprobe_opcode_t opcode)
 
 int __kprobes arch_prepare_kprobe(struct kprobe *p)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	/* insn: must be on special executable page on i386. */
 	p->ainsn.insn = get_insn_slot();
 	if (!p->ainsn.insn)
 		return -ENOMEM;
 
-	memcpy(p->ainsn.insn, p->addr, MAX_INSN_SIZE * sizeof(kprobe_opcode_t));
-	p->opcode = *p->addr;
-	if (can_boost(p->addr)) {
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
+	memcpy(p->ainsn.insn, ktla_ktva(p->addr), MAX_INSN_SIZE * sizeof(kprobe_opcode_t));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
+	p->opcode = *(ktla_ktva(p->addr));
+	if (can_boost(ktla_ktva(p->addr))) {
 		p->ainsn.boostable = 0;
 	} else {
 		p->ainsn.boostable = -1;
@@ -225,7 +254,7 @@ static void __kprobes prepare_singlestep(struct kprobe *p, struct pt_regs *regs)
 	if (p->opcode == BREAKPOINT_INSTRUCTION)
 		regs->eip = (unsigned long)p->addr;
 	else
-		regs->eip = (unsigned long)p->ainsn.insn;
+		regs->eip = ktva_ktla((unsigned long)p->ainsn.insn);
 }
 
 /* Called with kretprobe_lock held */
@@ -331,7 +360,7 @@ ss_probe:
 	if (p->ainsn.boostable == 1 && !p->post_handler){
 		/* Boost up -- we can execute copied instructions directly */
 		reset_current_kprobe();
-		regs->eip = (unsigned long)p->ainsn.insn;
+		regs->eip = ktva_ktla((unsigned long)p->ainsn.insn);
 		preempt_enable_no_resched();
 		return 1;
 	}
@@ -481,7 +510,7 @@ static void __kprobes resume_execution(struct kprobe *p,
 		struct pt_regs *regs, struct kprobe_ctlblk *kcb)
 {
 	unsigned long *tos = (unsigned long *)&regs->esp;
-	unsigned long copy_eip = (unsigned long)p->ainsn.insn;
+	unsigned long copy_eip = ktva_ktla((unsigned long)p->ainsn.insn);
 	unsigned long orig_eip = (unsigned long)p->addr;
 
 	regs->eflags &= ~TF_MASK;
@@ -655,7 +684,7 @@ int __kprobes kprobe_exceptions_notify(struct notifier_block *self,
 	struct die_args *args = (struct die_args *)data;
 	int ret = NOTIFY_DONE;
 
-	if (args->regs && user_mode_vm(args->regs))
+	if (args->regs && user_mode(args->regs))
 		return ret;
 
 	switch (val) {
