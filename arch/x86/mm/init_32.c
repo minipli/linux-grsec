@@ -44,6 +44,7 @@
 #include <asm/tlbflush.h>
 #include <asm/sections.h>
 #include <asm/paravirt.h>
+#include <asm/desc.h>
 
 unsigned int __VMALLOC_RESERVE = 128 << 20;
 
@@ -51,32 +52,6 @@ DEFINE_PER_CPU(struct mmu_gather, mmu_gathers);
 unsigned long highstart_pfn, highend_pfn;
 
 static int noinline do_test_wp_bit(void);
-
-/*
- * Creates a middle page table and puts a pointer to it in the
- * given global directory entry. This only returns the gd entry
- * in non-PAE compilation mode, since the middle layer is folded.
- */
-static pmd_t * __init one_md_table_init(pgd_t *pgd)
-{
-	pud_t *pud;
-	pmd_t *pmd_table;
-		
-#ifdef CONFIG_X86_PAE
-	if (!(pgd_val(*pgd) & _PAGE_PRESENT)) {
-		pmd_table = (pmd_t *) alloc_bootmem_low_pages(PAGE_SIZE);
-
-		paravirt_alloc_pd(__pa(pmd_table) >> PAGE_SHIFT);
-		set_pgd(pgd, __pgd(__pa(pmd_table) | _PAGE_PRESENT));
-		pud = pud_offset(pgd, 0);
-		if (pmd_table != pmd_offset(pud, 0))
-			BUG();
-	}
-#endif
-	pud = pud_offset(pgd, 0);
-	pmd_table = pmd_offset(pud, 0);
-	return pmd_table;
-}
 
 /*
  * Create a page table and place a pointer to it in a middle page
@@ -95,7 +70,11 @@ static pte_t * __init one_page_table_init(pmd_t *pmd)
 				(pte_t *)alloc_bootmem_low_pages(PAGE_SIZE);
 
 		paravirt_alloc_pt(&init_mm, __pa(page_table) >> PAGE_SHIFT);
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+		set_pmd(pmd, __pmd(__pa(page_table) | _KERNPG_TABLE));
+#else
 		set_pmd(pmd, __pmd(__pa(page_table) | _PAGE_TABLE));
+#endif
 		BUG_ON(page_table != pte_offset_kernel(pmd, 0));
 	}
 
@@ -116,6 +95,7 @@ static pte_t * __init one_page_table_init(pmd_t *pmd)
 static void __init page_table_range_init (unsigned long start, unsigned long end, pgd_t *pgd_base)
 {
 	pgd_t *pgd;
+	pud_t *pud;
 	pmd_t *pmd;
 	int pgd_idx, pmd_idx;
 	unsigned long vaddr;
@@ -126,8 +106,13 @@ static void __init page_table_range_init (unsigned long start, unsigned long end
 	pgd = pgd_base + pgd_idx;
 
 	for ( ; (pgd_idx < PTRS_PER_PGD) && (vaddr != end); pgd++, pgd_idx++) {
-		pmd = one_md_table_init(pgd);
-		pmd = pmd + pmd_index(vaddr);
+		pud = pud_offset(pgd, vaddr);
+		pmd = pmd_offset(pud, vaddr);
+
+#ifdef CONFIG_X86_PAE
+		paravirt_alloc_pd(__pa(pmd) >> PAGE_SHIFT);
+#endif
+
 		for (; (pmd_idx < PTRS_PER_PMD) && (vaddr != end); pmd++, pmd_idx++) {
 			one_page_table_init(pmd);
 
@@ -137,11 +122,23 @@ static void __init page_table_range_init (unsigned long start, unsigned long end
 	}
 }
 
-static inline int is_kernel_text(unsigned long addr)
+static inline int is_kernel_text(unsigned long start, unsigned long end)
 {
-	if (addr >= PAGE_OFFSET && addr <= (unsigned long)__init_end)
-		return 1;
-	return 0;
+	unsigned long etext;
+
+#if defined(CONFIG_MODULES) && defined(CONFIG_PAX_KERNEXEC)
+	etext = ktva_ktla((unsigned long)&MODULES_END);
+#else
+	etext = (unsigned long)&_etext;
+#endif
+
+	if ((start > ktla_ktva(etext) ||
+	     end <= ktla_ktva((unsigned long)_stext)) &&
+	    (start > ktla_ktva((unsigned long)_einittext) ||
+	     end <= ktla_ktva((unsigned long)_sinittext)) &&
+	    (start > (unsigned long)__va(0xfffff) || end <= (unsigned long)__va(0xc0000)))
+		return 0;
+	return 1;
 }
 
 /*
@@ -153,25 +150,29 @@ static void __init kernel_physical_mapping_init(pgd_t *pgd_base)
 {
 	unsigned long pfn;
 	pgd_t *pgd;
+	pud_t *pud;
 	pmd_t *pmd;
 	pte_t *pte;
-	int pgd_idx, pmd_idx, pte_ofs;
+	unsigned int pgd_idx, pmd_idx, pte_ofs;
 
 	pgd_idx = pgd_index(PAGE_OFFSET);
 	pgd = pgd_base + pgd_idx;
 	pfn = 0;
 
-	for (; pgd_idx < PTRS_PER_PGD; pgd++, pgd_idx++) {
-		pmd = one_md_table_init(pgd);
-		if (pfn >= max_low_pfn)
-			continue;
+	for (; pgd_idx < PTRS_PER_PGD && pfn < max_low_pfn; pgd++, pgd_idx++) {
+		pud = pud_offset(pgd, 0);
+		pmd = pmd_offset(pud, 0);
+
+#ifdef CONFIG_X86_PAE
+		paravirt_alloc_pd(__pa(pmd) >> PAGE_SHIFT);
+#endif
+
 		for (pmd_idx = 0; pmd_idx < PTRS_PER_PMD && pfn < max_low_pfn; pmd++, pmd_idx++) {
-			unsigned int address = pfn * PAGE_SIZE + PAGE_OFFSET;
+			unsigned long address = pfn * PAGE_SIZE + PAGE_OFFSET;
 
 			/* Map with big pages if possible, otherwise create normal page tables. */
-			if (cpu_has_pse) {
-				unsigned int address2 = (pfn + PTRS_PER_PTE - 1) * PAGE_SIZE + PAGE_OFFSET + PAGE_SIZE-1;
-				if (is_kernel_text(address) || is_kernel_text(address2))
+			if (cpu_has_pse && address >= (unsigned long)__va(0x100000)) {
+				if (is_kernel_text(address, address + PMD_SIZE))
 					set_pmd(pmd, pfn_pmd(pfn, PAGE_KERNEL_LARGE_EXEC));
 				else
 					set_pmd(pmd, pfn_pmd(pfn, PAGE_KERNEL_LARGE));
@@ -183,7 +184,7 @@ static void __init kernel_physical_mapping_init(pgd_t *pgd_base)
 				for (pte_ofs = 0;
 				     pte_ofs < PTRS_PER_PTE && pfn < max_low_pfn;
 				     pte++, pfn++, pte_ofs++, address += PAGE_SIZE) {
-					if (is_kernel_text(address))
+					if (is_kernel_text(address, address + PAGE_SIZE))
 						set_pte(pte, pfn_pte(pfn, PAGE_KERNEL_EXEC));
 					else
 						set_pte(pte, pfn_pte(pfn, PAGE_KERNEL));
@@ -338,9 +339,9 @@ static void __init set_highmem_pages_init(int bad_ppro)
 #define set_highmem_pages_init(bad_ppro) do { } while (0)
 #endif /* CONFIG_HIGHMEM */
 
-unsigned long long __PAGE_KERNEL = _PAGE_KERNEL;
+unsigned long long __PAGE_KERNEL __read_only = _PAGE_KERNEL;
 EXPORT_SYMBOL(__PAGE_KERNEL);
-unsigned long long __PAGE_KERNEL_EXEC = _PAGE_KERNEL_EXEC;
+unsigned long long __PAGE_KERNEL_EXEC __read_only = _PAGE_KERNEL_EXEC;
 
 #ifdef CONFIG_NUMA
 extern void __init remap_numa_kva(void);
@@ -351,26 +352,10 @@ extern void __init remap_numa_kva(void);
 void __init native_pagetable_setup_start(pgd_t *base)
 {
 #ifdef CONFIG_X86_PAE
-	int i;
+	unsigned int i;
 
-	/*
-	 * Init entries of the first-level page table to the
-	 * zero page, if they haven't already been set up.
-	 *
-	 * In a normal native boot, we'll be running on a
-	 * pagetable rooted in swapper_pg_dir, but not in PAE
-	 * mode, so this will end up clobbering the mappings
-	 * for the lower 24Mbytes of the address space,
-	 * without affecting the kernel address space.
-	 */
-	for (i = 0; i < USER_PTRS_PER_PGD; i++)
-		set_pgd(&base[i],
-			__pgd(__pa(empty_zero_page) | _PAGE_PRESENT));
-
-	/* Make sure kernel address space is empty so that a pagetable
-	   will be allocated for it. */
-	memset(&base[USER_PTRS_PER_PGD], 0,
-	       KERNEL_PGD_PTRS * sizeof(pgd_t));
+	for (i = 0; i < PTRS_PER_PGD; i++)
+		paravirt_alloc_pd(__pa(swapper_pm_dir + i) >> PAGE_SHIFT);
 #else
 	paravirt_alloc_pd(__pa(swapper_pg_dir) >> PAGE_SHIFT);
 #endif
@@ -378,16 +363,6 @@ void __init native_pagetable_setup_start(pgd_t *base)
 
 void __init native_pagetable_setup_done(pgd_t *base)
 {
-#ifdef CONFIG_X86_PAE
-	/*
-	 * Add low memory identity-mappings - SMP needs it when
-	 * starting up on an AP from real-mode. In the non-PAE
-	 * case we already have these mappings through head.S.
-	 * All user-space mappings are explicitly cleared after
-	 * SMP startup.
-	 */
-	set_pgd(&base[0], base[USER_PTRS_PER_PGD]);
-#endif
 }
 
 /*
@@ -449,12 +424,12 @@ static void __init pagetable_init (void)
  * Swap suspend & friends need this for resume because things like the intel-agp
  * driver might have split up a kernel 4MB mapping.
  */
-char __nosavedata swsusp_pg_dir[PAGE_SIZE]
+pgd_t __nosavedata swsusp_pg_dir[PTRS_PER_PGD]
 	__attribute__ ((aligned (PAGE_SIZE)));
 
 static inline void save_pg_dir(void)
 {
-	memcpy(swsusp_pg_dir, swapper_pg_dir, PAGE_SIZE);
+	clone_pgd_range(swsusp_pg_dir, swapper_pg_dir, PTRS_PER_PGD);
 }
 #else
 static inline void save_pg_dir(void)
@@ -483,12 +458,11 @@ void zap_low_mappings (void)
 	flush_tlb_all();
 }
 
-int nx_enabled = 0;
+int nx_enabled;
 
 #ifdef CONFIG_X86_PAE
 
-static int disable_nx __initdata = 0;
-u64 __supported_pte_mask __read_mostly = ~_PAGE_NX;
+u64 __supported_pte_mask __read_only = ~_PAGE_NX;
 EXPORT_SYMBOL_GPL(__supported_pte_mask);
 
 /*
@@ -499,36 +473,31 @@ EXPORT_SYMBOL_GPL(__supported_pte_mask);
  * on      Enable
  * off     Disable
  */
+#if !defined(CONFIG_PAX_PAGEEXEC)
 static int __init noexec_setup(char *str)
 {
 	if (!str || !strcmp(str, "on")) {
-		if (cpu_has_nx) {
-			__supported_pte_mask |= _PAGE_NX;
-			disable_nx = 0;
-		}
+		if (cpu_has_nx)
+			nx_enabled = 1;
 	} else if (!strcmp(str,"off")) {
-		disable_nx = 1;
-		__supported_pte_mask &= ~_PAGE_NX;
+		nx_enabled = 0;
 	} else
 		return -EINVAL;
 
 	return 0;
 }
 early_param("noexec", noexec_setup);
+#endif
 
 static void __init set_nx(void)
 {
-	unsigned int v[4], l, h;
+	if (!nx_enabled && cpu_has_nx) {
+		unsigned l, h;
 
-	if (cpu_has_pae && (cpuid_eax(0x80000000) > 0x80000001)) {
-		cpuid(0x80000001, &v[0], &v[1], &v[2], &v[3]);
-		if ((v[3] & (1 << 20)) && !disable_nx) {
-			rdmsr(MSR_EFER, l, h);
-			l |= EFER_NX;
-			wrmsr(MSR_EFER, l, h);
-			nx_enabled = 1;
-			__supported_pte_mask |= _PAGE_NX;
-		}
+		__supported_pte_mask &= ~_PAGE_NX;
+		rdmsr(MSR_EFER, l, h);
+		l &= ~EFER_NX;
+		wrmsr(MSR_EFER, l, h);
 	}
 }
 
@@ -581,14 +550,6 @@ void __init paging_init(void)
 
 	load_cr3(swapper_pg_dir);
 
-#ifdef CONFIG_X86_PAE
-	/*
-	 * We will bail out later - printk doesn't work right now so
-	 * the user would just see a hanging kernel.
-	 */
-	if (cpu_has_pae)
-		set_in_cr4(X86_CR4_PAE);
-#endif
 	__flush_tlb_all();
 
 	kmap_init();
@@ -659,7 +620,7 @@ void __init mem_init(void)
 	set_highmem_pages_init(bad_ppro);
 
 	codesize =  (unsigned long) &_etext - (unsigned long) &_text;
-	datasize =  (unsigned long) &_edata - (unsigned long) &_etext;
+	datasize =  (unsigned long) &_edata - (unsigned long) &_data;
 	initsize =  (unsigned long) &__init_end - (unsigned long) &__init_begin;
 
 	kclist_add(&kcore_mem, __va(0), max_low_pfn << PAGE_SHIFT); 
@@ -704,10 +665,10 @@ void __init mem_init(void)
 	       (unsigned long)&__init_begin, (unsigned long)&__init_end,
 	       ((unsigned long)&__init_end - (unsigned long)&__init_begin) >> 10,
 
-	       (unsigned long)&_etext, (unsigned long)&_edata,
-	       ((unsigned long)&_edata - (unsigned long)&_etext) >> 10,
+	       (unsigned long)&_data, (unsigned long)&_edata,
+	       ((unsigned long)&_edata - (unsigned long)&_data) >> 10,
 
-	       (unsigned long)&_text, (unsigned long)&_etext,
+	       ktla_ktva((unsigned long)&_text), ktla_ktva((unsigned long)&_etext),
 	       ((unsigned long)&_etext - (unsigned long)&_text) >> 10);
 
 #ifdef CONFIG_HIGHMEM
@@ -718,10 +679,6 @@ void __init mem_init(void)
 	BUG_ON((unsigned long)high_memory      > VMALLOC_START);
 #endif /* double-sanity-check paranoia */
 
-#ifdef CONFIG_X86_PAE
-	if (!cpu_has_pae)
-		panic("cannot execute a PAE-enabled kernel on a PAE-less CPU!");
-#endif
 	if (boot_cpu_data.wp_works_ok < 0)
 		test_wp_bit();
 
@@ -839,6 +796,46 @@ void free_init_pages(char *what, unsigned long begin, unsigned long end)
 
 void free_initmem(void)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	/* PaX: limit KERNEL_CS to actual size */
+	unsigned long addr, limit;
+	__u32 a, b;
+	int cpu;
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+
+#ifdef CONFIG_MODULES
+	limit = ktva_ktla((unsigned long)&MODULES_END);
+#else
+	limit = (unsigned long)&_etext;
+#endif
+	limit = (limit - 1UL) >> PAGE_SHIFT;
+
+	for (cpu = 0; cpu < NR_CPUS; cpu++) {
+		pack_descriptor(&a, &b, get_desc_base(&get_cpu_gdt_table(cpu)[GDT_ENTRY_KERNEL_CS]), limit, 0x9B, 0xC);
+		write_gdt_entry(get_cpu_gdt_table(cpu), GDT_ENTRY_KERNEL_CS, a, b);
+	}
+
+	/* PaX: make KERNEL_CS read-only */
+	for (addr = ktla_ktva((unsigned long)&_text); addr < (unsigned long)&_data; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+	}
+#ifdef CONFIG_X86_PAE
+	for (addr = (unsigned long)&__init_begin; addr < (unsigned long)&__init_end; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+#endif
+	flush_tlb_all();
+#endif
+
 	free_init_pages("unused kernel memory",
 			(unsigned long)(&__init_begin),
 			(unsigned long)(&__init_end));

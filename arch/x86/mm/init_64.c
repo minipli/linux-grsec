@@ -45,7 +45,7 @@
 #include <asm/sections.h>
 
 #ifndef Dprintk
-#define Dprintk(x...)
+#define Dprintk(x...) do {} while (0)
 #endif
 
 const struct dma_mapping_ops* dma_ops;
@@ -121,6 +121,10 @@ static __init void set_pte_phys(unsigned long vaddr,
 	pmd_t *pmd;
 	pte_t *pte, new_pte;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	Dprintk("set_pte_phys %lx to %lx\n", vaddr, phys);
 
 	pgd = pgd_offset_k(vaddr);
@@ -131,7 +135,7 @@ static __init void set_pte_phys(unsigned long vaddr,
 	pud = pud_offset(pgd, vaddr);
 	if (pud_none(*pud)) {
 		pmd = (pmd_t *) spp_getpage(); 
-		set_pud(pud, __pud(__pa(pmd) | _KERNPG_TABLE | _PAGE_USER));
+		set_pud(pud, __pud(__pa(pmd) | _PAGE_TABLE));
 		if (pmd != pmd_offset(pud, 0)) {
 			printk("PAGETABLE BUG #01! %p <-> %p\n", pmd, pmd_offset(pud,0));
 			return;
@@ -140,7 +144,7 @@ static __init void set_pte_phys(unsigned long vaddr,
 	pmd = pmd_offset(pud, vaddr);
 	if (pmd_none(*pmd)) {
 		pte = (pte_t *) spp_getpage();
-		set_pmd(pmd, __pmd(__pa(pte) | _KERNPG_TABLE | _PAGE_USER));
+		set_pmd(pmd, __pmd(__pa(pte) | _PAGE_TABLE));
 		if (pte != pte_offset_kernel(pmd, 0)) {
 			printk("PAGETABLE BUG #02!\n");
 			return;
@@ -152,7 +156,16 @@ static __init void set_pte_phys(unsigned long vaddr,
 	if (!pte_none(*pte) &&
 	    pte_val(*pte) != (pte_val(new_pte) & __supported_pte_mask))
 		pte_ERROR(*pte);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	set_pte(pte, new_pte);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
 
 	/*
 	 * It's enough to flush this one mapping.
@@ -225,7 +238,7 @@ __meminit void *early_ioremap(unsigned long addr, unsigned long size)
 		addr &= PMD_MASK;
 		for (i = 0; i < pmds; i++, addr += PMD_SIZE)
 			set_pmd(pmd + i,__pmd(addr | _KERNPG_TABLE | _PAGE_PSE));
-		__flush_tlb();
+		__flush_tlb_all();
 		return (void *)vaddr;
 	next:
 		;
@@ -246,7 +259,7 @@ __meminit void early_iounmap(void *addr, unsigned long size)
 	pmd = level2_kernel_pgt + pmd_index(vaddr);
 	for (i = 0; i < pmds; i++)
 		pmd_clear(pmd + i);
-	__flush_tlb();
+	__flush_tlb_all();
 }
 
 static void __meminit
@@ -314,7 +327,7 @@ static void __meminit phys_pud_init(pud_t *pud_page, unsigned long addr, unsigne
 		spin_unlock(&init_mm.page_table_lock);
 		unmap_low_page(pmd);
 	}
-	__flush_tlb();
+	__flush_tlb_all();
 } 
 
 static void __init find_early_table_space(unsigned long end)
@@ -583,6 +596,39 @@ void free_init_pages(char *what, unsigned long begin, unsigned long end)
 
 void free_initmem(void)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long addr, end;
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+
+	/* PaX: make kernel code/rodata read-only, rest non-executable */
+	for (addr = __START_KERNEL_map; addr < __START_KERNEL_map + KERNEL_TEXT_SIZE; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		if ((unsigned long)_text <= addr && addr < (unsigned long)_data)
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		else
+			set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+
+	addr = (unsigned long)__va(__pa(__START_KERNEL_map));
+	end = addr + KERNEL_TEXT_SIZE;
+	for (; addr < end; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		if ((unsigned long)__va(__pa(_text)) <= addr && addr < (unsigned long)__va(__pa(_data)))
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		else
+			set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+
+	flush_tlb_all();
+#endif
+
 	free_init_pages("unused kernel memory",
 			(unsigned long)(&__init_begin),
 			(unsigned long)(&__init_end));
@@ -730,7 +776,7 @@ int in_gate_area_no_task(unsigned long addr)
 
 const char *arch_vma_name(struct vm_area_struct *vma)
 {
-	if (vma->vm_mm && vma->vm_start == (long)vma->vm_mm->context.vdso)
+	if (vma->vm_mm && vma->vm_start == vma->vm_mm->context.vdso)
 		return "[vdso]";
 	if (vma == &gate_vma)
 		return "[vsyscall]";

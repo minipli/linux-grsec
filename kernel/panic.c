@@ -20,6 +20,7 @@
 #include <linux/kexec.h>
 #include <linux/debug_locks.h>
 #include <linux/random.h>
+#include <linux/kallsyms.h>
 
 int panic_on_oops;
 int tainted;
@@ -299,6 +300,8 @@ void oops_exit(void)
  */
 void __stack_chk_fail(void)
 {
+	print_symbol("stack corrupted in: %s\n", (unsigned long)__builtin_return_address(0));
+	dump_stack();
 	panic("stack-protector: Kernel stack is corrupted");
 }
 EXPORT_SYMBOL(__stack_chk_fail);

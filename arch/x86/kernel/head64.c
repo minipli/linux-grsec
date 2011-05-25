@@ -24,7 +24,7 @@ static void __init zap_identity_mappings(void)
 {
 	pgd_t *pgd = pgd_offset_k(0UL);
 	pgd_clear(pgd);
-	__flush_tlb();
+	__flush_tlb_all();
 }
 
 /* Don't add a printk in there. printk relies on the PDA which is not initialized 
@@ -56,16 +56,17 @@ void __init x86_64_start_kernel(char * real_mode_data)
 	/* Make NULL pointers segfault */
 	zap_identity_mappings();
 
+ 	for (i = 0; i < NR_CPUS; i++)
+ 		cpu_pda(i) = &boot_cpu_pda[i];
+
+	pda_init(0);
+
 	for (i = 0; i < IDT_ENTRIES; i++)
 		set_intr_gate(i, early_idt_handler);
 	load_idt((const struct desc_ptr *)&idt_descr);
 
 	early_printk("Kernel alive\n");
 
- 	for (i = 0; i < NR_CPUS; i++)
- 		cpu_pda(i) = &boot_cpu_pda[i];
-
-	pda_init(0);
 	copy_bootdata(__va(real_mode_data));
 #ifdef CONFIG_SMP
 	cpu_set(0, cpu_online_map);

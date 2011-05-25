@@ -1200,7 +1200,7 @@ static int wait_task_zombie(struct task_struct *p, int noreap,
 		pid_t pid = task_pid_nr_ns(p, ns);
 		uid_t uid = p->uid;
 		int exit_code = p->exit_code;
-		int why, status;
+		int why;
 
 		if (unlikely(p->exit_state != EXIT_ZOMBIE))
 			return 0;

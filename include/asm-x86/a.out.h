@@ -19,9 +19,13 @@ struct exec
 
 #ifdef __KERNEL__
 # include <linux/thread_info.h>
-# define STACK_TOP	TASK_SIZE
+# ifdef CONFIG_PAX_SEGMEXEC
+# define __STACK_TOP	((current->mm->pax_flags & MF_PAX_SEGMEXEC)?TASK_SIZE/2:TASK_SIZE)
+# else
+# define __STACK_TOP	TASK_SIZE
+# endif
 # ifdef CONFIG_X86_32
-#  define STACK_TOP_MAX	STACK_TOP
+#  define STACK_TOP_MAX	TASK_SIZE
 # else
 #  define STACK_TOP_MAX	TASK_SIZE64
 # endif

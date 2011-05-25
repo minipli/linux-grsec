@@ -1124,23 +1124,23 @@ static inline unsigned long __raw_local_irq_save(void)
 
 #define INTERRUPT_RETURN						\
 	PARA_SITE(PARA_PATCH(pv_cpu_ops, PV_CPU_iret), CLBR_NONE,	\
-		  jmp *%cs:pv_cpu_ops+PV_CPU_iret)
+		  jmp *%ss:pv_cpu_ops+PV_CPU_iret)
 
 #define DISABLE_INTERRUPTS(clobbers)					\
 	PARA_SITE(PARA_PATCH(pv_irq_ops, PV_IRQ_irq_disable), clobbers, \
 		  pushl %eax; pushl %ecx; pushl %edx;			\
-		  call *%cs:pv_irq_ops+PV_IRQ_irq_disable;		\
+		  call *%ss:pv_irq_ops+PV_IRQ_irq_disable;		\
 		  popl %edx; popl %ecx; popl %eax)			\
 
 #define ENABLE_INTERRUPTS(clobbers)					\
 	PARA_SITE(PARA_PATCH(pv_irq_ops, PV_IRQ_irq_enable), clobbers,	\
 		  pushl %eax; pushl %ecx; pushl %edx;			\
-		  call *%cs:pv_irq_ops+PV_IRQ_irq_enable;		\
+		  call *%ss:pv_irq_ops+PV_IRQ_irq_enable;		\
 		  popl %edx; popl %ecx; popl %eax)
 
 #define ENABLE_INTERRUPTS_SYSEXIT					       \
 	PARA_SITE(PARA_PATCH(pv_cpu_ops, PV_CPU_irq_enable_sysexit), CLBR_NONE,\
-		  jmp *%cs:pv_cpu_ops+PV_CPU_irq_enable_sysexit)
+		  jmp *%ss:pv_cpu_ops+PV_CPU_irq_enable_sysexit)
 
 #define GET_CR0_INTO_EAX			\
 	push %ecx; push %edx;			\

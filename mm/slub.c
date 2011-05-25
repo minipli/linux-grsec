@@ -1539,7 +1539,7 @@ debug:
  *
  * Otherwise we can simply pick the next object from the lockless free list.
  */
-static void __always_inline *slab_alloc(struct kmem_cache *s,
+static __always_inline void *slab_alloc(struct kmem_cache *s,
 		gfp_t gfpflags, int node, void *addr)
 {
 	void **object;
@@ -1647,7 +1647,7 @@ debug:
  * If fastpath is not possible then fall back to __slab_free where we deal
  * with all sorts of special processing.
  */
-static void __always_inline slab_free(struct kmem_cache *s,
+static __always_inline void slab_free(struct kmem_cache *s,
 			struct page *page, void *x, void *addr)
 {
 	void **object = (void *)x;

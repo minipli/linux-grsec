@@ -14,7 +14,7 @@
 #include <asm/segment.h>
 #include <asm/mmu.h>
 
-extern struct desc_struct cpu_gdt_table[GDT_ENTRIES];
+extern struct desc_struct cpu_gdt_table[NR_CPUS][PAGE_SIZE / sizeof(struct desc_struct)];
 
 #define load_TR_desc() asm volatile("ltr %w0"::"r" (GDT_ENTRY_TSS*8))
 #define load_LDT_desc() asm volatile("lldt %w0"::"r" (GDT_ENTRY_LDT*8))
@@ -34,12 +34,10 @@ static inline unsigned long __store_tr(void)
  * This is the ldt that every process will get unless we need
  * something other than this.
  */
-extern struct desc_struct default_ldt[];
 extern struct gate_struct idt_table[]; 
-extern struct desc_ptr cpu_gdt_descr[];
 
 /* the cpu gdt accessor */
-#define cpu_gdt(_cpu) ((struct desc_struct *)cpu_gdt_descr[_cpu].address)
+#define cpu_gdt(_cpu) (cpu_gdt_table[_cpu])
 
 static inline void load_gdt(const struct desc_ptr *ptr)
 {
@@ -54,6 +52,11 @@ static inline void store_gdt(struct desc_ptr *ptr)
 static inline void _set_gate(void *adr, unsigned type, unsigned long func, unsigned dpl, unsigned ist)  
 {
 	struct gate_struct s; 	
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	s.offset_low = PTR_LOW(func); 
 	s.segment = __KERNEL_CS;
 	s.ist = ist; 
@@ -65,7 +68,17 @@ static inline void _set_gate(void *adr, unsigned type, unsigned long func, unsig
 	s.offset_middle = PTR_MIDDLE(func); 
 	s.offset_high = PTR_HIGH(func); 
 	/* does not need to be atomic because it is only done once at setup time */ 
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	memcpy(adr, &s, 16); 
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 } 
 
 static inline void set_intr_gate(int nr, void *func) 
@@ -105,6 +118,11 @@ static inline void set_tssldt_descriptor(void *ptr, unsigned long tss, unsigned 
 					 unsigned size) 
 { 
 	struct ldttss_desc d;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	memset(&d,0,sizeof(d)); 
 	d.limit0 = size & 0xFFFF;
 	d.base0 = PTR_LOW(tss); 
@@ -114,7 +132,17 @@ static inline void set_tssldt_descriptor(void *ptr, unsigned long tss, unsigned 
 	d.limit1 = (size >> 16) & 0xF;
 	d.base2 = (PTR_MIDDLE(tss) >> 8) & 0xFF; 
 	d.base3 = PTR_HIGH(tss); 
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	memcpy(ptr, &d, 16); 
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 static inline void set_tss_desc(unsigned cpu, void *addr)
@@ -152,7 +180,7 @@ static inline void set_ldt_desc(unsigned cpu, void *addr, int size)
 	((info)->limit_in_pages << 23) | \
 	((info)->useable << 20) | \
 	/* ((info)->lm << 21) | */ \
-	0x7000)
+	0x7100)
 
 #define LDT_empty(info) (\
 	(info)->base_addr	== 0	&& \
@@ -170,8 +198,19 @@ static inline void load_TLS(struct thread_struct *t, unsigned int cpu)
 	unsigned int i;
 	u64 *gdt = (u64 *)(cpu_gdt(cpu) + GDT_ENTRY_TLS_MIN);
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	for (i = 0; i < GDT_ENTRY_TLS_ENTRIES; i++)
 		gdt[i] = t->tls_array[i];
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 } 
 
 /*
@@ -197,7 +236,7 @@ static inline void load_LDT(mm_context_t *pc)
 	put_cpu();
 }
 
-extern struct desc_ptr idt_descr;
+extern const struct desc_ptr idt_descr;
 
 #endif /* !__ASSEMBLY__ */
 

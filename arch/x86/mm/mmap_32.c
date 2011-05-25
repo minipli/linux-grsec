@@ -35,12 +35,18 @@
  * Leave an at least ~128 MB hole.
  */
 #define MIN_GAP (128*1024*1024)
-#define MAX_GAP (TASK_SIZE/6*5)
+#define MAX_GAP (pax_task_size/6*5)
 
 static inline unsigned long mmap_base(struct mm_struct *mm)
 {
 	unsigned long gap = current->signal->rlim[RLIMIT_STACK].rlim_cur;
 	unsigned long random_factor = 0;
+	unsigned long pax_task_size = TASK_SIZE;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (mm->pax_flags & MF_PAX_SEGMEXEC)
+		pax_task_size = SEGMEXEC_TASK_SIZE;
+#endif
 
 	if (current->flags & PF_RANDOMIZE)
 		random_factor = get_random_int() % (1024*1024);
@@ -50,7 +56,7 @@ static inline unsigned long mmap_base(struct mm_struct *mm)
 	else if (gap > MAX_GAP)
 		gap = MAX_GAP;
 
-	return PAGE_ALIGN(TASK_SIZE - gap - random_factor);
+	return PAGE_ALIGN(pax_task_size - gap - random_factor);
 }
 
 /*
@@ -66,11 +72,30 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 	if (sysctl_legacy_va_layout ||
 			(current->personality & ADDR_COMPAT_LAYOUT) ||
 			current->signal->rlim[RLIMIT_STACK].rlim_cur == RLIM_INFINITY) {
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if (mm->pax_flags & MF_PAX_SEGMEXEC)
+			mm->mmap_base = SEGMEXEC_TASK_UNMAPPED_BASE;
+		else
+#endif
+
 		mm->mmap_base = TASK_UNMAPPED_BASE;
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (mm->pax_flags & MF_PAX_RANDMMAP)
+			mm->mmap_base += mm->delta_mmap;
+#endif
+
 		mm->get_unmapped_area = arch_get_unmapped_area;
 		mm->unmap_area = arch_unmap_area;
 	} else {
 		mm->mmap_base = mmap_base(mm);
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (mm->pax_flags & MF_PAX_RANDMMAP)
+			mm->mmap_base -= mm->delta_mmap + mm->delta_stack;
+#endif
+
 		mm->get_unmapped_area = arch_get_unmapped_area_topdown;
 		mm->unmap_area = arch_unmap_area_topdown;
 	}

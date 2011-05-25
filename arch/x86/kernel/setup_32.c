@@ -61,6 +61,7 @@
 #include <setup_arch.h>
 #include <bios_ebda.h>
 #include <asm/cacheflush.h>
+#include <asm/boot.h>
 
 /* This value is set up by the early boot code to point to the value
    immediately after the boot time page tables.  It contains a *physical*
@@ -82,7 +83,11 @@ struct cpuinfo_x86 new_cpu_data __cpuinitdata = { 0, 0, 0, 0, -1, 1, 0, 0, -1 };
 struct cpuinfo_x86 boot_cpu_data __read_mostly = { 0, 0, 0, 0, -1, 1, 0, 0, -1 };
 EXPORT_SYMBOL(boot_cpu_data);
 
+#ifdef CONFIG_X86_PAE
+unsigned long mmu_cr4_features = X86_CR4_PAE;
+#else
 unsigned long mmu_cr4_features;
+#endif
 
 /* for MCA, but anyone else can use it if they want */
 unsigned int machine_id;
@@ -436,8 +441,8 @@ void __init setup_bootmem_allocator(void)
 	 * the (very unlikely) case of us accidentally initializing the
 	 * bootmem allocator with an invalid RAM area.
 	 */
-	reserve_bootmem(__pa_symbol(_text), (PFN_PHYS(min_low_pfn) +
-			 bootmap_size + PAGE_SIZE-1) - __pa_symbol(_text));
+	reserve_bootmem(LOAD_PHYSICAL_ADDR, (PFN_PHYS(min_low_pfn) +
+			 bootmap_size + PAGE_SIZE-1) - LOAD_PHYSICAL_ADDR);
 
 	/*
 	 * reserve physical page 0 - it's a special BIOS page on many boxes,
@@ -590,14 +595,14 @@ void __init setup_arch(char **cmdline_p)
 
 	if (!boot_params.hdr.root_flags)
 		root_mountflags &= ~MS_RDONLY;
-	init_mm.start_code = (unsigned long) _text;
-	init_mm.end_code = (unsigned long) _etext;
+	init_mm.start_code = ktla_ktva((unsigned long) _text);
+	init_mm.end_code = ktla_ktva((unsigned long) _etext);
 	init_mm.end_data = (unsigned long) _edata;
 	init_mm.brk = init_pg_tables_end + PAGE_OFFSET;
 
-	code_resource.start = virt_to_phys(_text);
-	code_resource.end = virt_to_phys(_etext)-1;
-	data_resource.start = virt_to_phys(_etext);
+	code_resource.start = virt_to_phys(ktla_ktva(_text));
+	code_resource.end = virt_to_phys(ktla_ktva(_etext))-1;
+	data_resource.start = virt_to_phys(_data);
 	data_resource.end = virt_to_phys(_edata)-1;
 	bss_resource.start = virt_to_phys(&__bss_start);
 	bss_resource.end = virt_to_phys(&__bss_stop)-1;
@@ -691,4 +696,24 @@ void __init setup_arch(char **cmdline_p)
 	conswitchp = &dummy_con;
 #endif
 #endif
+}
+
+unsigned long __per_cpu_offset[NR_CPUS] __read_only;
+
+EXPORT_SYMBOL(__per_cpu_offset);
+
+void __init setup_per_cpu_areas(void)
+{
+	unsigned long size, i;
+	char *ptr;
+
+	/* Copy section for each CPU (we discard the original) */
+	size = ALIGN(PERCPU_ENOUGH_ROOM, PAGE_SIZE);
+	ptr = alloc_bootmem_pages(size * num_possible_cpus());
+
+	for_each_possible_cpu(i) {
+		__per_cpu_offset[i] = (unsigned long)ptr;
+		memcpy(ptr, __per_cpu_start, __per_cpu_end - __per_cpu_start);
+		ptr += size;
+	}
 }

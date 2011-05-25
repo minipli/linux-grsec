@@ -1233,7 +1233,7 @@ static int access_valid(u32 x)
 
 static int deny_valid(u32 x)
 {
-	return (x >= 0 && x < 5);
+	return (x < 5);
 }
 
 static void

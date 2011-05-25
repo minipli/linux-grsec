@@ -70,6 +70,19 @@ static inline int is_kernel_text(unsigned long addr)
 
 static inline int is_kernel(unsigned long addr)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+
+#ifdef CONFIG_MODULES
+	if ((unsigned long)MODULES_VADDR <= ktla_ktva(addr) &&
+	    ktla_ktva(addr) < (unsigned long)MODULES_END)
+		return 0;
+#endif
+
+	if (is_kernel_inittext(addr))
+		return 1;
+#endif
+
 	if (addr >= (unsigned long)_stext && addr <= (unsigned long)_end)
 		return 1;
 	return in_gate_area_no_task(addr);
@@ -378,7 +391,6 @@ static unsigned long get_ksymbol_core(struct kallsym_iter *iter)
 
 static void reset_iter(struct kallsym_iter *iter, loff_t new_pos)
 {
-	iter->name[0] = '\0';
 	iter->nameoff = get_symbol_offset(new_pos);
 	iter->pos = new_pos;
 }
@@ -462,7 +474,7 @@ static int kallsyms_open(struct inode *inode, struct file *file)
 	struct kallsym_iter *iter;
 	int ret;
 
-	iter = kmalloc(sizeof(*iter), GFP_KERNEL);
+	iter = kzalloc(sizeof(*iter), GFP_KERNEL);
 	if (!iter)
 		return -ENOMEM;
 	reset_iter(iter, 0);

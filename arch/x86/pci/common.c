@@ -331,7 +331,7 @@ static struct dmi_system_id __devinitdata pciprobe_dmi_table[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "ProLiant DL585 G2"),
 		},
 	},
-	{}
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL}
 };
 
 struct pci_bus * __devinit pcibios_scan_root(int busnum)

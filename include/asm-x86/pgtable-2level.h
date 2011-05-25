@@ -22,7 +22,19 @@ static inline void native_set_pte_at(struct mm_struct *mm, unsigned long addr,
 }
 static inline void native_set_pmd(pmd_t *pmdp, pmd_t pmd)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	*pmdp = pmd;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 #ifndef CONFIG_PARAVIRT
 #define set_pte(pteptr, pteval)		native_set_pte(pteptr, pteval)

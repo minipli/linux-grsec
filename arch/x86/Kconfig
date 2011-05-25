@@ -792,7 +792,7 @@ config PAGE_OFFSET
 	hex
 	default 0xB0000000 if VMSPLIT_3G_OPT
 	default 0x80000000 if VMSPLIT_2G
-	default 0x78000000 if VMSPLIT_2G_OPT
+	default 0x70000000 if VMSPLIT_2G_OPT
 	default 0x40000000 if VMSPLIT_1G
 	default 0xC0000000
 	depends on X86_32
@@ -1096,8 +1096,7 @@ config CRASH_DUMP
 config PHYSICAL_START
 	hex "Physical address where the kernel is loaded" if (EMBEDDED || CRASH_DUMP)
 	default "0x1000000" if X86_NUMAQ
-	default "0x200000" if X86_64
-	default "0x100000"
+	default "0x200000"
 	help
 	  This gives the physical address where the kernel is loaded.
 
@@ -1190,7 +1189,7 @@ config HOTPLUG_CPU
 
 config COMPAT_VDSO
 	bool "Compat VDSO support"
-	default y
+	default n
 	depends on X86_32
 	help
 	  Map the VDSO to the predictable old-style address too.
@@ -1387,7 +1386,7 @@ config PCI
 choice
 	prompt "PCI access mode"
 	depends on X86_32 && PCI && !X86_VISWS
-	default PCI_GOANY
+	default PCI_GODIRECT
 	---help---
 	  On PCI systems, the BIOS can be used to detect the PCI devices and
 	  determine their configuration. However, some old PCI motherboards

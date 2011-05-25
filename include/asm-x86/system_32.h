@@ -188,6 +188,21 @@ static inline void clflush(volatile void *__p)
 /* Set the 'TS' bit */
 #define stts() write_cr0(8 | read_cr0())
 
+#define pax_open_kernel(cr0)		\
+do {					\
+	typecheck(unsigned long, cr0);	\
+	preempt_disable();		\
+	cr0 = read_cr0();		\
+	write_cr0(cr0 & ~X86_CR0_WP);	\
+} while (0)
+
+#define pax_close_kernel(cr0)		\
+do {					\
+	typecheck(unsigned long, cr0);	\
+	write_cr0(cr0);			\
+	preempt_enable_no_resched();	\
+} while (0)
+
 #endif	/* __KERNEL__ */
 
 static inline unsigned long get_limit(unsigned long segment)
@@ -195,7 +210,7 @@ static inline unsigned long get_limit(unsigned long segment)
 	unsigned long __limit;
 	__asm__("lsll %1,%0"
 		:"=r" (__limit):"r" (segment));
-	return __limit+1;
+	return __limit;
 }
 
 #define nop() __asm__ __volatile__ ("nop")
@@ -311,7 +326,7 @@ void enable_hlt(void);
 extern int es7000_plat;
 void cpu_idle_wait(void);
 
-extern unsigned long arch_align_stack(unsigned long sp);
+#define arch_align_stack(x) (x)
 extern void free_init_pages(char *what, unsigned long begin, unsigned long end);
 
 void default_idle(void);

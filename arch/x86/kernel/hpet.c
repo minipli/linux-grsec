@@ -137,7 +137,7 @@ static void hpet_reserve_platform_timers(unsigned long id)
 	hd.hd_irq[1] = HPET_LEGACY_RTC;
 
 	for (i = 2; i < nrtimers; timer++, i++)
-		hd.hd_irq[i] = (timer->hpet_config & Tn_INT_ROUTE_CNF_MASK) >>
+		hd.hd_irq[i] = (readl(&timer->hpet_config) & Tn_INT_ROUTE_CNF_MASK) >>
 			Tn_INT_ROUTE_CNF_SHIFT;
 
 	hpet_alloc(&hd);
