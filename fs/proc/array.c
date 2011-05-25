@@ -305,6 +305,21 @@ static inline char *task_context_switch_counts(struct task_struct *p,
 			    p->nivcsw);
 }
 
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+static inline char *task_pax(struct task_struct *p, char *buffer)
+{
+	if (p->mm)
+		return buffer + sprintf(buffer, "PaX:\t%c%c%c%c%c\n",
+				p->mm->pax_flags & MF_PAX_PAGEEXEC ? 'P' : 'p',
+				p->mm->pax_flags & MF_PAX_EMUTRAMP ? 'E' : 'e',
+				p->mm->pax_flags & MF_PAX_MPROTECT ? 'M' : 'm',
+				p->mm->pax_flags & MF_PAX_RANDMMAP ? 'R' : 'r',
+				p->mm->pax_flags & MF_PAX_SEGMEXEC ? 'S' : 's');
+	else
+		return buffer + sprintf(buffer, "PaX:\t-----\n");
+}
+#endif
+
 int proc_pid_status(struct task_struct *task, char *buffer)
 {
 	char *orig = buffer;
@@ -324,6 +339,11 @@ int proc_pid_status(struct task_struct *task, char *buffer)
 	buffer = task_show_regs(task, buffer);
 #endif
 	buffer = task_context_switch_counts(task, buffer);
+
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+	buffer = task_pax(task, buffer);
+#endif
+
 	return buffer - orig;
 }
 

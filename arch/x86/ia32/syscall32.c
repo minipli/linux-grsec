@@ -30,6 +30,9 @@ int syscall32_setup_pages(struct linux_binprm *bprm, int exstack)
 	struct mm_struct *mm = current->mm;
 	int ret;
 
+	if (!sysctl_vsyscall32)
+		return 0;
+
 	down_write(&mm->mmap_sem);
 	/*
 	 * MAYWRITE to allow gdb to COW and set breakpoints

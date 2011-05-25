@@ -30,25 +30,25 @@ static u32 kexec_pmd1[1024] PAGE_ALIGNED;
 static u32 kexec_pte0[1024] PAGE_ALIGNED;
 static u32 kexec_pte1[1024] PAGE_ALIGNED;
 
-static void set_idt(void *newidt, __u16 limit)
+static void set_idt(struct desc_struct *newidt, __u16 limit)
 {
 	struct Xgt_desc_struct curidt;
 
 	/* ia32 supports unaliged loads & stores */
 	curidt.size    = limit;
-	curidt.address = (unsigned long)newidt;
+	curidt.address = newidt;
 
 	load_idt(&curidt);
 };
 
 
-static void set_gdt(void *newgdt, __u16 limit)
+static void set_gdt(struct desc_struct *newgdt, __u16 limit)
 {
 	struct Xgt_desc_struct curgdt;
 
 	/* ia32 supports unaligned loads & stores */
 	curgdt.size    = limit;
-	curgdt.address = (unsigned long)newgdt;
+	curgdt.address = newgdt;
 
 	load_gdt(&curgdt);
 };
@@ -111,10 +111,10 @@ NORET_TYPE void machine_kexec(struct kimage *image)
 	local_irq_disable();
 
 	control_page = page_address(image->control_code_page);
-	memcpy(control_page, relocate_kernel, PAGE_SIZE);
+	memcpy(control_page, ktla_ktva(relocate_kernel), PAGE_SIZE);
 
 	page_list[PA_CONTROL_PAGE] = __pa(control_page);
-	page_list[VA_CONTROL_PAGE] = (unsigned long)relocate_kernel;
+	page_list[VA_CONTROL_PAGE] = ktla_ktva((unsigned long)relocate_kernel);
 	page_list[PA_PGD] = __pa(kexec_pgd);
 	page_list[VA_PGD] = (unsigned long)kexec_pgd;
 #ifdef CONFIG_X86_PAE

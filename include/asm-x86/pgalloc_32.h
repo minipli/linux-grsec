@@ -15,11 +15,19 @@
 #define paravirt_release_pd(pfn) do { } while (0)
 #endif
 
+#ifdef CONFIG_COMPAT_VDSO
 #define pmd_populate_kernel(mm, pmd, pte)			\
 do {								\
 	paravirt_alloc_pt(mm, __pa(pte) >> PAGE_SHIFT);		\
 	set_pmd(pmd, __pmd(_PAGE_TABLE + __pa(pte)));		\
 } while (0)
+#else
+#define pmd_populate_kernel(mm, pmd, pte)			\
+do {								\
+	paravirt_alloc_pt(mm, __pa(pte) >> PAGE_SHIFT);		\
+	set_pmd(pmd, __pmd(_KERNPG_TABLE + __pa(pte)));		\
+} while (0)
+#endif
 
 #define pmd_populate(mm, pmd, pte) 				\
 do {								\

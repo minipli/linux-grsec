@@ -470,6 +470,8 @@ acpi_os_read_memory(acpi_physical_address phys_addr, u32 * value, u32 width)
 	void __iomem *virt_addr;
 
 	virt_addr = ioremap(phys_addr, width);
+	if (!virt_addr)
+		return AE_NO_MEMORY;
 	if (!value)
 		value = &dummy;
 
@@ -498,6 +500,8 @@ acpi_os_write_memory(acpi_physical_address phys_addr, u32 value, u32 width)
 	void __iomem *virt_addr;
 
 	virt_addr = ioremap(phys_addr, width);
+	if (!virt_addr)
+		return AE_NO_MEMORY;
 
 	switch (width) {
 	case 8:
@@ -520,7 +524,7 @@ acpi_os_write_memory(acpi_physical_address phys_addr, u32 value, u32 width)
 
 acpi_status
 acpi_os_read_pci_configuration(struct acpi_pci_id * pci_id, u32 reg,
-			       void *value, u32 width)
+			       u32 *value, u32 width)
 {
 	int result, size;
 
@@ -592,7 +596,7 @@ static void acpi_os_derive_pci_id_2(acpi_handle rhandle,	/* upper bound  */
 	acpi_status status;
 	unsigned long temp;
 	acpi_object_type type;
-	u8 tu8;
+	u32 tu8;
 
 	acpi_get_parent(chandle, &handle);
 	if (handle != rhandle) {

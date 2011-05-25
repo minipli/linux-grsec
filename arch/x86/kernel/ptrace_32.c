@@ -160,22 +160,20 @@ static unsigned long convert_eip_to_linear(struct task_struct *child, struct pt_
 	 * and APM bios ones we just ignore here.
 	 */
 	if (seg & LDT_SEGMENT) {
-		u32 *desc;
+		struct desc_struct *desc;
 		unsigned long base;
 
-		seg &= ~7UL;
+		seg >>= 3;
 
 		mutex_lock(&child->mm->context.lock);
-		if (unlikely((seg >> 3) >= child->mm->context.size))
-			addr = -1L; /* bogus selector, access would fault */
+		if (unlikely(seg >= child->mm->context.size))
+			addr = -EINVAL;
 		else {
-			desc = child->mm->context.ldt + seg;
-			base = ((desc[0] >> 16) |
-				((desc[1] & 0xff) << 16) |
-				(desc[1] & 0xff000000));
+			desc = &child->mm->context.ldt[seg];
+			base = (desc->a >> 16) | ((desc->b & 0xff) << 16) | (desc->b & 0xff000000);
 
 			/* 16-bit code segment? */
-			if (!((desc[1] >> 22) & 1))
+			if (!((desc->b >> 22) & 1))
 				addr &= 0xffff;
 			addr += base;
 		}
@@ -189,6 +187,9 @@ static inline int is_setting_trap_flag(struct task_struct *child, struct pt_regs
 	int i, copied;
 	unsigned char opcode[15];
 	unsigned long addr = convert_eip_to_linear(child, regs);
+
+	if (addr == -EINVAL)
+		return 0;
 
 	copied = access_process_vm(child, addr, opcode, sizeof(opcode), 0);
 	for (i = 0; i < copied; i++) {
@@ -339,6 +340,11 @@ ptrace_set_thread_area(struct task_struct *child,
 
 	if (copy_from_user(&info, user_desc, sizeof(info)))
 		return -EFAULT;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((child->mm->pax_flags & MF_PAX_SEGMEXEC) && (info.contents & MODIFY_LDT_CONTENTS_CODE))
+		return -EINVAL;
+#endif
 
 	if (idx < GDT_ENTRY_TLS_MIN || idx > GDT_ENTRY_TLS_MAX)
 		return -EINVAL;
@@ -630,7 +636,7 @@ void send_sigtrap(struct task_struct *tsk, struct pt_regs *regs, int error_code)
 	info.si_code = TRAP_BRKPT;
 
 	/* User-mode eip? */
-	info.si_addr = user_mode_vm(regs) ? (void __user *) regs->eip : NULL;
+	info.si_addr = user_mode(regs) ? (void __user *) regs->eip : NULL;
 
 	/* Send us the fake SIGTRAP */
 	force_sig_info(SIGTRAP, &info, tsk);

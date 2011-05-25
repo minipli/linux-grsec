@@ -42,4 +42,6 @@ obj-$(CONFIG_PCI)		+= early-quirks.o
 obj-y				+= topology.o
 obj-y				+= pcspeaker.o
 
-CFLAGS_vsyscall_64.o		:= $(PROFILING) -g0
+CFLAGS_vsyscall_64.o		:= $(PROFILING) -g0 -fno-stack-protector
+CFLAGS_hpet.o			:= -fno-stack-protector
+CFLAGS_tsc_64.o			:= -fno-stack-protector

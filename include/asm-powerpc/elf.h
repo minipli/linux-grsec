@@ -160,6 +160,18 @@ typedef elf_vrreg_t elf_vrregset_t[ELF_NVRREG];
 typedef elf_vrreg_t elf_vrregset_t32[ELF_NVRREG32];
 #endif
 
+#ifdef CONFIG_PAX_ASLR
+#define PAX_ELF_ET_DYN_BASE	(0x10000000UL)
+
+#ifdef __powerpc64__
+#define PAX_DELTA_MMAP_LEN	(test_thread_flag(TIF_32BIT) ? 16 : 28)
+#define PAX_DELTA_STACK_LEN	(test_thread_flag(TIF_32BIT) ? 16 : 28)
+#else
+#define PAX_DELTA_MMAP_LEN	15
+#define PAX_DELTA_STACK_LEN	15
+#endif
+#endif
+
 #ifdef __KERNEL__
 /*
  * This is used to ensure we don't load something for the wrong architecture.

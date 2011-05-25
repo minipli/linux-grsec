@@ -47,12 +47,12 @@
 #define AT_SYSINFO 32
 #define AT_SYSINFO_EHDR		33
 
-int sysctl_vsyscall32 = 1;
+int sysctl_vsyscall32;
 
 #undef ARCH_DLINFO
 #define ARCH_DLINFO do {  \
 	if (sysctl_vsyscall32) { \
-		current->mm->context.vdso = (void *)VSYSCALL32_BASE;	\
+		current->mm->context.vdso = VSYSCALL32_BASE; \
 		NEW_AUX_ENT(AT_SYSINFO, (u32)(u64)VSYSCALL32_VSYSCALL); \
 		NEW_AUX_ENT(AT_SYSINFO_EHDR, VSYSCALL32_BASE);    \
 	}	\
@@ -65,6 +65,17 @@ struct file;
 #undef ELF_ET_DYN_BASE
 
 #define ELF_ET_DYN_BASE		(TASK_UNMAPPED_BASE + 0x1000000)
+
+#ifdef CONFIG_PAX_ASLR
+#undef PAX_ELF_ET_DYN_BASE
+#undef PAX_DELTA_MMAP_LEN
+#undef PAX_DELTA_STACK_LEN
+
+#define PAX_ELF_ET_DYN_BASE	0x08048000UL
+
+#define PAX_DELTA_MMAP_LEN	16
+#define PAX_DELTA_STACK_LEN	16
+#endif
 
 #define jiffies_to_timeval(a,b) do { (b)->tv_usec = 0; (b)->tv_sec = (a)/HZ; }while(0)
 
@@ -263,7 +274,7 @@ static ctl_table abi_table2[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec
 	},
-	{}
+	{ 0, NULL, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 static ctl_table abi_root_table2[] = {
@@ -273,7 +284,7 @@ static ctl_table abi_root_table2[] = {
 		.mode = 0555,
 		.child = abi_table2
 	},
-	{}
+	{ 0, NULL, NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL }
 };
 
 static __init int ia32_binfmt_init(void)

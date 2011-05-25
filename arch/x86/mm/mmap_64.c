@@ -23,6 +23,12 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 		unsigned rnd = get_random_int() & 0xfffffff;
 		mm->mmap_base += ((unsigned long)rnd) << PAGE_SHIFT;
 	}
+
+#ifdef CONFIG_PAX_RANDMMAP
+	if (mm->pax_flags & MF_PAX_RANDMMAP)
+		mm->mmap_base += mm->delta_mmap;
+#endif
+
 	mm->get_unmapped_area = arch_get_unmapped_area;
 	mm->unmap_area = arch_unmap_area;
 }

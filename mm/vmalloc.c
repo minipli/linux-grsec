@@ -202,6 +202,8 @@ static struct vm_struct *__get_vm_area_node(unsigned long size, unsigned long fl
 
 	write_lock(&vmlist_lock);
 	for (p = &vmlist; (tmp = *p) != NULL ;p = &tmp->next) {
+		if (addr > end - size)
+			goto out;
 		if ((unsigned long)tmp->addr < addr) {
 			if((unsigned long)tmp->addr + tmp->size >= addr)
 				addr = ALIGN(tmp->size + 
@@ -213,8 +215,6 @@ static struct vm_struct *__get_vm_area_node(unsigned long size, unsigned long fl
 		if (size + addr <= (unsigned long)tmp->addr)
 			goto found;
 		addr = ALIGN(tmp->size + (unsigned long)tmp->addr, align);
-		if (addr > end - size)
-			goto out;
 	}
 
 found:

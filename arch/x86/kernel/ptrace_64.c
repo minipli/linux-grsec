@@ -98,22 +98,20 @@ unsigned long convert_rip_to_linear(struct task_struct *child, struct pt_regs *r
 	 * and APM bios ones we just ignore here.
 	 */
 	if (seg & LDT_SEGMENT) {
-		u32 *desc;
+		struct desc_struct *desc;
 		unsigned long base;
 
-		seg &= ~7UL;
+		seg >>= 3;
 
 		mutex_lock(&child->mm->context.lock);
-		if (unlikely((seg >> 3) >= child->mm->context.size))
-			addr = -1L; /* bogus selector, access would fault */
+		if (unlikely(seg >= child->mm->context.size))
+			addr = -EINVAL; /* bogus selector, access would fault */
 		else {
-			desc = child->mm->context.ldt + seg;
-			base = ((desc[0] >> 16) |
-				((desc[1] & 0xff) << 16) |
-				(desc[1] & 0xff000000));
+			desc = &child->mm->context.ldt[seg];
+			base = desc->base0 | (desc->base1 << 16) | (desc->base2 << 24);
 
 			/* 16-bit code segment? */
-			if (!((desc[1] >> 22) & 1))
+			if (!desc->d)
 				addr &= 0xffff;
 			addr += base;
 		}
@@ -128,6 +126,9 @@ static int is_setting_trap_flag(struct task_struct *child, struct pt_regs *regs)
 	int i, copied;
 	unsigned char opcode[15];
 	unsigned long addr = convert_rip_to_linear(child, regs);
+
+	if (addr == -EINVAL)
+		return 0;
 
 	copied = access_process_vm(child, addr, opcode, sizeof(opcode), 0);
 	for (i = 0; i < copied; i++) {

@@ -108,6 +108,8 @@ static inline unsigned long __raw_local_irq_save(void)
 #define ENABLE_INTERRUPTS_SYSEXIT	sti; sysexit
 #define INTERRUPT_RETURN		iret
 #define GET_CR0_INTO_EAX		movl %cr0, %eax
+#define GET_CR0_INTO_EDX		movl %cr0, %edx
+#define SET_CR0_FROM_EDX		movl %edx, %cr0
 #endif /* __ASSEMBLY__ */
 #endif /* CONFIG_PARAVIRT */
 

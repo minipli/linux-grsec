@@ -110,6 +110,10 @@ static void revert_page(unsigned long address, pgprot_t ref_prot)
 	pte_t large_pte;
 	unsigned long pfn;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	pgd = pgd_offset_k(address);
 	BUG_ON(pgd_none(*pgd));
 	pud = pud_offset(pgd,address);
@@ -119,8 +123,18 @@ static void revert_page(unsigned long address, pgprot_t ref_prot)
 	pfn = (__pa(address) & LARGE_PAGE_MASK) >> PAGE_SHIFT;
 	large_pte = pfn_pte(pfn, ref_prot);
 	large_pte = pte_mkhuge(large_pte);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	set_pte((pte_t *)pmd, large_pte);
-}      
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
+}
 
 static int
 __change_page_attr(unsigned long address, unsigned long pfn, pgprot_t prot,
@@ -136,22 +150,36 @@ __change_page_attr(unsigned long address, unsigned long pfn, pgprot_t prot,
 	BUG_ON(PageLRU(kpte_page));
 	BUG_ON(PageCompound(kpte_page));
 	if (pgprot_val(prot) != pgprot_val(ref_prot)) { 
-		if (!pte_huge(*kpte)) {
-			set_pte(kpte, pfn_pte(pfn, prot));
-		} else {
+		if (pte_huge(*kpte)) {
  			/*
 			 * split_large_page will take the reference for this
 			 * change_page_attr on the split page.
  			 */
 			struct page *split;
+
+#ifdef CONFIG_PAX_KERNEXEC
+			unsigned long cr0;
+#endif
+
 			ref_prot2 = pte_pgprot(pte_clrhuge(*kpte));
 			split = split_large_page(address, prot, ref_prot2);
 			if (!split)
 				return -ENOMEM;
 			pgprot_val(ref_prot2) &= ~_PAGE_NX;
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_open_kernel(cr0);
+#endif
+
 			set_pte(kpte, mk_pte(split, ref_prot2));
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_close_kernel(cr0);
+#endif
+
 			kpte_page = split;
-		}
+		} else
+			set_pte(kpte, pfn_pte(pfn, prot));
 		page_private(kpte_page)++;
 	} else if (!pte_huge(*kpte)) {
 		set_pte(kpte, pfn_pte(pfn, ref_prot));

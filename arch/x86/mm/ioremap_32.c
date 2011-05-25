@@ -67,8 +67,11 @@ void __iomem * __ioremap(unsigned long phys_addr, unsigned long size, unsigned l
 				return NULL;
 	}
 
-	prot = __pgprot(_PAGE_PRESENT | _PAGE_RW | _PAGE_DIRTY
-			| _PAGE_ACCESSED | flags);
+#ifdef CONFIG_X86_PAE
+	prot = __pgprot((__PAGE_KERNEL | _PAGE_GLOBAL | flags) & __supported_pte_mask);
+#else
+	prot = __pgprot(__PAGE_KERNEL | _PAGE_GLOBAL | flags);
+#endif
 
 	/*
 	 * Mappings have to be page-aligned

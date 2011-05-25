@@ -44,15 +44,27 @@ char *task_mem(struct mm_struct *mm, char *buffer)
 		"VmStk:\t%8lu kB\n"
 		"VmExe:\t%8lu kB\n"
 		"VmLib:\t%8lu kB\n"
-		"VmPTE:\t%8lu kB\n",
-		hiwater_vm << (PAGE_SHIFT-10),
+		"VmPTE:\t%8lu kB\n"
+
+#ifdef CONFIG_ARCH_TRACK_EXEC_LIMIT
+		"CsBase:\t%8lx\nCsLim:\t%8lx\n"
+#endif
+
+		,hiwater_vm << (PAGE_SHIFT-10),
 		(total_vm - mm->reserved_vm) << (PAGE_SHIFT-10),
 		mm->locked_vm << (PAGE_SHIFT-10),
 		hiwater_rss << (PAGE_SHIFT-10),
 		total_rss << (PAGE_SHIFT-10),
 		data << (PAGE_SHIFT-10),
 		mm->stack_vm << (PAGE_SHIFT-10), text, lib,
-		(PTRS_PER_PTE*sizeof(pte_t)*mm->nr_ptes) >> 10);
+		(PTRS_PER_PTE*sizeof(pte_t)*mm->nr_ptes) >> 10
+
+#ifdef CONFIG_ARCH_TRACK_EXEC_LIMIT
+		, mm->context.user_cs_base, mm->context.user_cs_limit
+#endif
+
+	);
+
 	return buffer;
 }
 
@@ -155,9 +167,17 @@ static int show_map_internal(struct seq_file *m, void *v, struct mem_size_stats 
 	seq_printf(m, "%08lx-%08lx %c%c%c%c %08lx %02x:%02x %lu %n",
 			vma->vm_start,
 			vma->vm_end,
+
+#if 0
+			flags & VM_MAYREAD ? flags & VM_READ ? 'R' : '+' : flags & VM_READ ? 'r' : '-',
+			flags & VM_MAYWRITE ? flags & VM_WRITE ? 'W' : '+' : flags & VM_WRITE ? 'w' : '-',
+			flags & VM_MAYEXEC ? flags & VM_EXEC ? 'X' : '+' : flags & VM_EXEC ? 'x' : '-',
+#else
 			flags & VM_READ ? 'r' : '-',
 			flags & VM_WRITE ? 'w' : '-',
 			flags & VM_EXEC ? 'x' : '-',
+#endif
+
 			flags & VM_MAYSHARE ? 's' : 'p',
 			vma->vm_pgoff << PAGE_SHIFT,
 			MAJOR(dev), MINOR(dev), ino, &len);
@@ -173,11 +193,11 @@ static int show_map_internal(struct seq_file *m, void *v, struct mem_size_stats 
 		const char *name = arch_vma_name(vma);
 		if (!name) {
 			if (mm) {
-				if (vma->vm_start <= mm->start_brk &&
-						vma->vm_end >= mm->brk) {
+				if (vma->vm_start <= mm->brk && vma->vm_end >= mm->start_brk) {
 					name = "[heap]";
-				} else if (vma->vm_start <= mm->start_stack &&
-					   vma->vm_end >= mm->start_stack) {
+				} else if ((vma->vm_flags & (VM_GROWSDOWN | VM_GROWSUP)) ||
+					   (vma->vm_start <= mm->start_stack &&
+					    vma->vm_end >= mm->start_stack)) {
 					name = "[stack]";
 				}
 			} else {

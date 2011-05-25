@@ -16,8 +16,8 @@ jiffies_64 = jiffies;
 _proxy_pda = 1;
 PHDRS {
 	text PT_LOAD FLAGS(5);	/* R_E */
-	data PT_LOAD FLAGS(7);	/* RWE */
-	user PT_LOAD FLAGS(7);	/* RWE */
+	data PT_LOAD FLAGS(6);	/* RW_ */
+	user PT_LOAD FLAGS(7);	/* RWX */
 	data.init PT_LOAD FLAGS(7);	/* RWE */
 	note PT_NOTE FLAGS(4);	/* R__ */
 }
@@ -52,7 +52,7 @@ SECTIONS
 
   BUG_TABLE :text
 
-  RODATA
+  RO_DATA(4096)
 
   . = ALIGN(4);
   .tracedata : AT(ADDR(.tracedata) - LOAD_OFFSET) {
@@ -61,14 +61,17 @@ SECTIONS
   	__tracedata_end = .;
   }
 
+#ifdef CONFIG_PAX_KERNEXEC
+  . = ALIGN(2*1024*1024);      /* Align data segment to PMD size boundary */
+#else
   . = ALIGN(PAGE_SIZE);        /* Align data segment to page size boundary */
+#endif
 				/* Data */
+  _data = .;
   .data : AT(ADDR(.data) - LOAD_OFFSET) {
 	DATA_DATA
 	CONSTRUCTORS
 	} :data
-
-  _edata = .;			/* End of data section */
 
   . = ALIGN(PAGE_SIZE);
   . = ALIGN(CONFIG_X86_L1_CACHE_BYTES);
@@ -80,9 +83,27 @@ SECTIONS
   	*(.data.read_mostly)
   }
 
+  . = ALIGN(8192);		/* init_task */
+  .data.init_task : AT(ADDR(.data.init_task) - LOAD_OFFSET) {
+	*(.data.init_task)
+  }
+
+  . = ALIGN(4096);
+  .data.page_aligned : AT(ADDR(.data.page_aligned) - LOAD_OFFSET) {
+	*(.data.page_aligned)
+  }
+
+  . = ALIGN(4096);
+  __nosave_begin = .;
+  .data_nosave : AT(ADDR(.data_nosave) - LOAD_OFFSET) { *(.data.nosave) }
+  . = ALIGN(4096);
+  __nosave_end = .;
+
+  _edata = .;			/* End of data section */
+
 #define VSYSCALL_ADDR (-10*1024*1024)
-#define VSYSCALL_PHYS_ADDR ((LOADADDR(.data.read_mostly) + SIZEOF(.data.read_mostly) + 4095) & ~(4095))
-#define VSYSCALL_VIRT_ADDR ((ADDR(.data.read_mostly) + SIZEOF(.data.read_mostly) + 4095) & ~(4095))
+#define VSYSCALL_PHYS_ADDR ((LOADADDR(.data_nosave) + SIZEOF(.data_nosave) + 4095) & ~(4095))
+#define VSYSCALL_VIRT_ADDR ((ADDR(.data_nosave) + SIZEOF(.data_nosave) + 4095) & ~(4095))
 
 #define VLOAD_OFFSET (VSYSCALL_ADDR - VSYSCALL_PHYS_ADDR)
 #define VLOAD(x) (ADDR(x) - VLOAD_OFFSET)
@@ -130,23 +151,13 @@ SECTIONS
 #undef VVIRT_OFFSET
 #undef VVIRT
 
-  . = ALIGN(8192);		/* init_task */
-  .data.init_task : AT(ADDR(.data.init_task) - LOAD_OFFSET) {
-	*(.data.init_task)
-  }:data.init
-
-  . = ALIGN(4096);
-  .data.page_aligned : AT(ADDR(.data.page_aligned) - LOAD_OFFSET) {
-	*(.data.page_aligned)
-  }
-
   /* might get freed after init */
   . = ALIGN(4096);
   __smp_alt_begin = .;
   __smp_locks = .;
   .smp_locks : AT(ADDR(.smp_locks) - LOAD_OFFSET) {
 	*(.smp_locks)
-  }
+  } :data.init
   __smp_locks_end = .;
   . = ALIGN(4096);
   __smp_alt_end = .;
@@ -208,12 +219,6 @@ SECTIONS
   . = ALIGN(4096);
   __init_end = .;
 
-  . = ALIGN(4096);
-  __nosave_begin = .;
-  .data_nosave : AT(ADDR(.data_nosave) - LOAD_OFFSET) { *(.data.nosave) }
-  . = ALIGN(4096);
-  __nosave_end = .;
-
   __bss_start = .;		/* BSS */
   .bss : AT(ADDR(.bss) - LOAD_OFFSET) {
 	*(.bss.page_aligned)
@@ -221,6 +226,7 @@ SECTIONS
 	}
   __bss_stop = .;
 
+  . = ALIGN(2*1024*1024);
   _end = . ;
 
   /* Sections to be discarded */

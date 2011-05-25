@@ -31,7 +31,6 @@ struct vm_area_struct;
  */
 #define ZERO_PAGE(vaddr) (virt_to_page(empty_zero_page))
 extern unsigned long empty_zero_page[1024];
-extern pgd_t swapper_pg_dir[1024];
 extern struct kmem_cache *pmd_cache;
 extern spinlock_t pgd_lock;
 extern struct page *pgd_list;
@@ -55,6 +54,11 @@ void paging_init(void);
 # include <asm/pgtable-2level-defs.h>
 #endif
 
+extern pgd_t swapper_pg_dir[PTRS_PER_PGD];
+#ifdef CONFIG_X86_PAE
+extern pmd_t swapper_pm_dir[PTRS_PER_PGD][PTRS_PER_PMD];
+#endif
+
 #define PGDIR_SIZE	(1UL << PGDIR_SHIFT)
 #define PGDIR_MASK	(~(PGDIR_SIZE-1))
 
@@ -64,9 +68,11 @@ void paging_init(void);
 #define USER_PGD_PTRS (PAGE_OFFSET >> PGDIR_SHIFT)
 #define KERNEL_PGD_PTRS (PTRS_PER_PGD-USER_PGD_PTRS)
 
+#ifndef CONFIG_X86_PAE
 #define TWOLEVEL_PGDIR_SHIFT	22
 #define BOOT_USER_PGD_PTRS (__PAGE_OFFSET >> TWOLEVEL_PGDIR_SHIFT)
 #define BOOT_KERNEL_PGD_PTRS (1024-BOOT_USER_PGD_PTRS)
+#endif
 
 /* Just any arbitrary offset to the start of the vmalloc VM area: the
  * current 8MB value just means that there will be a 8MB "hole" after the
@@ -133,7 +139,7 @@ void paging_init(void);
 #define PAGE_NONE \
 	__pgprot(_PAGE_PROTNONE | _PAGE_ACCESSED)
 #define PAGE_SHARED \
-	__pgprot(_PAGE_PRESENT | _PAGE_RW | _PAGE_USER | _PAGE_ACCESSED)
+	__pgprot(_PAGE_PRESENT | _PAGE_RW | _PAGE_USER | _PAGE_ACCESSED | _PAGE_NX)
 
 #define PAGE_SHARED_EXEC \
 	__pgprot(_PAGE_PRESENT | _PAGE_RW | _PAGE_USER | _PAGE_ACCESSED)
@@ -199,7 +205,7 @@ extern unsigned long long __PAGE_KERNEL, __PAGE_KERNEL_EXEC;
 #undef TEST_ACCESS_OK
 
 /* The boot page tables (all created as a single array) */
-extern unsigned long pg0[];
+extern pte_t pg0[];
 
 #define pte_present(x)	((x).pte_low & (_PAGE_PRESENT | _PAGE_PROTNONE))
 
@@ -215,29 +221,54 @@ extern unsigned long pg0[];
  * The following only work if pte_present() is true.
  * Undefined behaviour if not..
  */
+static inline int pte_user(pte_t pte)		{ return (pte).pte_low & _PAGE_USER; }
 static inline int pte_dirty(pte_t pte)		{ return (pte).pte_low & _PAGE_DIRTY; }
 static inline int pte_young(pte_t pte)		{ return (pte).pte_low & _PAGE_ACCESSED; }
 static inline int pte_write(pte_t pte)		{ return (pte).pte_low & _PAGE_RW; }
 static inline int pte_huge(pte_t pte)		{ return (pte).pte_low & _PAGE_PSE; }
-
-/*
- * The following only works if pte_present() is not true.
- */
-static inline int pte_file(pte_t pte)		{ return (pte).pte_low & _PAGE_FILE; }
-
-static inline pte_t pte_mkclean(pte_t pte)	{ (pte).pte_low &= ~_PAGE_DIRTY; return pte; }
-static inline pte_t pte_mkold(pte_t pte)	{ (pte).pte_low &= ~_PAGE_ACCESSED; return pte; }
-static inline pte_t pte_wrprotect(pte_t pte)	{ (pte).pte_low &= ~_PAGE_RW; return pte; }
-static inline pte_t pte_mkdirty(pte_t pte)	{ (pte).pte_low |= _PAGE_DIRTY; return pte; }
-static inline pte_t pte_mkyoung(pte_t pte)	{ (pte).pte_low |= _PAGE_ACCESSED; return pte; }
-static inline pte_t pte_mkwrite(pte_t pte)	{ (pte).pte_low |= _PAGE_RW; return pte; }
-static inline pte_t pte_mkhuge(pte_t pte)	{ (pte).pte_low |= _PAGE_PSE; return pte; }
 
 #ifdef CONFIG_X86_PAE
 # include <asm/pgtable-3level.h>
 #else
 # include <asm/pgtable-2level.h>
 #endif
+
+/*
+ * The following only works if pte_present() is not true.
+ */
+static inline int pte_file(pte_t pte)		{ return (pte).pte_low & _PAGE_FILE; }
+
+static inline pte_t pte_exprotect(pte_t pte)
+{
+#ifdef CONFIG_X86_PAE
+	if (__supported_pte_mask & _PAGE_NX)
+		set_pte(&pte, __pte(pte_val(pte) | _PAGE_NX));
+	else
+#endif
+		set_pte(&pte, __pte(pte_val(pte) & ~_PAGE_USER));
+	return pte;
+}
+
+static inline pte_t pte_mkclean(pte_t pte)	{ (pte).pte_low &= ~_PAGE_DIRTY; return pte; }
+static inline pte_t pte_mkold(pte_t pte)	{ (pte).pte_low &= ~_PAGE_ACCESSED; return pte; }
+static inline pte_t pte_wrprotect(pte_t pte)	{ (pte).pte_low &= ~_PAGE_RW; return pte; }
+static inline pte_t pte_mkread(pte_t pte)	{ (pte).pte_low |= _PAGE_USER; return pte; }
+
+static inline pte_t pte_mkexec(pte_t pte)
+{
+#ifdef CONFIG_X86_PAE
+	if (__supported_pte_mask & _PAGE_NX)
+		set_pte(&pte, __pte(pte_val(pte) & ~_PAGE_NX));
+	else
+#endif
+		set_pte(&pte, __pte(pte_val(pte) | _PAGE_USER));
+	return pte;
+}
+
+static inline pte_t pte_mkdirty(pte_t pte)	{ (pte).pte_low |= _PAGE_DIRTY; return pte; }
+static inline pte_t pte_mkyoung(pte_t pte)	{ (pte).pte_low |= _PAGE_ACCESSED; return pte; }
+static inline pte_t pte_mkwrite(pte_t pte)	{ (pte).pte_low |= _PAGE_RW; return pte; }
+static inline pte_t pte_mkhuge(pte_t pte)	{ (pte).pte_low |= _PAGE_PSE; return pte; }
 
 #ifndef CONFIG_PARAVIRT
 /*
@@ -350,7 +381,19 @@ static inline void ptep_set_wrprotect(struct mm_struct *mm, unsigned long addr, 
  */
 static inline void clone_pgd_range(pgd_t *dst, pgd_t *src, int count)
 {
-       memcpy(dst, src, count * sizeof(pgd_t));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
+	memcpy(dst, src, count * sizeof(pgd_t));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 /*
@@ -496,6 +539,9 @@ static inline void paravirt_pagetable_setup_done(pgd_t *base)
 #endif	/* !CONFIG_PARAVIRT */
 
 #endif /* !__ASSEMBLY__ */
+
+#define HAVE_ARCH_UNMAPPED_AREA
+#define HAVE_ARCH_UNMAPPED_AREA_TOPDOWN
 
 #ifdef CONFIG_FLATMEM
 #define kern_addr_valid(addr)	(1)

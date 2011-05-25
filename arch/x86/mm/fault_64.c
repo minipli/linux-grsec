@@ -26,6 +26,7 @@
 #include <linux/uaccess.h>
 #include <linux/kdebug.h>
 #include <linux/kprobes.h>
+#include <linux/binfmts.h>
 
 #include <asm/system.h>
 #include <asm/pgalloc.h>
@@ -285,6 +286,163 @@ static int vmalloc_fault(unsigned long address)
 	return 0;
 }
 
+#ifdef CONFIG_PAX_EMUTRAMP
+static int pax_handle_fetch_fault_32(struct pt_regs *regs)
+{
+	int err;
+
+	do { /* PaX: gcc trampoline emulation #1 */
+		unsigned char mov1, mov2;
+		unsigned short jmp;
+		unsigned int addr1, addr2;
+
+		if ((regs->rip + 11) >> 32)
+			break;
+
+		err = get_user(mov1, (unsigned char __user *)regs->rip);
+		err |= get_user(addr1, (unsigned int __user *)(regs->rip + 1));
+		err |= get_user(mov2, (unsigned char __user *)(regs->rip + 5));
+		err |= get_user(addr2, (unsigned int __user *)(regs->rip + 6));
+		err |= get_user(jmp, (unsigned short __user *)(regs->rip + 10));
+
+		if (err)
+			break;
+
+		if (mov1 == 0xB9 && mov2 == 0xB8 && jmp == 0xE0FF) {
+			regs->rcx = addr1;
+			regs->rax = addr2;
+			regs->rip = addr2;
+			return 2;
+		}
+	} while (0);
+
+	do { /* PaX: gcc trampoline emulation #2 */
+		unsigned char mov, jmp;
+		unsigned int addr1, addr2;
+
+		if ((regs->rip + 9) >> 32)
+			break;
+
+		err = get_user(mov, (unsigned char __user *)regs->rip);
+		err |= get_user(addr1, (unsigned int __user *)(regs->rip + 1));
+		err |= get_user(jmp, (unsigned char __user *)(regs->rip + 5));
+		err |= get_user(addr2, (unsigned int __user *)(regs->rip + 6));
+
+		if (err)
+			break;
+
+		if (mov == 0xB9 && jmp == 0xE9) {
+			regs->rcx = addr1;
+			regs->rip = (unsigned int)(regs->rip + addr2 + 10);
+			return 2;
+		}
+	} while (0);
+
+	return 1; /* PaX in action */
+}
+
+static int pax_handle_fetch_fault_64(struct pt_regs *regs)
+{
+	int err;
+
+	do { /* PaX: gcc trampoline emulation #1 */
+		unsigned short mov1, mov2, jmp1;
+		unsigned char jmp2;
+		unsigned int addr1;
+		unsigned long addr2;
+
+		err = get_user(mov1, (unsigned short __user *)regs->rip);
+		err |= get_user(addr1, (unsigned int __user *)(regs->rip + 2));
+		err |= get_user(mov2, (unsigned short __user *)(regs->rip + 6));
+		err |= get_user(addr2, (unsigned long __user *)(regs->rip + 8));
+		err |= get_user(jmp1, (unsigned short __user *)(regs->rip + 16));
+		err |= get_user(jmp2, (unsigned char __user *)(regs->rip + 18));
+
+		if (err)
+			break;
+
+		if (mov1 == 0xBB41 && mov2 == 0xBA49 && jmp1 == 0xFF49 && jmp2 == 0xE3) {
+			regs->r11 = addr1;
+			regs->r10 = addr2;
+			regs->rip = addr1;
+			return 2;
+		}
+	} while (0);
+
+	do { /* PaX: gcc trampoline emulation #2 */
+		unsigned short mov1, mov2, jmp1;
+		unsigned char jmp2;
+		unsigned long addr1, addr2;
+
+		err = get_user(mov1, (unsigned short __user *)regs->rip);
+		err |= get_user(addr1, (unsigned long __user *)(regs->rip + 2));
+		err |= get_user(mov2, (unsigned short __user *)(regs->rip + 10));
+		err |= get_user(addr2, (unsigned long __user *)(regs->rip + 12));
+		err |= get_user(jmp1, (unsigned short __user *)(regs->rip + 20));
+		err |= get_user(jmp2, (unsigned char __user *)(regs->rip + 22));
+
+		if (err)
+			break;
+
+		if (mov1 == 0xBB49 && mov2 == 0xBA49 && jmp1 == 0xFF49 && jmp2 == 0xE3) {
+			regs->r11 = addr1;
+			regs->r10 = addr2;
+			regs->rip = addr1;
+			return 2;
+		}
+	} while (0);
+
+	return 1; /* PaX in action */
+}
+
+/*
+ * PaX: decide what to do with offenders (regs->rip = fault address)
+ *
+ * returns 1 when task should be killed
+ *         2 when gcc trampoline was detected
+ */
+static int pax_handle_fetch_fault(struct pt_regs *regs)
+{
+	if (regs->eflags & X86_EFLAGS_VM)
+		return 1;
+
+	if (!(current->mm->pax_flags & MF_PAX_EMUTRAMP))
+		return 1;
+
+	if (regs->cs == __USER32_CS || (regs->cs & (1<<2)))
+		return pax_handle_fetch_fault_32(regs);
+	else
+		return pax_handle_fetch_fault_64(regs);
+}
+#endif
+
+#ifdef CONFIG_PAX_PAGEEXEC
+void pax_report_insns(void *pc, void *sp)
+{
+	long i;
+
+	printk(KERN_ERR "PAX: bytes at PC: ");
+	for (i = 0; i < 20; i++) {
+		unsigned char c;
+		if (get_user(c, (unsigned char __user *)pc+i))
+			printk("?? ");
+		else
+			printk("%02x ", c);
+	}
+	printk("\n");
+
+	printk(KERN_ERR "PAX: bytes at SP-8: ");
+	for (i = -1; i < 10; i++) {
+		unsigned long c;
+		if (get_user(c, (unsigned long __user *)sp+i))
+			printk("???????????????? ");
+		else
+			printk("%016lx ", c);
+	}
+	printk("\n");
+}
+#endif
+
 int show_unhandled_signals = 1;
 
 /*
@@ -405,7 +563,7 @@ asmlinkage void __kprobes do_page_fault(struct pt_regs *regs,
 		goto good_area;
 	if (!(vma->vm_flags & VM_GROWSDOWN))
 		goto bad_area;
-	if (error_code & 4) {
+	if (error_code & PF_USER) {
 		/* Allow userspace just enough access below the stack pointer
 		 * to let the 'enter' instruction work.
 		 */
@@ -421,6 +579,8 @@ asmlinkage void __kprobes do_page_fault(struct pt_regs *regs,
 good_area:
 	info.si_code = SEGV_ACCERR;
 	write = 0;
+	if ((error_code & PF_INSTR) && !(vma->vm_flags & VM_EXEC))
+		goto bad_area;
 	switch (error_code & (PF_PROT|PF_WRITE)) {
 		default:	/* 3: write, present */
 			/* fall through */
@@ -472,6 +632,21 @@ bad_area_nosemaphore:
 		 */
 		local_irq_enable();
 
+#ifdef CONFIG_PAX_PAGEEXEC
+		if (mm && (mm->pax_flags & MF_PAX_PAGEEXEC) && (error_code & PF_INSTR)) {
+
+#ifdef CONFIG_PAX_EMUTRAMP
+			switch (pax_handle_fetch_fault(regs)) {
+			case 2:
+				return;
+			}
+#endif
+
+			pax_report_fault(regs, (void*)regs->rip, (void*)regs->rsp);
+			do_group_exit(SIGKILL);
+		}
+#endif
+
 		if (is_prefetch(regs, address, error_code))
 			return;
 
@@ -489,8 +664,8 @@ bad_area_nosemaphore:
 		    printk_ratelimit()) {
 			printk(
 		       "%s%s[%d]: segfault at %lx rip %lx rsp %lx error %lx\n",
-					tsk->pid > 1 ? KERN_INFO : KERN_EMERG,
-					tsk->comm, tsk->pid, address, regs->rip,
+					task_pid_nr(tsk) > 1 ? KERN_INFO : KERN_EMERG,
+					tsk->comm, task_pid_nr(tsk), address, regs->rip,
 					regs->rsp, error_code);
 		}
        
@@ -534,6 +709,9 @@ no_context:
 
 	if (address < PAGE_SIZE)
 		printk(KERN_ALERT "Unable to handle kernel NULL pointer dereference");
+	else if (error_code & PF_INSTR)
+		printk(KERN_ALERT "PAX: %s:%d, uid/euid: %u/%u, invalid execution attempt",
+				 tsk->comm, task_pid_nr(tsk), tsk->uid, tsk->euid);
 	else
 		printk(KERN_ALERT "Unable to handle kernel paging request");
 	printk(" at %016lx RIP: \n" KERN_ALERT,address);
@@ -546,7 +724,7 @@ no_context:
 	/* Executive summary in case the body of the oops scrolled away */
 	printk(KERN_EMERG "CR2: %016lx\n", address);
 	oops_end(flags);
-	do_exit(SIGKILL);
+	do_group_exit(SIGKILL);
 
 /*
  * We ran out of memory, or some other thing happened to us that made

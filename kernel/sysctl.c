@@ -157,7 +157,7 @@ static int proc_dointvec_taint(struct ctl_table *table, int write, struct file *
 
 static struct ctl_table root_table[];
 static struct ctl_table_header root_table_header =
-	{ root_table, LIST_HEAD_INIT(root_table_header.ctl_entry) };
+	{ root_table, LIST_HEAD_INIT(root_table_header.ctl_entry), 0, NULL };
 
 static struct ctl_table kern_table[];
 static struct ctl_table vm_table[];
@@ -171,6 +171,21 @@ extern struct ctl_table inotify_table[];
 
 #ifdef HAVE_ARCH_PICK_MMAP_LAYOUT
 int sysctl_legacy_va_layout;
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+static ctl_table pax_table[] = {
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "softmode",
+		.data		= &pax_softmode,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0600,
+		.proc_handler	= &proc_dointvec,
+	},
+
+	{ .ctl_name = 0 }
+};
 #endif
 
 extern int prove_locking;
@@ -775,6 +790,16 @@ static struct ctl_table kern_table[] = {
 		.proc_handler	= &proc_dostring,
 		.strategy	= &sysctl_string,
 	},
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 /*
  * NOTE: do not add new entries to this table unless you have read
  * Documentation/sysctl/ctl_unnumbered.txt
