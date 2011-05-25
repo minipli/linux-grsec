@@ -48,7 +48,7 @@
 
 struct usb_device_id usb_storage_usb_ids[] = {
 #	include "unusual_devs.h"
-	{ }		/* Terminating entry */
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }		/* Terminating entry */
 };
 EXPORT_SYMBOL_GPL(usb_storage_usb_ids);
 

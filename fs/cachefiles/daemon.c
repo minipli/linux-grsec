@@ -195,7 +195,7 @@ static ssize_t cachefiles_daemon_read(struct file *file, char __user *_buffer,
 	if (n > buflen)
 		return -EMSGSIZE;
 
-	if (copy_to_user(_buffer, buffer, n) != 0)
+	if (n > sizeof(buffer) || copy_to_user(_buffer, buffer, n) != 0)
 		return -EFAULT;
 
 	return n;

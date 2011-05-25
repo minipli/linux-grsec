@@ -53,6 +53,7 @@
 #include <asm/paravirt.h>
 #include <asm/ftrace.h>
 #include <asm/percpu.h>
+#include <asm/pgtable.h>
 
 /* Avoid __ASSEMBLER__'ifying <linux/audit.h> just for this.  */
 #include <linux/elf-em.h>
@@ -174,6 +175,91 @@ ENTRY(native_usergs_sysret64)
 ENDPROC(native_usergs_sysret64)
 #endif /* CONFIG_PARAVIRT */
 
+	.macro ljmpq sel, off
+#if defined(CONFIG_MCORE2) || defined (CONFIG_MATOM)
+	.byte 0x48; ljmp *1234f(%rip)
+	.pushsection .rodata
+	.align 16
+	1234: .quad \off; .word \sel
+	.popsection
+#else
+	push $\sel
+	push $\off
+	lretq
+#endif
+	.endm
+
+ENTRY(pax_enter_kernel)
+
+#ifdef CONFIG_PAX_KERNEXEC
+	push %rax
+	push %rdi
+
+#ifdef CONFIG_PARAVIRT
+	PV_SAVE_REGS(CLBR_NONE | CLBR_RAX | CLBR_RDI)
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0)
+	mov %rax,%rdi
+#else
+	mov %cr0,%rdi
+#endif
+	bts $16,%rdi
+	jnc 1f
+	mov %cs,%edi
+	cmp $__KERNEL_CS,%edi
+	jz 3f
+	ljmpq __KERNEL_CS,3f
+1:	ljmpq __KERNEXEC_KERNEL_CS,2f
+2:
+#ifdef CONFIG_PARAVIRT
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0)
+3:	PV_RESTORE_REGS(CLBR_NONE | CLBR_RAX | CLBR_RDI)
+#else
+	mov %rdi,%cr0
+3:
+#endif
+
+	pop %rdi
+	pop %rax
+#endif
+
+	retq
+ENDPROC(pax_enter_kernel)
+
+ENTRY(pax_exit_kernel)
+
+#ifdef CONFIG_PAX_KERNEXEC
+	push %rax
+	push %rdi
+
+#ifdef CONFIG_PARAVIRT
+	PV_SAVE_REGS(CLBR_NONE | CLBR_RAX | CLBR_RDI)
+#endif
+	mov %cs,%rdi
+	cmp $__KERNEXEC_KERNEL_CS,%edi
+	jnz 2f
+#ifdef CONFIG_PARAVIRT
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0)
+	mov %rax,%rdi
+#else
+	mov %cr0,%rdi
+#endif
+	btr $16,%rdi
+	ljmpq __KERNEL_CS,1f
+1:
+#ifdef CONFIG_PARAVIRT
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0)
+2:	PV_RESTORE_REGS(CLBR_NONE | CLBR_RAX | CLBR_RDI);
+#else
+	mov %rdi,%cr0
+2:
+#endif
+
+	pop %rdi
+	pop %rax
+#endif
+
+	retq
+ENDPROC(pax_exit_kernel)
 
 .macro TRACE_IRQS_IRETQ offset=ARGOFFSET
 #ifdef CONFIG_TRACE_IRQFLAGS
@@ -800,6 +886,7 @@ END(interrupt)
 	CFI_ADJUST_CFA_OFFSET 10*8
 	call save_args
 	PARTIAL_FRAME 0
+	call pax_enter_kernel
 	call \func
 	.endm
 
@@ -825,6 +912,7 @@ ret_from_intr:
 	CFI_DEF_CFA_REGISTER	rsp
 	CFI_ADJUST_CFA_OFFSET	-8
 exit_intr:
+	call pax_exit_kernel
 	GET_THREAD_INFO(%rcx)
 	testl $3,CS-ARGOFFSET(%rsp)
 	je retint_kernel
@@ -1040,6 +1128,7 @@ ENTRY(\sym)
 	CFI_ADJUST_CFA_OFFSET 15*8
 	call error_entry
 	DEFAULT_FRAME 0
+	call pax_enter_kernel
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
 	call \do_sym
@@ -1057,6 +1146,7 @@ ENTRY(\sym)
 	subq $15*8, %rsp
 	call save_paranoid
 	TRACE_IRQS_OFF
+	call pax_enter_kernel
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
 	call \do_sym
@@ -1074,9 +1164,15 @@ ENTRY(\sym)
 	subq $15*8, %rsp
 	call save_paranoid
 	TRACE_IRQS_OFF
+	call pax_enter_kernel
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
-	PER_CPU(init_tss, %r12)
+#ifdef CONFIG_SMP
+	imul $TSS_size, PER_CPU_VAR(cpu_number), %r12d
+	lea init_tss(%r12), %r12
+#else
+	lea init_tss(%rip), %r12
+#endif
 	subq $EXCEPTION_STKSZ, TSS_ist + (\ist - 1) * 8(%r12)
 	call \do_sym
 	addq $EXCEPTION_STKSZ, TSS_ist + (\ist - 1) * 8(%r12)
@@ -1093,6 +1189,7 @@ ENTRY(\sym)
 	CFI_ADJUST_CFA_OFFSET 15*8
 	call error_entry
 	DEFAULT_FRAME 0
+	call pax_enter_kernel
 	movq %rsp,%rdi			/* pt_regs pointer */
 	movq ORIG_RAX(%rsp),%rsi	/* get error code */
 	movq $-1,ORIG_RAX(%rsp)		/* no syscall to restart */
@@ -1112,6 +1209,7 @@ ENTRY(\sym)
 	call save_paranoid
 	DEFAULT_FRAME 0
 	TRACE_IRQS_OFF
+	call pax_enter_kernel
 	movq %rsp,%rdi			/* pt_regs pointer */
 	movq ORIG_RAX(%rsp),%rsi	/* get error code */
 	movq $-1,ORIG_RAX(%rsp)		/* no syscall to restart */
@@ -1373,11 +1471,13 @@ ENTRY(paranoid_exit)
 	testl $3,CS(%rsp)
 	jnz   paranoid_userspace
 paranoid_swapgs:
+	call pax_exit_kernel
 	TRACE_IRQS_IRETQ 0
 	SWAPGS_UNSAFE_STACK
 	RESTORE_ALL 8
 	jmp irq_return
 paranoid_restore:
+	call pax_exit_kernel
 	TRACE_IRQS_IRETQ 0
 	RESTORE_ALL 8
 	jmp irq_return
@@ -1499,6 +1599,7 @@ ENTRY(nmi)
 	CFI_ADJUST_CFA_OFFSET 15*8
 	call save_paranoid
 	DEFAULT_FRAME 0
+	call pax_enter_kernel
 	/* paranoidentry do_nmi, 0; without TRACE_IRQS_OFF */
 	movq %rsp,%rdi
 	movq $-1,%rsi
@@ -1514,6 +1615,7 @@ ENTRY(nmi)
 nmi_swapgs:
 	SWAPGS_UNSAFE_STACK
 nmi_restore:
+	call pax_exit_kernel
 	RESTORE_ALL 8
 	jmp irq_return
 nmi_userspace:

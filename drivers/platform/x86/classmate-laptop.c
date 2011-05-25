@@ -455,7 +455,7 @@ static int cmpc_bl_update_status(struct backlight_device *bd)
 		return -1;
 }
 
-static struct backlight_ops cmpc_bl_ops = {
+static const struct backlight_ops cmpc_bl_ops = {
 	.get_brightness = cmpc_bl_get_brightness,
 	.update_status = cmpc_bl_update_status
 };
