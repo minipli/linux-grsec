@@ -366,9 +366,9 @@ static int setup_frame(int sig, struct k_sigaction *ka,
 	}
 
 	if (current->binfmt->hasvdso)
-		restorer = VDSO32_SYMBOL(current->mm->context.vdso, sigreturn);
+		restorer = (void __user *)VDSO32_SYMBOL(current->mm->context.vdso, sigreturn);
 	else
-		restorer = &frame->retcode;
+		restorer = (void __user *)&frame->retcode;
 	if (ka->sa.sa_flags & SA_RESTORER)
 		restorer = ka->sa.sa_restorer;
 
@@ -463,7 +463,7 @@ static int setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 		goto give_sigsegv;
 
 	/* Set up to return from userspace.  */
-	restorer = VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
+	restorer = (void __user *)VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
 	if (ka->sa.sa_flags & SA_RESTORER)
 		restorer = ka->sa.sa_restorer;
 	err |= __put_user(restorer, &frame->pretcode);
@@ -593,7 +593,7 @@ static void do_signal(struct pt_regs *regs)
  	 * before reaching here, so testing against kernel
  	 * CS suffices.
 	 */
-	if (!user_mode(regs))
+	if (!user_mode_novm(regs))
 		return;
 
 	if (test_thread_flag(TIF_RESTORE_SIGMASK))
