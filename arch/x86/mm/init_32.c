@@ -219,8 +219,14 @@ static inline int is_kernel_text(unsigned long start, unsigned long end)
 {
 	unsigned long etext;
 
-#if defined(CONFIG_MODULES) && defined(CONFIG_PAX_KERNEXEC)
+#ifdef CONFIG_PAX_KERNEXEC
+#ifdef CONFIG_VMI
+	etext = ktva_ktla(0xffffffff);
+#elif defined(CONFIG_MODULES)
 	etext = ktva_ktla((unsigned long)&MODULES_EXEC_END);
+#else
+	etext = (unsigned long)&_etext;
+#endif
 #else
 	etext = (unsigned long)&_etext;
 #endif

@@ -44,12 +44,12 @@ typedef u32 __attribute__((regparm(1))) (VROMFUNC)(void);
 typedef u64 __attribute__((regparm(2))) (VROMLONGFUNC)(int);
 
 #define call_vrom_func(rom,func) \
-   (((VROMFUNC *)(rom->func))())
+   (((VROMFUNC *)(ktva_ktla(rom.func)))())
 
 #define call_vrom_long_func(rom,func,arg) \
-   (((VROMLONGFUNC *)(rom->func)) (arg))
+   (((VROMLONGFUNC *)(ktva_ktla(rom.func))) (arg))
 
-static struct vrom_header *vmi_rom;
+static struct vrom_header vmi_rom __attribute((__section__(".vmi.rom"), __aligned__(PAGE_SIZE)));
 static int disable_pge;
 static int disable_pse;
 static int disable_sep;
@@ -94,7 +94,13 @@ struct vmi_timer_ops vmi_timer_ops;
 static inline void patch_offset(void *insnbuf,
 				unsigned long ip, unsigned long dest)
 {
-        *(unsigned long *)(insnbuf+1) = dest-ip-5;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	if (dest < (unsigned long)&vmi_rom)
+		printk("PAX: vmi patch trouble ahead: %08lx->%08lx\n", ip, dest);
+#endif
+
+	*(unsigned long *)(insnbuf+1) = ktva_ktla(dest)-ip-5;
 }
 
 static unsigned patch_internal(int call, unsigned len, void *insnbuf,
@@ -523,6 +529,10 @@ static inline int __init check_vmi_rom(struct vrom_header *rom)
 		return 0;
 	if (rom->vrom_signature != VMI_SIGNATURE)
 		return 0;
+	if (rom->rom_length * 512 > sizeof(*rom)) {
+		printk(KERN_WARNING "PAX: VMI: ROM size too big: %x\n", rom->rom_length * 512);
+		return 0;
+	}
 	if (rom->api_version_maj != VMI_API_REV_MAJOR ||
 	    rom->api_version_min+1 < VMI_API_REV_MINOR+1) {
 		printk(KERN_WARNING "VMI: Found mismatched rom version %d.%d\n",
@@ -587,7 +597,7 @@ static inline int __init probe_vmi_rom(void)
 		struct vrom_header *romstart;
 		romstart = (struct vrom_header *)isa_bus_to_virt(base);
 		if (check_vmi_rom(romstart)) {
-			vmi_rom = romstart;
+			vmi_rom = *romstart;
 			return 1;
 		}
 	}
@@ -613,8 +623,14 @@ static void *vmi_get_function(int vmicall)
 	const struct vmi_relocation_info *rel = (struct vmi_relocation_info *)&reloc;
 	reloc = call_vrom_long_func(vmi_rom, get_reloc,	vmicall);
 	BUG_ON(rel->type == VMI_RELOCATION_JUMP_REL);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	if (rel->eip < (unsigned char *)&vmi_rom)
+		printk("PAX: vmi get function trouble ahead: %d->%p\n", vmicall, rel->eip);
+#endif
+
 	if (rel->type == VMI_RELOCATION_CALL_REL)
-		return (void *)rel->eip;
+		return (void *)ktva_ktla((unsigned long)rel->eip);
 	else
 		return NULL;
 }
@@ -628,6 +644,9 @@ static void *vmi_get_function(int vmicall)
 do {								\
 	reloc = call_vrom_long_func(vmi_rom, get_reloc,		\
 				    VMI_CALL_##vmicall);	\
+	if (rel->eip < (unsigned char *)&vmi_rom)		\
+		printk("PAX: vmi para fill trouble ahead: %d->%p\n", VMI_CALL_##vmicall, rel->eip);\
+	rel->eip = (unsigned char *)ktva_ktla((unsigned long)rel->eip);\
 	if (rel->type == VMI_RELOCATION_CALL_REL) 		\
 		opname = (void *)rel->eip;			\
 	else if (rel->type == VMI_RELOCATION_NOP) 		\
@@ -650,6 +669,9 @@ do {								\
 	reloc = call_vrom_long_func(vmi_rom, get_reloc,		\
 				    VMI_CALL_##vmicall);	\
 	BUG_ON(rel->type == VMI_RELOCATION_JUMP_REL);		\
+	if (rel->eip < (unsigned char *)&vmi_rom)		\
+		printk("PAX: vmi para wrap trouble ahead: %d->%p\n", VMI_CALL_##vmicall, rel->eip);\
+	rel->eip = (unsigned char *)ktva_ktla((unsigned long)rel->eip);\
 	if (rel->type == VMI_RELOCATION_CALL_REL) {		\
 		opname = wrapper;				\
 		vmi_ops.cache = (void *)rel->eip;		\
@@ -663,7 +685,7 @@ static inline int __init activate_vmi(void)
 {
 	short kernel_cs;
 	u64 reloc;
-	const struct vmi_relocation_info *rel = (struct vmi_relocation_info *)&reloc;
+	struct vmi_relocation_info *rel = (struct vmi_relocation_info *)&reloc;
 
 #ifdef CONFIG_PAX_KERNEXEC
 	unsigned long cr0;
@@ -840,7 +862,7 @@ static inline int __init activate_vmi(void)
 	 */
 	reloc = call_vrom_long_func(vmi_rom, get_reloc, VMI_CALL_GetCycleFrequency);
 	if (!disable_vmi_timer && rel->type != VMI_RELOCATION_NONE) {
-		vmi_timer_ops.get_cycle_frequency = (void *)rel->eip;
+		vmi_timer_ops.get_cycle_frequency = (void *)ktva_ktla((unsigned long)rel->eip);
 		vmi_timer_ops.get_cycle_counter =
 			vmi_get_function(VMI_CALL_GetCycleCounter);
 		vmi_timer_ops.get_wallclock =
@@ -890,16 +912,16 @@ static inline int __init activate_vmi(void)
 
 void __init vmi_init(void)
 {
-	if (!vmi_rom)
+	if (!vmi_rom.rom_signature)
 		probe_vmi_rom();
 	else
-		check_vmi_rom(vmi_rom);
+		check_vmi_rom(&vmi_rom);
 
 	/* In case probing for or validating the ROM failed, basil */
-	if (!vmi_rom)
+	if (!vmi_rom.rom_signature)
 		return;
 
-	reserve_top_address(-vmi_rom->virtual_top);
+	reserve_top_address(-vmi_rom.virtual_top);
 
 #ifdef CONFIG_X86_IO_APIC
 	/* This is virtual hardware; timer routing is wired correctly */
@@ -911,7 +933,7 @@ void __init vmi_activate(void)
 {
 	unsigned long flags;
 
-	if (!vmi_rom)
+	if (!vmi_rom.rom_signature)
 		return;
 
 	local_irq_save(flags);

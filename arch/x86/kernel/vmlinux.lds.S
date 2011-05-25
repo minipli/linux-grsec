@@ -59,6 +59,7 @@ jiffies = jiffies_64;
 
 PHDRS {
 	text PT_LOAD FLAGS(5);          /* R_E */
+	vmi PT_LOAD FLAGS(5);           /* R_E */
 	rodata PT_LOAD FLAGS(4);        /* R__ */
 	data PT_LOAD FLAGS(6);          /* RW_ */
 #ifdef CONFIG_X86_64
@@ -110,11 +111,16 @@ SECTIONS
 		IRQENTRY_TEXT
 		*(.fixup)
 		*(.gnu.warning)
-		/* End of text section */
-		_etext = .;
 	} :text = 0x9090
 
 	. += __KERNEL_TEXT_OFFSET;
+
+	. = ALIGN(PAGE_SIZE);
+	.vmi.rom : AT(ADDR(.vmi.rom) - LOAD_OFFSET) {
+		*(.vmi.rom)
+		/* End of text section */
+		_etext = . - __KERNEL_TEXT_OFFSET;
+	} :vmi
 
 	. = ALIGN(PAGE_SIZE);
 	NOTES :rodata :note
