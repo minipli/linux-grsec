@@ -333,6 +333,9 @@ int reserve_memtype(u64 start, u64 end, unsigned long req_type,
 					      req_type & _PAGE_CACHE_MASK);
 	}
 
+	if (new_type)
+		*new_type = actual_type;
+
 	is_range_ram = pagerange_is_ram(start, end);
 	if (is_range_ram == 1)
 		return reserve_ram_pages_type(start, end, req_type, new_type);
@@ -346,9 +349,6 @@ int reserve_memtype(u64 start, u64 end, unsigned long req_type,
 	new->start	= start;
 	new->end	= end;
 	new->type	= actual_type;
-
-	if (new_type)
-		*new_type = actual_type;
 
 	spin_lock(&memtype_lock);
 
@@ -474,7 +474,7 @@ pgprot_t phys_mem_access_prot(struct file *file, unsigned long pfn,
 	return vma_prot;
 }
 
-#ifdef CONFIG_STRICT_DEVMEM
+#ifndef CONFIG_STRICT_DEVMEM
 /* This check is done in drivers/char/mem.c in case of STRICT_DEVMEM*/
 static inline int range_is_allowed(unsigned long pfn, unsigned long size)
 {
