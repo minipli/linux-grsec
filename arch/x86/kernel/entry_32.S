@@ -186,7 +186,15 @@
 	/*CFI_REL_OFFSET gs, PT_GS*/
 .endm
 .macro SET_KERNEL_GS reg
+
+#ifdef CONFIG_CC_STACKPROTECTOR
 	movl $(__KERNEL_STACK_CANARY), \reg
+#elif defined(CONFIG_PAX_MEMORY_UDEREF)
+	movl $(__USER_DS), \reg
+#else
+	xorl \reg, \reg
+#endif
+
 	movl \reg, %gs
 .endm
 

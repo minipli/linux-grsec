@@ -122,7 +122,7 @@ execute_on_irq_stack(int overflow, struct irq_desc *desc, int irq)
 		     : "memory", "cc", "ecx");
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
-	__set_fs(curctx->addr_limit, smp_processor_id());
+	__set_fs(curctx->tinfo.addr_limit, smp_processor_id());
 #endif
 
 	return 1;
