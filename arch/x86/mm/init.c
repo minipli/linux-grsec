@@ -453,11 +453,7 @@ void free_initmem(void)
 	struct desc_struct d;
 	int cpu;
 
-#ifdef CONFIG_MODULES
-	limit = ktva_ktla((unsigned long)&MODULES_EXEC_END);
-#else
-	limit = (unsigned long)&_etext;
-#endif
+	limit = paravirt_enabled() ? ktva_ktla(0xffffffff) : (unsigned long)&_etext;
 	limit = (limit - 1UL) >> PAGE_SHIFT;
 
 	memset(__LOAD_PHYSICAL_ADDR + PAGE_OFFSET, POISON_FREE_INITMEM, PAGE_SIZE);

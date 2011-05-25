@@ -531,13 +531,7 @@ void *__kprobes text_poke(void *addr, const void *opcode, size_t len)
 	struct page *pages[2];
 	size_t i;
 
-	if (!core_kernel_text((unsigned long)addr)
-
-#if defined(CONFIG_X86_32) && defined(CONFIG_MODULES) && defined(CONFIG_PAX_KERNEXEC)
-	    && (vaddr < MODULES_EXEC_VADDR || MODULES_EXEC_END < vaddr)
-#endif
-
-	   ) {
+	if (!core_kernel_text((unsigned long)addr)) {
 		pages[0] = vmalloc_to_page(vaddr);
 		pages[1] = vmalloc_to_page(vaddr + PAGE_SIZE);
 	} else {

@@ -47,7 +47,12 @@ typedef u64 __attribute__((regparm(2))) (VROMLONGFUNC)(int);
    (((VROMFUNC *)(ktva_ktla(rom.func)))())
 
 #define call_vrom_long_func(rom,func,arg) \
-   (((VROMLONGFUNC *)(ktva_ktla(rom.func))) (arg))
+({\
+	u64 __reloc = ((VROMLONGFUNC *)(ktva_ktla(rom.func))) (arg);\
+	struct vmi_relocation_info *const __rel = (struct vmi_relocation_info *)&__reloc;\
+	__rel->eip = (unsigned char *)ktva_ktla((unsigned long)__rel->eip);\
+	__reloc;\
+})
 
 static struct vrom_header vmi_rom __attribute((__section__(".vmi.rom"), __aligned__(PAGE_SIZE)));
 static int disable_pge;
@@ -76,10 +81,10 @@ static struct {
 	void (*set_initial_ap_state)(int, int);
 	void (*halt)(void);
   	void (*set_lazy_mode)(int mode);
-} vmi_ops;
+} vmi_ops __read_only;
 
 /* Cached VMI operations */
-struct vmi_timer_ops vmi_timer_ops;
+struct vmi_timer_ops vmi_timer_ops __read_only;
 
 /*
  * VMI patching routines.
@@ -94,13 +99,7 @@ struct vmi_timer_ops vmi_timer_ops;
 static inline void patch_offset(void *insnbuf,
 				unsigned long ip, unsigned long dest)
 {
-
-#ifdef CONFIG_PAX_KERNEXEC
-	if (dest < (unsigned long)&vmi_rom)
-		printk("PAX: vmi patch trouble ahead: %08lx->%08lx\n", ip, dest);
-#endif
-
-	*(unsigned long *)(insnbuf+1) = ktva_ktla(dest)-ip-5;
+	*(unsigned long *)(insnbuf+1) = dest-ip-5;
 }
 
 static unsigned patch_internal(int call, unsigned len, void *insnbuf,
@@ -623,14 +622,8 @@ static void *vmi_get_function(int vmicall)
 	const struct vmi_relocation_info *rel = (struct vmi_relocation_info *)&reloc;
 	reloc = call_vrom_long_func(vmi_rom, get_reloc,	vmicall);
 	BUG_ON(rel->type == VMI_RELOCATION_JUMP_REL);
-
-#ifdef CONFIG_PAX_KERNEXEC
-	if (rel->eip < (unsigned char *)&vmi_rom)
-		printk("PAX: vmi get function trouble ahead: %d->%p\n", vmicall, rel->eip);
-#endif
-
 	if (rel->type == VMI_RELOCATION_CALL_REL)
-		return (void *)ktva_ktla((unsigned long)rel->eip);
+		return (void *)rel->eip;
 	else
 		return NULL;
 }
@@ -644,9 +637,6 @@ static void *vmi_get_function(int vmicall)
 do {								\
 	reloc = call_vrom_long_func(vmi_rom, get_reloc,		\
 				    VMI_CALL_##vmicall);	\
-	if (rel->eip < (unsigned char *)&vmi_rom)		\
-		printk("PAX: vmi para fill trouble ahead: %d->%p\n", VMI_CALL_##vmicall, rel->eip);\
-	rel->eip = (unsigned char *)ktva_ktla((unsigned long)rel->eip);\
 	if (rel->type == VMI_RELOCATION_CALL_REL) 		\
 		opname = (void *)rel->eip;			\
 	else if (rel->type == VMI_RELOCATION_NOP) 		\
@@ -669,9 +659,6 @@ do {								\
 	reloc = call_vrom_long_func(vmi_rom, get_reloc,		\
 				    VMI_CALL_##vmicall);	\
 	BUG_ON(rel->type == VMI_RELOCATION_JUMP_REL);		\
-	if (rel->eip < (unsigned char *)&vmi_rom)		\
-		printk("PAX: vmi para wrap trouble ahead: %d->%p\n", VMI_CALL_##vmicall, rel->eip);\
-	rel->eip = (unsigned char *)ktva_ktla((unsigned long)rel->eip);\
 	if (rel->type == VMI_RELOCATION_CALL_REL) {		\
 		opname = wrapper;				\
 		vmi_ops.cache = (void *)rel->eip;		\
@@ -685,7 +672,7 @@ static inline int __init activate_vmi(void)
 {
 	short kernel_cs;
 	u64 reloc;
-	struct vmi_relocation_info *rel = (struct vmi_relocation_info *)&reloc;
+	const struct vmi_relocation_info *rel = (struct vmi_relocation_info *)&reloc;
 
 #ifdef CONFIG_PAX_KERNEXEC
 	unsigned long cr0;
@@ -862,7 +849,7 @@ static inline int __init activate_vmi(void)
 	 */
 	reloc = call_vrom_long_func(vmi_rom, get_reloc, VMI_CALL_GetCycleFrequency);
 	if (!disable_vmi_timer && rel->type != VMI_RELOCATION_NONE) {
-		vmi_timer_ops.get_cycle_frequency = (void *)ktva_ktla((unsigned long)rel->eip);
+		vmi_timer_ops.get_cycle_frequency = (void *)rel->eip;
 		vmi_timer_ops.get_cycle_counter =
 			vmi_get_function(VMI_CALL_GetCycleCounter);
 		vmi_timer_ops.get_wallclock =
