@@ -116,4 +116,81 @@ extern long vwrite(char *buf, char *addr, unsigned long count);
 extern rwlock_t vmlist_lock;
 extern struct vm_struct *vmlist;
 
+#define vmalloc(x)						\
+({								\
+	void *___retval;					\
+	intoverflow_t ___x = (intoverflow_t)x;			\
+	if (WARN(___x > ULONG_MAX, "vmalloc overflow\n"))	\
+		___retval = NULL;				\
+	else							\
+		___retval = vmalloc((unsigned long)___x);	\
+	___retval;						\
+})
+
+#define __vmalloc(x, y, z)					\
+({								\
+	void *___retval;					\
+	intoverflow_t ___x = (intoverflow_t)x;			\
+	if (WARN(___x > ULONG_MAX, "__vmalloc size overflow\n"))\
+		___retval = NULL;				\
+	else							\
+		___retval = __vmalloc((unsigned long)___x, (y), (z));\
+	___retval;						\
+})
+
+#define vmalloc_user(x)						\
+({								\
+	void *___retval;					\
+	intoverflow_t ___x = (intoverflow_t)x;			\
+	if (WARN(___x > ULONG_MAX, "vmalloc_user size overflow\n"))\
+		___retval = NULL;				\
+	else							\
+		___retval = vmalloc_user((unsigned long)___x);	\
+	___retval;						\
+})
+
+#define vmalloc_exec(x)						\
+({								\
+	void *___retval;					\
+	intoverflow_t ___x = (intoverflow_t)x;			\
+	if (WARN(___x > ULONG_MAX, "vmalloc_exec size overflow\n"))\
+		___retval = NULL;				\
+	else							\
+		___retval = vmalloc_exec((unsigned long)___x);	\
+	___retval;						\
+})
+
+#define vmalloc_node(x, y)					\
+({								\
+	void *___retval;					\
+	intoverflow_t ___x = (intoverflow_t)x;			\
+	if (WARN(___x > ULONG_MAX, "vmalloc_node size overflow\n"))\
+		___retval = NULL;				\
+	else							\
+		___retval = vmalloc_node((unsigned long)___x, (y));\
+	___retval;						\
+})
+
+#define vmalloc_32(x)						\
+({								\
+	void *___retval;					\
+	intoverflow_t ___x = (intoverflow_t)x;			\
+	if (WARN(___x > ULONG_MAX, "vmalloc_32 size overflow\n"))\
+		___retval = NULL;				\
+	else							\
+		___retval = vmalloc_32((unsigned long)___x);	\
+	___retval;						\
+})
+
+#define vmalloc_32_user(x)					\
+({								\
+	void *___retval;					\
+	intoverflow_t ___x = (intoverflow_t)x;			\
+	if (WARN(___x > ULONG_MAX, "vmalloc_32_user size overflow\n"))\
+		___retval = NULL;				\
+	else							\
+		___retval = vmalloc_32_user((unsigned long)___x);\
+	___retval;						\
+})
+
 #endif /* _LINUX_VMALLOC_H */
