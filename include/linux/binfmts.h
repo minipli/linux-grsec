@@ -101,5 +101,8 @@ extern int do_coredump(long signr, int exit_code, struct pt_regs * regs);
 extern int set_binfmt(struct linux_binfmt *new);
 extern void free_bprm(struct linux_binprm *);
 
+void pax_report_fault(struct pt_regs *regs, void *pc, void *sp);
+void pax_report_insns(void *pc, void *sp);
+
 #endif /* __KERNEL__ */
 #endif /* _LINUX_BINFMTS_H */

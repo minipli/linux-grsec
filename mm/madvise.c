@@ -43,6 +43,10 @@ static long madvise_behavior(struct vm_area_struct * vma,
 	pgoff_t pgoff;
 	int new_flags = vma->vm_flags;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	struct vm_area_struct *vma_m;
+#endif
+
 	switch (behavior) {
 	case MADV_NORMAL:
 		new_flags = new_flags & ~VM_RAND_READ & ~VM_SEQ_READ;
@@ -92,6 +96,13 @@ success:
 	/*
 	 * vm_flags is protected by the mmap_sem held in write mode.
 	 */
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	vma_m = pax_find_mirror_vma(vma);
+	if (vma_m)
+		vma_m->vm_flags = new_flags & ~(VM_WRITE | VM_MAYWRITE | VM_ACCOUNT);
+#endif
+
 	vma->vm_flags = new_flags;
 
 out:
@@ -236,6 +247,17 @@ madvise_vma(struct vm_area_struct *vma, struct vm_area_struct **prev,
 
 	case MADV_DONTNEED:
 		error = madvise_dontneed(vma, prev, start, end);
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if (!error) {
+			struct vm_area_struct *vma_m, *prev_m;
+
+			vma_m = pax_find_mirror_vma(vma);
+			if (vma_m)
+				error = madvise_dontneed(vma_m, &prev_m, start + SEGMEXEC_TASK_SIZE, end + SEGMEXEC_TASK_SIZE);
+		}
+#endif
+
 		break;
 
 	default:
@@ -306,6 +328,16 @@ asmlinkage long sys_madvise(unsigned long start, size_t len_in, int behavior)
 
 	end = start + len;
 	if (end < start)
+		goto out;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (current->mm->pax_flags & MF_PAX_SEGMEXEC) {
+		if (end > SEGMEXEC_TASK_SIZE)
+			goto out;
+	} else
+#endif
+
+	if (end > TASK_SIZE)
 		goto out;
 
 	error = 0;

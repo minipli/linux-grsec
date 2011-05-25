@@ -3,9 +3,10 @@
  */
 #include <linux/module.h>
 #include <asm/smp.h>
+#include <asm/sections.h>
 
 #ifdef CONFIG_X86_32
-DEFINE_PER_CPU(unsigned long, this_cpu_off);
+DEFINE_PER_CPU(unsigned long, this_cpu_off) = (unsigned long)__per_cpu_start;
 EXPORT_PER_CPU_SYMBOL(this_cpu_off);
 
 /* Initialize the CPU's GDT.  This is either the boot CPU doing itself
@@ -13,15 +14,32 @@ EXPORT_PER_CPU_SYMBOL(this_cpu_off);
    secondary which will soon come up. */
 __cpuinit void init_gdt(int cpu)
 {
-	struct desc_struct *gdt = get_cpu_gdt_table(cpu);
+	struct desc_struct d, *gdt = get_cpu_gdt_table(cpu);
+	unsigned long base, limit;
+  
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
 
-	pack_descriptor(&gdt[GDT_ENTRY_PERCPU],
-			__per_cpu_offset[cpu], 0xFFFFF,
-			0x2 | DESCTYPE_S, 0x8);
+	pax_open_kernel(cr0);
+#endif
 
-	gdt[GDT_ENTRY_PERCPU].s = 1;
+	if (cpu)
+		memcpy(gdt, get_cpu_gdt_table(0), GDT_SIZE);
 
-	per_cpu(this_cpu_off, cpu) = __per_cpu_offset[cpu];
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
+	base = __per_cpu_offset[cpu] + (unsigned long)__per_cpu_start;
+	limit = PERCPU_ENOUGH_ROOM - 1;
+	if (limit < 64*1024)
+		pack_descriptor(&d, base, limit, 0x80 | DESCTYPE_S | 0x3, 0x4);
+	else
+		pack_descriptor(&d, base, limit >> PAGE_SHIFT, 0x80 | DESCTYPE_S | 0x3, 0xC);
+
+	write_gdt_entry(gdt, GDT_ENTRY_PERCPU, &d, DESCTYPE_S);
+
+	per_cpu(this_cpu_off, cpu) = base;
 	per_cpu(cpu_number, cpu) = cpu;
 }
 #endif
