@@ -1325,7 +1325,7 @@ void pax_report_insns(void *pc, void *sp)
 	}
 	printk("\n");
 
-	printk(KERN_ERR "PAX: bytes at SP-%u: ", sizeof(long));
+	printk(KERN_ERR "PAX: bytes at SP-%lu: ", (unsigned long)sizeof(long));
 	for (i = -1; i < 80 / sizeof(long); i++) {
 		unsigned long c;
 		if (get_user(c, (unsigned long __user *)sp+i))
@@ -1335,7 +1335,7 @@ void pax_report_insns(void *pc, void *sp)
 			printk(KERN_CONT "???????????????? ");
 #endif
 		else
-			printk(KERN_CONT "%0*lx ", 2 * sizeof(long), c);
+			printk(KERN_CONT "%0*lx ", 2 * (int)sizeof(long), c);
 	}
 	printk("\n");
 }
