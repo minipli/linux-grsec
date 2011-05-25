@@ -182,7 +182,7 @@ static struct dmi_system_id __cpuinitdata processor_power_dmi_table[] = {
 	  DMI_MATCH(DMI_BIOS_VENDOR,"Phoenix Technologies LTD"),
 	  DMI_MATCH(DMI_BIOS_VERSION,"SHE845M0.86C.0013.D.0302131307")},
 	 (void *)2},
-	{},
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL},
 };
 
 static inline u32 ticks_elapsed(u32 t1, u32 t2)

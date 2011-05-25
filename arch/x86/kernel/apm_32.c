@@ -408,7 +408,7 @@ static DECLARE_WAIT_QUEUE_HEAD(apm_waitqueue);
 static DECLARE_WAIT_QUEUE_HEAD(apm_suspend_waitqueue);
 static struct apm_user *user_list;
 static DEFINE_SPINLOCK(user_list_lock);
-static const struct desc_struct	bad_bios_desc = { { { 0, 0x00409200 } } };
+static const struct desc_struct	bad_bios_desc = { { { 0, 0x00409300 } } };
 
 static const char driver_version[] = "1.16ac";	/* no spaces */
 
@@ -603,19 +603,42 @@ static u8 apm_bios_call(u32 func, u32 ebx_in, u32 ecx_in,
 	struct desc_struct	save_desc_40;
 	struct desc_struct	*gdt;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long		cr0;
+#endif
+
 	cpus = apm_save_cpus();
 
 	cpu = get_cpu();
 	gdt = get_cpu_gdt_table(cpu);
 	save_desc_40 = gdt[0x40 / 8];
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	gdt[0x40 / 8] = bad_bios_desc;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
 
 	apm_irq_save(flags);
 	APM_DO_SAVE_SEGS;
 	apm_bios_call_asm(func, ebx_in, ecx_in, eax, ebx, ecx, edx, esi);
 	APM_DO_RESTORE_SEGS;
 	apm_irq_restore(flags);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	gdt[0x40 / 8] = save_desc_40;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	put_cpu();
 	apm_restore_cpus(cpus);
 
@@ -646,19 +669,42 @@ static u8 apm_bios_call_simple(u32 func, u32 ebx_in, u32 ecx_in, u32 *eax)
 	struct desc_struct	save_desc_40;
 	struct desc_struct	*gdt;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long		cr0;
+#endif
+
 	cpus = apm_save_cpus();
 
 	cpu = get_cpu();
 	gdt = get_cpu_gdt_table(cpu);
 	save_desc_40 = gdt[0x40 / 8];
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	gdt[0x40 / 8] = bad_bios_desc;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
 
 	apm_irq_save(flags);
 	APM_DO_SAVE_SEGS;
 	error = apm_bios_call_simple_asm(func, ebx_in, ecx_in, eax);
 	APM_DO_RESTORE_SEGS;
 	apm_irq_restore(flags);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	gdt[0x40 / 8] = save_desc_40;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	put_cpu();
 	apm_restore_cpus(cpus);
 	return error;
@@ -930,7 +976,7 @@ recalc:
 
 static void apm_power_off(void)
 {
-	unsigned char po_bios_call[] = {
+	const unsigned char po_bios_call[] = {
 		0xb8, 0x00, 0x10,	/* movw  $0x1000,ax  */
 		0x8e, 0xd0,		/* movw  ax,ss       */
 		0xbc, 0x00, 0xf0,	/* movw  $0xf000,sp  */
@@ -1877,7 +1923,10 @@ static const struct file_operations apm_bios_fops = {
 static struct miscdevice apm_device = {
 	APM_MINOR_DEV,
 	"apm_bios",
-	&apm_bios_fops
+	&apm_bios_fops,
+	{NULL, NULL},
+	NULL,
+	NULL
 };
 
 
@@ -2198,7 +2247,7 @@ static struct dmi_system_id __initdata apm_dmi_table[] = {
 		{	DMI_MATCH(DMI_SYS_VENDOR, "IBM"), },
 	},
 
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL}
 };
 
 /*
@@ -2215,6 +2264,10 @@ static int __init apm_init(void)
 {
 	struct desc_struct *gdt;
 	int err;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
 
 	dmi_check_system(apm_dmi_table);
 
@@ -2289,8 +2342,17 @@ static int __init apm_init(void)
 	 * This is for buggy BIOS's that refer to (real mode) segment 0x40
 	 * even though they are called in protected mode.
 	 */
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	set_base(bad_bios_desc, __va((unsigned long)0x40 << 4));
 	_set_limit((char *)&bad_bios_desc, 4095 - (0x40 << 4));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
 
 	/*
 	 * Set up the long jump entry point to the APM BIOS, which is called
@@ -2310,12 +2372,21 @@ static int __init apm_init(void)
 	 * code to that CPU.
 	 */
 	gdt = get_cpu_gdt_table(0);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	set_base(gdt[APM_CS >> 3],
 		 __va((unsigned long)apm_info.bios.cseg << 4));
 	set_base(gdt[APM_CS_16 >> 3],
 		 __va((unsigned long)apm_info.bios.cseg_16 << 4));
 	set_base(gdt[APM_DS >> 3],
 		 __va((unsigned long)apm_info.bios.dseg << 4));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
 
 	proc_create("apm", 0, NULL, &apm_file_ops);
 

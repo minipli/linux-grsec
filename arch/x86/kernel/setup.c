@@ -578,6 +578,7 @@ static struct x86_quirks default_x86_quirks __initdata;
 
 struct x86_quirks *x86_quirks __initdata = &default_x86_quirks;
 
+#ifdef CONFIG_X86_RESERVE_LOW_64K
 static int __init dmi_low_memory_corruption(const struct dmi_system_id *d)
 {
 	printk(KERN_NOTICE
@@ -589,6 +590,7 @@ static int __init dmi_low_memory_corruption(const struct dmi_system_id *d)
 
 	return 0;
 }
+#endif
 
 /* List of systems that have known low memory corruption BIOS problems */
 static struct dmi_system_id __initdata bad_bios_dmi_table[] = {
@@ -685,8 +687,8 @@ void __init setup_arch(char **cmdline_p)
 
 	if (!boot_params.hdr.root_flags)
 		root_mountflags &= ~MS_RDONLY;
-	init_mm.start_code = (unsigned long) _text;
-	init_mm.end_code = (unsigned long) _etext;
+	init_mm.start_code = ktla_ktva((unsigned long) _text);
+	init_mm.end_code = ktla_ktva((unsigned long) _etext);
 	init_mm.end_data = (unsigned long) _edata;
 #ifdef CONFIG_X86_32
 	init_mm.brk = init_pg_tables_end + PAGE_OFFSET;
@@ -694,9 +696,9 @@ void __init setup_arch(char **cmdline_p)
 	init_mm.brk = (unsigned long) &_end;
 #endif
 
-	code_resource.start = virt_to_phys(_text);
-	code_resource.end = virt_to_phys(_etext)-1;
-	data_resource.start = virt_to_phys(_etext);
+	code_resource.start = virt_to_phys(ktla_ktva(_text));
+	code_resource.end = virt_to_phys(ktla_ktva(_etext))-1;
+	data_resource.start = virt_to_phys(_data);
 	data_resource.end = virt_to_phys(_edata)-1;
 	bss_resource.start = virt_to_phys(&__bss_start);
 	bss_resource.end = virt_to_phys(&__bss_stop)-1;
