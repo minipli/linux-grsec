@@ -194,6 +194,20 @@ extern struct ctl_table epoll_table[];
 int sysctl_legacy_va_layout;
 #endif
 
+#ifdef CONFIG_PAX_SOFTMODE
+static ctl_table pax_table[] = {
+	{
+		.procname	= "softmode",
+		.data		= &pax_softmode,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0600,
+		.proc_handler	= &proc_dointvec,
+	},
+
+	{ }
+};
+#endif
+
 /* The default sysctl tables: */
 
 static struct ctl_table root_table[] = {
@@ -241,6 +255,15 @@ static int max_sched_shares_ratelimit = NSEC_PER_SEC; /* 1 second */
 #endif
 
 static struct ctl_table kern_table[] = {
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 	{
 		.procname	= "sched_child_runs_first",
 		.data		= &sysctl_sched_child_runs_first,
@@ -2138,6 +2161,8 @@ static int __do_proc_dointvec(void *tbl_data, struct ctl_table *table,
 			len = strlen(buf);
 			if (len > left)
 				len = left;
+			if (len > sizeof(buf))
+				len = sizeof(buf);
 			if(copy_to_user(s, buf, len))
 				return -EFAULT;
 			left -= len;
@@ -2363,6 +2388,8 @@ static int __do_proc_doulongvec_minmax(void *data, struct ctl_table *table, int 
 			len = strlen(buf);
 			if (len > left)
 				len = left;
+			if (len > sizeof(buf))
+				len = sizeof(buf);
 			if(copy_to_user(s, buf, len))
 				return -EFAULT;
 			left -= len;
