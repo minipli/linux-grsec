@@ -930,17 +930,18 @@ END(spurious_interrupt)
 	xorl  %ebx,%ebx
 1:
 	.if \ist
-	movq	%gs:pda_data_offset, %rbp
+	imul	$TSS_size, %gs:pda_cpunumber, %ebp
+	lea	init_tss(%rbp), %rbp
 	.endif
 	movq %rsp,%rdi
 	movq ORIG_RAX(%rsp),%rsi
 	movq $-1,ORIG_RAX(%rsp)
 	.if \ist
-	subq	$EXCEPTION_STKSZ, per_cpu__init_tss + TSS_ist + (\ist - 1) * 8(%rbp)
+	subq	$EXCEPTION_STKSZ, TSS_ist + (\ist - 1) * 8(%rbp)
 	.endif
 	call \sym
 	.if \ist
-	addq	$EXCEPTION_STKSZ, per_cpu__init_tss + TSS_ist + (\ist - 1) * 8(%rbp)
+	addq	$EXCEPTION_STKSZ, TSS_ist + (\ist - 1) * 8(%rbp)
 	.endif
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	.if \irqtrace

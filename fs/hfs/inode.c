@@ -419,7 +419,7 @@ int hfs_write_inode(struct inode *inode, int unused)
 
 	if (S_ISDIR(main_inode->i_mode)) {
 		if (fd.entrylength < sizeof(struct hfs_cat_dir))
-			/* panic? */;
+			{/* panic? */}
 		hfs_bnode_read(fd.bnode, &rec, fd.entryoffset,
 			   sizeof(struct hfs_cat_dir));
 		if (rec.type != HFS_CDR_DIR ||
@@ -440,7 +440,7 @@ int hfs_write_inode(struct inode *inode, int unused)
 				sizeof(struct hfs_cat_file));
 	} else {
 		if (fd.entrylength < sizeof(struct hfs_cat_file))
-			/* panic? */;
+			{/* panic? */}
 		hfs_bnode_read(fd.bnode, &rec, fd.entryoffset,
 			   sizeof(struct hfs_cat_file));
 		if (rec.type != HFS_CDR_FIL ||

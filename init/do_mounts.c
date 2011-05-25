@@ -214,11 +214,11 @@ static void __init get_fs_names(char *page)
 
 static int __init do_mount_root(char *name, char *fs, int flags, void *data)
 {
-	int err = sys_mount(name, "/root", fs, flags, data);
+	int err = sys_mount((char __user *)name, (char __user *)"/root", (char __user *)fs, flags, (void __user *)data);
 	if (err)
 		return err;
 
-	sys_chdir("/root");
+	sys_chdir((char __user *)"/root");
 	ROOT_DEV = current->fs->pwd.mnt->mnt_sb->s_dev;
 	printk("VFS: Mounted root (%s filesystem)%s.\n",
 	       current->fs->pwd.mnt->mnt_sb->s_type->name,
@@ -304,18 +304,18 @@ void __init change_floppy(char *fmt, ...)
 	va_start(args, fmt);
 	vsprintf(buf, fmt, args);
 	va_end(args);
-	fd = sys_open("/dev/root", O_RDWR | O_NDELAY, 0);
+	fd = sys_open((char __user *)"/dev/root", O_RDWR | O_NDELAY, 0);
 	if (fd >= 0) {
 		sys_ioctl(fd, FDEJECT, 0);
 		sys_close(fd);
 	}
 	printk(KERN_NOTICE "VFS: Insert %s and press ENTER\n", buf);
-	fd = sys_open("/dev/console", O_RDWR, 0);
+	fd = sys_open((char __user *)"/dev/console", O_RDWR, 0);
 	if (fd >= 0) {
 		sys_ioctl(fd, TCGETS, (long)&termios);
 		termios.c_lflag &= ~ICANON;
 		sys_ioctl(fd, TCSETSF, (long)&termios);
-		sys_read(fd, &c, 1);
+		sys_read(fd, (char __user *)&c, 1);
 		termios.c_lflag |= ICANON;
 		sys_ioctl(fd, TCSETSF, (long)&termios);
 		sys_close(fd);
@@ -402,7 +402,7 @@ void __init prepare_namespace(void)
 
 	mount_root();
 out:
-	sys_mount(".", "/", NULL, MS_MOVE, NULL);
-	sys_chroot(".");
+	sys_mount((char __user *)".", (char __user *)"/", NULL, MS_MOVE, NULL);
+	sys_chroot((char __user *)".");
 }
 

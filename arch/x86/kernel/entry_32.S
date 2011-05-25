@@ -101,7 +101,7 @@
 #define resume_userspace_sig	resume_userspace
 #endif
 
-#define SAVE_ALL \
+#define __SAVE_ALL(_DS) \
 	cld; \
 	pushl %fs; \
 	CFI_ADJUST_CFA_OFFSET 4;\
@@ -133,11 +133,25 @@
 	pushl %ebx; \
 	CFI_ADJUST_CFA_OFFSET 4;\
 	CFI_REL_OFFSET ebx, 0;\
-	movl $(__USER_DS), %edx; \
+	movl $(_DS), %edx; \
 	movl %edx, %ds; \
 	movl %edx, %es; \
 	movl $(__KERNEL_PERCPU), %edx; \
 	movl %edx, %fs
+
+#ifdef CONFIG_PAX_KERNEXEC
+#define SAVE_ALL \
+	__SAVE_ALL(__KERNEL_DS); \
+	GET_CR0_INTO_EDX; \
+	movl %edx, %esi; \
+	orl $X86_CR0_WP, %edx; \
+	xorl %edx, %esi; \
+	SET_CR0_FROM_EDX
+#elif defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+#define SAVE_ALL __SAVE_ALL(__KERNEL_DS)
+#else
+#define SAVE_ALL __SAVE_ALL(__USER_DS)
+#endif
 
 #define RESTORE_INT_REGS \
 	popl %ebx;	\
@@ -229,6 +243,11 @@ ENTRY(ret_from_fork)
 	CFI_ADJUST_CFA_OFFSET 4
 	popfl
 	CFI_ADJUST_CFA_OFFSET -4
+
+#ifdef CONFIG_PAX_KERNEXEC
+	xorl %esi, %esi
+#endif
+
 	jmp syscall_exit
 	CFI_ENDPROC
 END(ret_from_fork)
@@ -252,7 +271,17 @@ check_userspace:
 	movb PT_CS(%esp), %al
 	andl $(X86_EFLAGS_VM | SEGMENT_RPL_MASK), %eax
 	cmpl $USER_RPL, %eax
+
+#ifdef CONFIG_PAX_KERNEXEC
+	jae resume_userspace
+	
+	GET_CR0_INTO_EDX
+	xorl %esi, %edx
+	SET_CR0_FROM_EDX
+	jmp resume_kernel
+#else
 	jb resume_kernel		# not returning to v8086 or userspace
+#endif
 
 ENTRY(resume_userspace)
 	LOCKDEP_SYS_EXIT
@@ -314,10 +343,9 @@ sysenter_past_esp:
 	/*CFI_REL_OFFSET cs, 0*/
 	/*
 	 * Push current_thread_info()->sysenter_return to the stack.
-	 * A tiny bit of offset fixup is necessary - 4*4 means the 4 words
-	 * pushed above; +8 corresponds to copy_thread's esp0 setting.
 	 */
-	pushl (TI_sysenter_return-THREAD_SIZE+8+4*4)(%esp)
+	GET_THREAD_INFO(%ebp)
+	pushl TI_sysenter_return(%ebp)
 	CFI_ADJUST_CFA_OFFSET 4
 	CFI_REL_OFFSET eip, 0
 
@@ -330,9 +358,17 @@ sysenter_past_esp:
  * Load the potential sixth argument from user stack.
  * Careful about security.
  */
+	movl PT_OLDESP(%esp),%ebp
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	mov PT_OLDSS(%esp),%ds
+1:	movl %ds:(%ebp),%ebp
+#else
 	cmpl $__PAGE_OFFSET-3,%ebp
 	jae syscall_fault
 1:	movl (%ebp),%ebp
+#endif
+
 	movl %ebp,PT_EBP(%esp)
 .section __ex_table,"a"
 	.align 4
@@ -356,12 +392,23 @@ sysenter_do_call:
 	testw $_TIF_ALLWORK_MASK, %cx
 	jne sysexit_audit
 sysenter_exit:
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pushl %eax
+	CFI_ADJUST_CFA_OFFSET 4
+	call pax_randomize_kstack
+	popl %eax
+	CFI_ADJUST_CFA_OFFSET -4
+#endif
+
 /* if something modifies registers it must also disable sysexit */
 	movl PT_EIP(%esp), %edx
 	movl PT_OLDESP(%esp), %ecx
 	xorl %ebp,%ebp
 	TRACE_IRQS_ON
 1:	mov  PT_FS(%esp), %fs
+2:	mov  PT_DS(%esp), %ds
+3:	mov  PT_ES(%esp), %es
 	ENABLE_INTERRUPTS_SYSEXIT
 
 #ifdef CONFIG_AUDITSYSCALL
@@ -404,11 +451,17 @@ sysexit_audit:
 
 	CFI_ENDPROC
 .pushsection .fixup,"ax"
-2:	movl $0,PT_FS(%esp)
+4:	movl $0,PT_FS(%esp)
+	jmp 1b
+5:	movl $0,PT_DS(%esp)
+	jmp 1b
+6:	movl $0,PT_ES(%esp)
 	jmp 1b
 .section __ex_table,"a"
 	.align 4
-	.long 1b,2b
+	.long 1b,4b
+	.long 2b,5b
+	.long 3b,6b
 .popsection
 ENDPROC(ia32_sysenter_target)
 
@@ -437,6 +490,10 @@ syscall_exit:
 	movl TI_flags(%ebp), %ecx
 	testw $_TIF_ALLWORK_MASK, %cx	# current->work
 	jne syscall_exit_work
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	call pax_randomize_kstack
+#endif
 
 restore_all:
 	movl PT_EFLAGS(%esp), %eax	# mix EFLAGS, SS and CS
@@ -531,25 +588,19 @@ work_resched:
 
 work_notifysig:				# deal with pending signals and
 					# notify-resume requests
+	movl %esp, %eax
 #ifdef CONFIG_VM86
 	testl $X86_EFLAGS_VM, PT_EFLAGS(%esp)
-	movl %esp, %eax
-	jne work_notifysig_v86		# returning to kernel-space or
+	jz 1f				# returning to kernel-space or
 					# vm86-space
-	xorl %edx, %edx
-	call do_notify_resume
-	jmp resume_userspace_sig
 
-	ALIGN
-work_notifysig_v86:
 	pushl %ecx			# save ti_flags for do_notify_resume
 	CFI_ADJUST_CFA_OFFSET 4
 	call save_v86_state		# %eax contains pt_regs pointer
 	popl %ecx
 	CFI_ADJUST_CFA_OFFSET -4
 	movl %eax, %esp
-#else
-	movl %esp, %eax
+1:
 #endif
 	xorl %edx, %edx
 	call do_notify_resume
@@ -595,17 +646,24 @@ syscall_badsys:
 END(syscall_badsys)
 	CFI_ENDPROC
 
-#define FIXUP_ESPFIX_STACK \
-	/* since we are on a wrong stack, we cant make it a C code :( */ \
-	PER_CPU(gdt_page, %ebx); \
-	GET_DESC_BASE(GDT_ENTRY_ESPFIX_SS, %ebx, %eax, %ax, %al, %ah); \
-	addl %esp, %eax; \
-	pushl $__KERNEL_DS; \
-	CFI_ADJUST_CFA_OFFSET 4; \
-	pushl %eax; \
-	CFI_ADJUST_CFA_OFFSET 4; \
-	lss (%esp), %esp; \
+.macro FIXUP_ESPFIX_STACK
+	/* since we are on a wrong stack, we cant make it a C code :( */
+#ifdef CONFIG_SMP
+	movl PER_CPU_VAR(cpu_number), %ebx;
+	shll $PAGE_SHIFT_asm, %ebx;
+	addl $cpu_gdt_table, %ebx;
+#else
+	movl $cpu_gdt_table, %ebx;
+#endif
+	GET_DESC_BASE(GDT_ENTRY_ESPFIX_SS, %ebx, %eax, %ax, %al, %ah);
+	addl %esp, %eax;
+	pushl $__KERNEL_DS;
+	CFI_ADJUST_CFA_OFFSET 4;
+	pushl %eax;
+	CFI_ADJUST_CFA_OFFSET 4;
+	lss (%esp), %esp;
 	CFI_ADJUST_CFA_OFFSET -8;
+.endm
 #define UNWIND_ESPFIX_STACK \
 	movl %ss, %eax; \
 	/* see if on espfix stack */ \
@@ -622,7 +680,7 @@ END(syscall_badsys)
  * Build the entry stubs and pointer table with
  * some assembler magic.
  */
-.section .rodata,"a"
+.section .rodata,"a",@progbits
 ENTRY(interrupt)
 .text
 
@@ -722,12 +780,21 @@ error_code:
 	popl %ecx
 	CFI_ADJUST_CFA_OFFSET -4
 	/*CFI_REGISTER es, ecx*/
+
+#ifdef CONFIG_PAX_KERNEXEC
+	GET_CR0_INTO_EDX
+	movl %edx, %esi
+	orl $X86_CR0_WP, %edx
+	xorl %edx, %esi
+	SET_CR0_FROM_EDX
+#endif
+
 	movl PT_FS(%esp), %edi		# get the function address
 	movl PT_ORIG_EAX(%esp), %edx	# get the error code
 	movl $-1, PT_ORIG_EAX(%esp)	# no syscall to restart
 	mov  %ecx, PT_FS(%esp)
 	/*CFI_REL_OFFSET fs, ES*/
-	movl $(__USER_DS), %ecx
+	movl $(__KERNEL_DS), %ecx
 	movl %ecx, %ds
 	movl %ecx, %es
 	movl %esp,%eax			# pt_regs pointer
@@ -861,6 +928,13 @@ nmi_stack_correct:
 	xorl %edx,%edx		# zero error code
 	movl %esp,%eax		# pt_regs pointer
 	call do_nmi
+
+#ifdef CONFIG_PAX_KERNEXEC
+	GET_CR0_INTO_EDX
+	xorl %esi, %edx
+	SET_CR0_FROM_EDX
+#endif
+
 	jmp restore_nocheck_notrace
 	CFI_ENDPROC
 
@@ -901,6 +975,13 @@ nmi_espfix_stack:
 	FIXUP_ESPFIX_STACK		# %eax == %esp
 	xorl %edx,%edx			# zero error code
 	call do_nmi
+
+#ifdef CONFIG_PAX_KERNEXEC
+	GET_CR0_INTO_EDX
+	xorl %esi, %edx
+	SET_CR0_FROM_EDX
+#endif
+
 	RESTORE_REGS
 	lss 12+4(%esp), %esp		# back to espfix stack
 	CFI_ADJUST_CFA_OFFSET -24
@@ -1226,7 +1307,6 @@ END(mcount)
 #endif /* CONFIG_DYNAMIC_FTRACE */
 #endif /* CONFIG_FTRACE */
 
-.section .rodata,"a"
 #include "syscall_table_32.S"
 
 syscall_table_size=(.-sys_call_table)

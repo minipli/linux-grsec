@@ -591,7 +591,7 @@ static const struct pci_device_id ahci_pci_tbl[] = {
 	{ PCI_ANY_ID, PCI_ANY_ID, PCI_ANY_ID, PCI_ANY_ID,
 	  PCI_CLASS_STORAGE_SATA_AHCI, 0xffffff, board_ahci },
 
-	{ }	/* terminate list */
+	{ 0, 0, 0, 0, 0, 0, 0 }	/* terminate list */
 };
 
 
