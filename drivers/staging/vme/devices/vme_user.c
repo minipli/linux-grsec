@@ -136,7 +136,7 @@ static int vme_user_ioctl(struct inode *, struct file *, unsigned int,
 static int __init vme_user_probe(struct device *, int, int);
 static int __exit vme_user_remove(struct device *, int, int);
 
-static struct file_operations vme_user_fops = {
+static const struct file_operations vme_user_fops = {
         .open = vme_user_open,
         .release = vme_user_release,
         .read = vme_user_read,
