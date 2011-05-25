@@ -201,7 +201,7 @@ static struct pnp_fixup pnp_fixups[] = {
 	{"CTL0045", quirk_sb16audio_resources},
 	{"PNP0c01", quirk_system_pci_resources},
 	{"PNP0c02", quirk_system_pci_resources},
-	{""}
+	{"", NULL}
 };
 
 void pnp_fixup_device(struct pnp_dev *dev)

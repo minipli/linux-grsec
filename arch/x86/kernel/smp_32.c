@@ -104,7 +104,7 @@
  *	about nothing of note with C stepping upwards.
  */
 
-DEFINE_PER_CPU(struct tlb_state, cpu_tlbstate) ____cacheline_aligned = { &init_mm, 0, };
+DEFINE_PER_CPU(struct tlb_state, cpu_tlbstate) ____cacheline_aligned = { &init_mm, 0, {0} };
 
 /*
  * the following functions deal with sending IPIs between CPUs.

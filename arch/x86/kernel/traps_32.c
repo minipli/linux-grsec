@@ -29,6 +29,7 @@
 #include <linux/uaccess.h>
 #include <linux/nmi.h>
 #include <linux/bug.h>
+#include <linux/binfmts.h>
 
 #ifdef CONFIG_EISA
 #include <linux/ioport.h>
@@ -70,14 +71,6 @@ asmlinkage int system_call(void);
 
 /* Do we ignore FPU interrupts ? */
 char ignore_fpu_irq = 0;
-
-/*
- * The IDT has to be page-aligned to simplify the Pentium
- * F0 0F bug workaround.. We have a special link segment
- * for this.
- */
-gate_desc idt_table[256]
-	__attribute__((__section__(".data.idt"))) = { { { { 0, 0 } } }, };
 
 asmlinkage void divide_error(void);
 asmlinkage void debug(void);
@@ -330,22 +323,23 @@ void show_registers(struct pt_regs *regs)
 	 * When in-kernel, we also print out the stack and code at the
 	 * time of the fault..
 	 */
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		u8 *ip;
 		unsigned int code_prologue = code_bytes * 43 / 64;
 		unsigned int code_len = code_bytes;
 		unsigned char c;
+		unsigned long cs_base = get_desc_base(&get_cpu_gdt_table(smp_processor_id())[(0xffff & regs->cs) >> 3]);
 
 		printk("\n" KERN_EMERG "Stack: ");
 		show_stack_log_lvl(NULL, regs, &regs->sp, 0, KERN_EMERG);
 
 		printk(KERN_EMERG "Code: ");
 
-		ip = (u8 *)regs->ip - code_prologue;
+		ip = (u8 *)regs->ip - code_prologue + cs_base;
 		if (ip < (u8 *)PAGE_OFFSET ||
 			probe_kernel_address(ip, c)) {
 			/* try starting at EIP */
-			ip = (u8 *)regs->ip;
+			ip = (u8 *)regs->ip + cs_base;
 			code_len = code_len - code_prologue + 1;
 		}
 		for (i = 0; i < code_len; i++, ip++) {
@@ -354,7 +348,7 @@ void show_registers(struct pt_regs *regs)
 				printk(" Bad EIP value.");
 				break;
 			}
-			if (ip == (u8 *)regs->ip)
+			if (ip == (u8 *)regs->ip + cs_base)
 				printk("<%02x> ", c);
 			else
 				printk("%02x ", c);
@@ -367,6 +361,7 @@ int is_valid_bugaddr(unsigned long ip)
 {
 	unsigned short ud2;
 
+	ip = ktla_ktva(ip);
 	if (ip < PAGE_OFFSET)
 		return 0;
 	if (probe_kernel_address((unsigned short *)ip, ud2))
@@ -476,7 +471,7 @@ void die(const char * str, struct pt_regs * regs, long err)
 
 static inline void die_if_kernel(const char * str, struct pt_regs * regs, long err)
 {
-	if (!user_mode_vm(regs))
+	if (!user_mode(regs))
 		die(str, regs, err);
 }
 
@@ -492,7 +487,7 @@ static void __kprobes do_trap(int trapnr, int signr, char *str, int vm86,
 		goto trap_signal;
 	}
 
-	if (!user_mode(regs))
+	if (!user_mode_novm(regs))
 		goto kernel_trap;
 
 	trap_signal: {
@@ -598,7 +593,7 @@ void __kprobes do_general_protection(struct pt_regs * regs,
 					      long error_code)
 {
 	int cpu = get_cpu();
-	struct tss_struct *tss = &per_cpu(init_tss, cpu);
+	struct tss_struct *tss = &init_tss[cpu];
 	struct thread_struct *thread = &current->thread;
 
 	/*
@@ -631,8 +626,24 @@ void __kprobes do_general_protection(struct pt_regs * regs,
 	if (regs->flags & VM_MASK)
 		goto gp_in_vm86;
 
-	if (!user_mode(regs))
+	if (!user_mode_novm(regs))
 		goto gp_in_kernel;
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	if (!nx_enabled && current->mm && (current->mm->pax_flags & MF_PAX_PAGEEXEC)) {
+		struct mm_struct *mm = current->mm;
+		unsigned long limit;
+
+		down_write(&mm->mmap_sem);
+		limit = mm->context.user_cs_limit;
+		if (limit < TASK_SIZE) {
+			track_exec_limit(mm, limit, TASK_SIZE, VM_EXEC);
+			up_write(&mm->mmap_sem);
+			return;
+		}
+		up_write(&mm->mmap_sem);
+	}
+#endif
 
 	current->thread.error_code = error_code;
 	current->thread.trap_no = 13;
@@ -661,6 +672,13 @@ gp_in_kernel:
 		if (notify_die(DIE_GPF, "general protection fault", regs,
 				error_code, 13, SIGSEGV) == NOTIFY_STOP)
 			return;
+
+#ifdef CONFIG_PAX_KERNEXEC
+		if ((regs->cs & 0xFFFF) == __KERNEL_CS)
+			die("PAX: suspicious general protection fault", regs, error_code);
+		else
+#endif
+
 		die("general protection fault", regs, error_code);
 	}
 }
@@ -750,7 +768,7 @@ void __kprobes die_nmi(struct pt_regs *regs, const char *msg)
 	/* If we are in kernel we are probably nested up pretty bad
 	 * and might aswell get out now while we still can.
 	*/
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		current->thread.trap_no = 2;
 		crash_kexec(regs);
 	}
@@ -907,7 +925,7 @@ void __kprobes do_debug(struct pt_regs * regs, long error_code)
 		 * check for kernel mode by just checking the CPL
 		 * of CS.
 		 */
-		if (!user_mode(regs))
+		if (!user_mode_novm(regs))
 			goto clear_TF_reenable;
 	}
 
@@ -1085,18 +1103,14 @@ void do_spurious_interrupt_bug(struct pt_regs * regs,
 unsigned long patch_espfix_desc(unsigned long uesp,
 					  unsigned long kesp)
 {
-	struct desc_struct *gdt = __get_cpu_var(gdt_page).gdt;
 	unsigned long base = (kesp - uesp) & -THREAD_SIZE;
 	unsigned long new_kesp = kesp - base;
 	unsigned long lim_pages = (new_kesp | (THREAD_SIZE - 1)) >> PAGE_SHIFT;
-	__u64 desc = *(__u64 *)&gdt[GDT_ENTRY_ESPFIX_SS];
+	struct desc_struct ss;
+
 	/* Set up base for espfix segment */
- 	desc &= 0x00f0ff0000000000ULL;
- 	desc |=	((((__u64)base) << 16) & 0x000000ffffff0000ULL) |
-		((((__u64)base) << 32) & 0xff00000000000000ULL) |
-		((((__u64)lim_pages) << 32) & 0x000f000000000000ULL) |
-		(lim_pages & 0xffff);
-	*(__u64 *)&gdt[GDT_ENTRY_ESPFIX_SS] = desc;
+	pack_descriptor(&ss, base, lim_pages, 0x93, 0xC);
+	write_gdt_entry(get_cpu_gdt_table(smp_processor_id()), GDT_ENTRY_ESPFIX_SS, &ss, DESCTYPE_S);
 	return new_kesp;
 }
 

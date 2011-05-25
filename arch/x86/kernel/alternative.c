@@ -403,7 +403,7 @@ void apply_paravirt(struct paravirt_patch_site *start,
 
 		BUG_ON(p->len > MAX_PATCH_LEN);
 		/* prep the buffer with the original instructions */
-		memcpy(insnbuf, p->instr, p->len);
+		memcpy(insnbuf, ktla_ktva(p->instr), p->len);
 		used = pv_init_ops.patch(p->instrtype, p->clobbers, insnbuf,
 					 (unsigned long)p->instr, p->len);
 
@@ -485,7 +485,19 @@ void __init alternative_instructions(void)
  */
 void __kprobes text_poke(void *addr, unsigned char *opcode, int len)
 {
-	memcpy(addr, opcode, len);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
+	memcpy(ktla_ktva(addr), opcode, len);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	sync_core();
 	/* Could also do a CLFLUSH here to speed up CPU recovery; but
 	   that causes hangs on some VIA CPUs. */
