@@ -375,7 +375,7 @@ static inline void smp_prepare_cpus(unsigned int maxcpus) { }
 #else
 
 #ifndef CONFIG_HAVE_SETUP_PER_CPU_AREA
-unsigned long __per_cpu_offset[NR_CPUS] __read_mostly;
+unsigned long __per_cpu_offset[NR_CPUS] __read_only;
 
 EXPORT_SYMBOL(__per_cpu_offset);
 
