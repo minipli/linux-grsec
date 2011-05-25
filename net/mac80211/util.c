@@ -1030,7 +1030,7 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 		local->resuming = true;
 
 	/* restart hardware */
-	if (local->open_count) {
+	if (atomic_read(&local->open_count)) {
 		res = drv_start(local);
 
 		ieee80211_led_radio(local, true);
