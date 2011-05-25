@@ -165,6 +165,7 @@ create_elf_tables(struct linux_binprm *bprm, struct elfhdr *exec,
 	int ei_index = 0;
 	const struct cred *cred = current_cred();
 	struct vm_area_struct *vma;
+	unsigned long saved_auxv[AT_VECTOR_SIZE];
 
 	/*
 	 * In some cases (e.g. Hyper-Threading), we want to avoid L1
@@ -323,9 +324,11 @@ create_elf_tables(struct linux_binprm *bprm, struct elfhdr *exec,
 		return -EFAULT;
 	current->mm->env_end = p;
 
+	memcpy(saved_auxv, elf_info, ei_index * sizeof(elf_addr_t));
+
 	/* Put the elf_info on the stack in the right place.  */
 	sp = (elf_addr_t __user *)envp + 1;
-	if (copy_to_user(sp, elf_info, ei_index * sizeof(elf_addr_t)))
+	if (copy_to_user(sp, saved_auxv, ei_index * sizeof(elf_addr_t)))
 		return -EFAULT;
 	return 0;
 }

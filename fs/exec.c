@@ -1779,16 +1779,10 @@ int object_is_on_stack(const void *obj, unsigned long len)
 #endif
 }
 
-void pax_report_leak_to_user(const void *ptr, unsigned long len)
+void pax_report_usercopy(const void *ptr, unsigned long len, bool to, const char *type)
 {
-	printk(KERN_ERR "PAX: kernel memory leak attempt detected from %p (%lu bytes)\n", ptr, len);
-	dump_stack();
-	do_group_exit(SIGKILL);
-}
-
-void pax_report_overflow_from_user(const void *ptr, unsigned long len)
-{
-	printk(KERN_ERR "PAX: kernel memory overflow attempt detected to %p (%lu bytes)\n", ptr, len);
+	printk(KERN_ERR "PAX: kernel memory %s attempt detected %s %p (%s) (%lu bytes)\n",
+		to ? "leak" : "overwrite", to ? "from" : "to", ptr, type ? : "unknown", len);
 	dump_stack();
 	do_group_exit(SIGKILL);
 }
