@@ -630,6 +630,10 @@ static int static_obj(void *obj)
 	int i;
 #endif
 
+#ifdef CONFIG_PAX_KERNEXEC
+	start = (unsigned long )&_sdata;
+#endif
+
 	/*
 	 * static variable?
 	 */
@@ -642,8 +646,7 @@ static int static_obj(void *obj)
 	 */
 	for_each_possible_cpu(i) {
 		start = (unsigned long) &__per_cpu_start + per_cpu_offset(i);
-		end   = (unsigned long) &__per_cpu_start + PERCPU_ENOUGH_ROOM
-					+ per_cpu_offset(i);
+		end   = start + PERCPU_ENOUGH_ROOM;
 
 		if ((addr >= start) && (addr < end))
 			return 1;

@@ -217,13 +217,9 @@ int param_set_charp(const char *val, struct kernel_param *kp)
 		return -ENOSPC;
 	}
 
-	if (kp->flags & KPARAM_KMALLOCED)
-		kfree(*(char **)kp->arg);
-
 	/* This is a hack.  We can't need to strdup in early boot, and we
 	 * don't need to; this mangled commandline is preserved. */
 	if (slab_is_available()) {
-		kp->flags |= KPARAM_KMALLOCED;
 		*(char **)kp->arg = kstrdup(val, GFP_KERNEL);
 		if (!kp->arg)
 			return -ENOMEM;
@@ -607,7 +603,7 @@ void destroy_params(const struct kernel_param *params, unsigned num)
 	unsigned int i;
 
 	for (i = 0; i < num; i++)
-		if (params[i].flags & KPARAM_KMALLOCED)
+		if (params[i].set == param_set_charp)
 			kfree(*(char **)params[i].arg);
 }
 
@@ -729,7 +725,7 @@ static ssize_t module_attr_store(struct kobject *kobj,
 	return ret;
 }
 
-static struct sysfs_ops module_sysfs_ops = {
+static const struct sysfs_ops module_sysfs_ops = {
 	.show = module_attr_show,
 	.store = module_attr_store,
 };
