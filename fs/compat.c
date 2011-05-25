@@ -590,7 +590,7 @@ ssize_t compat_rw_copy_check_uvector(int type,
 		goto out;
 
 	ret = -EINVAL;
-	if (nr_segs > UIO_MAXIOV || nr_segs < 0)
+	if (nr_segs > UIO_MAXIOV)
 		goto out;
 	if (nr_segs > fast_segs) {
 		ret = -ENOMEM;
@@ -1433,14 +1433,12 @@ static int compat_copy_strings(int argc, compat_uptr_t __user *argv,
 			if (!kmapped_page || kpos != (pos & PAGE_MASK)) {
 				struct page *page;
 
-#ifdef CONFIG_STACK_GROWSUP
 				ret = expand_stack_downwards(bprm->vma, pos);
 				if (ret < 0) {
 					/* We've exceed the stack rlimit. */
 					ret = -E2BIG;
 					goto out;
 				}
-#endif
 				ret = get_user_pages(current, bprm->mm, pos,
 						     1, 1, 1, &page, NULL);
 				if (ret <= 0) {
