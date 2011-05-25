@@ -11,7 +11,7 @@
 #include <linux/linkage.h>
 #include <asm/dwarf2.h>
 #include <asm/thread_info.h>
-
+#include <asm/segment.h>
 
 /*
  * __get_user_X
@@ -31,7 +31,11 @@ ENTRY(__get_user_1)
 	GET_THREAD_INFO(%edx)
 	cmpl TI_addr_limit(%edx),%eax
 	jae bad_get_user
+	pushl $(__USER_DS)
+	popl %ds
 1:	movzbl (%eax),%edx
+	pushl %ss
+	pop %ds
 	xorl %eax,%eax
 	ret
 	CFI_ENDPROC
@@ -44,7 +48,11 @@ ENTRY(__get_user_2)
 	GET_THREAD_INFO(%edx)
 	cmpl TI_addr_limit(%edx),%eax
 	jae bad_get_user
+	pushl $(__USER_DS)
+	popl %ds
 2:	movzwl -1(%eax),%edx
+	pushl %ss
+	pop %ds
 	xorl %eax,%eax
 	ret
 	CFI_ENDPROC
@@ -57,7 +65,11 @@ ENTRY(__get_user_4)
 	GET_THREAD_INFO(%edx)
 	cmpl TI_addr_limit(%edx),%eax
 	jae bad_get_user
+	pushl $(__USER_DS)
+	popl %ds
 3:	movl -3(%eax),%edx
+	pushl %ss
+	pop %ds
 	xorl %eax,%eax
 	ret
 	CFI_ENDPROC
@@ -65,6 +77,8 @@ ENDPROC(__get_user_4)
 
 bad_get_user:
 	CFI_STARTPROC
+	pushl %ss
+	pop %ds
 	xorl %edx,%edx
 	movl $-14,%eax
 	ret

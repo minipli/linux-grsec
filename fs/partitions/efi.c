@@ -99,7 +99,7 @@
 #ifdef EFI_DEBUG
 #define Dprintk(x...) printk(KERN_DEBUG x)
 #else
-#define Dprintk(x...)
+#define Dprintk(x...) do {} while (0)
 #endif
 
 /* This allows a kernel command line option 'gpt' to override
