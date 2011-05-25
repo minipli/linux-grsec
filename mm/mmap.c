@@ -1290,19 +1290,6 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 		if (error)
 			goto unmap_and_free_vma;
 
-#ifdef CONFIG_PAX_SEGMEXEC
-		if (vma_m) {
-			struct mempolicy *pol;
-
-			pol = mpol_copy(vma_policy(vma));
-			if (IS_ERR(pol)) {
-				mpol_free(vma_policy(vma));
-				goto unmap_and_free_vma;
-			}
-			vma_set_policy(vma_m, pol);
-		}
-#endif
-
 #if defined(CONFIG_PAX_PAGEEXEC) && defined(CONFIG_X86_32)
 		if ((mm->pax_flags & MF_PAX_PAGEEXEC) && !(vma->vm_flags & VM_SPECIAL)) {
 			vma->vm_flags |= VM_PAGEEXEC;
@@ -1359,10 +1346,8 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 		vma = NULL;
 
 #ifdef CONFIG_PAX_SEGMEXEC
-		if (vma_m) {
-			mpol_free(vma_policy(vma_m));
+		if (vma_m)
 			kmem_cache_free(vm_area_cachep, vma_m);
-		}
 #endif
 
 	}
@@ -2076,7 +2061,7 @@ detach_vmas_to_be_unmapped(struct mm_struct *mm, struct vm_area_struct *vma,
 int split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 	      unsigned long addr, int new_below)
 {
-	struct mempolicy *pol, *pol_m;
+	struct mempolicy *pol;
 	struct vm_area_struct *new, *vma_m, *new_m = NULL;
 	unsigned long addr_m = addr + SEGMEXEC_TASK_SIZE;
 
@@ -2133,17 +2118,6 @@ int split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 		kmem_cache_free(vm_area_cachep, new);
 		return PTR_ERR(pol);
 	}
-
-	if (vma_m) {
-		pol_m = mpol_copy(vma_policy(vma_m));
-		if (IS_ERR(pol_m)) {
-			mpol_free(pol);
-			kmem_cache_free(vm_area_cachep, new_m);
-			kmem_cache_free(vm_area_cachep, new);
-			return PTR_ERR(pol);
-		}
-	}
-
 	vma_set_policy(new, pol);
 
 	if (new->vm_file)
@@ -2159,7 +2133,8 @@ int split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 		vma_adjust(vma, vma->vm_start, addr, vma->vm_pgoff, new);
 
 	if (vma_m) {
-		vma_set_policy(new_m, pol_m);
+		mpol_get(pol);
+		vma_set_policy(new_m, pol);
 
 		if (new_m->vm_file)
 			get_file(new_m->vm_file);
@@ -2626,8 +2601,9 @@ void pax_mirror_vma(struct vm_area_struct *vma_m, struct vm_area_struct *vma)
 	BUG_ON(!(vma->vm_mm->pax_flags & MF_PAX_SEGMEXEC) || !(vma->vm_flags & VM_EXEC));
 	BUG_ON(vma->vm_mirror || vma_m->vm_mirror);
 	BUG_ON(!vma_mpol_equal(vma, vma_m));
-	pol_m = vma_policy(vma_m);
 	*vma_m = *vma;
+	pol_m = vma_policy(vma);
+	mpol_get(pol_m);
 	vma_set_policy(vma_m, pol_m);
 	vma_m->vm_start += SEGMEXEC_TASK_SIZE;
 	vma_m->vm_end += SEGMEXEC_TASK_SIZE;

@@ -266,20 +266,11 @@ mprotect_fixup(struct vm_area_struct *vma, struct vm_area_struct **pprev,
 
 #ifdef CONFIG_PAX_SEGMEXEC
 	if ((mm->pax_flags & MF_PAX_SEGMEXEC) && !(oldflags & VM_EXEC) && (newflags & VM_EXEC)) {
-		struct mempolicy *pol;
-
 		vma_m = kmem_cache_zalloc(vm_area_cachep, GFP_KERNEL);
 		if (!vma_m) {
 			error = -ENOMEM;
 			goto fail;
 		}
-		pol = mpol_copy(vma_policy(vma));
-		if (IS_ERR(pol)) {
-			kmem_cache_free(vm_area_cachep, vma_m);
-			error = -ENOMEM;
-			goto fail;
-		}
-		vma_set_policy(vma_m, pol);
 	}
 #endif
 
