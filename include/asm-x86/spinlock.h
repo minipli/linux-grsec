@@ -227,15 +227,34 @@ static inline int __raw_write_can_lock(raw_rwlock_t *lock)
 static inline void __raw_read_lock(raw_rwlock_t *rw)
 {
 	asm volatile(LOCK_PREFIX " subl $1,(%0)\n\t"
-		     "jns 1f\n"
-		     "call __read_lock_failed\n\t"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "into\n0:\n"
+		     ".pushsection .fixup,\"ax\"\n"
 		     "1:\n"
+		     LOCK_PREFIX " addl $1,(%0)\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
+#endif
+
+		     "jns 2f\n"
+		     "call __read_lock_failed\n\t"
+		     "2:\n"
 		     ::LOCK_PTR_REG (rw) : "memory");
 }
 
 static inline void __raw_write_lock(raw_rwlock_t *rw)
 {
 	asm volatile(LOCK_PREFIX " subl %1,(%0)\n\t"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX " addl %1,(%0)\n"
+		     "into\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
 		     "jz 1f\n"
 		     "call __write_lock_failed\n\t"
 		     "1:\n"
@@ -265,12 +284,32 @@ static inline int __raw_write_trylock(raw_rwlock_t *lock)
 
 static inline void __raw_read_unlock(raw_rwlock_t *rw)
 {
-	asm volatile(LOCK_PREFIX "incl %0" :"+m" (rw->lock) : : "memory");
+	asm volatile(LOCK_PREFIX "incl %0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "into\n0:\n"
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     LOCK_PREFIX "decl %0\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
+#endif
+
+		     :"+m" (rw->lock) : : "memory");
 }
 
 static inline void __raw_write_unlock(raw_rwlock_t *rw)
 {
-	asm volatile(LOCK_PREFIX "addl %1, %0"
+	asm volatile(LOCK_PREFIX "addl %1, %0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX "subl %1,%0\n"
+		     "into\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
 		     : "+m" (rw->lock) : "i" (RW_LOCK_BIAS) : "memory");
 }
 

@@ -53,6 +53,11 @@
 #include <linux/audit.h>
 #include <linux/random.h>
 
+#ifdef CONFIG_PAX_REFCOUNT
+#include <linux/kallsyms.h>
+#include <linux/kprobes.h>
+#endif
+
 #include <asm/uaccess.h>
 #include <asm/mmu_context.h>
 #include <asm/tlb.h>
@@ -1632,6 +1637,17 @@ void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
 	free_page((unsigned long)buffer_fault);
 	pax_report_insns(pc, sp);
 	do_coredump(SIGKILL, SIGKILL, regs);
+}
+#endif
+
+#ifdef CONFIG_PAX_REFCOUNT
+void pax_report_refcount_overflow(struct pt_regs *regs)
+{
+	printk(KERN_ERR "PAX: refcount overflow detected in: %s:%d, uid/euid: %u/%u\n",
+			 current->comm, task_pid_nr(current), current->uid, current->euid);
+	print_symbol(KERN_ERR "PAX: refcount overflow occured at: %s\n", instruction_pointer(regs));
+	show_registers(regs);
+	force_sig_specific(SIGKILL, current);
 }
 #endif
 
