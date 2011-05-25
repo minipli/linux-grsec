@@ -110,11 +110,6 @@ atomic_add_ret_unchecked: /* %o0 = increment, %o1 = atomic_ptr */
 	BACKOFF_SETUP(%o2)
 1:	lduw	[%o1], %g1
 	addcc	%g1, %o0, %g7
-
-#ifdef CONFIG_PAX_REFCOUNT
-	tvs	%icc, 6
-#endif
-
 	cas	[%o1], %g1, %g7
 	cmp	%g1, %g7
 	bne,pn	%icc, 2f
