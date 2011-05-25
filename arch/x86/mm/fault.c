@@ -1493,7 +1493,7 @@ void pax_report_insns(void *pc, void *sp)
 	printk(KERN_ERR "PAX: bytes at PC: ");
 	for (i = 0; i < 20; i++) {
 		unsigned char c;
-		if (get_user(c, (unsigned char __user *)pc+i))
+		if (get_user(c, (__force unsigned char __user *)pc+i))
 			printk(KERN_CONT "?? ");
 		else
 			printk(KERN_CONT "%02x ", c);
@@ -1503,7 +1503,7 @@ void pax_report_insns(void *pc, void *sp)
 	printk(KERN_ERR "PAX: bytes at SP-%lu: ", (unsigned long)sizeof(long));
 	for (i = -1; i < 80 / sizeof(long); i++) {
 		unsigned long c;
-		if (get_user(c, (unsigned long __user *)sp+i))
+		if (get_user(c, (__force unsigned long __user *)sp+i))
 #ifdef CONFIG_X86_32
 			printk(KERN_CONT "???????? ");
 #else
