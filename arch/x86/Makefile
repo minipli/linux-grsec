@@ -258,3 +258,11 @@ endef
 CLEAN_FILES += arch/x86/boot/fdimage \
 	       arch/x86/boot/image.iso \
 	       arch/x86/boot/mtools.conf
+
+archprepare:
+	@if ! $(LD) --build-id=none /dev/null -o /dev/null >/dev/null 2>&1 ; then \
+		echo -n '*** ${VERSION}.${PATCHLEVEL} PaX kernels no longer build ' ; \
+		echo 'correctly with old versions of binutils.' ; \
+		echo '*** Please upgrade your binutils to 2.18 or newer' ; \
+		false ; \
+	fi
