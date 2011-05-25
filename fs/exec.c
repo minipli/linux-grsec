@@ -52,11 +52,23 @@
 #include <linux/tracehook.h>
 #include <linux/kmod.h>
 #include <linux/fsnotify.h>
+#include <linux/random.h>
+#include <linux/seq_file.h>
+
+#ifdef CONFIG_PAX_REFCOUNT
+#include <linux/kallsyms.h>
+#include <linux/kdebug.h>
+#endif
 
 #include <asm/uaccess.h>
 #include <asm/mmu_context.h>
 #include <asm/tlb.h>
 #include "internal.h"
+
+#ifdef CONFIG_PAX_HOOK_ACL_FLAGS
+void (*pax_set_initial_flags_func)(struct linux_binprm *bprm);
+EXPORT_SYMBOL(pax_set_initial_flags_func);
+#endif
 
 int core_uses_pid;
 char core_pattern[CORENAME_MAX_SIZE] = "core";
@@ -169,18 +181,10 @@ static struct page *get_arg_page(struct linux_binprm *bprm, unsigned long pos,
 		int write)
 {
 	struct page *page;
-	int ret;
 
-#ifdef CONFIG_STACK_GROWSUP
-	if (write) {
-		ret = expand_stack_downwards(bprm->vma, pos);
-		if (ret < 0)
-			return NULL;
-	}
-#endif
-	ret = get_user_pages(current, bprm->mm, pos,
-			1, write, 1, &page, NULL);
-	if (ret <= 0)
+	if (0 > expand_stack_downwards(bprm->vma, pos))
+		return NULL;
+	if (0 >= get_user_pages(current, bprm->mm, pos, 1, write, 1, &page, NULL))
 		return NULL;
 
 	if (write) {
@@ -252,6 +256,11 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	vma->vm_end = STACK_TOP_MAX;
 	vma->vm_start = vma->vm_end - PAGE_SIZE;
 	vma->vm_flags = VM_STACK_FLAGS;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	vma->vm_flags &= ~(VM_EXEC | VM_MAYEXEC);
+#endif
+
 	vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
 	err = insert_vm_struct(mm, vma);
 	if (err)
@@ -260,6 +269,12 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	mm->stack_vm = mm->total_vm = 1;
 	up_write(&mm->mmap_sem);
 	bprm->p = vma->vm_end - sizeof(void *);
+
+#ifdef CONFIG_PAX_RANDUSTACK
+	if (randomize_va_space)
+		bprm->p ^= (pax_get_random_long() & ~15) & ~PAGE_MASK;
+#endif
+
 	return 0;
 err:
 	up_write(&mm->mmap_sem);
@@ -520,6 +535,10 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 	if (vma != find_vma(mm, new_start))
 		return -EFAULT;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	BUG_ON(pax_find_mirror_vma(vma));
+#endif
+
 	/*
 	 * cover the whole range: [new_start, old_end)
 	 */
@@ -608,6 +627,14 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	bprm->exec -= stack_shift;
 
 	down_write(&mm->mmap_sem);
+
+	/* Move stack pages down in memory. */
+	if (stack_shift) {
+		ret = shift_arg_pages(vma, stack_shift);
+		if (ret)
+			goto out_unlock;
+	}
+
 	vm_flags = VM_STACK_FLAGS;
 
 	/*
@@ -621,20 +648,23 @@ int setup_arg_pages(struct linux_binprm *bprm,
 		vm_flags &= ~VM_EXEC;
 	vm_flags |= mm->def_flags;
 
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+	if (mm->pax_flags & (MF_PAX_PAGEEXEC | MF_PAX_SEGMEXEC)) {
+		vm_flags &= ~VM_EXEC;
+
+#ifdef CONFIG_PAX_MPROTECT
+		if (mm->pax_flags & MF_PAX_MPROTECT)
+			vm_flags &= ~VM_MAYEXEC;
+#endif
+
+	}
+#endif
+
 	ret = mprotect_fixup(vma, &prev, vma->vm_start, vma->vm_end,
 			vm_flags);
 	if (ret)
 		goto out_unlock;
 	BUG_ON(prev != vma);
-
-	/* Move stack pages down in memory. */
-	if (stack_shift) {
-		ret = shift_arg_pages(vma, stack_shift);
-		if (ret) {
-			up_write(&mm->mmap_sem);
-			return ret;
-		}
-	}
 
 #ifdef CONFIG_STACK_GROWSUP
 	stack_base = vma->vm_end + EXTRA_STACK_VM_PAGES * PAGE_SIZE;
@@ -647,7 +677,7 @@ int setup_arg_pages(struct linux_binprm *bprm,
 
 out_unlock:
 	up_write(&mm->mmap_sem);
-	return 0;
+	return ret;
 }
 EXPORT_SYMBOL(setup_arg_pages);
 
@@ -1519,6 +1549,154 @@ out:
 	*out_ptr = 0;
 	return ispipe;
 }
+
+int pax_check_flags(unsigned long *flags)
+{
+	int retval = 0;
+
+#if !defined(CONFIG_X86_32) || !defined(CONFIG_PAX_SEGMEXEC)
+	if (*flags & MF_PAX_SEGMEXEC)
+	{
+		*flags &= ~MF_PAX_SEGMEXEC;
+		retval = -EINVAL;
+	}
+#endif
+
+	if ((*flags & MF_PAX_PAGEEXEC)
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	    &&  (*flags & MF_PAX_SEGMEXEC)
+#endif
+
+	   )
+	{
+		*flags &= ~MF_PAX_PAGEEXEC;
+		retval = -EINVAL;
+	}
+
+	if ((*flags & MF_PAX_MPROTECT)
+
+#ifdef CONFIG_PAX_MPROTECT
+	    && !(*flags & (MF_PAX_PAGEEXEC | MF_PAX_SEGMEXEC))
+#endif
+
+	   )
+	{
+		*flags &= ~MF_PAX_MPROTECT;
+		retval = -EINVAL;
+	}
+
+	if ((*flags & MF_PAX_EMUTRAMP)
+
+#ifdef CONFIG_PAX_EMUTRAMP
+	    && !(*flags & (MF_PAX_PAGEEXEC | MF_PAX_SEGMEXEC))
+#endif
+
+	   )
+	{
+		*flags &= ~MF_PAX_EMUTRAMP;
+		retval = -EINVAL;
+	}
+
+	return retval;
+}
+
+EXPORT_SYMBOL(pax_check_flags);
+
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
+{
+	struct task_struct *tsk = current;
+	struct mm_struct *mm = current->mm;
+	char *buffer_exec = (char *)__get_free_page(GFP_KERNEL);
+	char *buffer_fault = (char *)__get_free_page(GFP_KERNEL);
+	char *path_exec = NULL;
+	char *path_fault = NULL;
+	unsigned long start = 0UL, end = 0UL, offset = 0UL;
+
+	if (buffer_exec && buffer_fault) {
+		struct vm_area_struct *vma, *vma_exec = NULL, *vma_fault = NULL;
+
+		down_read(&mm->mmap_sem);
+		vma = mm->mmap;
+		while (vma && (!vma_exec || !vma_fault)) {
+			if ((vma->vm_flags & VM_EXECUTABLE) && vma->vm_file)
+				vma_exec = vma;
+			if (vma->vm_start <= (unsigned long)pc && (unsigned long)pc < vma->vm_end)
+				vma_fault = vma;
+			vma = vma->vm_next;
+		}
+		if (vma_exec) {
+			path_exec = d_path(&vma_exec->vm_file->f_path, buffer_exec, PAGE_SIZE);
+			if (IS_ERR(path_exec))
+				path_exec = "<path too long>";
+			else {
+				path_exec = mangle_path(buffer_exec, path_exec, "\t\n\\");
+				if (path_exec) {
+					*path_exec = 0;
+					path_exec = buffer_exec;
+				} else
+					path_exec = "<path too long>";
+			}
+		}
+		if (vma_fault) {
+			start = vma_fault->vm_start;
+			end = vma_fault->vm_end;
+			offset = vma_fault->vm_pgoff << PAGE_SHIFT;
+			if (vma_fault->vm_file) {
+				path_fault = d_path(&vma_fault->vm_file->f_path, buffer_fault, PAGE_SIZE);
+				if (IS_ERR(path_fault))
+					path_fault = "<path too long>";
+				else {
+					path_fault = mangle_path(buffer_fault, path_fault, "\t\n\\");
+					if (path_fault) {
+						*path_fault = 0;
+						path_fault = buffer_fault;
+					} else
+						path_fault = "<path too long>";
+				}
+			} else
+				path_fault = "<anonymous mapping>";
+		}
+		up_read(&mm->mmap_sem);
+	}
+	printk(KERN_ERR "PAX: execution attempt in: %s, %08lx-%08lx %08lx\n", path_fault, start, end, offset);
+	printk(KERN_ERR "PAX: terminating task: %s(%s):%d, uid/euid: %u/%u, "
+			"PC: %p, SP: %p\n", path_exec, tsk->comm, task_pid_nr(tsk),
+			task_uid(tsk), task_euid(tsk), pc, sp);
+	free_page((unsigned long)buffer_exec);
+	free_page((unsigned long)buffer_fault);
+	pax_report_insns(pc, sp);
+	do_coredump(SIGKILL, SIGKILL, regs);
+}
+#endif
+
+#ifdef CONFIG_PAX_REFCOUNT
+void pax_report_refcount_overflow(struct pt_regs *regs)
+{
+	printk(KERN_ERR "PAX: refcount overflow detected in: %s:%d, uid/euid: %u/%u\n",
+			 current->comm, task_pid_nr(current), current_uid(), current_euid());
+	print_symbol(KERN_ERR "PAX: refcount overflow occured at: %s\n", instruction_pointer(regs));
+	show_registers(regs);
+	force_sig_specific(SIGKILL, current);
+}
+#endif
+
+#ifdef CONFIG_PAX_USERCOPY
+void pax_report_leak_to_user(const void *ptr, unsigned long len)
+{
+	printk(KERN_ERR "PAX: kernel memory leak attempt detected from %p (%lu bytes)\n", ptr, len);
+	dump_stack();
+	do_group_exit(SIGKILL);
+}
+
+void pax_report_overflow_from_user(const void *ptr, unsigned long len)
+{
+	printk(KERN_ERR "PAX: kernel memory overflow attempt detected to %p (%lu bytes)\n", ptr, len);
+	dump_stack();
+	do_group_exit(SIGKILL);
+}
+#endif
 
 static int zap_process(struct task_struct *start)
 {

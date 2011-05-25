@@ -10,6 +10,8 @@
 #include <linux/lockdep.h>
 #include <asm/page.h>
 
+#define set_fs(x)	(current_thread_info()->addr_limit = (x))
+
 /*
  * Copy To/From Userspace
  */

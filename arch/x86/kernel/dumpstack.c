@@ -178,7 +178,7 @@ void dump_stack(void)
 #endif
 
 	printk("Pid: %d, comm: %.20s %s %s %.*s\n",
-		current->pid, current->comm, print_tainted(),
+		task_pid_nr(current), current->comm, print_tainted(),
 		init_utsname()->release,
 		(int)strcspn(init_utsname()->version, " "),
 		init_utsname()->version);
@@ -288,7 +288,7 @@ void die(const char *str, struct pt_regs *regs, long err)
 	unsigned long flags = oops_begin();
 	int sig = SIGSEGV;
 
-	if (!user_mode_vm(regs))
+	if (!user_mode(regs))
 		report_bug(regs->ip, regs);
 
 	if (__die(str, regs, err))

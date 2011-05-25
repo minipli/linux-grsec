@@ -151,7 +151,7 @@ static int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma)
 		if (len < 1)
 			len = 1;
 		seq_printf(m, "%*c", len, ' ');
-		seq_path(m, &file->f_path, "");
+		seq_path(m, &file->f_path, "\n\\");
 	}
 
 	seq_putc(m, '\n');
