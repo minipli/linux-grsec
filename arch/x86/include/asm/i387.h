@@ -92,6 +92,11 @@ static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
 {
 	int err;
 
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	if ((unsigned long)fx < PAX_USER_SHADOW_BASE)
+		fx = (struct i387_fxsave_struct *)((void *)fx + PAX_USER_SHADOW_BASE);
+#endif
+
 	/* See comment in fxsave() below. */
 	asm volatile("1:  rex64/fxrstor (%[fx])\n\t"
 		     "2:\n"
@@ -108,6 +113,11 @@ static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
 static inline int fxsave_user(struct i387_fxsave_struct __user *fx)
 {
 	int err;
+
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	if ((unsigned long)fx < PAX_USER_SHADOW_BASE)
+		fx = (struct i387_fxsave_struct __user *)((void __user *)fx + PAX_USER_SHADOW_BASE);
+#endif
 
 	/*
 	 * Clear the bytes not touched by the fxsave and reserved
@@ -189,13 +199,8 @@ static inline void fpu_fxsave(struct fpu *fpu)
 #endif	/* CONFIG_X86_64 */
 
 /* We need a safe address that is cheap to find and that is already
-   in L1 during context switch. The best choices are unfortunately
-   different for UP and SMP */
-#ifdef CONFIG_SMP
-#define safe_address (__per_cpu_offset[0])
-#else
-#define safe_address (kstat_cpu(0).cpustat.user)
-#endif
+   in L1 during context switch. */
+#define safe_address (init_tss[smp_processor_id()].x86_tss.sp0)
 
 /*
  * These must be called with preempt disabled

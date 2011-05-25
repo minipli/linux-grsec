@@ -43,7 +43,8 @@ struct screen_info {
 	__u16 pages;		/* 0x32 */
 	__u16 vesa_attributes;	/* 0x34 */
 	__u32 capabilities;     /* 0x36 */
-	__u8  _reserved[6];	/* 0x3a */
+	__u16 vesapm_size;	/* 0x3a */
+	__u8  _reserved[4];	/* 0x3c */
 } __attribute__((packed));
 
 #define VIDEO_TYPE_MDA		0x10	/* Monochrome Text Display	*/
