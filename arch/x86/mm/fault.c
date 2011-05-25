@@ -431,7 +431,7 @@ static void show_fault_oops(struct pt_regs *regs, unsigned long error_code,
 	if (init_mm.start_code <= address && address < init_mm.end_code)
 #endif
 		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code\n",
-				 current->comm, task_pid_nr(current), current->uid, current->euid);
+				 current->comm, task_pid_nr(current), current_uid(), current_euid());
 #endif
 
 	printk(KERN_ALERT "BUG: unable to handle kernel ");
