@@ -305,7 +305,7 @@ struct kmem_list3 {
  * Need this for bootstrapping a per node allocator.
  */
 #define NUM_INIT_LISTS (3 * MAX_NUMNODES)
-struct kmem_list3 __initdata initkmem_list3[NUM_INIT_LISTS];
+struct kmem_list3 initkmem_list3[NUM_INIT_LISTS];
 #define	CACHE_CACHE 0
 #define	SIZE_AC MAX_NUMNODES
 #define	SIZE_L3 (2 * MAX_NUMNODES)
@@ -654,14 +654,14 @@ struct cache_names {
 static struct cache_names __initdata cache_names[] = {
 #define CACHE(x) { .name = "size-" #x, .name_dma = "size-" #x "(DMA)" },
 #include <linux/kmalloc_sizes.h>
-	{NULL,}
+	{NULL, NULL}
 #undef CACHE
 };
 
 static struct arraycache_init initarray_cache __initdata =
-    { {0, BOOT_CPUCACHE_ENTRIES, 1, 0} };
+    { {0, BOOT_CPUCACHE_ENTRIES, 1, 0}, {NULL} };
 static struct arraycache_init initarray_generic =
-    { {0, BOOT_CPUCACHE_ENTRIES, 1, 0} };
+    { {0, BOOT_CPUCACHE_ENTRIES, 1, 0}, {NULL} };
 
 /* internal cache of cache description objs */
 static struct kmem_cache cache_cache = {
@@ -4436,6 +4436,41 @@ static int __init slab_proc_init(void)
 }
 module_init(slab_proc_init);
 #endif
+
+void check_object_size(const void *ptr, unsigned long n, bool to)
+{
+	struct page *page;
+	int size;
+
+	if (!n)
+		return;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		goto report;
+
+	if (!virt_addr_valid(ptr))
+		return;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page))
+		/* TODO: check for stack based ptr */
+		return;
+
+	size = obj_size(virt_to_cache(ptr));
+	if (n > size)
+		goto report;
+
+	/* TODO: figure out how to find beginning of object if ptr is inside one */
+	return;
+
+report:
+	if (to)
+		pax_report_leak_to_user(ptr, n);
+	else
+		pax_report_overflow_from_user(ptr, n);
+}
+EXPORT_SYMBOL(check_object_size);
 
 /**
  * ksize - get the actual amount of memory allocated for a given object

@@ -91,7 +91,7 @@ static void __exit_idle(void)
 void exit_idle(void)
 {
 	/* idle loop has pid 0 */
-	if (current->pid)
+	if (task_pid_nr(current))
 		return;
 	__exit_idle();
 }
@@ -112,6 +112,8 @@ static inline void play_dead(void)
 void cpu_idle(void)
 {
 	current_thread_info()->status |= TS_POLLING;
+	current->stack_canary = pax_get_random_long();
+	write_pda(stack_canary, current->stack_canary);
 	/* endless idle loop with no priority at all */
 	while (1) {
 		tick_nohz_stop_sched_tick(1);
@@ -160,7 +162,7 @@ void __show_regs(struct pt_regs *regs, int all)
 	if (!board)
 		board = "";
 	printk(KERN_INFO "Pid: %d, comm: %.20s %s %s %.*s %s\n",
-		current->pid, current->comm, print_tainted(),
+		task_pid_nr(current), current->comm, print_tainted(),
 		init_utsname()->release,
 		(int)strcspn(init_utsname()->version, " "),
 		init_utsname()->version, board);
@@ -230,7 +232,7 @@ void exit_thread(void)
 	struct thread_struct *t = &me->thread;
 
 	if (me->thread.io_bitmap_ptr) {
-		struct tss_struct *tss = &per_cpu(init_tss, get_cpu());
+		struct tss_struct *tss = init_tss + get_cpu();
 
 		kfree(t->io_bitmap_ptr);
 		t->io_bitmap_ptr = NULL;
@@ -537,7 +539,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	struct thread_struct *prev = &prev_p->thread;
 	struct thread_struct *next = &next_p->thread;
 	int cpu = smp_processor_id();
-	struct tss_struct *tss = &per_cpu(init_tss, cpu);
+	struct tss_struct *tss = init_tss + cpu;
 	unsigned fsindex, gsindex;
 
 	/* we're going to use this soon, after a few expensive things */
@@ -626,7 +628,6 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 		  (unsigned long)task_stack_page(next_p) +
 		  THREAD_SIZE - PDA_STACKOFFSET);
 #ifdef CONFIG_CC_STACKPROTECTOR
-	write_pda(stack_canary, next_p->stack_canary);
 	/*
 	 * Build time only check to make sure the stack_canary is at
 	 * offset 40 in the pda; this is a gcc ABI requirement
@@ -725,12 +726,11 @@ unsigned long get_wchan(struct task_struct *p)
 	if (!p || p == current || p->state == TASK_RUNNING)
 		return 0;
 	stack = (unsigned long)task_stack_page(p);
-	if (p->thread.sp < stack || p->thread.sp >= stack+THREAD_SIZE)
+	if (p->thread.sp < stack || p->thread.sp > stack+THREAD_SIZE-8-sizeof(u64))
 		return 0;
 	fp = *(u64 *)(p->thread.sp);
 	do {
-		if (fp < (unsigned long)stack ||
-		    fp >= (unsigned long)stack+THREAD_SIZE)
+		if (fp < stack || fp > stack+THREAD_SIZE-8-sizeof(u64))
 			return 0;
 		ip = *(u64 *)(fp+8);
 		if (!in_sched_functions(ip))
@@ -838,17 +838,4 @@ long do_arch_prctl(struct task_struct *task, int code, unsigned long addr)
 long sys_arch_prctl(int code, unsigned long addr)
 {
 	return do_arch_prctl(current, code, addr);
-}
-
-unsigned long arch_align_stack(unsigned long sp)
-{
-	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
-		sp -= get_random_int() % 8192;
-	return sp & ~0xf;
-}
-
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long range_end = mm->brk + 0x02000000;
-	return randomize_range(mm->brk, range_end, 0) ? : mm->brk;
 }
