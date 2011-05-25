@@ -1232,6 +1232,10 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	   merely specific addresses, but regions of memory -- perhaps
 	   this feature should be incorporated into all ports?  */
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(current->mm->pax_flags & MF_PAX_RANDMMAP) || !filp)
+#endif
+
 	if (addr) {
 		addr = arch_get_unmapped_area_1 (PAGE_ALIGN(addr), len, limit);
 		if (addr != (unsigned long) -ENOMEM)
@@ -1239,8 +1243,8 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	}
 
 	/* Next, try allocating at TASK_UNMAPPED_BASE.  */
-	addr = arch_get_unmapped_area_1 (PAGE_ALIGN(TASK_UNMAPPED_BASE),
-					 len, limit);
+	addr = arch_get_unmapped_area_1 (PAGE_ALIGN(current->mm->mmap_base), len, limit);
+
 	if (addr != (unsigned long) -ENOMEM)
 		return addr;
 

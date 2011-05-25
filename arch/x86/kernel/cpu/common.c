@@ -4,7 +4,6 @@
 #include <linux/smp.h>
 #include <linux/module.h>
 #include <linux/percpu.h>
-#include <linux/bootmem.h>
 #include <asm/processor.h>
 #include <asm/i387.h>
 #include <asm/msr.h>
@@ -21,42 +20,6 @@
 #endif
 
 #include "cpu.h"
-
-DEFINE_PER_CPU(struct gdt_page, gdt_page) = { .gdt = {
-	[GDT_ENTRY_KERNEL_CS] = { { { 0x0000ffff, 0x00cf9a00 } } },
-	[GDT_ENTRY_KERNEL_DS] = { { { 0x0000ffff, 0x00cf9200 } } },
-	[GDT_ENTRY_DEFAULT_USER_CS] = { { { 0x0000ffff, 0x00cffa00 } } },
-	[GDT_ENTRY_DEFAULT_USER_DS] = { { { 0x0000ffff, 0x00cff200 } } },
-	/*
-	 * Segments used for calling PnP BIOS have byte granularity.
-	 * They code segments and data segments have fixed 64k limits,
-	 * the transfer segment sizes are set at run time.
-	 */
-	/* 32-bit code */
-	[GDT_ENTRY_PNPBIOS_CS32] = { { { 0x0000ffff, 0x00409a00 } } },
-	/* 16-bit code */
-	[GDT_ENTRY_PNPBIOS_CS16] = { { { 0x0000ffff, 0x00009a00 } } },
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_DS] = { { { 0x0000ffff, 0x00009200 } } },
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_TS1] = { { { 0x00000000, 0x00009200 } } },
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_TS2] = { { { 0x00000000, 0x00009200 } } },
-	/*
-	 * The APM segments have byte granularity and their bases
-	 * are set at run time.  All have 64k limits.
-	 */
-	/* 32-bit code */
-	[GDT_ENTRY_APMBIOS_BASE] = { { { 0x0000ffff, 0x00409a00 } } },
-	/* 16-bit code */
-	[GDT_ENTRY_APMBIOS_BASE+1] = { { { 0x0000ffff, 0x00009a00 } } },
-	/* data */
-	[GDT_ENTRY_APMBIOS_BASE+2] = { { { 0x0000ffff, 0x00409200 } } },
-
-	[GDT_ENTRY_ESPFIX_SS] = { { { 0x00000000, 0x00c09200 } } },
-	[GDT_ENTRY_PERCPU] = { { { 0x00000000, 0x00000000 } } },
-} };
-EXPORT_PER_CPU_SYMBOL_GPL(gdt_page);
 
 __u32 cleared_cpu_caps[NCAPINTS] __cpuinitdata;
 
@@ -493,6 +456,10 @@ static void __cpuinit identify_cpu(struct cpuinfo_x86 *c)
 	 * we do "generic changes."
 	 */
 
+#if defined(CONFIG_PAX_SEGMEXEC) || defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+	setup_clear_cpu_cap(X86_FEATURE_SEP);
+#endif
+
 	/* If the model name is still unset, do table lookup. */
 	if (!c->x86_model_id[0]) {
 		char *p;
@@ -629,7 +596,7 @@ static __init int setup_disablecpuid(char *arg)
 }
 __setup("clearcpuid=", setup_disablecpuid);
 
-cpumask_t cpu_initialized __cpuinitdata = CPU_MASK_NONE;
+cpumask_t cpu_initialized = CPU_MASK_NONE;
 
 void __init early_cpu_init(void)
 {
@@ -658,7 +625,7 @@ void switch_to_new_gdt(void)
 {
 	struct desc_ptr gdt_descr;
 
-	gdt_descr.address = (long)get_cpu_gdt_table(smp_processor_id());
+	gdt_descr.address = (unsigned long)get_cpu_gdt_table(smp_processor_id());
 	gdt_descr.size = GDT_SIZE - 1;
 	load_gdt(&gdt_descr);
 	asm("mov %0, %%fs" : : "r" (__KERNEL_PERCPU) : "memory");
@@ -674,7 +641,7 @@ void __cpuinit cpu_init(void)
 {
 	int cpu = smp_processor_id();
 	struct task_struct *curr = current;
-	struct tss_struct *t = &per_cpu(init_tss, cpu);
+	struct tss_struct *t = init_tss + cpu;
 	struct thread_struct *thread = &curr->thread;
 
 	if (cpu_test_and_set(cpu, cpu_initialized)) {
@@ -729,7 +696,7 @@ void __cpuinit cpu_init(void)
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
-void __cpuinit cpu_uninit(void)
+void cpu_uninit(void)
 {
 	int cpu = raw_smp_processor_id();
 	cpu_clear(cpu, cpu_initialized);

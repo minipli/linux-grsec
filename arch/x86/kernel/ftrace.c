@@ -103,9 +103,9 @@ notrace int ftrace_update_ftrace_func(ftrace_func_t func)
 	unsigned char old[MCOUNT_INSN_SIZE], *new;
 	int ret;
 
-	memcpy(old, &ftrace_call, MCOUNT_INSN_SIZE);
+	memcpy(old, (void *)ktla_ktva((unsigned long)ftrace_call), MCOUNT_INSN_SIZE);
 	new = ftrace_call_replace(ip, (unsigned long)func);
-	ret = ftrace_modify_code(ip, old, new);
+	ret = ftrace_modify_code(ktla_ktva(ip), old, new);
 
 	return ret;
 }
@@ -120,9 +120,9 @@ notrace int ftrace_mcount_set(unsigned long *data)
 	 * Replace the mcount stub with a pointer to the
 	 * ip recorder function.
 	 */
-	memcpy(old, &mcount_call, MCOUNT_INSN_SIZE);
+	memcpy(old, ktla_ktva(mcount_call), MCOUNT_INSN_SIZE);
 	new = ftrace_call_replace(ip, *addr);
-	*addr = ftrace_modify_code(ip, old, new);
+	*addr = ftrace_modify_code(ktla_ktva(ip), old, new);
 
 	return 0;
 }

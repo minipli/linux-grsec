@@ -365,7 +365,7 @@ static struct dmi_system_id __devinitdata msi_k8t_dmi_table[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "MS-6702E"),
 		},
 	},
-	{}
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL }
 };
 
 /*
@@ -436,7 +436,7 @@ static struct dmi_system_id __devinitdata toshiba_ohci1394_dmi_table[] = {
 			DMI_MATCH(DMI_PRODUCT_VERSION, "PSA40U"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL }
 };
 
 static void __devinit pci_pre_fixup_toshiba_ohci1394(struct pci_dev *dev)

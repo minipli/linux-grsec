@@ -814,6 +814,11 @@ static int __cpuinit do_boot_cpu(int apicid, int cpu)
 		.cpu = cpu,
 		.done = COMPLETION_INITIALIZER_ONSTACK(c_idle.done),
 	};
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	INIT_WORK(&c_idle.work, do_fork_idle);
 
 #ifdef CONFIG_X86_64
@@ -864,7 +869,17 @@ do_rest:
 	cpu_pda(cpu)->pcurrent = c_idle.idle;
 	clear_tsk_thread_flag(c_idle.idle, TIF_FORK);
 #endif
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	early_gdt_descr.address = (unsigned long)get_cpu_gdt_table(cpu);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	initial_code = (unsigned long)start_secondary;
 	stack_start.sp = (void *) c_idle.idle->thread.sp;
 

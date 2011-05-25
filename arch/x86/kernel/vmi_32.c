@@ -102,18 +102,43 @@ static unsigned patch_internal(int call, unsigned len, void *insnbuf,
 {
 	u64 reloc;
 	struct vmi_relocation_info *const rel = (struct vmi_relocation_info *)&reloc;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	reloc = call_vrom_long_func(vmi_rom, get_reloc,	call);
 	switch(rel->type) {
 		case VMI_RELOCATION_CALL_REL:
 			BUG_ON(len < 5);
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_open_kernel(cr0);
+#endif
+
 			*(char *)insnbuf = MNEM_CALL;
 			patch_offset(insnbuf, ip, (unsigned long)rel->eip);
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_close_kernel(cr0);
+#endif
+
 			return 5;
 
 		case VMI_RELOCATION_JUMP_REL:
 			BUG_ON(len < 5);
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_open_kernel(cr0);
+#endif
+
 			*(char *)insnbuf = MNEM_JMP;
 			patch_offset(insnbuf, ip, (unsigned long)rel->eip);
+
+#ifdef CONFIG_PAX_KERNEXEC
+			pax_close_kernel(cr0);
+#endif
+
 			return 5;
 
 		case VMI_RELOCATION_NOP:
@@ -526,14 +551,14 @@ static void vmi_set_pud(pud_t *pudp, pud_t pudval)
 
 static void vmi_pte_clear(struct mm_struct *mm, unsigned long addr, pte_t *ptep)
 {
-	const pte_t pte = { .pte = 0 };
+	const pte_t pte = __pte(0ULL);
 	vmi_check_page_type(__pa(ptep) >> PAGE_SHIFT, VMI_PAGE_PTE);
 	vmi_ops.set_pte(pte, ptep, vmi_flags_addr(mm, addr, VMI_PAGE_PT, 0));
 }
 
 static void vmi_pmd_clear(pmd_t *pmd)
 {
-	const pte_t pte = { .pte = 0 };
+	const pte_t pte = __pte(0ULL);
 	vmi_check_page_type(__pa(pmd) >> PAGE_SHIFT, VMI_PAGE_PMD);
 	vmi_ops.set_pte(pte, (pte_t *)pmd, VMI_PAGE_PD);
 }
@@ -562,8 +587,8 @@ vmi_startup_ipi_hook(int phys_apicid, unsigned long start_eip,
 	ap.ss = __KERNEL_DS;
 	ap.esp = (unsigned long) start_esp;
 
-	ap.ds = __USER_DS;
-	ap.es = __USER_DS;
+	ap.ds = __KERNEL_DS;
+	ap.es = __KERNEL_DS;
 	ap.fs = __KERNEL_PERCPU;
 	ap.gs = 0;
 
@@ -758,11 +783,19 @@ static inline int __init activate_vmi(void)
 	u64 reloc;
 	const struct vmi_relocation_info *rel = (struct vmi_relocation_info *)&reloc;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	if (call_vrom_func(vmi_rom, vmi_init) != 0) {
 		printk(KERN_ERR "VMI ROM failed to initialize!");
 		return 0;
 	}
 	savesegment(cs, kernel_cs);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
 
 	pv_info.paravirt_enabled = 1;
 	pv_info.kernel_rpl = kernel_cs & SEGMENT_RPL_MASK;
@@ -953,6 +986,10 @@ static inline int __init activate_vmi(void)
 	}
 
 	para_fill(pv_irq_ops.safe_halt, Halt);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
 
 	/*
 	 * Alternative instruction rewriting doesn't happen soon enough

@@ -16,6 +16,6 @@ extern struct machine_ops machine_ops;
 
 void native_machine_crash_shutdown(struct pt_regs *regs);
 void native_machine_shutdown(void);
-void machine_real_restart(const unsigned char *code, int length);
+void machine_real_restart(const unsigned char *code, unsigned int length);
 
 #endif	/* _ASM_REBOOT_H */
