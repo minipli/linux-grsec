@@ -217,6 +217,9 @@ copy_from_user(void *to, const void __user *from, unsigned long size)
 	if ((long)size < 0)
 		return size;
 
+	if (!__builtin_constant_p(size))
+		check_object_size(to, size, false);
+
 	ret = ___copy_from_user(to, from, size);
 	if (unlikely(ret))
 		ret = copy_from_user_fixup(to, from, size);
@@ -236,6 +239,9 @@ copy_to_user(void __user *to, const void *from, unsigned long size)
 
 	if ((long)size < 0)
 		return size;
+
+	if (!__builtin_constant_p(size))
+		check_object_size(from, size, true);
 
 	ret = ___copy_to_user(to, from, size);
 	if (unlikely(ret))

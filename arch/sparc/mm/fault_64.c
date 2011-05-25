@@ -484,35 +484,6 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 		}
 	} while (0);
 
-	do { /* PaX: patched PLT emulation #7 */
-		unsigned int sethi, ba, nop;
-
-		err = get_user(sethi, (unsigned int *)regs->tpc);
-		err |= get_user(ba, (unsigned int *)(regs->tpc+4));
-		err |= get_user(nop, (unsigned int *)(regs->tpc+8));
-
-		if (err)
-			break;
-
-		if ((sethi & 0xFFC00000U) == 0x03000000U &&
-		    (ba & 0xFFF00000U) == 0x30600000U &&
-		    nop == 0x01000000U)
-		{
-			unsigned long addr;
-
-			addr = (sethi & 0x003FFFFFU) << 10;
-			regs->u_regs[UREG_G1] = addr;
-			addr = regs->tpc + ((((ba | 0xFFFFFFFFFFF80000UL) ^ 0x00040000UL) + 0x00040000UL) << 2);
-
-			if (test_thread_flag(TIF_32BIT))
-				addr &= 0xFFFFFFFFUL;
-
-			regs->tpc = addr;
-			regs->tnpc = addr+4;
-			return 2;
-		}
-	} while (0);
-
 	do { /* PaX: unpatched PLT emulation step 1 */
 		unsigned int sethi, ba, nop;
 
@@ -614,6 +585,7 @@ emulate:
 		}
 	} while (0);
 
+#ifdef CONFIG_PAX_DLRESOLVE
 	do { /* PaX: unpatched PLT emulation step 2 */
 		unsigned int save, call, nop;
 
@@ -638,6 +610,37 @@ emulate:
 			return 3;
 		}
 	} while (0);
+#endif
+
+	do { /* PaX: patched PLT emulation #7, must be AFTER the unpatched PLT emulation */
+		unsigned int sethi, ba, nop;
+
+		err = get_user(sethi, (unsigned int *)regs->tpc);
+		err |= get_user(ba, (unsigned int *)(regs->tpc+4));
+		err |= get_user(nop, (unsigned int *)(regs->tpc+8));
+
+		if (err)
+			break;
+
+		if ((sethi & 0xFFC00000U) == 0x03000000U &&
+		    (ba & 0xFFF00000U) == 0x30600000U &&
+		    nop == 0x01000000U)
+		{
+			unsigned long addr;
+
+			addr = (sethi & 0x003FFFFFU) << 10;
+			regs->u_regs[UREG_G1] = addr;
+			addr = regs->tpc + ((((ba | 0xFFFFFFFFFFF80000UL) ^ 0x00040000UL) + 0x00040000UL) << 2);
+
+			if (test_thread_flag(TIF_32BIT))
+				addr &= 0xFFFFFFFFUL;
+
+			regs->tpc = addr;
+			regs->tnpc = addr+4;
+			return 2;
+		}
+	} while (0);
+
 #endif
 
 	return 1;
