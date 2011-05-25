@@ -202,7 +202,7 @@ static void set_slob(slob_t *s, slobidx_t size, slob_t *next)
 /*
  * Return the size of a slob block.
  */
-static slobidx_t slob_units(slob_t *s)
+static slobidx_t slob_units(const slob_t *s)
 {
 	if (s->units > 0)
 		return s->units;
@@ -212,7 +212,7 @@ static slobidx_t slob_units(slob_t *s)
 /*
  * Return the next free slob block pointer after this one.
  */
-static slob_t *slob_next(slob_t *s)
+static slob_t *slob_next(const slob_t *s)
 {
 	slob_t *base = (slob_t *)((unsigned long)s & PAGE_MASK);
 	slobidx_t next;
@@ -227,7 +227,7 @@ static slob_t *slob_next(slob_t *s)
 /*
  * Returns true if s is the last free block in its page.
  */
-static int slob_last(slob_t *s)
+static int slob_last(const slob_t *s)
 {
 	return !((unsigned long)slob_next(s) & ~PAGE_MASK);
 }
@@ -524,10 +524,8 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 
 #ifdef CONFIG_PAX_USERCOPY
 	struct slob_page *sp;
-	slob_t *base, *free;
-	int offset;
-	int align;
-	int m;
+	const slob_t *free;
+	const void *base;
 
 	if (!n)
 		return;
@@ -540,32 +538,37 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 		return;
 
 	if (sp->size) {
-		const void *base = page_address(&sp->page);
+		base = page_address(&sp->page);
 		if (base <= ptr && n <= sp->size - (ptr - base))
 			return;
 		goto report;
 	}
 
 	/* some tricky double walking to find the chunk */
-#if 0
-	base = (slob_t *)((unsigned long)ptr & PAGE_MASK);
-	free = sp->free
-	while (!slob_last(free)) {
-		if (base != free) {
-			m = *(unsigned int *)base;
-			if (base <= ptr < base + m)
-				break;
-			continue;
-		}
-		
+	base = (void *)((unsigned long)ptr & PAGE_MASK);
+	free = sp->free;
+
+	while (!slob_last(free) && (void *)free <= ptr) {
+		base = free + slob_units(free);
+		free = slob_next(free);
 	}
 
-	m = base[0];
-	align = base[1];
-	offset = ptr - base - align;
-	if (offset <= m && n <= m - offset)
-		return;
-#endif
+	while (base < (void *)free) {
+		slobidx_t m = ((slob_t *)base)[0].units, align = ((slob_t *)base)[1].units;
+		int size = SLOB_UNIT * SLOB_UNITS(m + align);
+		int offset;
+
+		if (ptr < base + align)
+			goto report;
+
+		offset = ptr - base - align;
+		if (offset < m) {
+			if (n <= m - offset)
+				return;
+			goto report;
+		}
+		base += size;
+	}
 
 report:
 	if (to)
