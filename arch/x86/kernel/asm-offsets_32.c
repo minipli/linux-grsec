@@ -100,6 +100,7 @@ void foo(void)
 	DEFINE(PTRS_PER_PTE, PTRS_PER_PTE);
 	DEFINE(PTRS_PER_PMD, PTRS_PER_PMD);
 	DEFINE(PTRS_PER_PGD, PTRS_PER_PGD);
+	DEFINE(PERCPU_MODULE_RESERVE, PERCPU_MODULE_RESERVE);
 
 	OFFSET(crypto_tfm_ctx_offset, crypto_tfm, __crt_ctx);
 
@@ -113,6 +114,7 @@ void foo(void)
 	OFFSET(PV_CPU_iret, pv_cpu_ops, iret);
 	OFFSET(PV_CPU_irq_enable_sysexit, pv_cpu_ops, irq_enable_sysexit);
 	OFFSET(PV_CPU_read_cr0, pv_cpu_ops, read_cr0);
+	OFFSET(PV_CPU_write_cr0, pv_cpu_ops, write_cr0);
 #endif
 
 #ifdef CONFIG_XEN

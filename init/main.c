@@ -190,6 +190,40 @@ static int __init set_reset_devices(char *str)
 
 __setup("reset_devices", set_reset_devices);
 
+#if defined(CONFIG_PAX_MEMORY_UDEREF) && defined(CONFIG_X86_32)
+static int __init setup_pax_nouderef(char *str)
+{
+	unsigned int cpu;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
+	for (cpu = 0; cpu < NR_CPUS; cpu++)
+		get_cpu_gdt_table(cpu)[GDT_ENTRY_KERNEL_DS].b = 0x00cf9300;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
+	return 1;
+}
+__setup("pax_nouderef", setup_pax_nouderef);
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+unsigned int pax_softmode;
+
+static int __init setup_pax_softmode(char *str)
+{
+	get_option(&str, &pax_softmode);
+	return 1;
+}
+__setup("pax_softmode=", setup_pax_softmode);
+#endif
+
 static char * argv_init[MAX_INIT_ARGS+2] = { "init", NULL, };
 char * envp_init[MAX_INIT_ENVS+2] = { "HOME=/", "TERM=linux", NULL, };
 static const char *panic_later, *panic_param;
@@ -388,7 +422,7 @@ static void __init setup_nr_cpu_ids(void)
 }
 
 #ifndef CONFIG_HAVE_SETUP_PER_CPU_AREA
-unsigned long __per_cpu_offset[NR_CPUS] __read_mostly;
+unsigned long __per_cpu_offset[NR_CPUS] __read_only;
 
 EXPORT_SYMBOL(__per_cpu_offset);
 
@@ -704,6 +738,7 @@ int do_one_initcall(initcall_t fn)
 {
 	int count = preempt_count();
 	ktime_t delta;
+	const char *msg1 = "", *msg2 = "";
 	char msgbuf[64];
 	struct boot_trace it;
 
@@ -730,15 +765,15 @@ int do_one_initcall(initcall_t fn)
 		sprintf(msgbuf, "error code %d ", it.result);
 
 	if (preempt_count() != count) {
-		strlcat(msgbuf, "preemption imbalance ", sizeof(msgbuf));
+		msg1 = " preemption imbalance";
 		preempt_count() = count;
 	}
 	if (irqs_disabled()) {
-		strlcat(msgbuf, "disabled interrupts ", sizeof(msgbuf));
+		msg2 = " disabled interrupts";
 		local_irq_enable();
 	}
-	if (msgbuf[0]) {
-		printk("initcall %pF returned with %s\n", fn, msgbuf);
+	if (msgbuf[0] || *msg1 || *msg2) {
+		printk("initcall %pF returned with %s%s%s\n", fn, msgbuf, msg1, msg2);
 	}
 
 	return it.result;
