@@ -510,6 +510,10 @@ static void __init do_boot_cpu(__u8 cpu)
 	__u32 *hijack_vector;
 	__u32 start_phys_address = setup_trampoline();
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	/* There's a clever trick to this: The linux trampoline is
 	 * compiled to begin at absolute location zero, so make the
 	 * address zero but have the data segment selector compensate
@@ -529,7 +533,17 @@ static void __init do_boot_cpu(__u8 cpu)
 
 	init_gdt(cpu);
 	per_cpu(current_task, cpu) = idle;
-	early_gdt_descr.address = (unsigned long)get_cpu_gdt_table(cpu);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
+	early_gdt_descr.address = get_cpu_gdt_table(cpu);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	irq_ctx_init(cpu);
 
 	/* Note: Don't modify initial ss override */
@@ -1141,7 +1155,7 @@ void smp_local_timer_interrupt(void)
 			    per_cpu(prof_counter, cpu);
 		}
 
-		update_process_times(user_mode_vm(get_irq_regs()));
+		update_process_times(user_mode(get_irq_regs()));
 	}
 
 	if (((1 << cpu) & voyager_extended_vic_processors) == 0)

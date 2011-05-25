@@ -20,6 +20,7 @@
 #include <asm/pgalloc.h>
 #include <asm/proto.h>
 #include <asm/pat.h>
+#include <asm/desc.h>
 
 /*
  * The current flushing context - we pass it instead of 5 arguments:
@@ -213,7 +214,7 @@ static inline pgprot_t static_protections(pgprot_t prot, unsigned long address,
 	 * Does not cover __inittext since that is gone later on. On
 	 * 64bit we do not enforce !NX on the low mapping
 	 */
-	if (within(address, (unsigned long)_text, (unsigned long)_etext))
+	if (within(address, ktla_ktva((unsigned long)_text), ktla_ktva((unsigned long)_etext)))
 		pgprot_val(forbidden) |= _PAGE_NX;
 
 	/*
@@ -275,8 +276,20 @@ EXPORT_SYMBOL_GPL(lookup_address);
  */
 static void __set_pmd_pte(pte_t *kpte, unsigned long address, pte_t pte)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	/* change init_mm */
 	set_pte_atomic(kpte, pte);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 #ifdef CONFIG_X86_32
 	if (!SHARED_KERNEL_PMD) {
 		struct page *page;

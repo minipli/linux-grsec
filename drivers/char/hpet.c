@@ -959,7 +959,7 @@ static struct acpi_driver hpet_acpi_driver = {
 		},
 };
 
-static struct miscdevice hpet_misc = { HPET_MINOR, "hpet", &hpet_fops };
+static struct miscdevice hpet_misc = { HPET_MINOR, "hpet", &hpet_fops, {NULL, NULL}, NULL, NULL };
 
 static int __init hpet_init(void)
 {

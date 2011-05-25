@@ -343,7 +343,7 @@ static void xen_set_ldt(const void *addr, unsigned entries)
 static void xen_load_gdt(const struct desc_ptr *dtr)
 {
 	unsigned long *frames;
-	unsigned long va = dtr->address;
+	unsigned long va = (unsigned long)dtr->address;
 	unsigned int size = dtr->size + 1;
 	unsigned pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
 	int f;
@@ -358,7 +358,7 @@ static void xen_load_gdt(const struct desc_ptr *dtr)
 	mcs = xen_mc_entry(sizeof(*frames) * pages);
 	frames = mcs.args;
 
-	for (f = 0; va < dtr->address + size; va += PAGE_SIZE, f++) {
+	for (f = 0; va < (unsigned long)dtr->address + size; va += PAGE_SIZE, f++) {
 		frames[f] = virt_to_mfn(va);
 		make_lowmem_page_readonly((void *)va);
 	}
@@ -467,7 +467,7 @@ static void xen_write_idt_entry(gate_desc *dt, int entrynum, const gate_desc *g)
 
 	preempt_disable();
 
-	start = __get_cpu_var(idt_desc).address;
+	start = (unsigned long)__get_cpu_var(idt_desc).address;
 	end = start + __get_cpu_var(idt_desc).size + 1;
 
 	xen_mc_flush();
@@ -1574,6 +1574,8 @@ static __init pgd_t *xen_setup_kernel_pagetable(pgd_t *pgd, unsigned long max_pf
 	convert_pfn_mfn(init_level4_pgt);
 	convert_pfn_mfn(level3_ident_pgt);
 	convert_pfn_mfn(level3_kernel_pgt);
+	convert_pfn_mfn(level3_vmalloc_pgt);
+	convert_pfn_mfn(level3_vmemmap_pgt);
 
 	l3 = m2v(pgd[pgd_index(__START_KERNEL_map)].pgd);
 	l2 = m2v(l3[pud_index(__START_KERNEL_map)].pud);
@@ -1592,9 +1594,12 @@ static __init pgd_t *xen_setup_kernel_pagetable(pgd_t *pgd, unsigned long max_pf
 	set_page_prot(init_level4_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_ident_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_kernel_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level3_vmalloc_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level3_vmemmap_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_user_vsyscall, PAGE_KERNEL_RO);
 	set_page_prot(level2_kernel_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level2_fixmap_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level1_fixmap_pgt, PAGE_KERNEL_RO);
 
 	/* Pin down new L4 */
 	pin_pagetable_pfn(MMUEXT_PIN_L4_TABLE,
