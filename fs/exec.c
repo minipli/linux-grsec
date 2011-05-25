@@ -1610,8 +1610,7 @@ void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
 			vma = vma->vm_next;
 		}
 		if (vma_exec) {
-			struct path path = {vma_exec->vm_file->f_path.mnt, vma_exec->vm_file->f_path.dentry};
-			path_exec = d_path(&path, buffer_exec, PAGE_SIZE);
+			path_exec = d_path(&vma_exec->vm_file->f_path, buffer_exec, PAGE_SIZE);
 			if (IS_ERR(path_exec))
 				path_exec = "<path too long>";
 		}
@@ -1620,8 +1619,7 @@ void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
 			end = vma_fault->vm_end;
 			offset = vma_fault->vm_pgoff << PAGE_SHIFT;
 			if (vma_fault->vm_file) {
-				struct path path = {vma_fault->vm_file->f_path.mnt, vma_fault->vm_file->f_path.dentry};
-				path_fault = d_path(&path, buffer_fault, PAGE_SIZE);
+				path_fault = d_path(&vma_fault->vm_file->f_path, buffer_fault, PAGE_SIZE);
 				if (IS_ERR(path_fault))
 					path_fault = "<path too long>";
 			} else
