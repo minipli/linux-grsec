@@ -456,7 +456,7 @@ static inline unsigned long __must_check copy_to_user(void __user *to,
 
 static inline unsigned long __must_check copy_from_user(void *to, const void __user *from, unsigned long n)
 {
-	if ((long)n < 0)
+	if ((long)n < 0 || n > INT_MAX)
 		return n;
 
 	if (!__builtin_constant_p(n))
@@ -471,7 +471,7 @@ static inline unsigned long __must_check copy_from_user(void *to, const void __u
 
 static inline unsigned long __must_check copy_to_user(void __user *to, const void *from, unsigned long n)
 {
-	if ((long)n < 0)
+	if ((long)n < 0 || n > INT_MAX)
 		return n;
 
 	if (likely(access_ok(VERIFY_WRITE, to, n))) {
