@@ -120,9 +120,9 @@ unsigned paravirt_patch_jmp(void *insnbuf, const void *target,
 
 /* Neat trick to map patch type back to the call within the
  * corresponding structure. */
-static void *get_call_destination(u8 type)
+static const void *get_call_destination(u8 type)
 {
-	struct paravirt_patch_template tmpl = {
+	const struct paravirt_patch_template tmpl = {
 		.pv_init_ops = pv_init_ops,
 		.pv_time_ops = pv_time_ops,
 		.pv_cpu_ops = pv_cpu_ops,
@@ -133,13 +133,13 @@ static void *get_call_destination(u8 type)
 		.pv_lock_ops = pv_lock_ops,
 #endif
 	};
-	return *((void **)&tmpl + type);
+	return *((const void **)&tmpl + type);
 }
 
 unsigned paravirt_patch_default(u8 type, u16 clobbers, void *insnbuf,
 				unsigned long addr, unsigned len)
 {
-	void *opfunc = get_call_destination(type);
+	const void *opfunc = get_call_destination(type);
 	unsigned ret;
 
 	if (opfunc == NULL)
@@ -178,7 +178,7 @@ unsigned paravirt_patch_insns(void *insnbuf, unsigned len,
 	if (insn_len > len || start == NULL)
 		insn_len = len;
 	else
-		memcpy(insnbuf, start, insn_len);
+		memcpy(insnbuf, ktla_ktva(start), insn_len);
 
 	return insn_len;
 }
@@ -294,22 +294,22 @@ void arch_flush_lazy_mmu_mode(void)
 	preempt_enable();
 }
 
-struct pv_info pv_info = {
+struct pv_info pv_info __read_only = {
 	.name = "bare hardware",
 	.paravirt_enabled = 0,
 	.kernel_rpl = 0,
 	.shared_kernel_pmd = 1,	/* Only used when CONFIG_X86_PAE is set */
 };
 
-struct pv_init_ops pv_init_ops = {
+struct pv_init_ops pv_init_ops __read_only = {
 	.patch = native_patch,
 };
 
-struct pv_time_ops pv_time_ops = {
+struct pv_time_ops pv_time_ops __read_only = {
 	.sched_clock = native_sched_clock,
 };
 
-struct pv_irq_ops pv_irq_ops = {
+struct pv_irq_ops pv_irq_ops __read_only = {
 	.save_fl = __PV_IS_CALLEE_SAVE(native_save_fl),
 	.restore_fl = __PV_IS_CALLEE_SAVE(native_restore_fl),
 	.irq_disable = __PV_IS_CALLEE_SAVE(native_irq_disable),
@@ -321,7 +321,7 @@ struct pv_irq_ops pv_irq_ops = {
 #endif
 };
 
-struct pv_cpu_ops pv_cpu_ops = {
+struct pv_cpu_ops pv_cpu_ops __read_only = {
 	.cpuid = native_cpuid,
 	.get_debugreg = native_get_debugreg,
 	.set_debugreg = native_set_debugreg,
@@ -382,7 +382,7 @@ struct pv_cpu_ops pv_cpu_ops = {
 	.end_context_switch = paravirt_nop,
 };
 
-struct pv_apic_ops pv_apic_ops = {
+struct pv_apic_ops pv_apic_ops __read_only = {
 #ifdef CONFIG_X86_LOCAL_APIC
 	.startup_ipi_hook = paravirt_nop,
 #endif
@@ -396,7 +396,7 @@ struct pv_apic_ops pv_apic_ops = {
 #define PTE_IDENT	__PV_IS_CALLEE_SAVE(_paravirt_ident_64)
 #endif
 
-struct pv_mmu_ops pv_mmu_ops = {
+struct pv_mmu_ops pv_mmu_ops __read_only = {
 
 	.read_cr2 = native_read_cr2,
 	.write_cr2 = native_write_cr2,
@@ -467,6 +467,12 @@ struct pv_mmu_ops pv_mmu_ops = {
 	},
 
 	.set_fixmap = native_set_fixmap,
+
+#ifdef CONFIG_PAX_KERNEXEC
+	.pax_open_kernel = native_pax_open_kernel,
+	.pax_close_kernel = native_pax_close_kernel,
+#endif
+
 };
 
 EXPORT_SYMBOL_GPL(pv_time_ops);

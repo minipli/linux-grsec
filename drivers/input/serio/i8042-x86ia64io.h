@@ -172,7 +172,7 @@ static const struct dmi_system_id __initconst i8042_dmi_noloop_table[] = {
 			DMI_MATCH(DMI_PRODUCT_VERSION, "Rev 1"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 
 /*
@@ -402,7 +402,7 @@ static const struct dmi_system_id __initconst i8042_dmi_nomux_table[] = {
 			DMI_MATCH(DMI_PRODUCT_VERSION, "0100"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 
 static const struct dmi_system_id __initconst i8042_dmi_reset_table[] = {
@@ -469,7 +469,7 @@ static const struct dmi_system_id __initconst i8042_dmi_reset_table[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "Vostro 1720"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 
 #ifdef CONFIG_PNP
@@ -488,7 +488,7 @@ static const struct dmi_system_id __initconst i8042_dmi_nopnp_table[] = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "MICRO-STAR INTERNATIONAL CO., LTD"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 
 static const struct dmi_system_id __initconst i8042_dmi_laptop_table[] = {
@@ -512,7 +512,7 @@ static const struct dmi_system_id __initconst i8042_dmi_laptop_table[] = {
 			DMI_MATCH(DMI_CHASSIS_TYPE, "14"), /* Sub-Notebook */
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 #endif
 
@@ -586,7 +586,7 @@ static const struct dmi_system_id __initconst i8042_dmi_dritek_table[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "TravelMate 4280"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, {0})}, NULL }
 };
 
 #endif /* CONFIG_X86 */
