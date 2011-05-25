@@ -46,7 +46,7 @@
 static int ccid3_debug;
 #define ccid3_pr_debug(format, a...)	DCCP_PR_DEBUG(ccid3_debug, format, ##a)
 #else
-#define ccid3_pr_debug(format, a...)
+#define ccid3_pr_debug(format, a...) do {} while (0)
 #endif
 
 static struct dccp_tx_hist *ccid3_tx_hist;

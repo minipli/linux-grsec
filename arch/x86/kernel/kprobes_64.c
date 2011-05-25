@@ -190,7 +190,19 @@ static s32 __kprobes *is_riprel(u8 *insn)
 static void __kprobes arch_copy_kprobe(struct kprobe *p)
 {
 	s32 *ripdisp;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	memcpy(p->ainsn.insn, p->addr, MAX_INSN_SIZE);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 	ripdisp = is_riprel(p->ainsn.insn);
 	if (ripdisp) {
 		/*
@@ -208,7 +220,17 @@ static void __kprobes arch_copy_kprobe(struct kprobe *p)
 		 */
 		s64 disp = (u8 *) p->addr + *ripdisp - (u8 *) p->ainsn.insn;
 		BUG_ON((s64) (s32) disp != disp); /* Sanity check.  */
+
+#ifdef CONFIG_PAX_KERNEXEC
+		pax_open_kernel(cr0);
+#endif
+
 		*ripdisp = disp;
+
+#ifdef CONFIG_PAX_KERNEXEC
+		pax_close_kernel(cr0);
+#endif
+
 	}
 	p->opcode = *p->addr;
 }

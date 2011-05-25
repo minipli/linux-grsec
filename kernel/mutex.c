@@ -82,7 +82,7 @@ __mutex_lock_slowpath(atomic_t *lock_count);
  *
  * This function is similar to (but not equivalent to) down().
  */
-void inline fastcall __sched mutex_lock(struct mutex *lock)
+inline void fastcall __sched mutex_lock(struct mutex *lock)
 {
 	might_sleep();
 	/*

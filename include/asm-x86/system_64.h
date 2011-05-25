@@ -33,6 +33,8 @@
 		     ".globl thread_return\n"					\
 		     "thread_return:\n\t"					    \
 		     "movq %%gs:%P[pda_pcurrent],%%rsi\n\t"			  \
+		     "movq %P[task_canary](%%rsi),%%r8\n\t"			  \
+		     "movq %%r8,%%gs:%P[pda_canary]\n\t"			  \
 		     "movq %P[thread_info](%%rsi),%%r8\n\t"			  \
 		     LOCK_PREFIX "btr  %[tif_fork],%P[ti_flags](%%r8)\n\t"	  \
 		     "movq %%rax,%%rdi\n\t" 					  \
@@ -44,7 +46,9 @@
 		       [ti_flags] "i" (offsetof(struct thread_info, flags)),\
 		       [tif_fork] "i" (TIF_FORK),			  \
 		       [thread_info] "i" (offsetof(struct task_struct, stack)), \
-		       [pda_pcurrent] "i" (offsetof(struct x8664_pda, pcurrent))   \
+		       [task_canary] "i" (offsetof(struct task_struct, stack_canary)), \
+		       [pda_pcurrent] "i" (offsetof(struct x8664_pda, pcurrent)),   \
+		       [pda_canary] "i" (offsetof(struct x8664_pda, stack_canary))   \
 		     : "memory", "cc" __EXTRA_CLOBBER)
     
 extern void load_gs_index(unsigned); 
@@ -139,6 +143,21 @@ static inline void write_cr8(unsigned long val)
 #define wbinvd() \
 	__asm__ __volatile__ ("wbinvd": : :"memory")
 
+#define pax_open_kernel(cr0)		\
+do {					\
+	typecheck(unsigned long, cr0);	\
+	preempt_disable();		\
+	cr0 = read_cr0();		\
+	write_cr0(cr0 & ~X86_CR0_WP);	\
+} while (0)
+
+#define pax_close_kernel(cr0)		\
+do {					\
+	typecheck(unsigned long, cr0);	\
+	write_cr0(cr0);			\
+	preempt_enable_no_resched();	\
+} while (0)
+
 #endif	/* __KERNEL__ */
 
 static inline void clflush(volatile void *__p)
@@ -179,7 +198,7 @@ static inline void clflush(volatile void *__p)
 
 void cpu_idle_wait(void);
 
-extern unsigned long arch_align_stack(unsigned long sp);
+#define arch_align_stack(x) (x)
 extern void free_init_pages(char *what, unsigned long begin, unsigned long end);
 
 #endif

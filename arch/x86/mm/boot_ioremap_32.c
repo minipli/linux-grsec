@@ -7,57 +7,37 @@
  * Written by Dave Hansen <haveblue@us.ibm.com>
  */
 
-
-/*
- * We need to use the 2-level pagetable functions, but CONFIG_X86_PAE
- * keeps that from happening.  If anyone has a better way, I'm listening.
- *
- * boot_pte_t is defined only if this all works correctly
- */
-
-#undef CONFIG_X86_PAE
 #undef CONFIG_PARAVIRT
 #include <asm/page.h>
 #include <asm/pgtable.h>
 #include <asm/tlbflush.h>
 #include <linux/init.h>
 #include <linux/stddef.h>
-
-/* 
- * I'm cheating here.  It is known that the two boot PTE pages are 
- * allocated next to each other.  I'm pretending that they're just
- * one big array. 
- */
-
-#define BOOT_PTE_PTRS (PTRS_PER_PTE*2)
-
-static unsigned long boot_pte_index(unsigned long vaddr) 
-{
-	return __pa(vaddr) >> PAGE_SHIFT;
-}
-
-static inline boot_pte_t* boot_vaddr_to_pte(void *address)
-{
-	boot_pte_t* boot_pg = (boot_pte_t*)pg0;
-	return &boot_pg[boot_pte_index((unsigned long)address)];
-}
+#include <linux/sched.h>
 
 /*
  * This is only for a caller who is clever enough to page-align
  * phys_addr and virtual_source, and who also has a preference
  * about which virtual address from which to steal ptes
  */
-static void __boot_ioremap(unsigned long phys_addr, unsigned long nrpages, 
-		    void* virtual_source)
+static void __init __boot_ioremap(unsigned long phys_addr, unsigned long nrpages, 
+		    char* virtual_source)
 {
-	boot_pte_t* pte;
-	int i;
-	char *vaddr = virtual_source;
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+	pte_t* pte;
+	unsigned int i;
+	unsigned long vaddr = (unsigned long)virtual_source;
 
-	pte = boot_vaddr_to_pte(virtual_source);
+	pgd = pgd_offset_k(vaddr);
+	pud = pud_offset(pgd, vaddr);
+	pmd = pmd_offset(pud, vaddr);
+	pte = pte_offset_kernel(pmd, vaddr);
+
 	for (i=0; i < nrpages; i++, phys_addr += PAGE_SIZE, pte++) {
 		set_pte(pte, pfn_pte(phys_addr>>PAGE_SHIFT, PAGE_KERNEL));
-		__flush_tlb_one(&vaddr[i*PAGE_SIZE]);
+		__flush_tlb_one(&virtual_source[i*PAGE_SIZE]);
 	}
 }
 

@@ -8,7 +8,7 @@
 #include <asm/processor.h>
 #include <asm/system.h>
 
-#define Dprintk(x...)
+#define Dprintk(x...) do {} while (0)
 
 /*
  * Debugging macros

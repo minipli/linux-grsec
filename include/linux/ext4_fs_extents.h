@@ -50,7 +50,7 @@
 #ifdef EXT_DEBUG
 #define ext_debug(a...)		printk(a)
 #else
-#define ext_debug(a...)
+#define ext_debug(a...)		do {} while (0)
 #endif
 
 /*

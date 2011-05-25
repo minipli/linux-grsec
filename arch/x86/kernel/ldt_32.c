@@ -56,7 +56,7 @@ static int alloc_ldt(mm_context_t *pc, int mincount, int reload)
 #ifdef CONFIG_SMP
 		cpumask_t mask;
 		preempt_disable();
-		load_LDT(pc);
+		load_LDT_nolock(pc);
 		mask = cpumask_of_cpu(smp_processor_id());
 		if (!cpus_equal(current->mm->cpu_vm_mask, mask))
 			smp_call_function(flush_ldt, NULL, 1, 1);
@@ -100,6 +100,22 @@ int init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 		retval = copy_ldt(&mm->context, &old_mm->context);
 		mutex_unlock(&old_mm->context.lock);
 	}
+
+	if (tsk == current) {
+		mm->context.vdso = ~0UL;
+
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+		mm->context.user_cs_base = 0UL;
+		mm->context.user_cs_limit = ~0UL;
+
+#if defined(CONFIG_PAX_PAGEEXEC) && defined(CONFIG_SMP)
+		cpus_clear(mm->context.cpu_user_cs_mask);
+#endif
+
+#endif
+
+	}
+
 	return retval;
 }
 
@@ -209,6 +225,13 @@ static int write_ldt(void __user * ptr, unsigned long bytecount, int oldmode)
 			goto install;
 		}
 	}
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((mm->pax_flags & MF_PAX_SEGMEXEC) && (ldt_info.contents & MODIFY_LDT_CONTENTS_CODE)) {
+		error = -EINVAL;
+		goto out_unlock;
+	}
+#endif
 
 	entry_1 = LDT_entry_a(&ldt_info);
 	entry_2 = LDT_entry_b(&ldt_info);

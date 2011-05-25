@@ -311,9 +311,6 @@ static int udf_get_block(struct inode *inode, sector_t block,
 
 	lock_kernel();
 
-	if (block < 0)
-		goto abort_negative;
-
 	if (block == UDF_I_NEXT_ALLOC_BLOCK(inode) + 1) {
 		UDF_I_NEXT_ALLOC_BLOCK(inode)++;
 		UDF_I_NEXT_ALLOC_GOAL(inode)++;
@@ -334,10 +331,6 @@ static int udf_get_block(struct inode *inode, sector_t block,
 abort:
 	unlock_kernel();
 	return err;
-
-abort_negative:
-	udf_warning(inode->i_sb, "udf_get_block", "block < 0");
-	goto abort;
 }
 
 static struct buffer_head *udf_getblk(struct inode *inode, long block,

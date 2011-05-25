@@ -318,21 +318,19 @@ void __init dmi_scan_machine(void)
 		}
 	}
 	else {
-		/*
-		 * no iounmap() for that ioremap(); it would be a no-op, but
-		 * it's so early in setup that sucker gets confused into doing
-		 * what it shouldn't if we actually call it.
-		 */
 		p = dmi_ioremap(0xF0000, 0x10000);
 		if (p == NULL)
 			goto out;
 
 		for (q = p; q < p + 0x10000; q += 16) {
 			rc = dmi_present(q);
-			if (!rc) {
-				dmi_available = 1;
-				return;
-			}
+			if (!rc)
+				break;
+		}
+		dmi_iounmap(p, 0x10000);
+		if (!rc) {
+			dmi_available = 1;
+			return;
 		}
 	}
  out:	printk(KERN_INFO "DMI not present or invalid.\n");

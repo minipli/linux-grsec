@@ -206,7 +206,25 @@ extern int vdso_enabled;
    the loader.  We need to make sure that it is out of the way of the program
    that it will "exec", and that there is sufficient room for the brk.  */
 
+#ifdef CONFIG_PAX_SEGMEXEC
+#define ELF_ET_DYN_BASE		((current->mm->pax_flags & MF_PAX_SEGMEXEC) ? SEGMEXEC_TASK_SIZE/3*2 : TASK_SIZE/3*2)
+#else
 #define ELF_ET_DYN_BASE		(TASK_SIZE / 3 * 2)
+#endif
+
+#ifdef CONFIG_PAX_ASLR
+#ifdef CONFIG_X86_32
+#define PAX_ELF_ET_DYN_BASE	0x10000000UL
+
+#define PAX_DELTA_MMAP_LEN	(current->mm->pax_flags & MF_PAX_SEGMEXEC ? 15 : 16)
+#define PAX_DELTA_STACK_LEN	(current->mm->pax_flags & MF_PAX_SEGMEXEC ? 15 : 16)
+#else
+#define PAX_ELF_ET_DYN_BASE	0x400000UL
+
+#define PAX_DELTA_MMAP_LEN	32
+#define PAX_DELTA_STACK_LEN	32
+#endif
+#endif
 
 /* This yields a mask that user programs can use to figure out what
    instruction set this CPU supports.  This could be done in user space,
@@ -246,7 +264,7 @@ extern int dump_task_extended_fpu (struct task_struct *,
 #define ELF_CORE_XFPREG_TYPE NT_PRXFPREG
 
 #define VDSO_HIGH_BASE		(__fix_to_virt(FIX_VDSO))
-#define VDSO_CURRENT_BASE	((unsigned long)current->mm->context.vdso)
+#define VDSO_CURRENT_BASE	(current->mm->context.vdso)
 #define VDSO_PRELINK		0
 
 #define VDSO_SYM(x) \
@@ -274,7 +292,7 @@ do if (vdso_enabled) {							\
 
 #define ARCH_DLINFO						\
 do if (vdso_enabled) {						\
-	NEW_AUX_ENT(AT_SYSINFO_EHDR,(unsigned long)current->mm->context.vdso);\
+	NEW_AUX_ENT(AT_SYSINFO_EHDR, current->mm->context.vdso);\
 } while (0)
 
 #endif /* !CONFIG_X86_32 */

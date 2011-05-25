@@ -67,22 +67,22 @@ static struct kvm_stats_debugfs_item {
 	int offset;
 	struct dentry *dentry;
 } debugfs_entries[] = {
-	{ "pf_fixed", STAT_OFFSET(pf_fixed) },
-	{ "pf_guest", STAT_OFFSET(pf_guest) },
-	{ "tlb_flush", STAT_OFFSET(tlb_flush) },
-	{ "invlpg", STAT_OFFSET(invlpg) },
-	{ "exits", STAT_OFFSET(exits) },
-	{ "io_exits", STAT_OFFSET(io_exits) },
-	{ "mmio_exits", STAT_OFFSET(mmio_exits) },
-	{ "signal_exits", STAT_OFFSET(signal_exits) },
-	{ "irq_window", STAT_OFFSET(irq_window_exits) },
-	{ "halt_exits", STAT_OFFSET(halt_exits) },
-	{ "halt_wakeup", STAT_OFFSET(halt_wakeup) },
-	{ "request_irq", STAT_OFFSET(request_irq_exits) },
-	{ "irq_exits", STAT_OFFSET(irq_exits) },
-	{ "light_exits", STAT_OFFSET(light_exits) },
-	{ "efer_reload", STAT_OFFSET(efer_reload) },
-	{ NULL }
+	{ "pf_fixed", STAT_OFFSET(pf_fixed), NULL },
+	{ "pf_guest", STAT_OFFSET(pf_guest), NULL },
+	{ "tlb_flush", STAT_OFFSET(tlb_flush), NULL },
+	{ "invlpg", STAT_OFFSET(invlpg), NULL },
+	{ "exits", STAT_OFFSET(exits), NULL },
+	{ "io_exits", STAT_OFFSET(io_exits), NULL },
+	{ "mmio_exits", STAT_OFFSET(mmio_exits), NULL },
+	{ "signal_exits", STAT_OFFSET(signal_exits), NULL },
+	{ "irq_window", STAT_OFFSET(irq_window_exits), NULL },
+	{ "halt_exits", STAT_OFFSET(halt_exits), NULL },
+	{ "halt_wakeup", STAT_OFFSET(halt_wakeup), NULL },
+	{ "request_irq", STAT_OFFSET(request_irq_exits), NULL },
+	{ "irq_exits", STAT_OFFSET(irq_exits), NULL },
+	{ "light_exits", STAT_OFFSET(light_exits), NULL },
+	{ "efer_reload", STAT_OFFSET(efer_reload), NULL },
+	{ NULL, 0, NULL }
 };
 
 static struct dentry *debugfs_dir;
@@ -2505,7 +2505,7 @@ static int kvm_vcpu_ioctl_translate(struct kvm_vcpu *vcpu,
 static int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu,
 				    struct kvm_interrupt *irq)
 {
-	if (irq->irq < 0 || irq->irq >= 256)
+	if (irq->irq >= 256)
 		return -EINVAL;
 	if (irqchip_in_kernel(vcpu->kvm))
 		return -ENXIO;
@@ -3250,6 +3250,9 @@ static struct miscdevice kvm_dev = {
 	KVM_MINOR,
 	"kvm",
 	&kvm_chardev_ops,
+	{NULL, NULL},
+	NULL,
+	NULL
 };
 
 /*

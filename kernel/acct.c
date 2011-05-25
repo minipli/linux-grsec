@@ -511,7 +511,7 @@ static void do_acct_process(struct file *file)
 	 */
 	flim = current->signal->rlim[RLIMIT_FSIZE].rlim_cur;
 	current->signal->rlim[RLIMIT_FSIZE].rlim_cur = RLIM_INFINITY;
-	file->f_op->write(file, (char *)&ac,
+	file->f_op->write(file, (char __user *)&ac,
 			       sizeof(acct_t), &file->f_pos);
 	current->signal->rlim[RLIMIT_FSIZE].rlim_cur = flim;
 	set_fs(fs);

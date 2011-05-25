@@ -100,8 +100,6 @@ struct cpuinfo_x86 {
 
 extern struct cpuinfo_x86 boot_cpu_data;
 extern struct cpuinfo_x86 new_cpu_data;
-extern struct tss_struct doublefault_tss;
-DECLARE_PER_CPU(struct tss_struct, init_tss);
 
 #ifdef CONFIG_SMP
 DECLARE_PER_CPU(struct cpuinfo_x86, cpu_info);
@@ -215,10 +213,18 @@ extern int bootloader_type;
  */
 #define TASK_SIZE	(PAGE_OFFSET)
 
+#ifdef CONFIG_PAX_SEGMEXEC
+#define SEGMEXEC_TASK_SIZE	(TASK_SIZE / 2)
+#endif
+
 /* This decides where the kernel will search for a free chunk of vm
  * space during mmap's.
  */
 #define TASK_UNMAPPED_BASE	(PAGE_ALIGN(TASK_SIZE / 3))
+
+#ifdef CONFIG_PAX_SEGMEXEC
+#define SEGMEXEC_TASK_UNMAPPED_BASE	(PAGE_ALIGN(SEGMEXEC_TASK_SIZE / 3))
+#endif
 
 #define HAVE_ARCH_PICK_MMAP_LAYOUT
 
@@ -344,6 +350,9 @@ struct tss_struct {
 
 #define ARCH_MIN_TASKALIGN	16
 
+extern struct tss_struct doublefault_tss;
+extern struct tss_struct init_tss[NR_CPUS];
+
 struct thread_struct {
 /* cached TLS descriptors. */
 	struct desc_struct tls_array[GDT_ENTRY_TLS_ENTRIES];
@@ -372,7 +381,7 @@ struct thread_struct {
 };
 
 #define INIT_THREAD  {							\
-	.esp0 = sizeof(init_stack) + (long)&init_stack,			\
+	.esp0 = sizeof(init_stack) + (long)&init_stack - 8,		\
 	.vm86_info = NULL,						\
 	.sysenter_cs = __KERNEL_CS,					\
 	.io_bitmap_ptr = NULL,						\
@@ -387,7 +396,7 @@ struct thread_struct {
  */
 #define INIT_TSS  {							\
 	.x86_tss = {							\
-		.esp0		= sizeof(init_stack) + (long)&init_stack, \
+		.esp0		= sizeof(init_stack) + (long)&init_stack - 8, \
 		.ss0		= __KERNEL_DS,				\
 		.ss1		= __KERNEL_CS,				\
 		.io_bitmap_base	= INVALID_IO_BITMAP_OFFSET,		\
@@ -428,11 +437,7 @@ void show_trace(struct task_struct *task, struct pt_regs *regs, unsigned long *s
 unsigned long get_wchan(struct task_struct *p);
 
 #define THREAD_SIZE_LONGS      (THREAD_SIZE/sizeof(unsigned long))
-#define KSTK_TOP(info)                                                 \
-({                                                                     \
-       unsigned long *__ptr = (unsigned long *)(info);                 \
-       (unsigned long)(&__ptr[THREAD_SIZE_LONGS]);                     \
-})
+#define KSTK_TOP(info)         ((info)->task.thread.esp0)
 
 /*
  * The below -8 is to reserve 8 bytes on top of the ring0 stack.
@@ -447,7 +452,7 @@ unsigned long get_wchan(struct task_struct *p);
 #define task_pt_regs(task)                                             \
 ({                                                                     \
        struct pt_regs *__regs__;                                       \
-       __regs__ = (struct pt_regs *)(KSTK_TOP(task_stack_page(task))-8); \
+       __regs__ = (struct pt_regs *)((task)->thread.esp0);             \
        __regs__ - 1;                                                   \
 })
 

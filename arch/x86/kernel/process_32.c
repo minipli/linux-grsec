@@ -66,15 +66,17 @@ EXPORT_SYMBOL(boot_option_idle_override);
 DEFINE_PER_CPU(struct task_struct *, current_task) = &init_task;
 EXPORT_PER_CPU_SYMBOL(current_task);
 
+#ifdef CONFIG_SMP
 DEFINE_PER_CPU(int, cpu_number);
 EXPORT_PER_CPU_SYMBOL(cpu_number);
+#endif
 
 /*
  * Return saved PC of a blocked thread.
  */
 unsigned long thread_saved_pc(struct task_struct *tsk)
 {
-	return ((unsigned long *)tsk->thread.esp)[3];
+	return tsk->thread.eip;
 }
 
 /*
@@ -313,7 +315,7 @@ void __show_registers(struct pt_regs *regs, int all)
 	unsigned long esp;
 	unsigned short ss, gs;
 
-	if (user_mode_vm(regs)) {
+	if (user_mode(regs)) {
 		esp = regs->esp;
 		ss = regs->xss & 0xffff;
 		savesegment(gs, gs);
@@ -391,8 +393,8 @@ int kernel_thread(int (*fn)(void *), void * arg, unsigned long flags)
 	regs.ebx = (unsigned long) fn;
 	regs.edx = (unsigned long) arg;
 
-	regs.xds = __USER_DS;
-	regs.xes = __USER_DS;
+	regs.xds = __KERNEL_DS;
+	regs.xes = __KERNEL_DS;
 	regs.xfs = __KERNEL_PERCPU;
 	regs.orig_eax = -1;
 	regs.eip = (unsigned long) kernel_thread_helper;
@@ -414,7 +416,7 @@ void exit_thread(void)
 		struct task_struct *tsk = current;
 		struct thread_struct *t = &tsk->thread;
 		int cpu = get_cpu();
-		struct tss_struct *tss = &per_cpu(init_tss, cpu);
+		struct tss_struct *tss = init_tss + cpu;
 
 		kfree(t->io_bitmap_ptr);
 		t->io_bitmap_ptr = NULL;
@@ -435,6 +437,7 @@ void flush_thread(void)
 {
 	struct task_struct *tsk = current;
 
+	__asm__("mov %0,%%gs\n" : : "r" (0) : "memory");
 	memset(tsk->thread.debugreg, 0, sizeof(unsigned long)*8);
 	memset(tsk->thread.tls_array, 0, sizeof(tsk->thread.tls_array));	
 	clear_tsk_thread_flag(tsk, TIF_DEBUG);
@@ -468,7 +471,7 @@ int copy_thread(int nr, unsigned long clone_flags, unsigned long esp,
 	struct task_struct *tsk;
 	int err;
 
-	childregs = task_pt_regs(p);
+	childregs = task_stack_page(p) + THREAD_SIZE - sizeof(struct pt_regs) - 8;
 	*childregs = *regs;
 	childregs->eax = 0;
 	childregs->esp = esp;
@@ -509,6 +512,11 @@ int copy_thread(int nr, unsigned long clone_flags, unsigned long esp,
 		idx = info.entry_number;
 		if (idx < GDT_ENTRY_TLS_MIN || idx > GDT_ENTRY_TLS_MAX)
 			goto out;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if ((current->mm->pax_flags & MF_PAX_SEGMEXEC) && (info.contents & MODIFY_LDT_CONTENTS_CODE))
+			goto out;
+#endif
 
 		desc = p->thread.tls_array + idx - GDT_ENTRY_TLS_MIN;
 		desc->a = LDT_entry_a(&info);
@@ -696,7 +704,7 @@ struct task_struct fastcall * __switch_to(struct task_struct *prev_p, struct tas
 	struct thread_struct *prev = &prev_p->thread,
 				 *next = &next_p->thread;
 	int cpu = smp_processor_id();
-	struct tss_struct *tss = &per_cpu(init_tss, cpu);
+	struct tss_struct *tss = init_tss + cpu;
 
 	/* never put a printk in __switch_to... printk() calls wake_up*() indirectly */
 
@@ -723,6 +731,11 @@ struct task_struct fastcall * __switch_to(struct task_struct *prev_p, struct tas
 	 * running inside of a hypervisor layer.
 	 */
 	savesegment(gs, prev->gs);
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	if (!segment_eq(task_thread_info(prev_p)->addr_limit, task_thread_info(next_p)->addr_limit))
+		__set_fs(task_thread_info(next_p)->addr_limit, cpu);
+#endif
 
 	/*
 	 * Load the per-thread Thread-Local Storage descriptor.
@@ -888,6 +901,12 @@ asmlinkage int sys_set_thread_area(struct user_desc __user *u_info)
 
 	if (copy_from_user(&info, u_info, sizeof(info)))
 		return -EFAULT;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((current->mm->pax_flags & MF_PAX_SEGMEXEC) && (info.contents & MODIFY_LDT_CONTENTS_CODE))
+		return -EINVAL;
+#endif
+
 	idx = info.entry_number;
 
 	/*
@@ -976,9 +995,27 @@ asmlinkage int sys_get_thread_area(struct user_desc __user *u_info)
 	return 0;
 }
 
-unsigned long arch_align_stack(unsigned long sp)
+#ifdef CONFIG_PAX_RANDKSTACK
+asmlinkage void pax_randomize_kstack(void)
 {
-	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
-		sp -= get_random_int() % 8192;
-	return sp & ~0xf;
+	struct thread_struct *thread = &current->thread;
+	unsigned long time;
+
+	if (!randomize_va_space)
+		return;
+
+	rdtscl(time);
+
+	/* P4 seems to return a 0 LSB, ignore it */
+#ifdef CONFIG_MPENTIUM4
+	time &= 0x1EUL;
+	time <<= 2;
+#else
+	time &= 0xFUL;
+	time <<= 3;
+#endif
+
+	thread->esp0 ^= time;
+	load_esp0(init_tss + smp_processor_id(), thread);
 }
+#endif
