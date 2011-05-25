@@ -114,8 +114,8 @@ int page_is_ram(unsigned long pagenr)
 	 * Second special case: Some BIOSen report the PC BIOS
 	 * area (640->1Mb) as ram even though it is not.
 	 */
-	if (pagenr >= (BIOS_BEGIN >> PAGE_SHIFT) &&
-		    pagenr < (BIOS_END >> PAGE_SHIFT))
+	if (pagenr >= (ISA_START_ADDRESS >> PAGE_SHIFT) &&
+		    pagenr < (ISA_END_ADDRESS >> PAGE_SHIFT))
 		return 0;
 
 	for (i = 0; i < e820.nr_map; i++) {
@@ -274,6 +274,8 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 		prot = PAGE_KERNEL_IO;
 		break;
 	}
+
+	prot = canon_pgprot(prot);
 
 	/*
 	 * Ok, go for it..
@@ -490,7 +492,7 @@ static int __init early_ioremap_debug_setup(char *str)
 early_param("early_ioremap_debug", early_ioremap_debug_setup);
 
 static __initdata int after_paging_init;
-static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __page_aligned_bss;
+static __read_only pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __aligned(PAGE_SIZE);
 
 static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 {
@@ -505,7 +507,11 @@ static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 
 static inline pte_t * __init early_ioremap_pte(unsigned long addr)
 {
+#ifdef CONFIG_X86_32
 	return &bm_pte[pte_index(addr)];
+#else
+	return &level1_fixmap_pgt[pte_index(addr)];
+#endif
 }
 
 void __init early_ioremap_init(void)
@@ -516,8 +522,10 @@ void __init early_ioremap_init(void)
 		printk(KERN_INFO "early_ioremap_init()\n");
 
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
+#ifdef CONFIG_X86_32
 	memset(bm_pte, 0, sizeof(bm_pte));
 	pmd_populate_kernel(&init_mm, pmd, bm_pte);
+#endif
 
 	/*
 	 * The boot-ioremap range spans multiple pmds, for which
