@@ -68,7 +68,7 @@
 #include <linux/freezer.h>
 #include <linux/parser.h>
 
-static struct super_operations xfs_super_operations;
+static const struct super_operations xfs_super_operations;
 static kmem_zone_t *xfs_ioend_zone;
 mempool_t *xfs_ioend_pool;
 

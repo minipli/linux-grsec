@@ -277,7 +277,6 @@ SECTIONS
   * for the boot processor.
   */
 #define INIT_PER_CPU(x) init_per_cpu__##x = per_cpu__##x + __per_cpu_load
-INIT_PER_CPU(gdt_page);
 INIT_PER_CPU(irq_stack_union);
 
 /*

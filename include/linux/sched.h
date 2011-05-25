@@ -2160,7 +2160,7 @@ static inline unsigned long *end_of_stack(struct task_struct *p)
 
 #endif
 
-static inline int object_is_on_stack(void *obj)
+static inline int object_is_on_stack(const void *obj)
 {
 	void *stack = task_stack_page(current);
 
