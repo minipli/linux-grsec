@@ -1195,20 +1195,6 @@ do_page_fault(struct pt_regs *regs, unsigned long error_code)
 	unsigned long address = read_cr2();
 
 #if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
-	if (address < PAX_USER_SHADOW_BASE && error_code == (PF_INSTR | PF_USER)) {
-		pmd_t *pmd = pax_get_pmd(current->mm, address + PAX_USER_SHADOW_BASE);
-		if (pmd) {
-			spinlock_t *ptl;
-			pte_t *pte = pte_offset_map_lock(current->mm, pmd, address + PAX_USER_SHADOW_BASE, &ptl);
-			if (pte_present(*pte)) {
-				printk(KERN_ERR "PAX: please report this to pageexec@freemail.hu\n");
-				printk(KERN_ERR "PAX: bad exit occured\n");
-				printk(KERN_ERR "PAX: faulting IP: %pS\n", (void *)regs->ip);
-				show_trace_log_lvl(NULL, NULL, (void *)regs->sp, regs->bp, KERN_ERR);
-			}
-			pte_unmap_unlock(pte, ptl);
-		}
-	}
 	if (!user_mode(regs) && address < 2 * PAX_USER_SHADOW_BASE) {
 		if (!search_exception_tables(regs->ip)) {
 			bad_area_nosemaphore(regs, error_code, address);
