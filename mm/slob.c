@@ -58,6 +58,7 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/cache.h>
@@ -472,10 +473,10 @@ static void *__kmalloc_node_align(size_t size, gfp_t gfp, int node, int align)
 		m = slob_alloc(size + align, gfp, align, node);
 		if (!m)
 			return NULL;
-		BUILD_BUG_ON(ARCH_KMALLOC_MINALIGN < 2 * sizeof slob_t);
-		BUILD_BUG_ON(ARCH_SLAB_MINALIGN < 2 * sizeof slob_t);
-		m[0] = size;
-		m[1] = align;
+		BUILD_BUG_ON(ARCH_KMALLOC_MINALIGN < 2 * SLOB_UNIT);
+		BUILD_BUG_ON(ARCH_SLAB_MINALIGN < 2 * SLOB_UNIT);
+		m[0].units = size;
+		m[1].units = align;
 		return (void *)m + align;
 	} else {
 		void *ret;
@@ -483,7 +484,7 @@ static void *__kmalloc_node_align(size_t size, gfp_t gfp, int node, int align)
 		ret = slob_new_page(gfp | __GFP_COMP, get_order(size), node);
 		if (ret) {
 			struct slob_page *sp;
-			sp = (struct slob_page *)virt_to_page(ptr);
+			sp = (struct slob_page *)virt_to_page(ret);
 			sp->size = size;
 		}
 		return ret;
@@ -509,7 +510,7 @@ void kfree(const void *block)
 	if (slob_page(sp)) {
 		int align = max(ARCH_KMALLOC_MINALIGN, ARCH_SLAB_MINALIGN);
 		slob_t *m = (slob_t *)(block - align);
-		slob_free(m, *m + align);
+		slob_free(m, m[0].units + align);
 	} else {
 		clear_slob_page(sp);
 		sp->size = 0;
@@ -534,13 +535,13 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	if (ZERO_OR_NULL_PTR(ptr))
 		goto report;
 
-	sp = (struct slob_page *)virt_to_page(ptr);
-	if (!PageSlobPage(sp))
+	sp = (struct slob_page *)virt_to_head_page(ptr);
+	if (!PageSlobPage((struct page*)sp))
 		return;
 
 	if (sp->size) {
 		const void *base = page_address(&sp->page);
-		if (base <= ptr && n <= sp->size - ptr + base)
+		if (base <= ptr && n <= sp->size - (ptr - base))
 			return;
 		goto report;
 	}
@@ -589,7 +590,7 @@ size_t ksize(const void *block)
 	if (slob_page(sp)) {
 		int align = max(ARCH_KMALLOC_MINALIGN, ARCH_SLAB_MINALIGN);
 		slob_t *m = (slob_t *)(block - align);
-		return SLOB_UNITS(*m) * SLOB_UNIT;
+		return SLOB_UNITS(m[0].units) * SLOB_UNIT;
 	} else
 		return sp->page.private;
 }

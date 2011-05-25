@@ -442,8 +442,8 @@ config PAX_REFCOUNT
 
 config PAX_USERCOPY
 	bool "Bounds check heap objects copies between kernel and userland"
-	depends on X86
-	depends on SLAB || SLUB
+	depends on X86_32
+	depends on SLAB || SLUB || SLOB
 	help
 	  By saying Y here the kernel will enforce the size of heap objects
 	  when they are copied in either direction between the kernel and
