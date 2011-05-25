@@ -55,7 +55,7 @@
 
 #ifdef CONFIG_PAX_REFCOUNT
 #include <linux/kallsyms.h>
-#include <linux/kprobes.h>
+#include <linux/kdebug.h>
 #endif
 
 #include <asm/uaccess.h>
