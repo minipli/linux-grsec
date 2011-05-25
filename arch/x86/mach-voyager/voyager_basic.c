@@ -123,7 +123,7 @@ int __init voyager_memory_detect(int region, __u32 * start, __u32 * length)
 	__u8 cmos[4];
 	ClickMap_t *map;
 	unsigned long map_addr;
-	unsigned long old;
+	pte_t old;
 
 	if (region >= CLICK_ENTRIES) {
 		printk("Voyager: Illegal ClickMap region %d\n", region);
@@ -138,7 +138,7 @@ int __init voyager_memory_detect(int region, __u32 * start, __u32 * length)
 
 	/* steal page 0 for this */
 	old = pg0[0];
-	pg0[0] = ((map_addr & PAGE_MASK) | _PAGE_RW | _PAGE_PRESENT);
+	pg0[0] = __pte((map_addr & PAGE_MASK) | _PAGE_RW | _PAGE_PRESENT);
 	local_flush_tlb();
 	/* now clear everything out but page 0 */
 	map = (ClickMap_t *) (map_addr & (~PAGE_MASK));
