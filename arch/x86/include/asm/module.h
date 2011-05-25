@@ -59,6 +59,12 @@
 #error unknown processor family
 #endif
 
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+#define MODULE_PAX_UDEREF "UDEREF "
+#else
+#define MODULE_PAX_UDEREF ""
+#endif
+
 #ifdef CONFIG_X86_32
 # ifdef CONFIG_4KSTACKS
 #  define MODULE_STACKSIZE "4KSTACKS "
@@ -70,12 +76,9 @@
 # else
 #  define MODULE_PAX_KERNEXEC ""
 # endif
-# ifdef CONFIG_PAX_MEMORY_UDEREF
-#  define MODULE_PAX_UDEREF "UDEREF "
-# else
-#  define MODULE_PAX_UDEREF ""
-# endif
 # define MODULE_ARCH_VERMAGIC MODULE_PROC_FAMILY MODULE_STACKSIZE MODULE_PAX_KERNEXEC MODULE_PAX_UDEREF
+#else
+# define MODULE_ARCH_VERMAGIC MODULE_PAX_UDEREF
 #endif
 
 #endif /* _ASM_X86_MODULE_H */
