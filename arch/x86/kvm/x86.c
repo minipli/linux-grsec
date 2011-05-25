@@ -81,45 +81,45 @@ static void update_cr8_intercept(struct kvm_vcpu *vcpu);
 static int kvm_dev_ioctl_get_supported_cpuid(struct kvm_cpuid2 *cpuid,
 				    struct kvm_cpuid_entry2 __user *entries);
 
-struct kvm_x86_ops *kvm_x86_ops;
+const struct kvm_x86_ops *kvm_x86_ops;
 EXPORT_SYMBOL_GPL(kvm_x86_ops);
 
 int ignore_msrs = 0;
 module_param_named(ignore_msrs, ignore_msrs, bool, S_IRUGO | S_IWUSR);
 
 struct kvm_stats_debugfs_item debugfs_entries[] = {
-	{ "pf_fixed", VCPU_STAT(pf_fixed) },
-	{ "pf_guest", VCPU_STAT(pf_guest) },
-	{ "tlb_flush", VCPU_STAT(tlb_flush) },
-	{ "invlpg", VCPU_STAT(invlpg) },
-	{ "exits", VCPU_STAT(exits) },
-	{ "io_exits", VCPU_STAT(io_exits) },
-	{ "mmio_exits", VCPU_STAT(mmio_exits) },
-	{ "signal_exits", VCPU_STAT(signal_exits) },
-	{ "irq_window", VCPU_STAT(irq_window_exits) },
-	{ "nmi_window", VCPU_STAT(nmi_window_exits) },
-	{ "halt_exits", VCPU_STAT(halt_exits) },
-	{ "halt_wakeup", VCPU_STAT(halt_wakeup) },
-	{ "hypercalls", VCPU_STAT(hypercalls) },
-	{ "request_irq", VCPU_STAT(request_irq_exits) },
-	{ "irq_exits", VCPU_STAT(irq_exits) },
-	{ "host_state_reload", VCPU_STAT(host_state_reload) },
-	{ "efer_reload", VCPU_STAT(efer_reload) },
-	{ "fpu_reload", VCPU_STAT(fpu_reload) },
-	{ "insn_emulation", VCPU_STAT(insn_emulation) },
-	{ "insn_emulation_fail", VCPU_STAT(insn_emulation_fail) },
-	{ "irq_injections", VCPU_STAT(irq_injections) },
-	{ "nmi_injections", VCPU_STAT(nmi_injections) },
-	{ "mmu_shadow_zapped", VM_STAT(mmu_shadow_zapped) },
-	{ "mmu_pte_write", VM_STAT(mmu_pte_write) },
-	{ "mmu_pte_updated", VM_STAT(mmu_pte_updated) },
-	{ "mmu_pde_zapped", VM_STAT(mmu_pde_zapped) },
-	{ "mmu_flooded", VM_STAT(mmu_flooded) },
-	{ "mmu_recycled", VM_STAT(mmu_recycled) },
-	{ "mmu_cache_miss", VM_STAT(mmu_cache_miss) },
-	{ "mmu_unsync", VM_STAT(mmu_unsync) },
-	{ "remote_tlb_flush", VM_STAT(remote_tlb_flush) },
-	{ "largepages", VM_STAT(lpages) },
+	{ "pf_fixed", VCPU_STAT(pf_fixed), NULL },
+	{ "pf_guest", VCPU_STAT(pf_guest), NULL },
+	{ "tlb_flush", VCPU_STAT(tlb_flush), NULL },
+	{ "invlpg", VCPU_STAT(invlpg), NULL },
+	{ "exits", VCPU_STAT(exits), NULL },
+	{ "io_exits", VCPU_STAT(io_exits), NULL },
+	{ "mmio_exits", VCPU_STAT(mmio_exits), NULL },
+	{ "signal_exits", VCPU_STAT(signal_exits), NULL },
+	{ "irq_window", VCPU_STAT(irq_window_exits), NULL },
+	{ "nmi_window", VCPU_STAT(nmi_window_exits), NULL },
+	{ "halt_exits", VCPU_STAT(halt_exits), NULL },
+	{ "halt_wakeup", VCPU_STAT(halt_wakeup), NULL },
+	{ "hypercalls", VCPU_STAT(hypercalls), NULL },
+	{ "request_irq", VCPU_STAT(request_irq_exits), NULL },
+	{ "irq_exits", VCPU_STAT(irq_exits), NULL },
+	{ "host_state_reload", VCPU_STAT(host_state_reload), NULL },
+	{ "efer_reload", VCPU_STAT(efer_reload), NULL },
+	{ "fpu_reload", VCPU_STAT(fpu_reload), NULL },
+	{ "insn_emulation", VCPU_STAT(insn_emulation), NULL },
+	{ "insn_emulation_fail", VCPU_STAT(insn_emulation_fail), NULL },
+	{ "irq_injections", VCPU_STAT(irq_injections), NULL },
+	{ "nmi_injections", VCPU_STAT(nmi_injections), NULL },
+	{ "mmu_shadow_zapped", VM_STAT(mmu_shadow_zapped), NULL },
+	{ "mmu_pte_write", VM_STAT(mmu_pte_write), NULL },
+	{ "mmu_pte_updated", VM_STAT(mmu_pte_updated), NULL },
+	{ "mmu_pde_zapped", VM_STAT(mmu_pde_zapped), NULL },
+	{ "mmu_flooded", VM_STAT(mmu_flooded), NULL },
+	{ "mmu_recycled", VM_STAT(mmu_recycled), NULL },
+	{ "mmu_cache_miss", VM_STAT(mmu_cache_miss), NULL },
+	{ "mmu_unsync", VM_STAT(mmu_unsync), NULL },
+	{ "remote_tlb_flush", VM_STAT(remote_tlb_flush), NULL },
+	{ "largepages", VM_STAT(lpages), NULL },
 	{ NULL }
 };
 
@@ -1638,7 +1638,7 @@ static int kvm_vcpu_ioctl_set_lapic(struct kvm_vcpu *vcpu,
 static int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu,
 				    struct kvm_interrupt *irq)
 {
-	if (irq->irq < 0 || irq->irq >= 256)
+	if (irq->irq >= 256)
 		return -EINVAL;
 	if (irqchip_in_kernel(vcpu->kvm))
 		return -ENXIO;
@@ -3220,10 +3220,10 @@ static struct notifier_block kvmclock_cpufreq_notifier_block = {
         .notifier_call  = kvmclock_cpufreq_notifier
 };
 
-int kvm_arch_init(void *opaque)
+int kvm_arch_init(const void *opaque)
 {
 	int r, cpu;
-	struct kvm_x86_ops *ops = (struct kvm_x86_ops *)opaque;
+	const struct kvm_x86_ops *ops = (const struct kvm_x86_ops *)opaque;
 
 	if (kvm_x86_ops) {
 		printk(KERN_ERR "kvm: already loaded the other module\n");
