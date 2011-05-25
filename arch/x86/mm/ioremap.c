@@ -510,7 +510,9 @@ static int __init early_ioremap_debug_setup(char *str)
 early_param("early_ioremap_debug", early_ioremap_debug_setup);
 
 static __initdata int after_paging_init;
-static __initdata pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __aligned(PAGE_SIZE);
+#ifdef CONFIG_X86_32
+static __read_only pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __aligned(PAGE_SIZE);
+#endif
 
 static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 {
@@ -542,7 +544,11 @@ void __init early_ioremap_init(void)
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
 #ifdef CONFIG_X86_32
 	memset(bm_pte, 0, sizeof(bm_pte));
+#ifdef CONFIG_COMPAT_VDSO
+	pmd_populate(&init_mm, pmd, bm_pte);
+#else
 	pmd_populate_kernel(&init_mm, pmd, bm_pte);
+#endif
 #endif
 
 	/*
