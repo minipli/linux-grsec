@@ -282,9 +282,9 @@ ENTRY(pax_enter_kernel_user)
 	.rept USER_PGD_PTRS
 #ifdef CONFIG_PARAVIRT
 	mov i*8(%rax),%rsi
-	mov $0,$sil
+	mov $0,%sil
 	lea i*8(%rax),%rdi
-	call PARA_INDIRECT(pv_mmu_ops+PV_MMU_set+pgd)
+	call PARA_INDIRECT(pv_mmu_ops+PV_MMU_set_pgd)
 #else
 	movb $0,i*8(%rax)
 #endif
@@ -323,6 +323,8 @@ ENTRY(pax_enter_kernel_user)
 ENDPROC(pax_enter_kernel_user)
 
 ENTRY(pax_exit_kernel_user)
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
 	push %rax
 	push %rdi
 
@@ -356,9 +358,9 @@ ENTRY(pax_exit_kernel_user)
 	.rept USER_PGD_PTRS
 #ifdef CONFIG_PARAVIRT
 	mov i*8(%rax),%rsi
-	mov $0x67,$sil
+	mov $0x67,%sil
 	lea i*8(%rax),%rdi
-	call PARA_INDIRECT(pv_mmu_ops+PV_MMU_set+pgd)
+	call PARA_INDIRECT(pv_mmu_ops+PV_MMU_set_pgd)
 #else
 	movb $0x67,i*8(%rax)
 #endif
@@ -367,6 +369,8 @@ ENTRY(pax_exit_kernel_user)
 
 	pop %rdi
 	pop %rax
+#endif
+
 	retq
 ENDPROC(pax_exit_kernel_user)
 
