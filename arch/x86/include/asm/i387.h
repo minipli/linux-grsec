@@ -145,6 +145,11 @@ static inline int fxsave_user(struct i387_fxsave_struct __user *fx)
 {
 	int err;
 
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	if ((unsigned long)fx < PAX_USER_SHADOW_BASE)
+		fx = (struct i387_fxsave_struct __user *)((void __user *)fx + PAX_USER_SHADOW_BASE);
+#endif
+
 	/*
 	 * Clear the bytes not touched by the fxsave and reserved
 	 * for the SW usage.
@@ -153,11 +158,6 @@ static inline int fxsave_user(struct i387_fxsave_struct __user *fx)
 			   sizeof(struct _fpx_sw_bytes));
 	if (unlikely(err))
 		return -EFAULT;
-
-#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
-	if ((unsigned long)fx < PAX_USER_SHADOW_BASE)
-		fx = (struct i387_fxsave_struct __user *)((void __user *)fx + PAX_USER_SHADOW_BASE);
-#endif
 
 	asm volatile("1:  rex64/fxsave (%[fx])\n\t"
 		     "2:\n"

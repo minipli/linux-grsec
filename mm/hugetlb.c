@@ -2321,7 +2321,6 @@ static void pax_mirror_huge_pte(struct vm_area_struct *vma, unsigned long addres
 	address_m = address + SEGMEXEC_TASK_SIZE;
 	ptep_m = huge_pte_offset(mm, address_m & HPAGE_MASK);
 	get_page(page_m);
-	page_remove_rmap(pte_page(*ptep_m));
 	hugepage_add_anon_rmap(page_m, vma_m, address_m);
 	set_huge_pte_at(mm, address_m, ptep_m, make_huge_pte(vma_m, page_m, 0));
 }

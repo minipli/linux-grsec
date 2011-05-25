@@ -2395,7 +2395,7 @@ static int move_module(struct module *mod, struct load_info *info)
 	 * after the module is initialized.
 	 */
 	kmemleak_not_leak(ptr);
-	if (!ptr) {
+	if (!ptr && mod->init_size_rw) {
 		module_free(mod, mod->module_core_rw);
 		return -ENOMEM;
 	}
@@ -2417,7 +2417,7 @@ static int move_module(struct module *mod, struct load_info *info)
 
 	ptr = module_alloc_update_bounds_rx(mod->init_size_rx);
 	kmemleak_not_leak(ptr);
-	if (!ptr) {
+	if (!ptr && mod->init_size_rx) {
 		module_free_exec(mod, mod->module_core_rx);
 		module_free(mod, mod->module_init_rw);
 		module_free(mod, mod->module_core_rw);
