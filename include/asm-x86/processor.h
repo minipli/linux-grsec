@@ -269,7 +269,7 @@ struct tss_struct {
 
 } ____cacheline_aligned;
 
-DECLARE_PER_CPU(struct tss_struct, init_tss);
+extern struct tss_struct init_tss[NR_CPUS];
 
 /*
  * Save the original ist values for checking stack pointers during debugging
@@ -832,11 +832,20 @@ static inline void spin_lock_prefetch(const void *x)
  * User space process size: 3GB (default).
  */
 #define TASK_SIZE		PAGE_OFFSET
+
+#ifdef CONFIG_PAX_SEGMEXEC
+#define SEGMEXEC_TASK_SIZE	(TASK_SIZE / 2)
+#endif
+
+#ifdef CONFIG_PAX_SEGMEXEC
+#define STACK_TOP		((current->mm->pax_flags & MF_PAX_SEGMEXEC)?SEGMEXEC_TASK_SIZE:TASK_SIZE)
+#else
 #define STACK_TOP		TASK_SIZE
-#define STACK_TOP_MAX		STACK_TOP
+#endif
+#define STACK_TOP_MAX		TASK_SIZE
 
 #define INIT_THREAD  {							  \
-	.sp0			= sizeof(init_stack) + (long)&init_stack, \
+	.sp0			= sizeof(init_stack) + (long)&init_stack - 8, \
 	.vm86_info		= NULL,					  \
 	.sysenter_cs		= __KERNEL_CS,				  \
 	.io_bitmap_ptr		= NULL,					  \
@@ -851,7 +860,7 @@ static inline void spin_lock_prefetch(const void *x)
  */
 #define INIT_TSS  {							  \
 	.x86_tss = {							  \
-		.sp0		= sizeof(init_stack) + (long)&init_stack, \
+		.sp0		= sizeof(init_stack) + (long)&init_stack - 8, \
 		.ss0		= __KERNEL_DS,				  \
 		.ss1		= __KERNEL_CS,				  \
 		.io_bitmap_base	= INVALID_IO_BITMAP_OFFSET,		  \
@@ -862,11 +871,7 @@ static inline void spin_lock_prefetch(const void *x)
 extern unsigned long thread_saved_pc(struct task_struct *tsk);
 
 #define THREAD_SIZE_LONGS      (THREAD_SIZE/sizeof(unsigned long))
-#define KSTK_TOP(info)                                                 \
-({                                                                     \
-       unsigned long *__ptr = (unsigned long *)(info);                 \
-       (unsigned long)(&__ptr[THREAD_SIZE_LONGS]);                     \
-})
+#define KSTK_TOP(info)         ((info)->task.thread.sp0)
 
 /*
  * The below -8 is to reserve 8 bytes on top of the ring0 stack.
@@ -881,7 +886,7 @@ extern unsigned long thread_saved_pc(struct task_struct *tsk);
 #define task_pt_regs(task)                                             \
 ({                                                                     \
        struct pt_regs *__regs__;                                       \
-       __regs__ = (struct pt_regs *)(KSTK_TOP(task_stack_page(task))-8); \
+       __regs__ = (struct pt_regs *)((task)->thread.sp0);              \
        __regs__ - 1;                                                   \
 })
 
@@ -897,7 +902,7 @@ extern unsigned long thread_saved_pc(struct task_struct *tsk);
  * space during mmap's.
  */
 #define IA32_PAGE_OFFSET	((current->personality & ADDR_LIMIT_3GB) ? \
-					0xc0000000 : 0xFFFFe000)
+					0xc0000000 : 0xFFFFf000)
 
 #define TASK_SIZE		(test_thread_flag(TIF_IA32) ? \
 					IA32_PAGE_OFFSET : TASK_SIZE64)
@@ -933,6 +938,10 @@ extern void start_thread(struct pt_regs *regs, unsigned long new_ip,
  * space during mmap's.
  */
 #define TASK_UNMAPPED_BASE	(PAGE_ALIGN(TASK_SIZE / 3))
+
+#ifdef CONFIG_PAX_SEGMEXEC
+#define SEGMEXEC_TASK_UNMAPPED_BASE	(PAGE_ALIGN(SEGMEXEC_TASK_SIZE / 3))
+#endif
 
 #define KSTK_EIP(task)		(task_pt_regs(task)->ip)
 

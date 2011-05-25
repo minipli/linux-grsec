@@ -37,6 +37,10 @@ int acpi_save_state_mem(void)
 {
 	struct wakeup_header *header;
 
+#if defined(CONFIG_64BIT) && defined(CONFIG_SMP) && defined(CONFIG_PAX_KERNEXEC)
+	unsigned long cr0;
+#endif
+
 	if (!acpi_realmode) {
 		printk(KERN_ERR "Could not allocate memory during boot, "
 		       "S3 disabled\n");
@@ -99,8 +103,18 @@ int acpi_save_state_mem(void)
 	header->trampoline_segment = setup_trampoline() >> 4;
 #ifdef CONFIG_SMP
 	stack_start.sp = temp_stack + 4096;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	early_gdt_descr.address =
 			(unsigned long)get_cpu_gdt_table(smp_processor_id());
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 #endif
 	initial_code = (unsigned long)wakeup_long64;
 	saved_magic = 0x123456789abcdef0;
