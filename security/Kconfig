@@ -492,7 +492,8 @@ config PAX_USERCOPY
 	  Specifically, this checking prevents information leaking from the
 	  kernel heap during kernel to userland copies (if the kernel heap
 	  object is otherwise fully initialized) and prevents kernel heap
-	  overflows during userland to kernel copies.
+	  overflows during userland to kernel copies.  Only objects belonging
+	  to explictly marked slub types are allowed to be copied at all.
 
 	  Note that the current implementation provides the strictest checks
 	  for the SLUB allocator.
