@@ -123,11 +123,11 @@ char *dbg_get_reg(int regno, void *mem, struct pt_regs *regs)
 	switch (regno) {
 #ifdef CONFIG_X86_32
 	case GDB_SS:
-		if (!user_mode_vm(regs))
+		if (!user_mode(regs))
 			*(unsigned long *)mem = __KERNEL_DS;
 		break;
 	case GDB_SP:
-		if (!user_mode_vm(regs))
+		if (!user_mode(regs))
 			*(unsigned long *)mem = kernel_stack_pointer(regs);
 		break;
 	case GDB_GS:
@@ -715,7 +715,7 @@ void kgdb_arch_set_pc(struct pt_regs *regs, unsigned long ip)
 	regs->ip = ip;
 }
 
-struct kgdb_arch arch_kgdb_ops = {
+const struct kgdb_arch arch_kgdb_ops = {
 	/* Breakpoint instruction: */
 	.gdb_bpt_instr		= { 0xcc },
 	.flags			= KGDB_HW_BREAKPOINT,
