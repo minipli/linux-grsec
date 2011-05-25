@@ -398,15 +398,13 @@ static int __init quickstart_init_input(void)
 static int __init quickstart_init(void)
 {
 	int ret;
-	acpi_status status = 0;
 
 	/* ACPI Check */
 	if (acpi_disabled)
 		return -ENODEV;
 
 	/* ACPI driver register */
-	status = acpi_bus_register_driver(&quickstart_acpi_driver);
-	if (status < 0)
+	if (acpi_bus_register_driver(&quickstart_acpi_driver) < 0)
 		return -ENODEV;
 
 	/* If existing bus with no devices */
