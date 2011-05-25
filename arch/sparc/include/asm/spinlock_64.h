@@ -102,7 +102,7 @@ static void inline __read_lock(raw_rwlock_t *lock)
 "4:	 addcc		%0, 1, %1\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-"	tvs		%icc, 6\n"
+"	tvs		%%icc, 6\n"
 #endif
 
 "	cas		[%2], %0, %1\n"
@@ -131,7 +131,7 @@ static int inline __read_trylock(raw_rwlock_t *lock)
 "	addcc		%0, 1, %1\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-"	tvs		%icc, 6\n"
+"	tvs		%%icc, 6\n"
 #endif
 
 "	cas		[%2], %0, %1\n"
@@ -155,7 +155,7 @@ static void inline __read_unlock(raw_rwlock_t *lock)
 "	subcc	%0, 1, %1\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-"	tvs		%icc, 6\n"
+"	tvs	%%icc, 6\n"
 #endif
 
 "	cas	[%2], %0, %1\n"
