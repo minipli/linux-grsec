@@ -906,13 +906,12 @@ static int vlsi_hard_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 			/* no race - tx-ring already empty */
 			vlsi_set_baud(idev, iobase);
 			netif_wake_queue(ndev);
-		}
-		else
-			;
+		} else {
 			/* keep the speed change pending like it would
 			 * for any len>0 packet. tx completion interrupt
 			 * will apply it when the tx ring becomes empty.
 			 */
+		}
 		spin_unlock_irqrestore(&idev->lock, flags);
 		dev_kfree_skb_any(skb);
 		return 0;

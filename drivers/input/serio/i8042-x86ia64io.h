@@ -135,7 +135,7 @@ static struct dmi_system_id __initdata i8042_dmi_noloop_table[] = {
 			DMI_MATCH(DMI_PRODUCT_VERSION, "5a"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL }
 };
 
 /*
@@ -322,7 +322,7 @@ static struct dmi_system_id __initdata i8042_dmi_nomux_table[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "N34AS6"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL }
 };
 
 #ifdef CONFIG_PNP
@@ -334,7 +334,7 @@ static struct dmi_system_id __initdata i8042_dmi_nopnp_table[] = {
 			DMI_MATCH(DMI_BOARD_VENDOR, "Intel Corporation"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL }
 };
 #endif
 
@@ -401,7 +401,7 @@ static struct dmi_system_id __initdata i8042_dmi_dritek_table[] = {
 			DMI_MATCH(DMI_PRODUCT_NAME, "TravelMate 4280"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL }
 };
 
 #endif /* CONFIG_X86 */

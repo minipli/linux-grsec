@@ -284,7 +284,7 @@ static const struct pci_device_id piix_pci_tbl[] = {
 	/* SATA Controller IDE (PCH) */
 	{ 0x8086, 0x3b2e, PCI_ANY_ID, PCI_ANY_ID, 0, 0, ich8_sata },
 
-	{ }	/* terminate list */
+	{ 0, 0, 0, 0, 0, 0, 0 }	/* terminate list */
 };
 
 static struct pci_driver piix_pci_driver = {
@@ -587,7 +587,7 @@ static const struct ich_laptop ich_laptop[] = {
 	{ 0x266F, 0x1025, 0x0066 },	/* ICH6 on ACER Aspire 1694WLMi */
 	{ 0x2653, 0x1043, 0x82D8 },	/* ICH6M on Asus Eee 701 */
 	/* end marker */
-	{ 0, }
+	{ 0, 0, 0 }
 };
 
 /**
@@ -1143,7 +1143,7 @@ static int piix_broken_suspend(void)
 			},
 		},
 
-		{ }	/* terminate list */
+		{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL }	/* terminate list */
 	};
 	static const char *oemstrs[] = {
 		"Tecra M3,",

@@ -118,6 +118,10 @@ set_pte_vaddr_pud(pud_t *pud_page, unsigned long vaddr, pte_t new_pte)
 	pmd_t *pmd;
 	pte_t *pte;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	pud = pud_page + pud_index(vaddr);
 	if (pud_none(*pud)) {
 		pmd = (pmd_t *) spp_getpage();
@@ -142,7 +146,16 @@ set_pte_vaddr_pud(pud_t *pud_page, unsigned long vaddr, pte_t new_pte)
 	if (!pte_none(*pte) && pte_val(new_pte) &&
 	    pte_val(*pte) != (pte_val(new_pte) & __supported_pte_mask))
 		pte_ERROR(*pte);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	set_pte(pte, new_pte);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
 
 	/*
 	 * It's enough to flush this one mapping.
@@ -184,14 +197,12 @@ static void __init __init_extra_mapping(unsigned long phys, unsigned long size,
 		pgd = pgd_offset_k((unsigned long)__va(phys));
 		if (pgd_none(*pgd)) {
 			pud = (pud_t *) spp_getpage();
-			set_pgd(pgd, __pgd(__pa(pud) | _KERNPG_TABLE |
-						_PAGE_USER));
+			set_pgd(pgd, __pgd(__pa(pud) | _PAGE_TABLE));
 		}
 		pud = pud_offset(pgd, (unsigned long)__va(phys));
 		if (pud_none(*pud)) {
 			pmd = (pmd_t *) spp_getpage();
-			set_pud(pud, __pud(__pa(pmd) | _KERNPG_TABLE |
-						_PAGE_USER));
+			set_pud(pud, __pud(__pa(pmd) | _PAGE_TABLE));
 		}
 		pmd = pmd_offset(pud, phys);
 		BUG_ON(!pmd_none(*pmd));
@@ -754,7 +765,9 @@ EXPORT_SYMBOL_GPL(memory_add_physaddr_to_nid);
  */
 int devmem_is_allowed(unsigned long pagenr)
 {
-	if (pagenr <= 256)
+	if (!pagenr)
+		return 1;
+	if ((ISA_START_ADDRESS >> PAGE_SHIFT) <= pagenr && pagenr < (ISA_END_ADDRESS >> PAGE_SHIFT))
 		return 1;
 	if (!page_is_ram(pagenr))
 		return 1;
@@ -842,6 +855,39 @@ void free_init_pages(char *what, unsigned long begin, unsigned long end)
 
 void free_initmem(void)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long addr, end;
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+
+	/* PaX: make kernel code/rodata read-only, rest non-executable */
+	for (addr = __START_KERNEL_map; addr < __START_KERNEL_map + KERNEL_IMAGE_SIZE; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		if ((unsigned long)_text <= addr && addr < (unsigned long)_data)
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		else
+			set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+
+	addr = (unsigned long)__va(__pa(__START_KERNEL_map));
+	end = addr + KERNEL_IMAGE_SIZE;
+	for (; addr < end; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		if ((unsigned long)__va(__pa(_text)) <= addr && addr < (unsigned long)__va(__pa(_data)))
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		else
+			set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+
+	flush_tlb_all();
+#endif
+
 	free_init_pages("unused kernel memory",
 			(unsigned long)(&__init_begin),
 			(unsigned long)(&__init_end));
@@ -1014,7 +1060,7 @@ int in_gate_area_no_task(unsigned long addr)
 
 const char *arch_vma_name(struct vm_area_struct *vma)
 {
-	if (vma->vm_mm && vma->vm_start == (long)vma->vm_mm->context.vdso)
+	if (vma->vm_mm && vma->vm_start == vma->vm_mm->context.vdso)
 		return "[vdso]";
 	if (vma == &gate_vma)
 		return "[vsyscall]";

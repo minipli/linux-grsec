@@ -16,6 +16,7 @@ static inline void fill_ldt(struct desc_struct *desc,
 	desc->base1 = (info->base_addr & 0x00ff0000) >> 16;
 	desc->type = (info->read_exec_only ^ 1) << 1;
 	desc->type |= info->contents << 2;
+	desc->type |= info->seg_not_present ^ 1;
 	desc->s = 1;
 	desc->dpl = 0x3;
 	desc->p = info->seg_not_present ^ 1;
@@ -27,16 +28,12 @@ static inline void fill_ldt(struct desc_struct *desc,
 }
 
 extern struct desc_ptr idt_descr;
-extern gate_desc idt_table[];
+extern gate_desc idt_table[256];
 
-struct gdt_page {
-	struct desc_struct gdt[GDT_ENTRIES];
-} __attribute__((aligned(PAGE_SIZE)));
-DECLARE_PER_CPU(struct gdt_page, gdt_page);
-
+extern struct desc_struct cpu_gdt_table[NR_CPUS][PAGE_SIZE / sizeof(struct desc_struct)];
 static inline struct desc_struct *get_cpu_gdt_table(unsigned int cpu)
 {
-	return per_cpu(gdt_page, cpu).gdt;
+	return cpu_gdt_table[cpu];
 }
 
 #ifdef CONFIG_X86_64
@@ -65,7 +62,6 @@ static inline void pack_gate(gate_desc *gate, unsigned char type,
 	gate->b = (base & 0xffff0000) |
 		  (((0x80 | type | (dpl << 5)) & 0xff) << 8);
 }
-
 #endif
 
 static inline int desc_empty(const void *ptr)
@@ -102,19 +98,48 @@ static inline int desc_empty(const void *ptr)
 static inline void native_write_idt_entry(gate_desc *idt, int entry,
 					  const gate_desc *gate)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	memcpy(&idt[entry], gate, sizeof(*gate));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 static inline void native_write_ldt_entry(struct desc_struct *ldt, int entry,
 					  const void *desc)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	memcpy(&ldt[entry], desc, 8);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 static inline void native_write_gdt_entry(struct desc_struct *gdt, int entry,
 					  const void *desc, int type)
 {
 	unsigned int size;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+#endif
+
 	switch (type) {
 	case DESC_TSS:
 		size = sizeof(tss_desc);
@@ -126,7 +151,17 @@ static inline void native_write_gdt_entry(struct desc_struct *gdt, int entry,
 		size = sizeof(struct desc_struct);
 		break;
 	}
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_open_kernel(cr0);
+#endif
+
 	memcpy(&gdt[entry], desc, size);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 static inline void pack_descriptor(struct desc_struct *desc, unsigned long base,
@@ -198,7 +233,19 @@ static inline void native_set_ldt(const void *addr, unsigned int entries)
 
 static inline void native_load_tr_desc(void)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	asm volatile("ltr %w0"::"q" (GDT_ENTRY_TSS*8));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 static inline void native_load_gdt(const struct desc_ptr *dtr)
@@ -233,8 +280,19 @@ static inline void native_load_tls(struct thread_struct *t, unsigned int cpu)
 	unsigned int i;
 	struct desc_struct *gdt = get_cpu_gdt_table(cpu);
 
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long cr0;
+
+	pax_open_kernel(cr0);
+#endif
+
 	for (i = 0; i < GDT_ENTRY_TLS_ENTRIES; i++)
 		gdt[GDT_ENTRY_TLS_MIN + i] = t->tls_array[i];
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pax_close_kernel(cr0);
+#endif
+
 }
 
 #define _LDT_empty(info)				\
@@ -371,6 +429,18 @@ static inline void set_system_gate_ist(int n, void *addr, unsigned ist)
 	BUG_ON((unsigned)n > 0xFF);
 	_set_gate(n, GATE_INTERRUPT, addr, 0x3, ist, __KERNEL_CS);
 }
+
+#ifdef CONFIG_X86_32
+static inline void set_user_cs(unsigned long base, unsigned long limit, int cpu)
+{
+	struct desc_struct d;
+
+	if (likely(limit))
+		limit = (limit - 1UL) >> PAGE_SHIFT;
+	pack_descriptor(&d, base, limit, 0xFB, 0xC);
+	write_gdt_entry(get_cpu_gdt_table(cpu), GDT_ENTRY_DEFAULT_USER_CS, &d, DESCTYPE_S);
+}
+#endif
 
 #else
 /*
