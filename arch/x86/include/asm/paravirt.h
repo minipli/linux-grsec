@@ -350,6 +350,12 @@ struct pv_mmu_ops {
 	   an mfn.  We can tell which is which from the index. */
 	void (*set_fixmap)(unsigned /* enum fixed_addresses */ idx,
 			   phys_addr_t phys, pgprot_t flags);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long (*pax_open_kernel)(void);
+	unsigned long (*pax_close_kernel)(void);
+#endif
+
 };
 
 struct raw_spinlock;
@@ -1439,6 +1445,21 @@ static inline void __set_fixmap(unsigned /* enum fixed_addresses */ idx,
 	pv_mmu_ops.set_fixmap(idx, phys, flags);
 }
 
+#ifdef CONFIG_PAX_KERNEXEC
+static inline unsigned long pax_open_kernel(void)
+{
+	return pv_mmu_ops.pax_open_kernel();
+}
+
+static inline unsigned long pax_close_kernel(void)
+{
+	return pv_mmu_ops.pax_close_kernel();
+}
+#else
+static inline unsigned long pax_open_kernel(void) { return 0; }
+static inline unsigned long pax_close_kernel(void) { return 0; }
+#endif
+
 void _paravirt_nop(void);
 u32 _paravirt_ident_32(u32);
 u64 _paravirt_ident_64(u64);
@@ -1572,7 +1593,7 @@ static inline unsigned long __raw_local_save_flags(void)
 
 static inline void raw_local_irq_restore(unsigned long f)
 {
-	PVOP_VCALLEE1(pv_irq_ops.restore_fl, f);
+	return PVOP_VCALLEE1(pv_irq_ops.restore_fl, f);
 }
 
 static inline void raw_local_irq_disable(void)
@@ -1670,7 +1691,7 @@ static inline unsigned long __raw_local_irq_save(void)
 
 #define PARA_PATCH(struct, off)        ((PARAVIRT_PATCH_##struct + (off)) / 4)
 #define PARA_SITE(ptype, clobbers, ops) _PVSITE(ptype, clobbers, ops, .long, 4)
-#define PARA_INDIRECT(addr)	*%cs:addr
+#define PARA_INDIRECT(addr)	*%ss:addr
 #endif
 
 #define INTERRUPT_RETURN						\
@@ -1695,6 +1716,31 @@ static inline unsigned long __raw_local_irq_save(void)
 		  jmp PARA_INDIRECT(pv_cpu_ops+PV_CPU_usergs_sysret32))
 
 #ifdef CONFIG_X86_32
+
+#ifdef CONFIG_PAX_KERNEXEC
+#define PAX_EXIT_KERNEL					\
+	bt $16, %esi;					\
+	jc 1f;						\
+	push %eax; push %ecx;				\
+	movl %esi, %eax;				\
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0);\
+	pop %ecx; pop %eax;				\
+1:
+
+#define PAX_ENTER_KERNEL				\
+	push %eax; push %ecx;				\
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0);	\
+	movl %eax, %esi;				\
+	bts $16, %eax;					\
+	jc 1f;						\
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0);\
+1:							\
+	pop %ecx; pop %eax;
+#else
+#define PAX_EXIT_KERNEL
+#define PAX_ENTER_KERNEL
+#endif
+
 #define GET_CR0_INTO_EAX				\
 	push %ecx; push %edx;				\
 	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0);	\
