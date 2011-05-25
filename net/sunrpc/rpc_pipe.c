@@ -858,7 +858,7 @@ EXPORT_SYMBOL_GPL(rpc_unlink);
 /*
  * populate the filesystem
  */
-static struct super_operations s_ops = {
+static const struct super_operations s_ops = {
 	.alloc_inode	= rpc_alloc_inode,
 	.destroy_inode	= rpc_destroy_inode,
 	.statfs		= simple_statfs,
