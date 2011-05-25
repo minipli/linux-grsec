@@ -19,7 +19,7 @@ int query_mca(void)
 	u8 err;
 	u16 es, bx, len;
 
-	asm("pushw %%es ; "
+	asm volatile("pushw %%es ; "
 	    "int $0x15 ; "
 	    "setc %0 ; "
 	    "movw %%es, %1 ; "

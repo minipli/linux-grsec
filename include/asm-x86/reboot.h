@@ -14,7 +14,7 @@ struct machine_ops {
 
 extern struct machine_ops machine_ops;
 
-void machine_real_restart(unsigned char *code, int length);
+void machine_real_restart(const unsigned char *code, unsigned int length);
 void native_machine_crash_shutdown(struct pt_regs *regs);
 void native_machine_shutdown(void);
 

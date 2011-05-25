@@ -1231,6 +1231,9 @@ static struct miscdevice kvm_dev = {
 	KVM_MINOR,
 	"kvm",
 	&kvm_chardev_ops,
+	{NULL, NULL},
+	NULL,
+	NULL
 };
 
 static void hardware_enable(void *junk)
