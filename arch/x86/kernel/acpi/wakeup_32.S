@@ -2,6 +2,7 @@
 #include <linux/linkage.h>
 #include <asm/segment.h>
 #include <asm/page.h>
+#include <asm/msr-index.h>
 
 #
 # wakeup_code runs in real mode, and at unknown address (determined at run-time).
@@ -79,7 +80,7 @@ wakeup_code:
 	# restore efer setting
 	movl	real_save_efer_edx - wakeup_code, %edx
 	movl	real_save_efer_eax - wakeup_code, %eax
-	mov     $0xc0000080, %ecx
+	mov	$MSR_EFER, %ecx
 	wrmsr
 4:
 	# make sure %cr4 is set correctly (features, etc)
@@ -196,13 +197,11 @@ wakeup_pmode_return:
 	# and restore the stack ... but you need gdt for this to work
 	movl	saved_context_esp, %esp
 
-	movl	%cs:saved_magic, %eax
-	cmpl	$0x12345678, %eax
+	cmpl	$0x12345678, saved_magic
 	jne	bogus_magic
 
 	# jump to place where we left off
-	movl	saved_eip,%eax
-	jmp	*%eax
+	jmp	*(saved_eip)
 
 bogus_magic:
 	jmp	bogus_magic
@@ -233,7 +232,7 @@ ENTRY(acpi_copy_wakeup_routine)
 	# save efer setting
 	pushl	%eax
 	movl	%eax, %ebx
-	mov     $0xc0000080, %ecx
+	mov	$MSR_EFER, %ecx
 	rdmsr
 	movl	%edx, real_save_efer_edx - wakeup_start (%ebx)
 	movl	%eax, real_save_efer_eax - wakeup_start (%ebx)

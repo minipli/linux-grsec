@@ -70,7 +70,7 @@ startup_32:
 	addl    $(CONFIG_PHYSICAL_ALIGN - 1), %ebx
 	andl    $(~(CONFIG_PHYSICAL_ALIGN - 1)), %ebx
 #else
-	movl $LOAD_PHYSICAL_ADDR, %ebx
+	movl $____LOAD_PHYSICAL_ADDR, %ebx
 #endif
 
 	/* Replace the compressed data size with the uncompressed size */
@@ -105,7 +105,7 @@ startup_32:
 	addl    $(CONFIG_PHYSICAL_ALIGN - 1), %ebp
 	andl    $(~(CONFIG_PHYSICAL_ALIGN - 1)), %ebp
 #else
-	movl	$LOAD_PHYSICAL_ADDR, %ebp
+	movl	$____LOAD_PHYSICAL_ADDR, %ebp
 #endif
 
 /*
@@ -159,16 +159,15 @@ relocated:
  * and where it was actually loaded.
  */
 	movl %ebp, %ebx
-	subl $LOAD_PHYSICAL_ADDR, %ebx
+	subl $____LOAD_PHYSICAL_ADDR, %ebx
 	jz   2f		/* Nothing to be done if loaded at compiled addr. */
 /*
  * Process relocations.
  */
 
 1:	subl $4, %edi
-	movl 0(%edi), %ecx
-	testl %ecx, %ecx
-	jz 2f
+	movl (%edi), %ecx
+	jecxz 2f
 	addl %ebx, -__PAGE_OFFSET(%ebx, %ecx)
 	jmp 1b
 2:

@@ -37,7 +37,7 @@ static void backtrace_address(void *data, unsigned long addr, int reliable)
 	unsigned int *depth = data;
 
 	if ((*depth)--)
-		oprofile_add_trace(addr);
+		oprofile_add_trace(ktla_ktva(addr));
 }
 
 static struct stacktrace_ops backtrace_ops = {
@@ -79,7 +79,7 @@ x86_backtrace(struct pt_regs * const regs, unsigned int depth)
 	struct frame_head *head = (struct frame_head *)frame_pointer(regs);
 	unsigned long stack = kernel_trap_sp(regs);
 
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		if (depth)
 			dump_trace(NULL, regs, (unsigned long *)stack, 0,
 				   &backtrace_ops, &depth);

@@ -118,7 +118,7 @@ static struct dmi_system_id __initdata i8042_dmi_noloop_table[] = {
 			DMI_MATCH(DMI_PRODUCT_VERSION, "VS2005R2"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL }
 };
 
 /*
@@ -284,7 +284,7 @@ static struct dmi_system_id __initdata i8042_dmi_nomux_table[] = {
 			DMI_MATCH(DMI_PRODUCT_VERSION, "3000 N100"),
 		},
 	},
-	{ }
+	{ NULL, NULL, {DMI_MATCH(DMI_NONE, NULL)}, NULL }
 };
 
 

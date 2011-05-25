@@ -115,7 +115,7 @@ unsigned int do_IRQ(struct pt_regs *regs)
 		int arg1, arg2, bx;
 
 		/* build the stack frame on the IRQ stack */
-		isp = (u32*) ((char*)irqctx + sizeof(*irqctx));
+		isp = (u32*) ((char*)irqctx + sizeof(*irqctx) - 8);
 		irqctx->tinfo.task = curctx->tinfo.task;
 		irqctx->tinfo.previous_esp = current_stack_pointer;
 
@@ -211,7 +211,7 @@ asmlinkage void do_softirq(void)
 		irqctx->tinfo.previous_esp = current_stack_pointer;
 
 		/* build the stack frame on the softirq stack */
-		isp = (u32*) ((char*)irqctx + sizeof(*irqctx));
+		isp = (u32*) ((char*)irqctx + sizeof(*irqctx) - 8);
 
 		asm volatile(
 			"       xchgl   %%ebx,%%esp     \n"
