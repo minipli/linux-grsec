@@ -122,7 +122,8 @@ typedef unsigned char  uch;
 typedef unsigned short ush;
 typedef unsigned long  ulg;
 
-#define WSIZE 0x80000000	/* Window size must be at least 32k,
+#define WSIZE 0x80000000
+				/* Window size must be at least 32k,
 				 * and a power of two
 				 * We don't actually have a window just
 				 * a huge output buffer so I report
@@ -400,7 +401,7 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 	if (heap > ((-__PAGE_OFFSET-(512<<20)-1) & 0x7fffffff))
 		error("Destination address too large");
 #ifndef CONFIG_RELOCATABLE
-	if ((u32)output != LOAD_PHYSICAL_ADDR)
+	if ((u32)output != __LOAD_PHYSICAL_ADDR)
 		error("Wrong destination address");
 #endif
 #endif
