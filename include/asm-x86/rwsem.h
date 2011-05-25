@@ -108,7 +108,12 @@ static inline void __down_read(struct rw_semaphore *sem)
 		     LOCK_PREFIX "  incl      (%%eax)\n\t"
 
 #ifdef CONFIG_PAX_REFCOUNT
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1:\n"
 		     LOCK_PREFIX "decl (%%eax)\n"
@@ -140,10 +145,18 @@ static inline int __down_read_trylock(struct rw_semaphore *sem)
 		     "  addl      %3,%2\n\t"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     LOCK_PREFIX "subl %3,%2\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     LOCK_PREFIX "subl %3,%2\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     "  jle	     2f\n\t"
@@ -169,10 +182,18 @@ static inline void __down_write_nested(struct rw_semaphore *sem, int subclass)
 		     LOCK_PREFIX "  xadd      %%edx,(%%eax)\n\t"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     "movl %%edx,(%%eax)\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     "movl %%edx,(%%eax)\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     /* subtract 0x0000ffff, returns the old value */
@@ -215,10 +236,18 @@ static inline void __up_read(struct rw_semaphore *sem)
 		     LOCK_PREFIX "  xadd      %%edx,(%%eax)\n\t"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     "movl %%edx,(%%eax)\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     "movl %%edx,(%%eax)\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     /* subtracts 1, returns the old value */
@@ -241,10 +270,18 @@ static inline void __up_write(struct rw_semaphore *sem)
 		     LOCK_PREFIX "  xaddl     %%edx,(%%eax)\n\t"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     "movl %%edx,(%%eax)\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     "movl %%edx,(%%eax)\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     /* tries to transition
@@ -267,10 +304,18 @@ static inline void __downgrade_write(struct rw_semaphore *sem)
 		     LOCK_PREFIX "  addl      %2,(%%eax)\n\t"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     LOCK_PREFIX "subl %2,(%%eax)\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     LOCK_PREFIX "subl %2,(%%eax)\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     /* transitions 0xZZZZ0001 -> 0xYYYY0001 */
@@ -291,10 +336,18 @@ static inline void rwsem_atomic_add(int delta, struct rw_semaphore *sem)
 	asm volatile(LOCK_PREFIX "addl %1,%0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     LOCK_PREFIX "subl %1,%0\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     LOCK_PREFIX "subl %1,%0\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     : "+m" (sem->count)
@@ -311,10 +364,18 @@ static inline int rwsem_atomic_update(int delta, struct rw_semaphore *sem)
 	asm volatile(LOCK_PREFIX "xadd %0,%1\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     "movl %0,%1\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     "movl %0,%1\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     : "+r" (tmp), "+m" (sem->count)

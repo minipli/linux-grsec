@@ -31,7 +31,6 @@
 #include <linux/bug.h>
 #include <linux/nmi.h>
 #include <linux/mm.h>
-#include <linux/binfmts.h>
 
 #ifdef CONFIG_EISA
 #include <linux/ioport.h>

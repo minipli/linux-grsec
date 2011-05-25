@@ -59,7 +59,7 @@ static inline void atomic_add(int i, atomic_t *v)
 #ifdef CONFIG_PAX_REFCOUNT
 		     "jno 0f\n"
 		     LOCK_PREFIX "subl %1,%0\n"
-		     "into\n0:\n"
+		     "int $4\n0:\n"
 		     _ASM_EXTABLE(0b, 0b)
 #endif
 
@@ -81,7 +81,7 @@ static inline void atomic_sub(int i, atomic_t *v)
 #ifdef CONFIG_PAX_REFCOUNT
 		     "jno 0f\n"
 		     LOCK_PREFIX "addl %1,%0\n"
-		     "into\n0:\n"
+		     "int $4\n0:\n"
 		     _ASM_EXTABLE(0b, 0b)
 #endif
 
@@ -107,7 +107,7 @@ static inline int atomic_sub_and_test(int i, atomic_t *v)
 #ifdef CONFIG_PAX_REFCOUNT
 		     "jno 0f\n"
 		     LOCK_PREFIX "addl %2,%0\n"
-		     "into\n0:\n"
+		     "int $4\n0:\n"
 		     _ASM_EXTABLE(0b, 0b)
 #endif
 
@@ -128,7 +128,8 @@ static inline void atomic_inc(atomic_t *v)
 	asm volatile(LOCK_PREFIX "incl %0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "into\n0:\n"
+		     "jno 0f\n"
+		     "int $4\n0:\n"
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1:\n"
 		     LOCK_PREFIX "decl %0\n"
@@ -152,7 +153,8 @@ static inline void atomic_dec(atomic_t *v)
 	asm volatile(LOCK_PREFIX "decl %0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "into\n0:\n"
+		     "jno 0f\n"
+		     "int $4\n0:\n"
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1: \n"
 		     LOCK_PREFIX "incl %0\n"
@@ -180,7 +182,8 @@ static inline int atomic_dec_and_test(atomic_t *v)
 	asm volatile(LOCK_PREFIX "decl %0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "into\n0:\n"
+		     "jno 0f\n"
+		     "int $4\n0:\n"
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1: \n"
 		     LOCK_PREFIX "incl %0\n"
@@ -210,7 +213,8 @@ static inline int atomic_inc_and_test(atomic_t *v)
 	asm volatile(LOCK_PREFIX "incl %0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "into\n0:\n"
+		     "jno 0f\n"
+		     "int $4\n0:\n"
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1: \n"
 		     LOCK_PREFIX "decl %0\n"
@@ -243,7 +247,7 @@ static inline int atomic_add_negative(int i, atomic_t *v)
 #ifdef CONFIG_PAX_REFCOUNT
 		     "jno 0f\n"
 		     LOCK_PREFIX "subl %2,%0\n"
-		     "into\n0:\n"
+		     "int $4\n0:\n"
 		     _ASM_EXTABLE(0b, 0b)
 #endif
 
@@ -268,7 +272,7 @@ static inline int atomic_add_return(int i, atomic_t *v)
 #ifdef CONFIG_PAX_REFCOUNT
 		     "jno 0f\n"
 		     "movl %0, %1\n"
-		     "into\n0:\n"
+		     "int $4\n0:\n"
 		     _ASM_EXTABLE(0b, 0b)
 #endif
 
@@ -325,7 +329,7 @@ static inline void atomic64_add(long i, atomic64_t *v)
 #ifdef CONFIG_PAX_REFCOUNT
 		     "jno 0f\n"
 		     LOCK_PREFIX "subq %1,%0\n"
-		     "into\n0:\n"
+		     "int $4\n0:\n"
 		     _ASM_EXTABLE(0b, 0b)
 #endif
 
@@ -347,7 +351,7 @@ static inline void atomic64_sub(long i, atomic64_t *v)
 #ifdef CONFIG_PAX_REFCOUNT
 		     "jno 0f\n"
 		     LOCK_PREFIX "addq %1,%0\n"
-		     "into\n0:\n"
+		     "int $4\n0:\n"
 		     _ASM_EXTABLE(0b, 0b)
 #endif
 
@@ -373,7 +377,7 @@ static inline int atomic64_sub_and_test(long i, atomic64_t *v)
 #ifdef CONFIG_PAX_REFCOUNT
 		     "jno 0f\n"
 		     LOCK_PREFIX "addq %2,%0\n"
-		     "into\n0:\n"
+		     "int $4\n0:\n"
 		     _ASM_EXTABLE(0b, 0b)
 #endif
 
@@ -394,7 +398,8 @@ static inline void atomic64_inc(atomic64_t *v)
 	asm volatile(LOCK_PREFIX "incq %0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "into\n0:\n"
+		     "jno 0f\n"
+		     "int $4\n0:\n"
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1:\n"
 		     LOCK_PREFIX "decq %0\n"
@@ -418,7 +423,8 @@ static inline void atomic64_dec(atomic64_t *v)
 	asm volatile(LOCK_PREFIX "decq %0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "into\n0:\n"
+		     "jno 0f\n"
+		     "int $4\n0:\n"
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1: \n"
 		     LOCK_PREFIX "incq %0\n"
@@ -446,7 +452,8 @@ static inline int atomic64_dec_and_test(atomic64_t *v)
 	asm volatile(LOCK_PREFIX "decq %0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "into\n0:\n"
+		     "jno 0f\n"
+		     "int $4\n0:\n"
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1: \n"
 		     LOCK_PREFIX "incq %0\n"
@@ -476,7 +483,8 @@ static inline int atomic64_inc_and_test(atomic64_t *v)
 	asm volatile(LOCK_PREFIX "incq %0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "into\n0:\n"
+		     "jno 0f\n"
+		     "int $4\n0:\n"
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1: \n"
 		     LOCK_PREFIX "decq %0\n"
@@ -509,7 +517,7 @@ static inline int atomic64_add_negative(long i, atomic64_t *v)
 #ifdef CONFIG_PAX_REFCOUNT
 		     "jno 0f\n"
 		     LOCK_PREFIX "subq %2,%0\n"
-		     "into\n0:\n"
+		     "int $4\n0:\n"
 		     _ASM_EXTABLE(0b, 0b)
 #endif
 
@@ -534,7 +542,7 @@ static inline long atomic64_add_return(long i, atomic64_t *v)
 #ifdef CONFIG_PAX_REFCOUNT
 		     "jno 0f\n"
 		     "movq %0, %1\n"
-		     "into\n0:\n"
+		     "int $4\n0:\n"
 		     _ASM_EXTABLE(0b, 0b)
 #endif
 

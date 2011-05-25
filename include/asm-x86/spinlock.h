@@ -229,7 +229,12 @@ static inline void __raw_read_lock(raw_rwlock_t *rw)
 	asm volatile(LOCK_PREFIX " subl $1,(%0)\n\t"
 
 #ifdef CONFIG_PAX_REFCOUNT
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1:\n"
 		     LOCK_PREFIX " addl $1,(%0)\n"
@@ -249,10 +254,18 @@ static inline void __raw_write_lock(raw_rwlock_t *rw)
 	asm volatile(LOCK_PREFIX " subl %1,(%0)\n\t"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     LOCK_PREFIX " addl %1,(%0)\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     LOCK_PREFIX " addl %1,(%0)\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     "jz 1f\n"
@@ -287,7 +300,12 @@ static inline void __raw_read_unlock(raw_rwlock_t *rw)
 	asm volatile(LOCK_PREFIX "incl %0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1:\n"
 		     LOCK_PREFIX "decl %0\n"
@@ -304,10 +322,18 @@ static inline void __raw_write_unlock(raw_rwlock_t *rw)
 	asm volatile(LOCK_PREFIX "addl %1, %0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     LOCK_PREFIX "subl %1,%0\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     LOCK_PREFIX "subl %1,%0\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     : "+m" (rw->lock) : "i" (RW_LOCK_BIAS) : "memory");

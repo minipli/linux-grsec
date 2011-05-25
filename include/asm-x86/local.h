@@ -21,7 +21,12 @@ static inline void local_inc(local_t *l)
 	asm volatile(_ASM_INC "%0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1:\n"
 		     _ASM_DEC "%0\n"
@@ -38,7 +43,12 @@ static inline void local_dec(local_t *l)
 	asm volatile(_ASM_DEC "%0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
 		     ".pushsection .fixup,\"ax\"\n"
 		     "1:\n"
 		     _ASM_INC "%0\n"
@@ -55,10 +65,18 @@ static inline void local_add(long i, local_t *l)
 	asm volatile(_ASM_ADD "%1,%0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     _ASM_SUB "%1,%0\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     _ASM_SUB "%1,%0\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     : "+m" (l->a.counter)
@@ -70,10 +88,18 @@ static inline void local_sub(long i, local_t *l)
 	asm volatile(_ASM_SUB "%1,%0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     _ASM_ADD "%1,%0\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     _ASM_ADD "%1,%0\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     : "+m" (l->a.counter)
@@ -96,10 +122,18 @@ static inline int local_sub_and_test(long i, local_t *l)
 	asm volatile(_ASM_SUB "%2,%0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     _ASM_ADD "%2,%0\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     _ASM_ADD "%2,%0\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     "sete %1\n"
@@ -123,9 +157,14 @@ static inline int local_dec_and_test(local_t *l)
 	asm volatile(_ASM_DEC "%0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
 		     ".pushsection .fixup,\"ax\"\n"
-		     "1: \n"
+		     "1:\n"
 		     _ASM_INC "%0\n"
 		     "jmp 0b\n"
 		     ".popsection\n"
@@ -153,9 +192,14 @@ static inline int local_inc_and_test(local_t *l)
 	asm volatile(_ASM_INC "%0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
 		     ".pushsection .fixup,\"ax\"\n"
-		     "1: \n"
+		     "1:\n"
 		     _ASM_DEC "%0\n"
 		     "jmp 0b\n"
 		     ".popsection\n"
@@ -184,10 +228,18 @@ static inline int local_add_negative(long i, local_t *l)
 	asm volatile(_ASM_ADD "%2,%0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     _ASM_SUB "%2,%0\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     _ASM_SUB "%2,%0\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     "sets %1\n"
@@ -216,10 +268,18 @@ static inline long local_add_return(long i, local_t *l)
 	asm volatile(_ASM_XADD "%0, %1\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
-		     "jno 0f\n"
-		     _ASM_MOV_UL "%0,%1\n"
+#ifdef CONFIG_X86_32
 		     "into\n0:\n"
-		     _ASM_EXTABLE(0b, 0b)
+#else
+		     "jno 0f\n"
+		     "int $4\n0:\n"
+#endif
+		     ".pushsection .fixup,\"ax\"\n"
+		     "1:\n"
+		     _ASM_MOV_UL "%0,%1\n"
+		     "jmp 0b\n"
+		     ".popsection\n"
+		     _ASM_EXTABLE(0b, 1b)
 #endif
 
 		     : "+r" (i), "+m" (l->a.counter)
