@@ -513,6 +513,7 @@ void kfree(const void *block)
 		slob_free(m, m[0].units + align);
 	} else {
 		clear_slob_page(sp);
+		free_slob_page(sp);
 		sp->size = 0;
 		put_page(&sp->page);
 	}

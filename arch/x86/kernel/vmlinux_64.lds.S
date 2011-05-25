@@ -16,8 +16,8 @@ jiffies_64 = jiffies;
 _proxy_pda = 1;
 PHDRS {
 	text PT_LOAD FLAGS(5);	/* R_E */
+	user PT_LOAD FLAGS(5);	/* R_E */
 	data PT_LOAD FLAGS(6);	/* RW_ */
-	user PT_LOAD FLAGS(7);	/* RWE */
 	data.init PT_LOAD FLAGS(7);	/* RWE */
 	note PT_NOTE FLAGS(0);	/* ___ */
 }
@@ -40,6 +40,8 @@ SECTIONS
 	*(.gnu.warning)
 	_etext = .;		/* End of text section */
   } :text = 0x9090
+
+  RO_DATA(PAGE_SIZE)
 
   NOTES :text :note
 
@@ -99,8 +101,6 @@ SECTIONS
 #undef VLOAD
 #undef VVIRT_OFFSET
 #undef VVIRT
-
-  RO_DATA(PAGE_SIZE)
 
 #ifdef CONFIG_PAX_KERNEXEC
   . = ALIGN(2*1024*1024);	/* Align data segment to PMD size boundary */
