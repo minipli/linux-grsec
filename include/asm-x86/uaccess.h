@@ -197,6 +197,8 @@ extern int __get_user_bad(void);
 		     "1:	movl %%eax,%%ds:0(%2)\n"		\
 		     "2:	movl %%edx,%%ds:4(%2)\n"		\
 		     "3:\n"						\
+		     "		pushl %%ss\n"				\
+		     "		popl %%ds\n"				\
 		     ".section .fixup,\"ax\"\n"				\
 		     "4:	movl %3,%0\n"				\
 		     "	jmp 3b\n"					\
