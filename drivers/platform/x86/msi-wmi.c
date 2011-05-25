@@ -138,7 +138,7 @@ static int bl_set_status(struct backlight_device *bd)
 	return msi_wmi_set_block(0, backlight_map[bright]);
 }
 
-static struct backlight_ops msi_backlight_ops = {
+static const struct backlight_ops msi_backlight_ops = {
 	.get_brightness	= bl_get,
 	.update_status	= bl_set_status,
 };
