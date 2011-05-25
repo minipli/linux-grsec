@@ -549,7 +549,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	/* some tricky double walking to find the chunk */
 #if 0
 	base = (slob_t *)((unsigned long)ptr & PAGE_MASK);
-	free = sp->free;
+	free = sp->free
 	while (!slob_last(free)) {
 		if (base != free) {
 			m = *(unsigned int *)base;

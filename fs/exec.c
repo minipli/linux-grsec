@@ -1096,7 +1096,7 @@ int check_unsafe_exec(struct linux_binprm *bprm)
 	}
 	rcu_read_unlock();
 
-	if (p->fs->users > n_fs) {
+	if (atomic_read(&p->fs->users) > n_fs) {
 		bprm->unsafe |= LSM_UNSAFE_SHARE;
 	} else {
 		res = -EAGAIN;

@@ -714,7 +714,7 @@ static int copy_fs(unsigned long clone_flags, struct task_struct *tsk)
 			write_unlock(&fs->lock);
 			return -EAGAIN;
 		}
-		fs->users++;
+		atomic_inc(&fs->users);
 		write_unlock(&fs->lock);
 		return 0;
 	}
@@ -1558,7 +1558,7 @@ static int unshare_fs(unsigned long unshare_flags, struct fs_struct **new_fsp)
 		return 0;
 
 	/* don't need lock here; in the worst case we'll do useless copy */
-	if (fs->users == 1)
+	if (atomic_read(&fs->users) == 1)
 		return 0;
 
 	*new_fsp = copy_fs_struct(fs);
@@ -1681,7 +1681,7 @@ SYSCALL_DEFINE1(unshare, unsigned long, unshare_flags)
 			fs = current->fs;
 			write_lock(&fs->lock);
 			current->fs = new_fs;
-			if (--fs->users)
+			if (atomic_dec_return(&fs->users))
 				new_fs = NULL;
 			else
 				new_fs = fs;
