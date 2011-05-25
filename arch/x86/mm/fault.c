@@ -839,8 +839,12 @@ not_pax_fault:
 	 * and pusha to work.  ("enter $65535,$31" pushes
 	 * 32 pointers and then decrements %sp by 65535.)
 	 */
-	if (address + 65536 + 32 * sizeof(unsigned long) < regs->sp)
-		goto bad_area;
+	if (address + 65536 + 32 * sizeof(unsigned long) < regs->sp) {
+		if (error_code & PF_USER)
+			goto bad_area;
+		printk(KERN_ERR "PAX: abnormal kernel stack expansion: %s(%d) %lx %lx-%lx\n", tsk->comm, task_pid_nr(tsk), address, vma->vm_start, vma->vm_end);
+		dump_stack();
+	}
 
 #ifdef CONFIG_PAX_SEGMEXEC
 	if ((mm->pax_flags & MF_PAX_SEGMEXEC) && vma->vm_end - SEGMEXEC_TASK_SIZE - 1 < address - SEGMEXEC_TASK_SIZE - 1)
