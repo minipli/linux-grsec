@@ -257,6 +257,16 @@ static int max_wakeup_granularity_ns = NSEC_PER_SEC;	/* 1 second */
 #endif
 
 static struct ctl_table kern_table[] = {
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 #ifdef CONFIG_SCHED_DEBUG
 	{
 		.ctl_name	= CTL_UNNUMBERED,
@@ -1293,15 +1303,6 @@ static struct ctl_table vm_table[] = {
 		.maxlen		= sizeof(scan_unevictable_pages),
 		.mode		= 0644,
 		.proc_handler	= &scan_unevictable_handler,
-	},
-#endif
-
-#ifdef CONFIG_PAX_SOFTMODE
-	{
-		.ctl_name	= CTL_UNNUMBERED,
-		.procname	= "pax",
-		.mode		= 0500,
-		.child		= pax_table,
 	},
 #endif
 
