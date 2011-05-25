@@ -16,6 +16,14 @@ typedef struct {
 	long long counter;
 } atomic64_t;
 
+#ifdef CONFIG_PAX_REFCOUNT
+typedef struct {
+	long long counter;
+} atomic64_unchecked_t;
+#else
+typedef atomic64_t atomic64_unchecked_t;
+#endif
+
 #define ATOMIC64_INIT(i)	{ (i) }
 
 extern long long atomic64_read(const atomic64_t *v);

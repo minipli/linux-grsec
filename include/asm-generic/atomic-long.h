@@ -22,6 +22,12 @@
 
 typedef atomic64_t atomic_long_t;
 
+#ifdef CONFIG_PAX_REFCOUNT
+typedef atomic64_unchecked_t atomic_long_unchecked_t;
+#else
+typedef atomic64_t atomic_long_unchecked_t;
+#endif
+
 #define ATOMIC_LONG_INIT(i)	ATOMIC64_INIT(i)
 
 static inline long atomic_long_read(atomic_long_t *l)
@@ -139,6 +145,12 @@ static inline long atomic_long_add_unless(atomic_long_t *l, long a, long u)
 #else  /*  BITS_PER_LONG == 64  */
 
 typedef atomic_t atomic_long_t;
+
+#ifdef CONFIG_PAX_REFCOUNT
+typedef atomic_unchecked_t atomic_long_unchecked_t;
+#else
+typedef atomic_t atomic_long_unchecked_t;
+#endif
 
 #define ATOMIC_LONG_INIT(i)	ATOMIC_INIT(i)
 static inline long atomic_long_read(atomic_long_t *l)
