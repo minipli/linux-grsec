@@ -63,7 +63,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 		return -ENOMEM;
 
 #ifdef CONFIG_PAX_RANDMMAP
-	if (!(mm->pax_flags & MF_PAX_RANDMMAP) || !filp)
+	if (!(mm->pax_flags & MF_PAX_RANDMMAP))
 #endif
 
 	if (addr) {

@@ -1231,7 +1231,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	   this feature should be incorporated into all ports?  */
 
 #ifdef CONFIG_PAX_RANDMMAP
-	if (!(current->mm->pax_flags & MF_PAX_RANDMMAP) || !filp)
+	if (!(current->mm->pax_flags & MF_PAX_RANDMMAP))
 #endif
 
 	if (addr) {

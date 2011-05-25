@@ -19,7 +19,7 @@ extern pud_t level3_vmalloc_pgt[512];
 extern pud_t level3_vmemmap_pgt[512];
 extern pmd_t level2_kernel_pgt[512];
 extern pmd_t level2_fixmap_pgt[512];
-extern pmd_t level2_ident_pgt[512];
+extern pmd_t level2_ident_pgt[512*4];
 extern pte_t level1_fixmap_pgt[512];
 extern pgd_t init_level4_pgt[];
 
