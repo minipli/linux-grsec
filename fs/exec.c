@@ -623,6 +623,13 @@ int setup_arg_pages(struct linux_binprm *bprm,
 
 	down_write(&mm->mmap_sem);
 
+	/* Move stack pages down in memory. */
+	if (stack_shift) {
+		ret = shift_arg_pages(vma, stack_shift);
+		if (ret)
+			goto out_unlock;
+	}
+
 	vm_flags = VM_STACK_FLAGS;
 
 	/*
@@ -653,13 +660,6 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	if (ret)
 		goto out_unlock;
 	BUG_ON(prev != vma);
-
-	/* Move stack pages down in memory. */
-	if (stack_shift) {
-		ret = shift_arg_pages(vma, stack_shift);
-		if (ret)
-			goto out_unlock;
-	}
 
 #ifdef CONFIG_STACK_GROWSUP
 	stack_base = vma->vm_end + EXTRA_STACK_VM_PAGES * PAGE_SIZE;
