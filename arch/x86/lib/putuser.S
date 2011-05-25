@@ -15,7 +15,8 @@
 #include <asm/thread_info.h>
 #include <asm/errno.h>
 #include <asm/asm.h>
-
+#include <asm/segment.h>
+#include <asm/pgtable.h>
 
 /*
  * __put_user_X
@@ -29,59 +30,156 @@
  * as they get called from within inline assembly.
  */
 
-#define ENTER	CFI_STARTPROC ; \
-		GET_THREAD_INFO(%_ASM_BX)
+#define ENTER	CFI_STARTPROC
 #define EXIT	ret ; \
 		CFI_ENDPROC
 
 .text
 ENTRY(__put_user_1)
 	ENTER
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	pushl $(__USER_DS)
+	popl %ds
+#else
+	GET_THREAD_INFO(%_ASM_BX)
 	cmp TI_addr_limit(%_ASM_BX),%_ASM_CX
 	jae bad_put_user
+
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	mov $PAX_USER_SHADOW_BASE,%_ASM_BX
+	cmp %_ASM_BX,%_ASM_CX
+	jae 1234f
+	add %_ASM_BX,%_ASM_CX
+1234:
+#endif
+
+#endif
+
 1:	movb %al,(%_ASM_CX)
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	pushl %ss
+	popl %ds
+#endif
+
 	xor %eax,%eax
 	EXIT
 ENDPROC(__put_user_1)
 
 ENTRY(__put_user_2)
 	ENTER
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	pushl $(__USER_DS)
+	popl %ds
+#else
+	GET_THREAD_INFO(%_ASM_BX)
 	mov TI_addr_limit(%_ASM_BX),%_ASM_BX
 	sub $1,%_ASM_BX
 	cmp %_ASM_BX,%_ASM_CX
 	jae bad_put_user
+
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	mov $PAX_USER_SHADOW_BASE,%_ASM_BX
+	cmp %_ASM_BX,%_ASM_CX
+	jae 1234f
+	add %_ASM_BX,%_ASM_CX
+1234:
+#endif
+
+#endif
+
 2:	movw %ax,(%_ASM_CX)
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	pushl %ss
+	popl %ds
+#endif
+
 	xor %eax,%eax
 	EXIT
 ENDPROC(__put_user_2)
 
 ENTRY(__put_user_4)
 	ENTER
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	pushl $(__USER_DS)
+	popl %ds
+#else
+	GET_THREAD_INFO(%_ASM_BX)
 	mov TI_addr_limit(%_ASM_BX),%_ASM_BX
 	sub $3,%_ASM_BX
 	cmp %_ASM_BX,%_ASM_CX
 	jae bad_put_user
+
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	mov $PAX_USER_SHADOW_BASE,%_ASM_BX
+	cmp %_ASM_BX,%_ASM_CX
+	jae 1234f
+	add %_ASM_BX,%_ASM_CX
+1234:
+#endif
+
+#endif
+
 3:	movl %eax,(%_ASM_CX)
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	pushl %ss
+	popl %ds
+#endif
+
 	xor %eax,%eax
 	EXIT
 ENDPROC(__put_user_4)
 
 ENTRY(__put_user_8)
 	ENTER
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	pushl $(__USER_DS)
+	popl %ds
+#else
+	GET_THREAD_INFO(%_ASM_BX)
 	mov TI_addr_limit(%_ASM_BX),%_ASM_BX
 	sub $7,%_ASM_BX
 	cmp %_ASM_BX,%_ASM_CX
 	jae bad_put_user
+
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	mov $PAX_USER_SHADOW_BASE,%_ASM_BX
+	cmp %_ASM_BX,%_ASM_CX
+	jae 1234f
+	add %_ASM_BX,%_ASM_CX
+1234:
+#endif
+
+#endif
+
 4:	mov %_ASM_AX,(%_ASM_CX)
 #ifdef CONFIG_X86_32
 5:	movl %edx,4(%_ASM_CX)
 #endif
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	pushl %ss
+	popl %ds
+#endif
+
 	xor %eax,%eax
 	EXIT
 ENDPROC(__put_user_8)
 
 bad_put_user:
 	CFI_STARTPROC
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	pushl %ss
+	popl %ds
+#endif
+
 	movl $-EFAULT,%eax
 	EXIT
 END(bad_put_user)
