@@ -650,11 +650,7 @@ static inline void set_pgd(pgd_t *pgdp, pgd_t pgd)
 
 static inline void pgd_clear(pgd_t *pgdp)
 {
-
-#ifndef CONFIG_PAX_PER_CPU_PGD
 	set_pgd(pgdp, __pgd(0));
-#endif
-
 }
 
 static inline void pud_clear(pud_t *pudp)
