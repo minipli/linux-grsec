@@ -359,6 +359,8 @@ int ptrace_readdata(struct task_struct *tsk, unsigned long src, char __user *dst
 {
 	int copied = 0;
 
+	pax_track_stack();
+
 	while (len > 0) {
 		char buf[128];
 		int this_len, retval;
@@ -370,7 +372,7 @@ int ptrace_readdata(struct task_struct *tsk, unsigned long src, char __user *dst
 				break;
 			return -EIO;
 		}
-		if (copy_to_user(dst, buf, retval))
+		if (retval > sizeof(buf) || copy_to_user(dst, buf, retval))
 			return -EFAULT;
 		copied += retval;
 		src += retval;
@@ -383,6 +385,8 @@ int ptrace_readdata(struct task_struct *tsk, unsigned long src, char __user *dst
 int ptrace_writedata(struct task_struct *tsk, char __user *src, unsigned long dst, int len)
 {
 	int copied = 0;
+
+	pax_track_stack();
 
 	while (len > 0) {
 		char buf[128];
@@ -566,8 +570,10 @@ int ptrace_request(struct task_struct *child, long request,
 {
 	int ret = -EIO;
 	siginfo_t siginfo;
-	void __user *datavp = (void __user *) data;
+	void __user *datavp = (__force void __user *) data;
 	unsigned long __user *datalp = datavp;
+
+	pax_track_stack();
 
 	switch (request) {
 	case PTRACE_PEEKTEXT:
@@ -746,7 +752,7 @@ int generic_ptrace_peekdata(struct task_struct *tsk, unsigned long addr,
 	copied = access_process_vm(tsk, addr, &tmp, sizeof(tmp), 0);
 	if (copied != sizeof(tmp))
 		return -EIO;
-	return put_user(tmp, (unsigned long __user *)data);
+	return put_user(tmp, (__force unsigned long __user *)data);
 }
 
 int generic_ptrace_pokedata(struct task_struct *tsk, unsigned long addr,
@@ -768,6 +774,8 @@ int compat_ptrace_request(struct task_struct *child, compat_long_t request,
 	compat_ulong_t word;
 	siginfo_t siginfo;
 	int ret;
+
+	pax_track_stack();
 
 	switch (request) {
 	case PTRACE_PEEKTEXT:
