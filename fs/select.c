@@ -403,7 +403,7 @@ int do_select(int n, fd_set_bits *fds, struct timespec *end_time)
 	int retval, i, timed_out = 0;
 	unsigned long slack = 0;
 
-	stackleak_probe(table);
+	pax_track_stack();
 
 	rcu_read_lock();
 	retval = max_select_fd(n, fds);
@@ -532,6 +532,8 @@ int core_sys_select(int n, fd_set __user *inp, fd_set __user *outp,
 	struct fdtable *fdt;
 	/* Allocate small arguments on the stack to save memory and be faster */
 	long stack_fds[SELECT_STACK_ALLOC/sizeof(long)];
+
+	pax_track_stack();
 
 	ret = -EINVAL;
 	if (n < 0)
@@ -842,8 +844,7 @@ int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
  	struct poll_list *walk = head;
  	unsigned long todo = nfds;
 
-	stackleak_probe(table);
-	stackleak_probe(stack_pps);
+	pax_track_stack();
 
 	if (nfds > rlimit(RLIMIT_NOFILE))
 		return -EINVAL;
