@@ -40,6 +40,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
 #include <linux/io-mapping.h>
+#include <linux/sched.h>
 
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/doorbell.h>
@@ -763,6 +764,8 @@ static int mlx4_init_hca(struct mlx4_dev *dev)
 	struct mlx4_init_hca_param init_hca;
 	u64 icm_size;
 	int err;
+
+	pax_track_stack();
 
 	err = mlx4_QUERY_FW(dev);
 	if (err) {

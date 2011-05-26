@@ -35,7 +35,7 @@ void (*pm_power_off)(void);
 EXPORT_SYMBOL(pm_power_off);
 
 static const struct desc_ptr no_idt = {};
-static int reboot_mode;
+static unsigned short reboot_mode;
 enum reboot_type reboot_type = BOOT_KBD;
 int reboot_force;
 
@@ -339,7 +339,7 @@ void machine_real_restart(unsigned int type)
 	   boot)".  This seems like a fairly standard thing that gets set by
 	   REBOOT.COM programs, and the previous reset routine did this
 	   too. */
-	*((unsigned short *)0x472) = reboot_mode;
+	*(unsigned short *)(__va(0x472)) = reboot_mode;
 
 	/* Patch the GDT in the low memory trampoline */
 	lowmem_gdt = TRAMPOLINE_SYM(machine_real_restart_gdt);

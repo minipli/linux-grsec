@@ -566,7 +566,7 @@ ssize_t compat_rw_copy_check_uvector(int type,
 		goto out;
 
 	ret = -EINVAL;
-	if (nr_segs > UIO_MAXIOV || nr_segs < 0)
+	if (nr_segs > UIO_MAXIOV)
 		goto out;
 	if (nr_segs > fast_segs) {
 		ret = -ENOMEM;
@@ -1680,6 +1680,8 @@ int compat_core_sys_select(int n, compat_ulong_t __user *inp,
 	int size, max_fds, ret = -EINVAL;
 	struct fdtable *fdt;
 	long stack_fds[SELECT_STACK_ALLOC/sizeof(long)];
+
+	pax_track_stack();
 
 	if (n < 0)
 		goto out_nofds;

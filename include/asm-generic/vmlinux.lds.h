@@ -213,6 +213,7 @@
 	.rodata           : AT(ADDR(.rodata) - LOAD_OFFSET) {		\
 		VMLINUX_SYMBOL(__start_rodata) = .;			\
 		*(.rodata) *(.rodata.*)					\
+		*(.data..read_only)					\
 		*(__vermagic)		/* Kernel version magic */	\
 		. = ALIGN(8);						\
 		VMLINUX_SYMBOL(__start___tracepoints_ptrs) = .;		\
@@ -707,14 +708,15 @@
  * section in the linker script will go there too.  @phdr should have
  * a leading colon.
  *
- * Note that this macros defines __per_cpu_load as an absolute symbol.
+ * Note that this macros defines per_cpu_load as an absolute symbol.
  * If there is no need to put the percpu section at a predetermined
  * address, use PERCPU().
  */
 #define PERCPU_VADDR(cacheline, vaddr, phdr)				\
-	VMLINUX_SYMBOL(__per_cpu_load) = .;				\
-	.data..percpu vaddr : AT(VMLINUX_SYMBOL(__per_cpu_load)		\
+	per_cpu_load = .;						\
+	.data..percpu vaddr : AT(VMLINUX_SYMBOL(per_cpu_load)		\
 				- LOAD_OFFSET) {			\
+		VMLINUX_SYMBOL(__per_cpu_load) = . + per_cpu_load;	\
 		VMLINUX_SYMBOL(__per_cpu_start) = .;			\
 		*(.data..percpu..first)					\
 		. = ALIGN(PAGE_SIZE);					\
@@ -726,7 +728,7 @@
 		*(.data..percpu..shared_aligned)			\
 		VMLINUX_SYMBOL(__per_cpu_end) = .;			\
 	} phdr								\
-	. = VMLINUX_SYMBOL(__per_cpu_load) + SIZEOF(.data..percpu);
+	. = VMLINUX_SYMBOL(per_cpu_load) + SIZEOF(.data..percpu);
 
 /**
  * PERCPU - define output section for percpu area, simple version

@@ -228,7 +228,7 @@ struct nouveau_channel {
 		struct list_head pending;
 		uint32_t sequence;
 		uint32_t sequence_ack;
-		atomic_t last_sequence_irq;
+		atomic_unchecked_t last_sequence_irq;
 	} fence;
 
 	/* DMA push buffer */
@@ -520,8 +520,7 @@ struct nouveau_vram_engine {
 
 struct nouveau_engine {
 	struct nouveau_instmem_engine instmem;
-	struct nouveau_mc_engine      mc;
-	struct nouveau_timer_engine   timer;
+	const struct nouveau_mc_engine mc;const struct nouveau_timer_engine timer;
 	struct nouveau_fb_engine      fb;
 	struct nouveau_pgraph_engine  graph;
 	struct nouveau_fifo_engine    fifo;
@@ -529,7 +528,7 @@ struct nouveau_engine {
 	struct nouveau_gpio_engine    gpio;
 	struct nouveau_pm_engine      pm;
 	struct nouveau_crypt_engine   crypt;
-	struct nouveau_vram_engine    vram;
+	const struct nouveau_vram_engine vram;
 };
 
 struct nouveau_pll_vals {
@@ -662,7 +661,7 @@ struct drm_nouveau_private {
 		struct drm_global_reference mem_global_ref;
 		struct ttm_bo_global_ref bo_global_ref;
 		struct ttm_bo_device bdev;
-		atomic_t validate_sequence;
+		atomic_unchecked_t validate_sequence;
 	} ttm;
 
 	struct {

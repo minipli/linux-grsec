@@ -255,7 +255,7 @@ extern void (*_machine_restart)(char *command);
 extern void (*_machine_halt)(void);
 extern void (*_machine_power_off)(void);
 
-extern unsigned long arch_align_stack(unsigned long sp);
+#define arch_align_stack(x) ((x) & ~0xfUL)
 
 static inline int tprot(unsigned long addr)
 {

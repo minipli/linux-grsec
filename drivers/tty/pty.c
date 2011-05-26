@@ -699,7 +699,18 @@ out:
 	return retval;
 }
 
-static struct file_operations ptmx_fops;
+static const struct file_operations ptmx_fops = {
+	.llseek		= no_llseek,
+	.read		= tty_read,
+	.write		= tty_write,
+	.poll		= tty_poll,
+	.unlocked_ioctl	= tty_ioctl,
+	.compat_ioctl	= tty_compat_ioctl,
+	.open		= ptmx_open,
+	.release	= tty_release,
+	.fasync		= tty_fasync,
+};
+
 
 static void __init unix98_pty_init(void)
 {
@@ -751,10 +762,6 @@ static void __init unix98_pty_init(void)
 		panic("Couldn't register Unix98 pts driver");
 
 	register_sysctl_table(pty_root_table);
-
-	/* Now create the /dev/ptmx special device */
-	tty_default_fops(&ptmx_fops);
-	ptmx_fops.open = ptmx_open;
 
 	cdev_init(&ptmx_cdev, &ptmx_fops);
 	if (cdev_add(&ptmx_cdev, MKDEV(TTYAUX_MAJOR, 2), 1) ||

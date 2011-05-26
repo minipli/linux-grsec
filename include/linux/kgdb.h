@@ -53,7 +53,7 @@ extern int kgdb_connected;
 extern int kgdb_io_module_registered;
 
 extern atomic_t			kgdb_setting_breakpoint;
-extern atomic_t			kgdb_cpu_doing_single_step;
+extern atomic_unchecked_t	kgdb_cpu_doing_single_step;
 
 extern struct task_struct	*kgdb_usethread;
 extern struct task_struct	*kgdb_contthread;
@@ -269,22 +269,22 @@ struct kgdb_arch {
  */
 struct kgdb_io {
 	const char		*name;
-	int			(*read_char) (void);
-	void			(*write_char) (u8);
-	void			(*flush) (void);
-	int			(*init) (void);
-	void			(*pre_exception) (void);
-	void			(*post_exception) (void);
+	int			(* const read_char) (void);
+	void			(* const write_char) (u8);
+	void			(* const flush) (void);
+	int			(* const init) (void);
+	void			(* const pre_exception) (void);
+	void			(* const post_exception) (void);
 	int			is_console;
 };
 
-extern struct kgdb_arch		arch_kgdb_ops;
+extern const struct kgdb_arch arch_kgdb_ops;
 
 extern unsigned long __weak kgdb_arch_pc(int exception, struct pt_regs *regs);
 
-extern int kgdb_register_io_module(struct kgdb_io *local_kgdb_io_ops);
-extern void kgdb_unregister_io_module(struct kgdb_io *local_kgdb_io_ops);
-extern struct kgdb_io *dbg_io_ops;
+extern int kgdb_register_io_module(const struct kgdb_io *local_kgdb_io_ops);
+extern void kgdb_unregister_io_module(const struct kgdb_io *local_kgdb_io_ops);
+extern const struct kgdb_io *dbg_io_ops;
 
 extern int kgdb_hex2long(char **ptr, unsigned long *long_val);
 extern char *kgdb_mem2hex(char *mem, char *buf, int count);
