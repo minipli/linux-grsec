@@ -222,6 +222,19 @@ static inline void atomic_dec(atomic_t *v)
 }
 
 /**
+ * atomic_dec_unchecked - decrement atomic variable
+ * @v: pointer of type atomic_t
+ *
+ * Atomically decrements @v by 1.
+ */
+static inline void atomic_dec_unchecked(atomic_unchecked_t *v)
+{
+	asm volatile(LOCK_PREFIX "decl %0\n"
+		     : "=m" (v->counter)
+		     : "m" (v->counter));
+}
+
+/**
  * atomic_dec_and_test - decrement and test
  * @v: pointer of type atomic_t
  *
@@ -540,6 +553,19 @@ static inline void atomic64_dec(atomic64_t *v)
 		     _ASM_EXTABLE(0b, 1b)
 #endif
 
+		     : "=m" (v->counter)
+		     : "m" (v->counter));
+}
+
+/**
+ * atomic64_dec_unchecked - decrement atomic64 variable
+ * @v: pointer to type atomic64_t
+ *
+ * Atomically decrements @v by 1.
+ */
+static inline void atomic64_dec_unchecked(atomic64_unhecked_t *v)
+{
+	asm volatile(LOCK_PREFIX "decq %0\n"
 		     : "=m" (v->counter)
 		     : "m" (v->counter));
 }
