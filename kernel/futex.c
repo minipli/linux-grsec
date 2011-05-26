@@ -236,6 +236,11 @@ get_futex_key(u32 __user *uaddr, int fshared, union futex_key *key)
 	struct page *page, *page_head;
 	int err;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((mm->pax_flags & MF_PAX_SEGMEXEC) && address >= SEGMEXEC_TASK_SIZE)
+		return -EFAULT;
+#endif
+
 	/*
 	 * The futex address must be "naturally" aligned.
 	 */
@@ -2667,6 +2672,7 @@ static int __init futex_init(void)
 {
 	u32 curval;
 	int i;
+	mm_segment_t oldfs;
 
 	/*
 	 * This will fail and we want it. Some arch implementations do
@@ -2678,7 +2684,10 @@ static int __init futex_init(void)
 	 * implementation, the non-functional ones will return
 	 * -ENOSYS.
 	 */
+	oldfs = get_fs();
+	set_fs(USER_DS);
 	curval = cmpxchg_futex_value_locked(NULL, 0, 0);
+	set_fs(oldfs);
 	if (curval == -EFAULT)
 		futex_cmpxchg_enabled = 1;
 
