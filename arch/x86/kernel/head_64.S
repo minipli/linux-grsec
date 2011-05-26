@@ -175,14 +175,14 @@ ENTRY(secondary_startup_64)
 	movl	$MSR_EFER, %ecx
 	rdmsr
 	btsl	$_EFER_SCE, %eax	/* Enable System Call */
-	btl	$20,%edi		/* No Execute supported? */
+	btl	$(X86_FEATURE_NX & 31),%edi	/* No Execute supported? */
 	jnc     1f
 	btsl	$_EFER_NX, %eax
 	leaq	init_level4_pgt(%rip), %rdi
 	btsq	$_PAGE_BIT_NX, 8*L4_PAGE_OFFSET(%rdi)
 	btsq	$_PAGE_BIT_NX, 8*L4_VMALLOC_START(%rdi)
 	btsq	$_PAGE_BIT_NX, 8*L4_VMEMMAP_START(%rdi)
-	btsq	$_PAGE_BIT_NX, (__supported_pte_mask - __START_KERNEL_map)
+	btsq	$_PAGE_BIT_NX, __supported_pte_mask(%rip)
 1:	wrmsr				/* Make changes effective */
 
 	/* Setup cr0 */
