@@ -364,6 +364,7 @@ __noreturn void machine_real_restart(unsigned int type)
 
 #if defined(CONFIG_X86_32) && (defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF))
 	gdt = get_cpu_gdt_table(smp_processor_id());
+	pax_open_kernel();
 #ifdef CONFIG_PAX_MEMORY_UDEREF
 	gdt[GDT_ENTRY_KERNEL_DS].type = 3;
 	gdt[GDT_ENTRY_KERNEL_DS].limit = 0xf;
@@ -372,10 +373,12 @@ __noreturn void machine_real_restart(unsigned int type)
 #ifdef CONFIG_PAX_KERNEXEC
 	gdt[GDT_ENTRY_KERNEL_CS].base0 = 0;
 	gdt[GDT_ENTRY_KERNEL_CS].base1 = 0;
+	gdt[GDT_ENTRY_KERNEL_CS].base2 = 0;
 	gdt[GDT_ENTRY_KERNEL_CS].limit0 = 0xffff;
 	gdt[GDT_ENTRY_KERNEL_CS].limit = 0xf;
 	gdt[GDT_ENTRY_KERNEL_CS].g = 1;
 #endif
+	pax_close_kernel();
 #endif
 
 #if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
