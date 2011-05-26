@@ -73,8 +73,6 @@ static inline void native_pmd_clear(pmd_t *pmd)
 
 static inline void pud_clear(pud_t *pudp)
 {
-
-#ifndef CONFIG_PAX_PER_CPU_PGD
 	unsigned long pgd;
 
 	set_pud(pudp, __pud(0));
@@ -92,8 +90,6 @@ static inline void pud_clear(pud_t *pudp)
 	if (__pa(pudp) >= pgd && __pa(pudp) <
 	    (pgd + sizeof(pgd_t)*PTRS_PER_PGD))
 		write_cr3(pgd);
-#endif
-
 }
 
 #ifdef CONFIG_SMP
