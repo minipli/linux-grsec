@@ -913,7 +913,7 @@ static int audpre_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static struct file_operations audio_fops = {
+static const struct file_operations audio_fops = {
 	.owner		= THIS_MODULE,
 	.open		= audio_in_open,
 	.release	= audio_in_release,
@@ -922,7 +922,7 @@ static struct file_operations audio_fops = {
 	.unlocked_ioctl	= audio_in_ioctl,
 };
 
-static struct file_operations audpre_fops = {
+static const struct file_operations audpre_fops = {
 	.owner          = THIS_MODULE,
 	.open           = audpre_open,
 	.unlocked_ioctl = audpre_ioctl,

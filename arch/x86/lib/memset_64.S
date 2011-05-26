@@ -118,7 +118,7 @@ ENDPROC(__memset)
 
 #include <asm/cpufeature.h>
 
-	.section .altinstr_replacement,"ax"
+	.section .altinstr_replacement,"a"
 1:	.byte 0xeb				/* jmp <disp8> */
 	.byte (memset_c - memset) - (2f - 1b)	/* offset */
 2:

@@ -28,8 +28,6 @@ EXPORT_SYMBOL(__put_user_8);
 
 EXPORT_SYMBOL(copy_user_generic);
 EXPORT_SYMBOL(__copy_user_nocache);
-EXPORT_SYMBOL(_copy_from_user);
-EXPORT_SYMBOL(_copy_to_user);
 
 EXPORT_SYMBOL(copy_page);
 EXPORT_SYMBOL(clear_page);

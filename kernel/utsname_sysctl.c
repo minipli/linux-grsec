@@ -93,7 +93,7 @@ static struct ctl_table uts_kern_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_do_uts_string,
 	},
-	{}
+	{ }
 };
 
 static struct ctl_table uts_root_table[] = {
@@ -102,7 +102,7 @@ static struct ctl_table uts_root_table[] = {
 		.mode		= 0555,
 		.child		= uts_kern_table,
 	},
-	{}
+	{ }
 };
 
 static int __init utsname_sysctl_init(void)

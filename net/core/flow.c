@@ -39,7 +39,7 @@ atomic_t flow_cache_genid = ATOMIC_INIT(0);
 
 static u32 flow_hash_shift;
 #define flow_hash_size	(1 << flow_hash_shift)
-static DEFINE_PER_CPU(struct flow_cache_entry **, flow_tables) = { NULL };
+static DEFINE_PER_CPU(struct flow_cache_entry **, flow_tables);
 
 #define flow_table(cpu) (per_cpu(flow_tables, cpu))
 
@@ -52,7 +52,7 @@ struct flow_percpu_info {
 	u32 hash_rnd;
 	int count;
 };
-static DEFINE_PER_CPU(struct flow_percpu_info, flow_hash_info) = { 0 };
+static DEFINE_PER_CPU(struct flow_percpu_info, flow_hash_info);
 
 #define flow_hash_rnd_recalc(cpu) \
 	(per_cpu(flow_hash_info, cpu).hash_rnd_recalc)
@@ -69,7 +69,7 @@ struct flow_flush_info {
 	atomic_t cpuleft;
 	struct completion completion;
 };
-static DEFINE_PER_CPU(struct tasklet_struct, flow_flush_tasklets) = { NULL };
+static DEFINE_PER_CPU(struct tasklet_struct, flow_flush_tasklets);
 
 #define flow_flush_tasklet(cpu) (&per_cpu(flow_flush_tasklets, cpu))
 
