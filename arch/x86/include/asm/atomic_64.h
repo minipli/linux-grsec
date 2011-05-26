@@ -563,7 +563,7 @@ static inline void atomic64_dec(atomic64_t *v)
  *
  * Atomically decrements @v by 1.
  */
-static inline void atomic64_dec_unchecked(atomic64_unhecked_t *v)
+static inline void atomic64_dec_unchecked(atomic64_unchecked_t *v)
 {
 	asm volatile(LOCK_PREFIX "decq %0\n"
 		     : "=m" (v->counter)
@@ -795,7 +795,7 @@ static inline int atomic64_add_unless(atomic64_t *v, long a, long u)
 			     : "=r" (new)
 			     : "0" (c), "er" (a));
 
-		old = atomic64_cmpxchg((v), c, new);
+		old = atomic64_cmpxchg(v, c, new);
 		if (likely(old == c))
 			break;
 		c = old;
