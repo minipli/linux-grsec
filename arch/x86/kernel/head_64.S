@@ -182,7 +182,7 @@ ENTRY(secondary_startup_64)
 	btsq	$_PAGE_BIT_NX, 8*L4_PAGE_OFFSET(%rdi)
 	btsq	$_PAGE_BIT_NX, 8*L4_VMALLOC_START(%rdi)
 	btsq	$_PAGE_BIT_NX, 8*L4_VMEMMAP_START(%rdi)
-	btsq	$_PAGE_BIT_NX, $(__supported_pte_mask - __START_KERNEL_map)
+	btsq	$_PAGE_BIT_NX, (__supported_pte_mask - __START_KERNEL_map)
 1:	wrmsr				/* Make changes effective */
 
 	/* Setup cr0 */

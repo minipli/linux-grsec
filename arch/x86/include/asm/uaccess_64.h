@@ -20,6 +20,10 @@
 __must_check unsigned long
 copy_user_generic(void *to, const void *from, unsigned len);
 
+static __always_inline __must_check unsigned long
+__copy_to_user(void __user *to, const void *from, unsigned len);
+static __always_inline __must_check unsigned long
+__copy_from_user(void *to, const void __user *from, unsigned len);
 __must_check unsigned long
 copy_in_user(void __user *to, const void __user *from, unsigned len);
 
@@ -44,8 +48,8 @@ int copy_to_user(void __user *dst, const void *src, unsigned size)
 {
 	might_fault();
 
-	if (access_ok(VERIFY_WRITE, to, size))
-		size = __copy_to_user(to, from, size);
+	if (access_ok(VERIFY_WRITE, dst, size))
+		size = __copy_to_user(dst, src, size);
 	return size;
 }
 
