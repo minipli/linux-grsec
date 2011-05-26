@@ -129,8 +129,6 @@ static int do_ipv6_setsockopt(struct sock *sk, int level, int optname,
 	int val, valbool;
 	int retv = -ENOPROTOOPT;
 
-	pax_track_stack();
-
 	if (optval == NULL)
 		val=0;
 	else {
@@ -920,8 +918,6 @@ static int do_ipv6_getsockopt(struct sock *sk, int level, int optname,
 	struct ipv6_pinfo *np = inet6_sk(sk);
 	int len;
 	int val;
-
-	pax_track_stack();
 
 	if (ip6_mroute_opt(optname))
 		return ip6_mroute_getsockopt(sk, optname, optval, optlen);

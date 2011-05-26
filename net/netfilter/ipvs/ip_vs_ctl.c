@@ -2287,8 +2287,6 @@ do_ip_vs_set_ctl(struct sock *sk, int cmd, void __user *user, unsigned int len)
 	struct ip_vs_dest_user *udest_compat;
 	struct ip_vs_dest_user_kern udest;
 
-	pax_track_stack();
-
 	if (!capable(CAP_NET_ADMIN))
 		return -EPERM;
 

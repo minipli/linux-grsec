@@ -272,8 +272,6 @@ static __init int init_posix_timers(void)
 		.timer_del	= common_timer_del,
 	};
 
-	pax_track_stack();
-
 	posix_timers_register_clock(CLOCK_REALTIME, &clock_realtime);
 	posix_timers_register_clock(CLOCK_MONOTONIC, &clock_monotonic);
 	posix_timers_register_clock(CLOCK_MONOTONIC_RAW, &clock_monotonic_raw);

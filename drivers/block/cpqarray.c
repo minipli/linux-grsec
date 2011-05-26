@@ -911,8 +911,6 @@ static void do_ida_request(struct request_queue *q)
 	struct scatterlist tmp_sg[SG_MAX];
 	int i, dir, seg;
 
-	pax_track_stack();
-
 queue_next:
 	creq = blk_peek_request(q);
 	if (!creq)

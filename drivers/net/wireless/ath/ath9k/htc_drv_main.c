@@ -737,8 +737,6 @@ static ssize_t read_file_tgt_stats(struct file *file, char __user *user_buf,
 	unsigned int len = 0;
 	int ret = 0;
 
-	pax_track_stack();
-
 	memset(&cmd_rsp, 0, sizeof(cmd_rsp));
 
 	WMI_CMD(WMI_TGT_STATS_CMDID);
@@ -783,8 +781,6 @@ static ssize_t read_file_xmit(struct file *file, char __user *user_buf,
 	struct ath9k_htc_priv *priv = file->private_data;
 	char buf[512];
 	unsigned int len = 0;
-
-	pax_track_stack();
 
 	len += snprintf(buf + len, sizeof(buf) - len,
 			"%20s : %10u\n", "Buffers queued",
@@ -834,8 +830,6 @@ static ssize_t read_file_recv(struct file *file, char __user *user_buf,
 	struct ath9k_htc_priv *priv = file->private_data;
 	char buf[512];
 	unsigned int len = 0;
-
-	pax_track_stack();
 
 	len += snprintf(buf + len, sizeof(buf) - len,
 			"%20s : %10u\n", "SKBs allocated",

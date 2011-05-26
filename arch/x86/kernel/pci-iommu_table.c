@@ -53,8 +53,6 @@ void __init check_iommu_entries(struct iommu_table_entry *start,
 	char sym_p[KSYM_SYMBOL_LEN];
 	char sym_q[KSYM_SYMBOL_LEN];
 
-	pax_track_stack();
-
 	/* Simple cyclic dependency checker. */
 	for (p = start; p < finish; p++) {
 		q = find_dependents_of(start, finish, p);

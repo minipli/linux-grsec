@@ -343,8 +343,6 @@ bool drm_crtc_helper_set_mode(struct drm_crtc *crtc,
 	struct drm_encoder *encoder;
 	bool ret = true;
 
-	pax_track_stack();
-
 	crtc->enabled = drm_helper_crtc_in_use(crtc);
 	if (!crtc->enabled)
 		return true;

@@ -916,7 +916,7 @@ $(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): $(vmlinux-dirs) ;
 # Error messages still appears in the original language
 
 PHONY += $(vmlinux-dirs)
-$(vmlinux-dirs): prepare scripts
+$(vmlinux-dirs): prepare scripts pax-plugin
 	$(Q)$(MAKE) $(build)=$@
 
 # Store (new) KERNELRELASE string in include/config/kernel.release
@@ -932,7 +932,19 @@ include/config/kernel.release: include/config/auto.conf FORCE
 # version.h and scripts_basic is processed / created.
 
 # Listed in dependency order
-PHONY += prepare archprepare prepare0 prepare1 prepare2 prepare3
+PHONY += prepare archprepare prepare0 prepare1 prepare2 prepare3 pax-plugin
+
+ifeq ($(CONFIG_PAX_MEMORY_STACKLEAK),y)
+KBUILD_CFLAGS += $(call cc-ifversion, -ge, 0405, -fplugin=$(obj)/tools/gcc/pax_plugin.so -fplugin-arg-pax_plugin-track-lowest-sp=120)
+endif
+pax-plugin:
+ifneq (,$(findstring pax_plugin, $(KBUILD_CFLAGS)))
+	$(Q)$(MAKE) $(build)=tools/gcc
+else
+ifeq ($(CONFIG_PAX_MEMORY_STACKLEAK),y)
+	$(Q)echo "warning, your gcc does not support plugins, PAX_MEMORY_STACKLEAK will be less secure"
+endif
+endif
 
 # prepare3 is used to check if we are building in a separate output directory,
 # and if so do:
@@ -954,7 +966,7 @@ prepare1: prepare2 include/linux/version.h include/generated/utsrelease.h \
                    include/config/auto.conf
 	$(cmd_crmodverdir)
 
-archprepare: prepare1 scripts_basic
+archprepare: prepare1 scripts_basic pax-plugin
 
 prepare0: archprepare FORCE
 	$(Q)$(MAKE) $(build)=.

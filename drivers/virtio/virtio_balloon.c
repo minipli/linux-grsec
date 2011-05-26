@@ -176,8 +176,6 @@ static void update_balloon_stats(struct virtio_balloon *vb)
 	struct sysinfo i;
 	int idx = 0;
 
-	pax_track_stack();
-
 	all_vm_events(events);
 	si_meminfo(&i);
 

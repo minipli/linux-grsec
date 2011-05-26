@@ -386,7 +386,6 @@ static int cfctrl_recv(struct cflayer *layer, struct cfpkt *pkt)
 	struct cfctrl *cfctrl = container_obj(layer);
 	struct cfctrl_request_info rsp, *req;
 
-	pax_track_stack();
 
 	cfpkt_extr_head(pkt, &cmdrsp, 1);
 	cmd = cmdrsp & CFCTRL_CMD_MASK;

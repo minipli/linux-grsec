@@ -467,8 +467,6 @@ struct inet_peer *inet_getpeer(struct inetpeer_addr *daddr, int create)
 	unsigned int sequence;
 	int invalidated;
 
-	pax_track_stack();
-
 	/* Look up for the address quickly, lockless.
 	 * Because of a concurrent writer, we might not find an existing entry.
 	 */

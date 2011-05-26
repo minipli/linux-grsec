@@ -2516,8 +2516,6 @@ void __show_free_areas(unsigned int filter)
 	int cpu;
 	struct zone *zone;
 
-	pax_track_stack();
-
 	for_each_populated_zone(zone) {
 		if (skip_free_areas_zone(filter, zone))
 			continue;

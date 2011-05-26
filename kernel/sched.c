@@ -4078,8 +4078,6 @@ asmlinkage void __sched schedule(void)
 	struct rq *rq;
 	int cpu;
 
-	pax_track_stack();
-
 need_resched:
 	preempt_disable();
 	cpu = smp_processor_id();
