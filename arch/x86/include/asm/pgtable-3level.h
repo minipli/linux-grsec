@@ -38,12 +38,16 @@ static inline void native_set_pte_atomic(pte_t *ptep, pte_t pte)
 
 static inline void native_set_pmd(pmd_t *pmdp, pmd_t pmd)
 {
+	pax_open_kernel();
 	set_64bit((unsigned long long *)(pmdp), native_pmd_val(pmd));
+	pax_close_kernel();
 }
 
 static inline void native_set_pud(pud_t *pudp, pud_t pud)
 {
+	pax_open_kernel();
 	set_64bit((unsigned long long *)(pudp), native_pud_val(pud));
+	pax_close_kernel();
 }
 
 /*
@@ -69,6 +73,8 @@ static inline void native_pmd_clear(pmd_t *pmd)
 
 static inline void pud_clear(pud_t *pudp)
 {
+
+#ifndef CONFIG_PAX_PER_CPU_PGD
 	unsigned long pgd;
 
 	set_pud(pudp, __pud(0));
@@ -86,6 +92,8 @@ static inline void pud_clear(pud_t *pudp)
 	if (__pa(pudp) >= pgd && __pa(pudp) <
 	    (pgd + sizeof(pgd_t)*PTRS_PER_PGD))
 		write_cr3(pgd);
+#endif
+
 }
 
 #ifdef CONFIG_SMP

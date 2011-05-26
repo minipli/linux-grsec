@@ -9,6 +9,7 @@
 #include <linux/compiler.h>
 #include <linux/string.h>
 #include <linux/thread_info.h>
+#include <linux/kernel.h>
 #include <asm/asi.h>
 #include <asm/system.h>
 #include <asm/spitfire.h>
@@ -203,6 +204,7 @@ __asm__ __volatile__(							\
        : "=r" (x) : "r" (__m(addr)), "i" (retval))
 
 extern int __get_user_bad(void);
+extern void check_object_size(const void *ptr, unsigned long n, bool to);
 
 extern unsigned long __must_check ___copy_from_user(void *to,
 						    const void __user *from,
@@ -212,8 +214,15 @@ extern unsigned long copy_from_user_fixup(void *to, const void __user *from,
 static inline unsigned long __must_check
 copy_from_user(void *to, const void __user *from, unsigned long size)
 {
-	unsigned long ret = ___copy_from_user(to, from, size);
+	unsigned long ret;
 
+	if ((long)size < 0 || size > INT_MAX)
+		return size;
+
+	if (!__builtin_constant_p(size))
+		check_object_size(to, size, false);
+
+	ret = ___copy_from_user(to, from, size);
 	if (unlikely(ret))
 		ret = copy_from_user_fixup(to, from, size);
 	return ret;
@@ -228,8 +237,15 @@ extern unsigned long copy_to_user_fixup(void __user *to, const void *from,
 static inline unsigned long __must_check
 copy_to_user(void __user *to, const void *from, unsigned long size)
 {
-	unsigned long ret = ___copy_to_user(to, from, size);
+	unsigned long ret;
 
+	if ((long)size < 0 || size > INT_MAX)
+		return size;
+
+	if (!__builtin_constant_p(size))
+		check_object_size(from, size, true);
+
+	ret = ___copy_to_user(to, from, size);
 	if (unlikely(ret))
 		ret = copy_to_user_fixup(to, from, size);
 	return ret;

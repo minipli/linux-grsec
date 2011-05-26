@@ -268,9 +268,10 @@ static inline pgprot_t static_protections(pgprot_t prot, unsigned long address,
 	 * Does not cover __inittext since that is gone later on. On
 	 * 64bit we do not enforce !NX on the low mapping
 	 */
-	if (within(address, (unsigned long)_text, (unsigned long)_etext))
+	if (within(address, ktla_ktva((unsigned long)_text), ktla_ktva((unsigned long)_etext)))
 		pgprot_val(forbidden) |= _PAGE_NX;
 
+#ifdef CONFIG_DEBUG_RODATA
 	/*
 	 * The .rodata section needs to be read-only. Using the pfn
 	 * catches all aliases.
@@ -278,6 +279,7 @@ static inline pgprot_t static_protections(pgprot_t prot, unsigned long address,
 	if (within(pfn, __pa((unsigned long)__start_rodata) >> PAGE_SHIFT,
 		   __pa((unsigned long)__end_rodata) >> PAGE_SHIFT))
 		pgprot_val(forbidden) |= _PAGE_RW;
+#endif
 
 	prot = __pgprot(pgprot_val(prot) & ~pgprot_val(forbidden));
 
@@ -331,7 +333,10 @@ EXPORT_SYMBOL_GPL(lookup_address);
 static void __set_pmd_pte(pte_t *kpte, unsigned long address, pte_t pte)
 {
 	/* change init_mm */
+	pax_open_kernel();
 	set_pte_atomic(kpte, pte);
+	pax_close_kernel();
+
 #ifdef CONFIG_X86_32
 	if (!SHARED_KERNEL_PMD) {
 		struct page *page;

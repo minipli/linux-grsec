@@ -535,27 +535,10 @@ void radeon_ttm_fini(struct radeon_device *rdev)
 	DRM_INFO("radeon: ttm finalized\n");
 }
 
-static struct vm_operations_struct radeon_ttm_vm_ops;
-static const struct vm_operations_struct *ttm_vm_ops = NULL;
-
-static int radeon_ttm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
-{
-	struct ttm_buffer_object *bo;
-	int r;
-
-	bo = (struct ttm_buffer_object *)vma->vm_private_data;
-	if (bo == NULL) {
-		return VM_FAULT_NOPAGE;
-	}
-	r = ttm_vm_ops->fault(vma, vmf);
-	return r;
-}
-
 int radeon_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	struct drm_file *file_priv;
 	struct radeon_device *rdev;
-	int r;
 
 	if (unlikely(vma->vm_pgoff < DRM_FILE_PAGE_OFFSET)) {
 		return drm_mmap(filp, vma);
@@ -563,20 +546,9 @@ int radeon_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	file_priv = (struct drm_file *)filp->private_data;
 	rdev = file_priv->minor->dev->dev_private;
-	if (rdev == NULL) {
+	if (!rdev)
 		return -EINVAL;
-	}
-	r = ttm_bo_mmap(filp, vma, &rdev->mman.bdev);
-	if (unlikely(r != 0)) {
-		return r;
-	}
-	if (unlikely(ttm_vm_ops == NULL)) {
-		ttm_vm_ops = vma->vm_ops;
-		radeon_ttm_vm_ops = *ttm_vm_ops;
-		radeon_ttm_vm_ops.fault = &radeon_ttm_fault;
-	}
-	vma->vm_ops = &radeon_ttm_vm_ops;
-	return 0;
+	return ttm_bo_mmap(filp, vma, &rdev->mman.bdev);
 }
 
 
