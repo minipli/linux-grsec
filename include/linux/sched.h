@@ -1599,7 +1599,7 @@ void pax_report_usercopy(const void *ptr, unsigned long len, bool to, const char
 			p[i] = 0;				\
 	} while (0)
 #else
-#define stackleak_probe(array, size)	do { } while (0)
+#define stackleak_probe(var)	do { } while (0)
 #endif
 
 /* Future-safe accessor for struct task_struct's cpus_allowed. */
