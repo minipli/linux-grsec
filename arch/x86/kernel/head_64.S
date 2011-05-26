@@ -19,6 +19,7 @@
 #include <asm/cache.h>
 #include <asm/processor-flags.h>
 #include <asm/percpu.h>
+#include <asm/cpufeature.h>
 
 #ifdef CONFIG_PARAVIRT
 #include <asm/asm-offsets.h>
