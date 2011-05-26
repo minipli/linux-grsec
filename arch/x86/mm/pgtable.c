@@ -56,8 +56,12 @@ void ___pte_free_tlb(struct mmu_gather *tlb, struct page *pte)
 #if PAGETABLE_LEVELS > 2
 void ___pmd_free_tlb(struct mmu_gather *tlb, pmd_t *pmd)
 {
+
+#if !defined(CONFIG_X86_32) || !defined(CONFIG_PAX_PER_CPU_PGD)
 	paravirt_release_pmd(__pa(pmd) >> PAGE_SHIFT);
 	tlb_remove_page(tlb, virt_to_page(pmd));
+#endif
+
 }
 
 #if PAGETABLE_LEVELS > 3
@@ -88,7 +92,7 @@ static inline void pgd_list_del(pgd_t *pgd)
 }
 
 #if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
-pteval_t clone_pgd_mask __read_only = ~_PAGE_PRESENT;
+pgdval_t clone_pgd_mask __read_only = ~_PAGE_PRESENT;
 #endif
 
 #ifdef CONFIG_PAX_PER_CPU_PGD
