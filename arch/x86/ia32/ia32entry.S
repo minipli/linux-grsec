@@ -224,7 +224,7 @@ sysexit_from_sys_call:
 	movl $AUDIT_ARCH_I386,%edi	/* 1st arg: audit arch */
 	call audit_syscall_entry
 
-	pax_erase_kstack
+	call pax_erase_kstack
 
 	movl RAX-ARGOFFSET(%rsp),%eax	/* reload syscall number */
 	cmpq $(IA32_NR_syscalls-1),%rax
@@ -279,7 +279,7 @@ sysenter_tracesys:
 	movq	%rsp,%rdi        /* &pt_regs -> arg1 */
 	call	syscall_trace_enter
 
-	pax_erase_kstack
+	call pax_erase_kstack
 
 	LOAD_ARGS32 ARGOFFSET  /* reload args from stack in case ptrace changed it */
 	RESTORE_REST
@@ -412,7 +412,7 @@ cstar_tracesys:
 	movq %rsp,%rdi        /* &pt_regs -> arg1 */
 	call syscall_trace_enter
 
-	pax_erase_kstack
+	call pax_erase_kstack
 
 	LOAD_ARGS32 ARGOFFSET, 1  /* reload args from stack in case ptrace changed it */
 	RESTORE_REST
@@ -493,7 +493,7 @@ ia32_tracesys:
 	movq %rsp,%rdi        /* &pt_regs -> arg1 */
 	call syscall_trace_enter
 
-	pax_erase_kstack
+	call pax_erase_kstack
 
 	LOAD_ARGS32 ARGOFFSET  /* reload args from stack in case ptrace changed it */
 	RESTORE_REST

@@ -112,6 +112,7 @@ EXPORT_SYMBOL(memdup_user);
  * allocated buffer. Use this if you don't want to free the buffer immediately
  * like, for example, with RCU.
  */
+#undef __krealloc
 void *__krealloc(const void *p, size_t new_size, gfp_t flags)
 {
 	void *ret;
@@ -145,6 +146,7 @@ EXPORT_SYMBOL(__krealloc);
  * behaves exactly like kmalloc().  If @size is 0 and @p is not a
  * %NULL pointer, the object pointed to is freed.
  */
+#undef krealloc
 void *krealloc(const void *p, size_t new_size, gfp_t flags)
 {
 	void *ret;
