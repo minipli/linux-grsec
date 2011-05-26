@@ -307,12 +307,16 @@ core_initcall(reboot_init);
 extern const unsigned char machine_real_restart_asm[];
 extern const u64 machine_real_restart_gdt[3];
 
-void machine_real_restart(unsigned int type)
+__noreturn void machine_real_restart(unsigned int type)
 {
 	void *restart_va;
 	unsigned long restart_pa;
-	void (*restart_lowmem)(unsigned int);
+	void (* __noreturn restart_lowmem)(unsigned int);
 	u64 *lowmem_gdt;
+
+#if defined(CONFIG_X86_32) && (defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF))
+	struct desc_struct *gdt;
+#endif
 
 	local_irq_disable();
 
@@ -346,7 +350,7 @@ void machine_real_restart(unsigned int type)
 
 	restart_va = TRAMPOLINE_SYM(machine_real_restart_asm);
 	restart_pa = virt_to_phys(restart_va);
-	restart_lowmem = (void (*)(unsigned int))restart_pa;
+	restart_lowmem = (void *)restart_pa;
 
 	/* GDT[0]: GDT self-pointer */
 	lowmem_gdt[0] =
@@ -357,7 +361,30 @@ void machine_real_restart(unsigned int type)
 		GDT_ENTRY(0x009b, restart_pa, 0xffff);
 
 	/* Jump to the identity-mapped low memory code */
+
+#if defined(CONFIG_X86_32) && (defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF))
+	gdt = get_cpu_gdt_table(smp_processor_id());
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	gdt[GDT_ENTRY_KERNEL_DS].type = 3;
+	gdt[GDT_ENTRY_KERNEL_DS].limit = 0xf;
+	asm("mov %0, %%ds; mov %0, %%es; mov %0, %%ss" : : "r" (__KERNEL_DS) : "memory");
+#endif
+#ifdef CONFIG_PAX_KERNEXEC
+	gdt[GDT_ENTRY_KERNEL_CS].base0 = 0;
+	gdt[GDT_ENTRY_KERNEL_CS].base1 = 0;
+	gdt[GDT_ENTRY_KERNEL_CS].limit0 = 0xffff;
+	gdt[GDT_ENTRY_KERNEL_CS].limit = 0xf;
+	gdt[GDT_ENTRY_KERNEL_CS].g = 1;
+#endif
+#endif
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	asm volatile("push %0; push %1; lret\n" : : "i" (__KERNEL_CS), "rm" (restart_lowmem), "a" (type));
+	unreachable();
+#else
 	restart_lowmem(type);
+#endif
+
 }
 #ifdef CONFIG_APM_MODULE
 EXPORT_SYMBOL(machine_real_restart);
@@ -478,7 +505,7 @@ void __attribute__((weak)) mach_reboot_fixups(void)
 {
 }
 
-static void native_machine_emergency_restart(void)
+__noreturn static void native_machine_emergency_restart(void)
 {
 	int i;
 
@@ -593,13 +620,13 @@ void native_machine_shutdown(void)
 #endif
 }
 
-static void __machine_emergency_restart(int emergency)
+static __noreturn void __machine_emergency_restart(int emergency)
 {
 	reboot_emergency = emergency;
 	machine_ops.emergency_restart();
 }
 
-static void native_machine_restart(char *__unused)
+static __noreturn void native_machine_restart(char *__unused)
 {
 	printk("machine restart\n");
 
@@ -608,7 +635,7 @@ static void native_machine_restart(char *__unused)
 	__machine_emergency_restart(0);
 }
 
-static void native_machine_halt(void)
+static __noreturn void native_machine_halt(void)
 {
 	/* stop other cpus and apics */
 	machine_shutdown();
@@ -619,7 +646,7 @@ static void native_machine_halt(void)
 	stop_this_cpu(NULL);
 }
 
-static void native_machine_power_off(void)
+__noreturn static void native_machine_power_off(void)
 {
 	if (pm_power_off) {
 		if (!reboot_force)
@@ -628,6 +655,7 @@ static void native_machine_power_off(void)
 	}
 	/* a fallback in case there is no PM info available */
 	tboot_shutdown(TB_SHUTDOWN_HALT);
+	unreachable();
 }
 
 struct machine_ops machine_ops = {
