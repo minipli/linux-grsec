@@ -15,8 +15,6 @@
  * - initialize all local variables
  *
  * BUGS:
- * - -mpreferred-stack-boundary=2 or -mregparm=[123] is needed on i386 else gcc asserts
- * - infinite loop on i386 with -Os unless -maccumulate-outgoing-args or -mregparm=[123] is specified
  */
 #include "gcc-plugin.h"
 #include "plugin-version.h"
@@ -43,7 +41,7 @@ static const char track_function[] = "pax_track_stack";
 static bool init_locals;
 
 static struct plugin_info pax_plugin_info = {
-	.version	= "201105261520",
+	.version	= "201106030000",
 	.help		= "track-lowest-sp=nn\ttrack sp in functions whose frame size is at least nn bytes\n"
 //			  "initialize-locals\t\tforcibly initialize all stack frames\n"
 };
@@ -86,9 +84,6 @@ static struct rtl_opt_pass pax_expand_rtl_opt_pass = {
 		.todo_flags_finish	= 0 //TODO_dump_func | TODO_ggc_collect
 	}
 };
-
-//rtx init_one_libfunc(const char *name);
-//tree build_libfunc_function(const char *name);
 
 static void pax_add_instrumentation(gimple_stmt_iterator *gsi, bool before)
 {
