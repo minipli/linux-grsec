@@ -99,7 +99,6 @@ unsigned long node_memmap_size_bytes(int nid, unsigned long start_pfn,
 }
 #endif
 
-extern unsigned long find_max_low_pfn(void);
 extern unsigned long highend_pfn, highstart_pfn;
 
 #define LARGE_PAGE_BYTES (PTRS_PER_PTE * PAGE_SIZE)

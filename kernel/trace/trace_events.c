@@ -1241,10 +1241,10 @@ static LIST_HEAD(ftrace_module_file_list);
 struct ftrace_module_file_ops {
 	struct list_head		list;
 	struct module			*mod;
-	struct file_operations		id;
-	struct file_operations		enable;
-	struct file_operations		format;
-	struct file_operations		filter;
+	struct file_operations		id;	/* cannot be const, see trace_create_file_ops() */
+	struct file_operations		enable;	/* cannot be const, see trace_create_file_ops() */
+	struct file_operations		format;	/* cannot be const, see trace_create_file_ops() */
+	struct file_operations		filter;	/* cannot be const, see trace_create_file_ops() */
 };
 
 static struct ftrace_module_file_ops *

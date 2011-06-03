@@ -504,8 +504,8 @@ struct inet_peer *inet_getpeer(struct inetpeer_addr *daddr, int create)
 	if (p) {
 		p->daddr = *daddr;
 		atomic_set(&p->refcnt, 1);
-		atomic_set(&p->rid, 0);
-		atomic_set(&p->ip_id_count, secure_ip_id(daddr->addr.a4));
+		atomic_set_unchecked(&p->rid, 0);
+		atomic_set_unchecked(&p->ip_id_count, secure_ip_id(daddr->addr.a4));
 		p->tcp_ts_stamp = 0;
 		p->metrics[RTAX_LOCK-1] = INETPEER_METRICS_NEW;
 		p->rate_tokens = 0;
