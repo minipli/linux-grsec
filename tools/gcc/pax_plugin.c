@@ -125,6 +125,8 @@ static unsigned int execute_pax_tree_instrument(void)
 			if (!is_gimple_call(stmt))
 				continue;
 			decl = gimple_call_fndecl(stmt);
+			if (!decl)
+				continue;
 			if (TREE_CODE(decl) != FUNCTION_DECL)
 				continue;
 			if (!DECL_BUILT_IN(decl))
