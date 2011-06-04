@@ -46,14 +46,16 @@ static struct plugin_info pax_plugin_info = {
 //			  "initialize-locals\t\tforcibly initialize all stack frames\n"
 };
 
+static bool gate_pax_track_stack(void);
 static unsigned int execute_pax_tree_instrument(void);
 static unsigned int execute_pax_expand(void);
+static unsigned int execute_pax_final(void);
 
 static struct gimple_opt_pass pax_tree_instrument_pass = {
 	.pass = {
 		.type			= GIMPLE_PASS,
 		.name			= "pax_tree_instrument",
-		.gate			= NULL,
+		.gate			= gate_pax_track_stack,
 		.execute		= execute_pax_tree_instrument,
 		.sub			= NULL,
 		.next			= NULL,
@@ -71,7 +73,7 @@ static struct rtl_opt_pass pax_expand_rtl_opt_pass = {
 	.pass = {
 		.type			= RTL_PASS,
 		.name			= "pax_expand",
-		.gate			= NULL,
+		.gate			= gate_pax_track_stack,
 		.execute		= execute_pax_expand,
 		.sub			= NULL,
 		.next			= NULL,
@@ -84,6 +86,29 @@ static struct rtl_opt_pass pax_expand_rtl_opt_pass = {
 		.todo_flags_finish	= 0 //TODO_dump_func | TODO_ggc_collect
 	}
 };
+
+static struct rtl_opt_pass pax_final_rtl_opt_pass = {
+	.pass = {
+		.type			= RTL_PASS,
+		.name			= "pax_final",
+		.gate			= gate_pax_track_stack,
+		.execute		= execute_pax_final,
+		.sub			= NULL,
+		.next			= NULL,
+		.static_pass_number	= 0,
+		.tv_id			= TV_NONE,
+		.properties_required	= 0,
+		.properties_provided	= 0,
+		.properties_destroyed	= 0,
+		.todo_flags_start	= 0,
+		.todo_flags_finish	= 0
+	}
+};
+
+static bool gate_pax_track_stack(void)
+{
+	return track_frame_size >= 0;
+}
 
 static void pax_add_instrumentation(gimple_stmt_iterator *gsi, bool before)
 {
@@ -106,9 +131,6 @@ static unsigned int execute_pax_tree_instrument(void)
 	basic_block bb;
 	gimple_stmt_iterator gsi;
 	bool isalloca = false;
-
-	if (track_frame_size < 0)
-		return 0;
 
 	// 1. loop through BBs and GIMPLE statements
 	FOR_EACH_BB(bb) {
@@ -154,12 +176,9 @@ static unsigned int execute_pax_expand(void)
 {
 	rtx sp, insn;
 
-	if (track_frame_size < 0)
-		return 0;
-
 	// 1. find pax_track_stack calls
 	for (insn = get_insns(); insn; insn = NEXT_INSN(insn)) {
-		// rtl match: (call_insn 8 7 9 3 a.c:9 (call (mem (symbol_ref ("pax_track_stack") [flags 0x41] <function_decl 0xb7470e80 pax_track_stack>) [0 S1 A8]) (4)) -1 (nil) (nil))
+		// rtl match: (call_insn 8 7 9 3 (call (mem (symbol_ref ("pax_track_stack") [flags 0x41] <function_decl 0xb7470e80 pax_track_stack>) [0 S1 A8]) (4)) -1 (nil) (nil))
 		rtx body;
 
 		if (!CALL_P(insn))
@@ -175,17 +194,13 @@ static unsigned int execute_pax_expand(void)
 			continue;
 		if (strcmp(XSTR(body, 0), track_function))
 			continue;
-		// 2. delete call if function frame is not big enough
-		if (!cfun->calls_alloca && get_frame_size() < track_frame_size) {
-			delete_insn_and_edges(PREV_INSN(insn));
-			delete_insn_and_edges(insn);
-			continue;
-		}
-		// 3. else fix parameter to be the stack pointer
+		// 2. fix parameter to be the stack pointer
 		// rtl match: (insn 6 5 7 3 (set (mem (reg 56 virtual-outgoing-args) [0 S4 A32]) (0)) -1 (nil))
 		//            (insn 6 5 7 3 (set (reg 0 ax) (0)) -1 (nil))
 		//            (insn 6 5 7 3 (set (reg 5 di) (0)) -1 (nil))
 		sp = PREV_INSN(insn);
+		if (!INSN_P(sp))
+			continue;
 		sp = PATTERN(sp);
 		if (GET_CODE(sp) != SET)
 			continue;
@@ -194,8 +209,51 @@ static unsigned int execute_pax_expand(void)
 
 //	print_simple_rtl(stderr, get_insns());
 //	print_rtl(stderr, get_insns());
-//	printf("%u %u %u\n", crtl->stack_alignment_needed, crtl->preferred_stack_boundary, cfun->calls_alloca);
-//	warning(0, "track_frame_size: %ld %x", get_frame_size(), track_frame_size);
+//	warning(0, "track_frame_size: %d %ld %d", cfun->calls_alloca, get_frame_size(), track_frame_size);
+
+	return 0;
+}
+
+static unsigned int execute_pax_final(void)
+{
+	rtx sp = NULL, insn;
+
+	// 1. find pax_track_stack calls
+	for (insn = get_insns(); insn; insn = NEXT_INSN(insn)) {
+		// rtl match: (call_insn 8 7 9 3 (call (mem (symbol_ref ("pax_track_stack") [flags 0x41] <function_decl 0xb7470e80 pax_track_stack>) [0 S1 A8]) (4)) -1 (nil) (nil))
+		rtx body;
+
+		if (!INSN_P(insn))
+			continue;
+		body = PATTERN(insn);
+		if (GET_CODE(body) == SET) {
+			if (GET_CODE(body) == SET && SET_SRC(body) == stack_pointer_rtx)
+				sp = insn;
+			continue;
+		}
+
+		if (!CALL_P(insn))
+			continue;
+		if (GET_CODE(body) != CALL)
+			continue;
+		body = XEXP(body, 0);
+		if (GET_CODE(body) != MEM)
+			continue;
+		body = XEXP(body, 0);
+		if (GET_CODE(body) != SYMBOL_REF)
+			continue;
+		if (strcmp(XSTR(body, 0), track_function))
+			continue;
+//	warning(0, "track_frame_size: %d %ld %d", cfun->calls_alloca, get_frame_size(), track_frame_size);
+		// 2. delete call if function frame is not big enough
+		if (cfun->calls_alloca)
+			continue;
+		if (get_frame_size() >= track_frame_size)
+			continue;
+		if (sp)
+			delete_insn_and_edges(sp);
+		delete_insn_and_edges(insn);
+	}
 
 	return 0;
 }
@@ -218,6 +276,12 @@ int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version 
 		.reference_pass_name		= "expand",
 		.ref_pass_instance_number	= 0,
 		.pos_op 			= PASS_POS_INSERT_AFTER
+	};
+	struct register_pass_info pax_final_pass_info = {
+		.pass				= &pax_final_rtl_opt_pass.pass,
+		.reference_pass_name		= "final",
+		.ref_pass_instance_number	= 0,
+		.pos_op 			= PASS_POS_INSERT_BEFORE
 	};
 
 	if (!plugin_default_version_check(version, &gcc_version)) {
@@ -251,6 +315,7 @@ int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version 
 
 	register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &pax_tree_instrument_pass_info);
 	register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &pax_expand_pass_info);
+	register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &pax_final_pass_info);
 
 	return 0;
 }
