@@ -90,7 +90,7 @@ static void pax_add_instrumentation(gimple_stmt_iterator *gsi, bool before)
 	gimple call;
 	tree sp, decl, type;
 
-	sp = build_int_cst(NULL_TREE, 0);
+	sp = build_int_cst_wide(ptr_type_node, 0, 0);
 	type = build_function_type_list(void_type_node, unsigned_type_node, NULL_TREE);
 	decl = build_fn_decl(track_function, type);
 	DECL_ASSEMBLER_NAME(decl); // for LTO
@@ -184,6 +184,7 @@ static unsigned int execute_pax_expand(void)
 		// 3. else fix parameter to be the stack pointer
 		// rtl match: (insn 6 5 7 3 (set (mem (reg 56 virtual-outgoing-args) [0 S4 A32]) (0)) -1 (nil))
 		//            (insn 6 5 7 3 (set (reg 0 ax) (0)) -1 (nil))
+		//            (insn 6 5 7 3 (set (reg 5 di) (0)) -1 (nil))
 		sp = PREV_INSN(insn);
 		sp = PATTERN(sp);
 		if (GET_CODE(sp) != SET)
