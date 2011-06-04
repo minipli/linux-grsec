@@ -2481,6 +2481,8 @@ static int pfkey_migrate(struct sock *sk, struct sk_buff *skb,
 	struct xfrm_migrate m[XFRM_MAX_DEPTH];
 	struct xfrm_kmaddress k;
 
+	pax_track_stack();
+
 	if (!present_and_same_family(ext_hdrs[SADB_EXT_ADDRESS_SRC - 1],
 				     ext_hdrs[SADB_EXT_ADDRESS_DST - 1]) ||
 	    !ext_hdrs[SADB_X_EXT_POLICY - 1]) {
@@ -3016,10 +3018,10 @@ static int pfkey_send_policy_notify(struct xfrm_policy *xp, int dir, const struc
 static u32 get_acqseq(void)
 {
 	u32 res;
-	static atomic_t acqseq;
+	static atomic_unchecked_t acqseq;
 
 	do {
-		res = atomic_inc_return(&acqseq);
+		res = atomic_inc_return_unchecked(&acqseq);
 	} while (!res);
 	return res;
 }
@@ -3657,7 +3659,11 @@ static int pfkey_seq_show(struct seq_file *f, void *v)
 		seq_printf(f ,"sk       RefCnt Rmem   Wmem   User   Inode\n");
 	else
 		seq_printf(f ,"%p %-6d %-6u %-6u %-6u %-6lu\n",
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+			       NULL,
+#else
 			       s,
+#endif
 			       atomic_read(&s->sk_refcnt),
 			       sk_rmem_alloc_get(s),
 			       sk_wmem_alloc_get(s),
