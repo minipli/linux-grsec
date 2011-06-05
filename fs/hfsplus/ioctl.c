@@ -101,8 +101,6 @@ int hfsplus_setxattr(struct dentry *dentry, const char *name,
 	struct hfsplus_cat_file *file;
 	int res;
 
-	pax_track_stack();
-
 	if (!S_ISREG(inode->i_mode) || HFSPLUS_IS_RSRC(inode))
 		return -EOPNOTSUPP;
 
@@ -144,8 +142,6 @@ ssize_t hfsplus_getxattr(struct dentry *dentry, const char *name,
 	hfsplus_cat_entry entry;
 	struct hfsplus_cat_file *file;
 	ssize_t res = 0;
-
-	pax_track_stack();
 
 	if (!S_ISREG(inode->i_mode) || HFSPLUS_IS_RSRC(inode))
 		return -EOPNOTSUPP;

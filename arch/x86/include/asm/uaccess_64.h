@@ -98,8 +98,6 @@ unsigned long __copy_to_user(void __user *dst, const void *src, unsigned size)
 
 	might_fault();
 
-	pax_track_stack();
-
 	if ((int)size < 0)
 		return size;
 
@@ -191,8 +189,6 @@ unsigned long __copy_in_user(void __user *dst, const void __user *src, unsigned 
 
 	might_fault();
 
-	pax_track_stack();
-
 	if ((int)size < 0)
 		return size;
 
@@ -280,8 +276,6 @@ __must_check unsigned long __clear_user(void __user *mem, unsigned long len);
 static __must_check __always_inline unsigned long
 __copy_from_user_inatomic(void *dst, const void __user *src, unsigned size)
 {
-	pax_track_stack();
-
 	if ((int)size < 0)
 		return size;
 

@@ -498,8 +498,6 @@ static void clear_expired(struct mpoa_client *client)
 	struct timeval now;
 	struct k_message msg;
 
-	pax_track_stack();
-
 	do_gettimeofday(&now);
 
 	write_lock_irq(&client->egress_lock);

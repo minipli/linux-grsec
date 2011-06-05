@@ -1159,8 +1159,6 @@ int reiserfs_delete_item(struct reiserfs_transaction_handle *th,
 	int iter = 0;
 #endif
 
-	pax_track_stack();
-
 	BUG_ON(!th->t_trans_id);
 
 	init_tb_struct(th, &s_del_balance, sb, path,
@@ -1297,8 +1295,6 @@ void reiserfs_delete_solid_item(struct reiserfs_transaction_handle *th,
 	struct cpu_key cpu_key;
 	int retval;
 	int quota_cut_bytes = 0;
-
-	pax_track_stack();
 
 	BUG_ON(!th->t_trans_id);
 
@@ -1528,8 +1524,6 @@ int reiserfs_cut_from_item(struct reiserfs_transaction_handle *th,
 	int retval2 = -1;
 	int quota_cut_bytes;
 	loff_t tail_pos = 0;
-
-	pax_track_stack();
 
 	BUG_ON(!th->t_trans_id);
 
@@ -1926,8 +1920,6 @@ int reiserfs_paste_into_item(struct reiserfs_transaction_handle *th, struct tree
 	int retval;
 	int fs_gen;
 
-	pax_track_stack();
-
 	BUG_ON(!th->t_trans_id);
 
 	fs_gen = get_generation(inode->i_sb);
@@ -2014,8 +2006,6 @@ int reiserfs_insert_item(struct reiserfs_transaction_handle *th,
 	int retval;
 	int fs_gen = 0;
 	int quota_bytes = 0;
-
-	pax_track_stack();
 
 	BUG_ON(!th->t_trans_id);
 

@@ -1290,8 +1290,6 @@ isdn_ioctl(struct inode *inode, struct file *file, uint cmd, ulong arg)
 	} iocpar;
 	void __user *argp = (void __user *)arg;
 
-	pax_track_stack();
-
 #define name  iocpar.name
 #define bname iocpar.bname
 #define iocts iocpar.iocts

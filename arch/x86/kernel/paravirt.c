@@ -134,8 +134,6 @@ static void *get_call_destination(u8 type)
 #endif
 	};
 
-	pax_track_stack();
-
 	return *((void **)&tmpl + type);
 }
 
