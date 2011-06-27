@@ -2518,6 +2518,8 @@ void ata_eh_report(struct ata_port *ap)
 {
 	struct ata_link *link;
 
+	pax_track_stack();
+
 	ata_for_each_link(link, ap, HOST_FIRST)
 		ata_eh_link_report(link);
 }
@@ -3922,7 +3924,7 @@ void ata_do_eh(struct ata_port *ap, ata_prereset_fn_t prereset,
  */
 void ata_std_error_handler(struct ata_port *ap)
 {
-	struct ata_port_operations *ops = ap->ops;
+	const struct ata_port_operations *ops = ap->ops;
 	ata_reset_fn_t hardreset = ops->hardreset;
 
 	/* ignore built-in hardreset if SCR access is not available */

@@ -85,7 +85,7 @@ nouveau_fence_update(struct nouveau_channel *chan)
 		if (USE_REFCNT(dev))
 			sequence = nvchan_rd32(chan, 0x48);
 		else
-			sequence = atomic_read(&chan->fence.last_sequence_irq);
+			sequence = atomic_read_unchecked(&chan->fence.last_sequence_irq);
 
 		if (chan->fence.sequence_ack == sequence)
 			goto out;
@@ -553,7 +553,7 @@ nouveau_fence_channel_init(struct nouveau_channel *chan)
 out_initialised:
 	INIT_LIST_HEAD(&chan->fence.pending);
 	spin_lock_init(&chan->fence.lock);
-	atomic_set(&chan->fence.last_sequence_irq, 0);
+	atomic_set_unchecked(&chan->fence.last_sequence_irq, 0);
 	return 0;
 }
 
