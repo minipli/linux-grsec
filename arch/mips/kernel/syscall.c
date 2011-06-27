@@ -102,17 +102,21 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	do_color_align = 0;
 	if (filp || (flags & MAP_SHARED))
 		do_color_align = 1;
+
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(current->mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (addr) {
 		if (do_color_align)
 			addr = COLOUR_ALIGN(addr, pgoff);
 		else
 			addr = PAGE_ALIGN(addr);
 		vmm = find_vma(current->mm, addr);
-		if (task_size - len >= addr &&
-		    (!vmm || addr + len <= vmm->vm_start))
+		if (task_size - len >= addr && check_heap_stack_gap(vmm, addr, len))
 			return addr;
 	}
-	addr = TASK_UNMAPPED_BASE;
+	addr = current->mm->mmap_base;
 	if (do_color_align)
 		addr = COLOUR_ALIGN(addr, pgoff);
 	else
@@ -122,7 +126,7 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr,
 		/* At this point:  (!vmm || addr < vmm->vm_end). */
 		if (task_size - len < addr)
 			return -ENOMEM;
-		if (!vmm || addr + len <= vmm->vm_start)
+		if (check_heap_stack_gap(vmm, addr, len))
 			return addr;
 		addr = vmm->vm_end;
 		if (do_color_align)

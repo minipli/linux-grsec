@@ -3021,7 +3021,7 @@ static int radeon_cp_getparam(struct drm_device *dev, void *data, struct drm_fil
 {
 	drm_radeon_private_t *dev_priv = dev->dev_private;
 	drm_radeon_getparam_t *param = data;
-	int value;
+	int value = 0;
 
 	DRM_DEBUG("pid=%d\n", DRM_CURRENTPID);
 
