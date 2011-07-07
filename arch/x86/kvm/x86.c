@@ -94,7 +94,7 @@ static void update_cr8_intercept(struct kvm_vcpu *vcpu);
 static int kvm_dev_ioctl_get_supported_cpuid(struct kvm_cpuid2 *cpuid,
 				    struct kvm_cpuid_entry2 __user *entries);
 
-struct kvm_x86_ops *kvm_x86_ops;
+const struct kvm_x86_ops *kvm_x86_ops;
 EXPORT_SYMBOL_GPL(kvm_x86_ops);
 
 int ignore_msrs = 0;
@@ -2050,6 +2050,8 @@ long kvm_arch_dev_ioctl(struct file *filp,
 		if (n < msr_list.nmsrs)
 			goto out;
 		r = -EFAULT;
+		if (num_msrs_to_save > ARRAY_SIZE(msrs_to_save))
+			goto out;
 		if (copy_to_user(user_msr_list->indices, &msrs_to_save,
 				 num_msrs_to_save * sizeof(u32)))
 			goto out;
@@ -2217,15 +2219,20 @@ static int kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu,
 				     struct kvm_cpuid2 *cpuid,
 				     struct kvm_cpuid_entry2 __user *entries)
 {
-	int r;
+	int r, i;
 
 	r = -E2BIG;
 	if (cpuid->nent > KVM_MAX_CPUID_ENTRIES)
 		goto out;
 	r = -EFAULT;
-	if (copy_from_user(&vcpu->arch.cpuid_entries, entries,
-			   cpuid->nent * sizeof(struct kvm_cpuid_entry2)))
+	if (!access_ok(VERIFY_READ, entries, cpuid->nent * sizeof(struct kvm_cpuid_entry2)))
 		goto out;
+	for (i = 0; i < cpuid->nent; ++i) {
+		struct kvm_cpuid_entry2 cpuid_entry;
+		if (__copy_from_user(&cpuid_entry, entries + i, sizeof(cpuid_entry)))
+			goto out;
+		vcpu->arch.cpuid_entries[i] = cpuid_entry;
+	}
 	vcpu->arch.cpuid_nent = cpuid->nent;
 	kvm_apic_set_version(vcpu);
 	kvm_x86_ops->cpuid_update(vcpu);
@@ -2240,15 +2247,19 @@ static int kvm_vcpu_ioctl_get_cpuid2(struct kvm_vcpu *vcpu,
 				     struct kvm_cpuid2 *cpuid,
 				     struct kvm_cpuid_entry2 __user *entries)
 {
-	int r;
+	int r, i;
 
 	r = -E2BIG;
 	if (cpuid->nent < vcpu->arch.cpuid_nent)
 		goto out;
 	r = -EFAULT;
-	if (copy_to_user(entries, &vcpu->arch.cpuid_entries,
-			 vcpu->arch.cpuid_nent * sizeof(struct kvm_cpuid_entry2)))
+	if (!access_ok(VERIFY_WRITE, entries, vcpu->arch.cpuid_nent * sizeof(struct kvm_cpuid_entry2)))
 		goto out;
+	for (i = 0; i < vcpu->arch.cpuid_nent; ++i) {
+		struct kvm_cpuid_entry2 cpuid_entry = vcpu->arch.cpuid_entries[i];
+		if (__copy_to_user(entries + i, &cpuid_entry, sizeof(cpuid_entry)))
+			goto out;
+	}
 	return 0;
 
 out:
@@ -2526,7 +2537,7 @@ static int kvm_vcpu_ioctl_set_lapic(struct kvm_vcpu *vcpu,
 static int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu,
 				    struct kvm_interrupt *irq)
 {
-	if (irq->irq < 0 || irq->irq >= 256)
+	if (irq->irq >= 256)
 		return -EINVAL;
 	if (irqchip_in_kernel(vcpu->kvm))
 		return -ENXIO;
@@ -4672,7 +4683,7 @@ static unsigned long kvm_get_guest_ip(void)
 	return ip;
 }
 
-static struct perf_guest_info_callbacks kvm_guest_cbs = {
+static const struct perf_guest_info_callbacks kvm_guest_cbs = {
 	.is_in_guest		= kvm_is_in_guest,
 	.is_user_mode		= kvm_is_user_mode,
 	.get_guest_ip		= kvm_get_guest_ip,
@@ -4690,10 +4701,10 @@ void kvm_after_handle_nmi(struct kvm_vcpu *vcpu)
 }
 EXPORT_SYMBOL_GPL(kvm_after_handle_nmi);
 
-int kvm_arch_init(void *opaque)
+int kvm_arch_init(const void *opaque)
 {
 	int r;
-	struct kvm_x86_ops *ops = (struct kvm_x86_ops *)opaque;
+	const struct kvm_x86_ops *ops = (const struct kvm_x86_ops *)opaque;
 
 	if (kvm_x86_ops) {
 		printk(KERN_ERR "kvm: already loaded the other module\n");

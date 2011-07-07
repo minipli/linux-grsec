@@ -235,7 +235,7 @@ mcpcia_write_config(struct pci_bus *bus, unsigned int devfn, int where,
 	return PCIBIOS_SUCCESSFUL;
 }
 
-struct pci_ops mcpcia_pci_ops = 
+const struct pci_ops mcpcia_pci_ops = 
 {
 	.read =		mcpcia_read_config,
 	.write =	mcpcia_write_config,

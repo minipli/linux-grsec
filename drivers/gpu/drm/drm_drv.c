@@ -386,7 +386,7 @@ long drm_ioctl(struct file *filp,
 
 	dev = file_priv->minor->dev;
 	atomic_inc(&dev->ioctl_count);
-	atomic_inc(&dev->counts[_DRM_STAT_IOCTLS]);
+	atomic_inc_unchecked(&dev->counts[_DRM_STAT_IOCTLS]);
 	++file_priv->ioctl_count;
 
 	DRM_DEBUG("pid=%d, cmd=0x%02x, nr=0x%02x, dev 0x%lx, auth=%d\n",

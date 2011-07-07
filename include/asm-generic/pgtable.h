@@ -447,6 +447,14 @@ static inline int pmd_write(pmd_t pmd)
 #endif /* __HAVE_ARCH_PMD_WRITE */
 #endif
 
+#ifndef __HAVE_ARCH_PAX_OPEN_KERNEL
+static inline unsigned long pax_open_kernel(void) { return 0; }
+#endif
+
+#ifndef __HAVE_ARCH_PAX_CLOSE_KERNEL
+static inline unsigned long pax_close_kernel(void) { return 0; }
+#endif
+
 #endif /* !__ASSEMBLY__ */
 
 #endif /* _ASM_GENERIC_PGTABLE_H */

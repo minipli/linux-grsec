@@ -268,7 +268,7 @@ const struct dev_pm_ops name = { \
  * runtime PM, make the pm member point to generic_subsys_pm_ops.
  */
 #ifdef CONFIG_PM
-extern struct dev_pm_ops generic_subsys_pm_ops;
+extern const struct dev_pm_ops generic_subsys_pm_ops;
 #define GENERIC_SUBSYS_PM_OPS	(&generic_subsys_pm_ops)
 #else
 #define GENERIC_SUBSYS_PM_OPS	NULL
@@ -471,7 +471,7 @@ extern void update_pm_runtime_accounting(struct device *dev);
  * subsystem-level and driver-level callbacks.
  */
 struct dev_power_domain {
-	struct dev_pm_ops	ops;
+	const struct dev_pm_ops ops;
 };
 
 /*

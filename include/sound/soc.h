@@ -245,7 +245,7 @@ struct snd_soc_jack_gpio;
 
 typedef int (*hw_write_t)(void *,const char* ,int);
 
-extern struct snd_ac97_bus_ops soc_ac97_ops;
+extern const struct snd_ac97_bus_ops soc_ac97_ops;
 
 enum snd_soc_control_type {
 	SND_SOC_CUSTOM,
