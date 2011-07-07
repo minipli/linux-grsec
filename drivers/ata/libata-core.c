@@ -4954,7 +4954,7 @@ void ata_qc_free(struct ata_queued_cmd *qc)
 	struct ata_port *ap;
 	unsigned int tag;
 
-	WARN_ON_ONCE(qc == NULL); /* ata_qc_from_tag _might_ return NULL */
+	BUG_ON(qc == NULL); /* ata_qc_from_tag _might_ return NULL */
 	ap = qc->ap;
 
 	qc->flags = 0;
@@ -4970,7 +4970,7 @@ void __ata_qc_complete(struct ata_queued_cmd *qc)
 	struct ata_port *ap;
 	struct ata_link *link;
 
-	WARN_ON_ONCE(qc == NULL); /* ata_qc_from_tag _might_ return NULL */
+	BUG_ON(qc == NULL); /* ata_qc_from_tag _might_ return NULL */
 	WARN_ON_ONCE(!(qc->flags & ATA_QCFLAG_ACTIVE));
 	ap = qc->ap;
 	link = qc->dev->link;
@@ -5987,7 +5987,7 @@ static void ata_host_stop(struct device *gendev, void *res)
  *	LOCKING:
  *	None.
  */
-static void ata_finalize_port_ops(struct ata_port_operations *ops)
+static void ata_finalize_port_ops(const struct ata_port_operations *ops)
 {
 	static DEFINE_SPINLOCK(lock);
 	const struct ata_port_operations *cur;
@@ -5999,6 +5999,7 @@ static void ata_finalize_port_ops(struct ata_port_operations *ops)
 		return;
 
 	spin_lock(&lock);
+	pax_open_kernel();
 
 	for (cur = ops->inherits; cur; cur = cur->inherits) {
 		void **inherit = (void **)cur;
@@ -6012,8 +6013,9 @@ static void ata_finalize_port_ops(struct ata_port_operations *ops)
 		if (IS_ERR(*pp))
 			*pp = NULL;
 
-	ops->inherits = NULL;
+	((struct ata_port_operations *)ops)->inherits = NULL;
 
+	pax_close_kernel();
 	spin_unlock(&lock);
 }
 
@@ -6110,7 +6112,7 @@ int ata_host_start(struct ata_host *host)
  */
 /* KILLME - the only user left is ipr */
 void ata_host_init(struct ata_host *host, struct device *dev,
-		   unsigned long flags, struct ata_port_operations *ops)
+		   unsigned long flags, const struct ata_port_operations *ops)
 {
 	spin_lock_init(&host->lock);
 	host->dev = dev;
@@ -6773,7 +6775,7 @@ static void ata_dummy_error_handler(struct ata_port *ap)
 	/* truly dummy */
 }
 
-struct ata_port_operations ata_dummy_port_ops = {
+const struct ata_port_operations ata_dummy_port_ops = {
 	.qc_prep		= ata_noop_qc_prep,
 	.qc_issue		= ata_dummy_qc_issue,
 	.error_handler		= ata_dummy_error_handler,

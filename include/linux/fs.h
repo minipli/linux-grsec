@@ -568,41 +568,41 @@ typedef int (*read_actor_t)(read_descriptor_t *, struct page *,
 		unsigned long, unsigned long);
 
 struct address_space_operations {
-	int (*writepage)(struct page *page, struct writeback_control *wbc);
-	int (*readpage)(struct file *, struct page *);
-	void (*sync_page)(struct page *);
+	int (* const writepage)(struct page *page, struct writeback_control *wbc);
+	int (* const readpage)(struct file *, struct page *);
+	void (* const sync_page)(struct page *);
 
 	/* Write back some dirty pages from this mapping. */
-	int (*writepages)(struct address_space *, struct writeback_control *);
+	int (* const writepages)(struct address_space *, struct writeback_control *);
 
 	/* Set a page dirty.  Return true if this dirtied it */
-	int (*set_page_dirty)(struct page *page);
+	int (* const set_page_dirty)(struct page *page);
 
-	int (*readpages)(struct file *filp, struct address_space *mapping,
+	int (* const readpages)(struct file *filp, struct address_space *mapping,
 			struct list_head *pages, unsigned nr_pages);
 
-	int (*write_begin)(struct file *, struct address_space *mapping,
+	int (* const write_begin)(struct file *, struct address_space *mapping,
 				loff_t pos, unsigned len, unsigned flags,
 				struct page **pagep, void **fsdata);
-	int (*write_end)(struct file *, struct address_space *mapping,
+	int (* const write_end)(struct file *, struct address_space *mapping,
 				loff_t pos, unsigned len, unsigned copied,
 				struct page *page, void *fsdata);
 
 	/* Unfortunately this kludge is needed for FIBMAP. Don't use it */
-	sector_t (*bmap)(struct address_space *, sector_t);
-	void (*invalidatepage) (struct page *, unsigned long);
-	int (*releasepage) (struct page *, gfp_t);
-	ssize_t (*direct_IO)(int, struct kiocb *, const struct iovec *iov,
+	sector_t (* const bmap)(struct address_space *, sector_t);
+	void (* const invalidatepage) (struct page *, unsigned long);
+	int (* const releasepage) (struct page *, gfp_t);
+	ssize_t (* const direct_IO)(int, struct kiocb *, const struct iovec *iov,
 			loff_t offset, unsigned long nr_segs);
-	int (*get_xip_mem)(struct address_space *, pgoff_t, int,
+	int (* const get_xip_mem)(struct address_space *, pgoff_t, int,
 						void **, unsigned long *);
 	/* migrate the contents of a page to the specified target */
-	int (*migratepage) (struct address_space *,
+	int (* const migratepage) (struct address_space *,
 			struct page *, struct page *);
-	int (*launder_page) (struct page *);
-	int (*is_partially_uptodate) (struct page *, read_descriptor_t *,
+	int (* const launder_page) (struct page *);
+	int (* const is_partially_uptodate) (struct page *, read_descriptor_t *,
 					unsigned long);
-	int (*error_remove_page)(struct address_space *, struct page *);
+	int (* const error_remove_page)(struct address_space *, struct page *);
 };
 
 /*
@@ -1030,19 +1030,19 @@ static inline int file_check_writeable(struct file *filp)
 typedef struct files_struct *fl_owner_t;
 
 struct file_lock_operations {
-	void (*fl_copy_lock)(struct file_lock *, struct file_lock *);
-	void (*fl_release_private)(struct file_lock *);
+	void (* const fl_copy_lock)(struct file_lock *, struct file_lock *);
+	void (* const fl_release_private)(struct file_lock *);
 };
 
 struct lock_manager_operations {
-	int (*fl_compare_owner)(struct file_lock *, struct file_lock *);
-	void (*fl_notify)(struct file_lock *);	/* unblock callback */
-	int (*fl_grant)(struct file_lock *, struct file_lock *, int);
-	void (*fl_copy_lock)(struct file_lock *, struct file_lock *);
-	void (*fl_release_private)(struct file_lock *);
-	void (*fl_break)(struct file_lock *);
-	int (*fl_mylease)(struct file_lock *, struct file_lock *);
-	int (*fl_change)(struct file_lock **, int);
+	int (* const fl_compare_owner)(struct file_lock *, struct file_lock *);
+	void (* const fl_notify)(struct file_lock *);	/* unblock callback */
+	int (* const fl_grant)(struct file_lock *, struct file_lock *, int);
+	void (* const fl_copy_lock)(struct file_lock *, struct file_lock *);
+	void (* const fl_release_private)(struct file_lock *);
+	void (* const fl_break)(struct file_lock *);
+	int (* const fl_mylease)(struct file_lock *, struct file_lock *);
+	int (* const fl_change)(struct file_lock **, int);
 };
 
 struct lock_manager {
@@ -1441,7 +1441,7 @@ struct fiemap_extent_info {
 	unsigned int fi_flags;		/* Flags as passed from user */
 	unsigned int fi_extents_mapped;	/* Number of mapped extents */
 	unsigned int fi_extents_max;	/* Size of fiemap_extent array */
-	struct fiemap_extent *fi_extents_start; /* Start of fiemap_extent
+	struct fiemap_extent __user *fi_extents_start; /* Start of fiemap_extent
 						 * array */
 };
 int fiemap_fill_next_extent(struct fiemap_extent_info *info, u64 logical,
@@ -1558,30 +1558,30 @@ extern ssize_t vfs_writev(struct file *, const struct iovec __user *,
 		unsigned long, loff_t *);
 
 struct super_operations {
-   	struct inode *(*alloc_inode)(struct super_block *sb);
-	void (*destroy_inode)(struct inode *);
+   	struct inode *(* const alloc_inode)(struct super_block *sb);
+	void (* const destroy_inode)(struct inode *);
 
-   	void (*dirty_inode) (struct inode *);
-	int (*write_inode) (struct inode *, int);
-	void (*drop_inode) (struct inode *);
-	void (*delete_inode) (struct inode *);
-	void (*put_super) (struct super_block *);
-	void (*write_super) (struct super_block *);
-	int (*sync_fs)(struct super_block *sb, int wait);
-	int (*freeze_fs) (struct super_block *);
-	int (*unfreeze_fs) (struct super_block *);
-	int (*statfs) (struct dentry *, struct kstatfs *);
-	int (*remount_fs) (struct super_block *, int *, char *);
-	void (*clear_inode) (struct inode *);
-	void (*umount_begin) (struct super_block *);
+   	void (* const dirty_inode) (struct inode *);
+	int (* const write_inode) (struct inode *, int);
+	void (* const drop_inode) (struct inode *);
+	void (* const delete_inode) (struct inode *);
+	void (* const put_super) (struct super_block *);
+	void (* const write_super) (struct super_block *);
+	int (* const sync_fs)(struct super_block *sb, int wait);
+	int (* const freeze_fs) (struct super_block *);
+	int (* const unfreeze_fs) (struct super_block *);
+	int (* const statfs) (struct dentry *, struct kstatfs *);
+	int (* const remount_fs) (struct super_block *, int *, char *);
+	void (* const clear_inode) (struct inode *);
+	void (* const umount_begin) (struct super_block *);
 
-	int (*show_options)(struct seq_file *, struct vfsmount *);
-	int (*show_stats)(struct seq_file *, struct vfsmount *);
+	int (* const show_options)(struct seq_file *, struct vfsmount *);
+	int (* const show_stats)(struct seq_file *, struct vfsmount *);
 #ifdef CONFIG_QUOTA
-	ssize_t (*quota_read)(struct super_block *, int, char *, size_t, loff_t);
-	ssize_t (*quota_write)(struct super_block *, int, const char *, size_t, loff_t);
+	ssize_t (* const quota_read)(struct super_block *, int, char *, size_t, loff_t);
+	ssize_t (* const quota_write)(struct super_block *, int, const char *, size_t, loff_t);
 #endif
-	int (*bdev_try_to_free_page)(struct super_block*, struct page*, gfp_t);
+	int (* const bdev_try_to_free_page)(struct super_block*, struct page*, gfp_t);
 };
 
 /*

@@ -221,8 +221,9 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer
-HOSTCXXFLAGS = -O2
+HOSTCFLAGS   = -Wall -W -Wmissing-prototypes -Wstrict-prototypes -Wno-unused-parameter -Wno-missing-field-initializers -O2 -fomit-frame-pointer -fno-delete-null-pointer-checks
+HOSTCLFAGS  += $(call cc-option, -Wno-empty-body)
+HOSTCXXFLAGS = -O2 -fno-delete-null-pointer-checks
 
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
@@ -342,10 +343,12 @@ LINUXINCLUDE    := -Iinclude \
 KBUILD_CPPFLAGS := -D__KERNEL__
 
 KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
+		   -W -Wno-unused-parameter -Wno-missing-field-initializers \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
 		   -fno-delete-null-pointer-checks
+KBUILD_CFLAGS   += $(call cc-option, -Wno-empty-body)
 KBUILD_AFLAGS   := -D__ASSEMBLY__
 
 # Read KERNELRELEASE from include/config/kernel.release (if it exists)
@@ -403,7 +406,7 @@ endif
 # of make so .config is not included in this case either (for *config).
 
 no-dot-config-targets := clean mrproper distclean \
-			 cscope TAGS tags help %docs check% \
+			 cscope gtags TAGS tags help %docs check% \
 			 include/linux/version.h headers_% \
 			 kernelrelease kernelversion
 
@@ -949,7 +952,19 @@ include/config/kernel.release: include/config/auto.conf FORCE
 # version.h and scripts_basic is processed / created.
 
 # Listed in dependency order
-PHONY += prepare archprepare prepare0 prepare1 prepare2 prepare3
+PHONY += prepare archprepare prepare0 prepare1 prepare2 prepare3 pax-plugin
+
+ifeq ($(CONFIG_PAX_MEMORY_STACKLEAK),y)
+KBUILD_CFLAGS += $(call cc-ifversion, -ge, 0405, -fplugin=$(objtree)/tools/gcc/pax_plugin.so -fplugin-arg-pax_plugin-track-lowest-sp=100)
+endif
+pax-plugin:
+ifneq (,$(findstring pax_plugin, $(KBUILD_CFLAGS)))
+	$(Q)$(MAKE) $(build)=tools/gcc
+else
+ifeq ($(CONFIG_PAX_MEMORY_STACKLEAK),y)
+	$(Q)echo "warning, your gcc does not support plugins, PAX_MEMORY_STACKLEAK will be less secure"
+endif
+endif
 
 # prepare3 is used to check if we are building in a separate output directory,
 # and if so do:
@@ -970,7 +985,7 @@ ifneq ($(KBUILD_SRC),)
 endif
 
 # prepare2 creates a makefile if using a separate output directory
-prepare2: prepare3 outputmakefile
+prepare2: prepare3 outputmakefile pax-plugin
 
 prepare1: prepare2 include/linux/version.h include/linux/utsrelease.h \
                    include/asm include/config/auto.conf
@@ -1198,7 +1213,7 @@ MRPROPER_FILES += .config .config.old include/asm .version .old_version \
                   include/linux/autoconf.h include/linux/version.h      \
                   include/linux/utsrelease.h                            \
                   include/linux/bounds.h include/asm*/asm-offsets.h     \
-		  Module.symvers Module.markers tags TAGS cscope*
+		  Module.symvers Module.markers tags TAGS cscope* GPATH GTAGS GRTAGS GSYMS
 
 # clean - Delete most, but leave enough to build external modules
 #
@@ -1289,6 +1304,7 @@ help:
 	@echo  '  modules_prepare - Set up for building external modules'
 	@echo  '  tags/TAGS	  - Generate tags file for editors'
 	@echo  '  cscope	  - Generate cscope index'
+	@echo  '  gtags           - Generate GNU GLOBAL index'
 	@echo  '  kernelrelease	  - Output the release version string'
 	@echo  '  kernelversion	  - Output the version stored in Makefile'
 	@echo  '  headers_install - Install sanitised kernel headers to INSTALL_HDR_PATH'; \
@@ -1445,7 +1461,7 @@ endif # KBUILD_EXTMOD
 quiet_cmd_tags = GEN     $@
       cmd_tags = $(CONFIG_SHELL) $(srctree)/scripts/tags.sh $@
 
-tags TAGS cscope: FORCE
+tags TAGS cscope gtags: FORCE
 	$(call cmd,tags)
 
 # Scripts to check various things for consistency
