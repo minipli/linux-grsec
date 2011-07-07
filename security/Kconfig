@@ -509,7 +509,7 @@ config PAX_REFCOUNT
 
 config PAX_USERCOPY
 	bool "Harden heap object copies between kernel and userland"
-	depends on X86 || PPC || SPARC
+	depends on ARM || PPC || SPARC || X86
 	depends on SLAB || SLUB || SLOB
 	help
 	  By saying Y here the kernel will enforce the size of heap objects

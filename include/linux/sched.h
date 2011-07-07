@@ -1590,10 +1590,10 @@ extern void pax_set_initial_flags(struct linux_binprm *bprm);
 extern void (*pax_set_initial_flags_func)(struct linux_binprm *bprm);
 #endif
 
-void pax_report_fault(struct pt_regs *regs, void *pc, void *sp);
-void pax_report_insns(void *pc, void *sp);
-void pax_report_refcount_overflow(struct pt_regs *regs);
-void pax_report_usercopy(const void *ptr, unsigned long len, bool to, const char *type);
+extern void pax_report_fault(struct pt_regs *regs, void *pc, void *sp);
+extern void pax_report_insns(void *pc, void *sp);
+extern void pax_report_refcount_overflow(struct pt_regs *regs);
+extern NORET_TYPE void pax_report_usercopy(const void *ptr, unsigned long len, bool to, const char *type) ATTRIB_NORET;
 
 /* Future-safe accessor for struct task_struct's cpus_allowed. */
 #define tsk_cpumask(tsk) (&(tsk)->cpus_allowed)
