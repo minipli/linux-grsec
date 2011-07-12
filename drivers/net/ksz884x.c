@@ -6637,7 +6637,7 @@ static int netdev_set_rx_csum(struct net_device *dev, u32 data)
 	return 0;
 }
 
-static struct ethtool_ops netdev_ethtool_ops = {
+static const struct ethtool_ops netdev_ethtool_ops = {
 	.get_settings		= netdev_get_settings,
 	.set_settings		= netdev_set_settings,
 	.nway_reset		= netdev_nway_reset,

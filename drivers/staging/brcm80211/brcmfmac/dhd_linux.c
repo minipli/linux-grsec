@@ -857,14 +857,14 @@ static void dhd_op_if(dhd_if_t *ifp)
 			free_netdev(ifp->net);
 		}
 		/* Allocate etherdev, including space for private structure */
-		ifp->net = alloc_etherdev(sizeof(dhd));
+		ifp->net = alloc_etherdev(sizeof(*dhd));
 		if (!ifp->net) {
 			DHD_ERROR(("%s: OOM - alloc_etherdev\n", __func__));
 			ret = -ENOMEM;
 		}
 		if (ret == 0) {
 			strcpy(ifp->net->name, ifp->name);
-			memcpy(netdev_priv(ifp->net), &dhd, sizeof(dhd));
+			memcpy(netdev_priv(ifp->net), dhd, sizeof(*dhd));
 			err = dhd_net_attach(&dhd->pub, ifp->idx);
 			if (err != 0) {
 				DHD_ERROR(("%s: dhd_net_attach failed, "
@@ -1500,7 +1500,7 @@ static void dhd_ethtool_get_drvinfo(struct net_device *net,
 	sprintf(info->bus_info, "%s", dev_name(&wl_cfg80211_get_sdio_func()->dev));
 }
 
-struct ethtool_ops dhd_ethtool_ops = {
+const struct ethtool_ops dhd_ethtool_ops = {
 	.get_drvinfo = dhd_ethtool_get_drvinfo
 };
 
@@ -1923,7 +1923,7 @@ dhd_pub_t *dhd_attach(struct dhd_bus *bus, uint bus_hdrlen)
 		strcpy(nv_path, nvram_path);
 
 	/* Allocate etherdev, including space for private structure */
-	net = alloc_etherdev(sizeof(dhd));
+	net = alloc_etherdev(sizeof(*dhd));
 	if (!net) {
 		DHD_ERROR(("%s: OOM - alloc_etherdev\n", __func__));
 		goto fail;
@@ -1939,7 +1939,7 @@ dhd_pub_t *dhd_attach(struct dhd_bus *bus, uint bus_hdrlen)
 	/*
 	 * Save the dhd_info into the priv
 	 */
-	memcpy(netdev_priv(net), &dhd, sizeof(dhd));
+	memcpy(netdev_priv(net), dhd, sizeof(*dhd));
 
 	/* Set network interface name if it was provided as module parameter */
 	if (iface_name[0]) {
@@ -2056,7 +2056,7 @@ dhd_pub_t *dhd_attach(struct dhd_bus *bus, uint bus_hdrlen)
 	/*
 	 * Save the dhd_info into the priv
 	 */
-	memcpy(netdev_priv(net), &dhd, sizeof(dhd));
+	memcpy(netdev_priv(net), dhd, sizeof(*dhd));
 
 #if defined(CUSTOMER_HW2) && defined(CONFIG_WIFI_CONTROL_FUNC)
 	g_bus = bus;
@@ -2206,7 +2206,7 @@ dhd_iovar(dhd_pub_t *pub, int ifidx, char *name, char *cmd_buf, uint cmd_len,
 	return ret;
 }
 
-static struct net_device_ops dhd_ops_pri = {
+static const struct net_device_ops dhd_ops_pri = {
 	.ndo_open = dhd_open,
 	.ndo_stop = dhd_stop,
 	.ndo_get_stats = dhd_get_stats,

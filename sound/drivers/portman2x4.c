@@ -47,6 +47,7 @@
 #include <sound/initval.h>
 #include <sound/rawmidi.h>
 #include <sound/control.h>
+#include <asm/local.h>
 
 #define CARD_NAME "Portman 2x4"
 #define DRIVER_NAME "portman"
@@ -84,7 +85,7 @@ struct portman {
 	struct pardevice *pardev;
 	int pardev_claimed;
 
-	int open_count;
+	local_t open_count;
 	int mode[PORTMAN_NUM_INPUT_PORTS];
 	struct snd_rawmidi_substream *midi_input[PORTMAN_NUM_INPUT_PORTS];
 };
@@ -547,13 +548,13 @@ static void snd_portman_midi_output_trigger(struct snd_rawmidi_substream *substr
 	spin_unlock_irqrestore(&pm->reg_lock, flags);
 }
 
-static struct snd_rawmidi_ops snd_portman_midi_output = {
+static const struct snd_rawmidi_ops snd_portman_midi_output = {
 	.open =		snd_portman_midi_open,
 	.close =	snd_portman_midi_close,
 	.trigger =	snd_portman_midi_output_trigger,
 };
 
-static struct snd_rawmidi_ops snd_portman_midi_input = {
+static const struct snd_rawmidi_ops snd_portman_midi_input = {
 	.open =		snd_portman_midi_open,
 	.close =	snd_portman_midi_close,
 	.trigger =	snd_portman_midi_input_trigger,

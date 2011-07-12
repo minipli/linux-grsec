@@ -103,7 +103,7 @@ MODULE_DEVICE_TABLE(pci, cciss_pci_device_id);
  *  product = Marketing Name for the board
  *  access = Address of the struct of function pointers
  */
-static struct board_type products[] = {
+static const struct board_type products[] = {
 	{0x40700E11, "Smart Array 5300", &SA5_access},
 	{0x40800E11, "Smart Array 5i", &SA5B_access},
 	{0x40820E11, "Smart Array 532", &SA5B_access},

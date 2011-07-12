@@ -1087,6 +1087,8 @@ static int shmem_writepage(struct page *page, struct writeback_control *wbc)
 		goto unlock;
 	}
 	entry = shmem_swp_entry(info, index, NULL);
+	if (!entry)
+		goto unlock;
 	if (entry->val) {
 		/*
 		 * The more uptodate page coming down from a stacked
@@ -2014,7 +2016,7 @@ static int shmem_symlink(struct inode *dir, struct dentry *dentry, const char *s
 
 	info = SHMEM_I(inode);
 	inode->i_size = len-1;
-	if (len <= (char *)inode - (char *)info) {
+	if (len <= (char *)inode - (char *)info && len <= 64) {
 		/* do it inline */
 		memcpy(info, symname, len);
 		inode->i_op = &shmem_symlink_inline_operations;
@@ -2362,8 +2364,7 @@ int shmem_fill_super(struct super_block *sb, void *data, int silent)
 	int err = -ENOMEM;
 
 	/* Round up to L1_CACHE_BYTES to resist false sharing */
-	sbinfo = kzalloc(max((int)sizeof(struct shmem_sb_info),
-				L1_CACHE_BYTES), GFP_KERNEL);
+	sbinfo = kzalloc(max(sizeof(struct shmem_sb_info), L1_CACHE_BYTES), GFP_KERNEL);
 	if (!sbinfo)
 		return -ENOMEM;
 
