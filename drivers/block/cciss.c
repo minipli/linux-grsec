@@ -103,7 +103,7 @@ MODULE_DEVICE_TABLE(pci, cciss_pci_device_id);
  *  product = Marketing Name for the board
  *  access = Address of the struct of function pointers
  */
-static struct board_type products[] = {
+static const struct board_type products[] = {
 	{0x40700E11, "Smart Array 5300", &SA5_access},
 	{0x40800E11, "Smart Array 5i", &SA5B_access},
 	{0x40820E11, "Smart Array 532", &SA5B_access},
@@ -1150,6 +1150,8 @@ static int cciss_ioctl32_passthru(struct block_device *bdev, fmode_t mode,
 	IOCTL_Command_struct __user *p = compat_alloc_user_space(sizeof(arg64));
 	int err;
 	u32 cp;
+
+	memset(&arg64, 0, sizeof(arg64));
 
 	err = 0;
 	err |=

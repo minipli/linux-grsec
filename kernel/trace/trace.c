@@ -3330,6 +3330,8 @@ static ssize_t tracing_splice_read_pipe(struct file *filp,
 	size_t rem;
 	unsigned int i;
 
+	pax_track_stack();
+
 	if (splice_grow_spd(pipe, &spd))
 		return -ENOMEM;
 
@@ -3813,6 +3815,8 @@ tracing_buffers_splice_read(struct file *file, loff_t *ppos,
 	int entries, size, i;
 	size_t ret;
 
+	pax_track_stack();
+
 	if (splice_grow_spd(pipe, &spd))
 		return -ENOMEM;
 
@@ -3981,10 +3985,9 @@ static const struct file_operations tracing_dyn_info_fops = {
 };
 #endif
 
-static struct dentry *d_tracer;
-
 struct dentry *tracing_init_dentry(void)
 {
+	static struct dentry *d_tracer;
 	static int once;
 
 	if (d_tracer)
@@ -4004,10 +4007,9 @@ struct dentry *tracing_init_dentry(void)
 	return d_tracer;
 }
 
-static struct dentry *d_percpu;
-
 struct dentry *tracing_dentry_percpu(void)
 {
+	static struct dentry *d_percpu;
 	static int once;
 	struct dentry *d_tracer;
 

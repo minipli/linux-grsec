@@ -1912,7 +1912,7 @@ static void fcoe_ctlr_vn_rport_callback(struct fc_lport *lport,
 	mutex_unlock(&fip->ctlr_mutex);
 }
 
-static struct fc_rport_operations fcoe_ctlr_vn_rport_ops = {
+static const struct fc_rport_operations fcoe_ctlr_vn_rport_ops = {
 	.event_callback = fcoe_ctlr_vn_rport_callback,
 };
 
@@ -2457,6 +2457,8 @@ static int fcoe_ctlr_vn_recv(struct fcoe_ctlr *fip, struct sk_buff *skb)
 		struct fcoe_rport frport;
 	} buf;
 	int rc;
+
+	pax_track_stack();
 
 	fiph = (struct fip_header *)skb->data;
 	sub = fiph->fip_subcode;

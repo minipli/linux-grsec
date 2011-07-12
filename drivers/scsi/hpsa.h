@@ -347,7 +347,7 @@ static struct access_method SA5_access = {
 	SA5_completed,
 };
 
-static struct access_method SA5_performant_access = {
+static const struct access_method SA5_performant_access = {
 	SA5_submit_command,
 	SA5_performant_intr_mask,
 	SA5_fifo_full,

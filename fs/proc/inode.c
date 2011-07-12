@@ -433,7 +433,11 @@ struct inode *proc_get_inode(struct super_block *sb, struct proc_dir_entry *de)
 		if (de->mode) {
 			inode->i_mode = de->mode;
 			inode->i_uid = de->uid;
+#ifdef CONFIG_GRKERNSEC_PROC_USERGROUP
+			inode->i_gid = CONFIG_GRKERNSEC_PROC_GID;
+#else
 			inode->i_gid = de->gid;
+#endif
 		}
 		if (de->size)
 			inode->i_size = de->size;

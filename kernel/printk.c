@@ -284,12 +284,17 @@ static int check_syslog_permissions(int type, bool from_file)
 	if (from_file && type != SYSLOG_ACTION_OPEN)
 		return 0;
 
+#ifdef CONFIG_GRKERNSEC_DMESG
+	if (grsec_enable_dmesg && !capable(CAP_SYSLOG) && !capable_nolog(CAP_SYS_ADMIN))
+		return -EPERM;
+#endif
+
 	if (syslog_action_restricted(type)) {
 		if (capable(CAP_SYSLOG))
 			return 0;
 		/* For historical reasons, accept CAP_SYS_ADMIN too, with a warning */
 		if (capable(CAP_SYS_ADMIN)) {
-			WARN_ONCE(1, "Attempt to access syslog with CAP_SYS_ADMIN "
+			printk_once(KERN_WARNING "Attempt to access syslog with CAP_SYS_ADMIN "
 				 "but no CAP_SYSLOG (deprecated).\n");
 			return 0;
 		}

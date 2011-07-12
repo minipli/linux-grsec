@@ -41,7 +41,7 @@ static struct phonet_protocol *phonet_proto_get(unsigned int protocol)
 {
 	struct phonet_protocol *pp;
 
-	if (protocol >= PHONET_NPROTO)
+	if (protocol < 0 || protocol >= PHONET_NPROTO)
 		return NULL;
 
 	rcu_read_lock();
@@ -149,7 +149,7 @@ static int pn_header_parse(const struct sk_buff *skb, unsigned char *haddr)
 	return 1;
 }
 
-struct header_ops phonet_header_ops = {
+const struct header_ops phonet_header_ops = {
 	.create = pn_header_create,
 	.parse = pn_header_parse,
 };
@@ -469,7 +469,7 @@ int __init_or_module phonet_proto_register(unsigned int protocol,
 {
 	int err = 0;
 
-	if (protocol >= PHONET_NPROTO)
+	if (protocol < 0 || protocol >= PHONET_NPROTO)
 		return -EINVAL;
 
 	err = proto_register(pp->prot, 1);

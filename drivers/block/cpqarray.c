@@ -80,7 +80,7 @@ static int eisa[8];
  *  product = Marketing Name for the board
  *  access = Address of the struct of function pointers
  */
-static struct board_type products[] = {
+static const struct board_type products[] = {
 	{ 0x0040110E, "IDA",			&smart1_access },
 	{ 0x0140110E, "IDA-2",			&smart1_access },
 	{ 0x1040110E, "IAES",			&smart1_access },
@@ -910,6 +910,8 @@ static void do_ida_request(struct request_queue *q)
 	struct request *creq;
 	struct scatterlist tmp_sg[SG_MAX];
 	int i, dir, seg;
+
+	pax_track_stack();
 
 queue_next:
 	creq = blk_peek_request(q);

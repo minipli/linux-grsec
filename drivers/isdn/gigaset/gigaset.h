@@ -35,6 +35,7 @@
 #include <linux/tty_driver.h>
 #include <linux/list.h>
 #include <asm/atomic.h>
+#include <asm/local.h>
 
 #define GIG_VERSION {0, 5, 0, 0}
 #define GIG_COMPAT  {0, 4, 0, 0}
@@ -433,7 +434,7 @@ struct cardstate {
 	spinlock_t cmdlock;
 	unsigned curlen, cmdbytes;
 
-	unsigned open_count;
+	local_t open_count;
 	struct tty_struct *tty;
 	struct tasklet_struct if_wake_tasklet;
 	unsigned control_state;

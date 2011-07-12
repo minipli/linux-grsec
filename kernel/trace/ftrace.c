@@ -1107,13 +1107,18 @@ ftrace_code_disable(struct module *mod, struct dyn_ftrace *rec)
 
 	ip = rec->ip;
 
+	ret = ftrace_arch_code_modify_prepare();
+	FTRACE_WARN_ON(ret);
+	if (ret)
+		return 0;
+
 	ret = ftrace_make_nop(mod, rec, MCOUNT_ADDR);
+	FTRACE_WARN_ON(ftrace_arch_code_modify_post_process());
 	if (ret) {
 		ftrace_bug(ret, ip);
 		rec->flags |= FTRACE_FL_FAILED;
-		return 0;
 	}
-	return 1;
+	return ret ? 0 : 1;
 }
 
 /*
@@ -2011,7 +2016,7 @@ static void ftrace_free_entry_rcu(struct rcu_head *rhp)
 
 int
 register_ftrace_function_probe(char *glob, struct ftrace_probe_ops *ops,
-			      void *data)
+				void *data)
 {
 	struct ftrace_func_probe *entry;
 	struct ftrace_page *pg;
@@ -2083,7 +2088,7 @@ enum {
 };
 
 static void
-__unregister_ftrace_function_probe(char *glob, struct ftrace_probe_ops *ops,
+__unregister_ftrace_function_probe(char *glob, const struct ftrace_probe_ops *ops,
 				  void *data, int flags)
 {
 	struct ftrace_func_probe *entry;
@@ -2144,7 +2149,7 @@ unregister_ftrace_function_probe(char *glob, struct ftrace_probe_ops *ops,
 }
 
 void
-unregister_ftrace_function_probe_func(char *glob, struct ftrace_probe_ops *ops)
+unregister_ftrace_function_probe_func(char *glob, const struct ftrace_probe_ops *ops)
 {
 	__unregister_ftrace_function_probe(glob, ops, NULL, PROBE_TEST_FUNC);
 }
