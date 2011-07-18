@@ -247,6 +247,10 @@ void ftrace_likely_update(struct ftrace_branch_data *f, int val, int expect);
 # define __attribute_const__	/* unimplemented */
 #endif
 
+#ifndef __no_const
+# define __no_const
+#endif
+
 /*
  * Tell gcc if a function is cold. The compiler will assume any path
  * directly leading to the call is unlikely.
@@ -254,6 +258,22 @@ void ftrace_likely_update(struct ftrace_branch_data *f, int val, int expect);
 
 #ifndef __cold
 #define __cold
+#endif
+
+#ifndef __alloc_size
+#define __alloc_size(...)
+#endif
+
+#ifndef __bos
+#define __bos(ptr, arg)
+#endif
+
+#ifndef __bos0
+#define __bos0(ptr)
+#endif
+
+#ifndef __bos1
+#define __bos1(ptr)
 #endif
 
 /* Simple shorthand for a section definition */
@@ -278,6 +298,7 @@ void ftrace_likely_update(struct ftrace_branch_data *f, int val, int expect);
  * use is to mediate communication between process-level code and irq/NMI
  * handlers, all running on the same CPU.
  */
-#define ACCESS_ONCE(x) (*(volatile typeof(x) *)&(x))
+#define ACCESS_ONCE(x) (*(volatile const typeof(x) *)&(x))
+#define ACCESS_ONCE_RW(x) (*(volatile typeof(x) *)&(x))
 
 #endif /* __LINUX_COMPILER_H */

@@ -74,8 +74,8 @@ void kgdb_breakpoint(void);
 
 extern int kgdb_connected;
 
-extern atomic_t			kgdb_setting_breakpoint;
-extern atomic_t			kgdb_cpu_doing_single_step;
+extern atomic_unchecked_t	kgdb_setting_breakpoint;
+extern atomic_unchecked_t	kgdb_cpu_doing_single_step;
 
 extern struct task_struct	*kgdb_usethread;
 extern struct task_struct	*kgdb_contthread;
@@ -226,8 +226,8 @@ extern int kgdb_arch_remove_breakpoint(unsigned long addr, char *bundle);
  * hardware debug registers.
  */
 struct kgdb_arch {
-	unsigned char		gdb_bpt_instr[BREAK_INSTR_SIZE];
-	unsigned long		flags;
+	const unsigned char	gdb_bpt_instr[BREAK_INSTR_SIZE];
+	const unsigned long	flags;
 
 	int	(*set_breakpoint)(unsigned long, char *);
 	int	(*remove_breakpoint)(unsigned long, char *);
@@ -250,7 +250,7 @@ struct kgdb_arch {
  * for the I/O driver.
  */
 struct kgdb_io {
-	const char		*name;
+	const char * const	name;
 	int			(*read_char) (void);
 	void			(*write_char) (u8);
 	void			(*flush) (void);

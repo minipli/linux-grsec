@@ -221,8 +221,9 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer
-HOSTCXXFLAGS = -O2
+HOSTCFLAGS   = -Wall -W -Wmissing-prototypes -Wstrict-prototypes -Wno-unused-parameter -Wno-missing-field-initializers -O2 -fomit-frame-pointer -fno-delete-null-pointer-checks
+HOSTCLFAGS  += $(call cc-option, -Wno-empty-body)
+HOSTCXXFLAGS = -O2 -fno-delete-null-pointer-checks
 
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
@@ -342,10 +343,12 @@ LINUXINCLUDE    := -Iinclude \
 KBUILD_CPPFLAGS := -D__KERNEL__
 
 KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
+		   -W -Wno-unused-parameter -Wno-missing-field-initializers \
 		   -fno-strict-aliasing -fno-common \
 		   -Werror-implicit-function-declaration \
 		   -Wno-format-security \
 		   -fno-delete-null-pointer-checks
+KBUILD_CFLAGS   += $(call cc-option, -Wno-empty-body)
 KBUILD_AFLAGS   := -D__ASSEMBLY__
 
 # Read KERNELRELEASE from include/config/kernel.release (if it exists)
@@ -376,8 +379,8 @@ export RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn --exc
 # Rules shared between *config targets and build targets
 
 # Basic helpers built in scripts/
-PHONY += scripts_basic
-scripts_basic:
+PHONY += scripts_basic gcc-plugins
+scripts_basic: gcc-plugins
 	$(Q)$(MAKE) $(build)=scripts/basic
 
 # To avoid any implicit rule to kick in, define an empty command.
@@ -403,7 +406,7 @@ endif
 # of make so .config is not included in this case either (for *config).
 
 no-dot-config-targets := clean mrproper distclean \
-			 cscope TAGS tags help %docs check% \
+			 cscope gtags TAGS tags help %docs check% \
 			 include/linux/version.h headers_% \
 			 kernelrelease kernelversion
 
@@ -524,6 +527,25 @@ ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os
 else
 KBUILD_CFLAGS	+= -O2
+endif
+
+ifeq ($(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-plugin.sh $(HOSTCC)), y)
+CONSTIFY_PLUGIN := -fplugin=$(objtree)/tools/gcc/constify_plugin.so
+ifdef CONFIG_PAX_MEMORY_STACKLEAK
+STACKLEAK_PLUGIN := -fplugin=$(objtree)/tools/gcc/stackleak_plugin.so -fplugin-arg-stackleak_plugin-track-lowest-sp=100
+endif
+KBUILD_CFLAGS += $(CONSTIFY_PLUGIN) $(STACKLEAK_PLUGIN)
+export CONSTIFY_PLUGIN STACKLEAK_PLUGIN
+gcc-plugins:
+	$(Q)$(MAKE) $(build)=tools/gcc
+else
+gcc-plugins:
+ifeq ($(call cc-ifversion, -ge, 0405, y), y)
+	$(Q)echo "warning, your gcc installation does not support plugins, perhaps the necessary headers are missing?"
+else
+	$(Q)echo "warning, your gcc version does not support plugins, you should upgrade it to gcc 4.5 at least"
+endif
+	$(Q)echo "PAX_MEMORY_STACKLEAK and other  will be less secure"
 endif
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
@@ -970,7 +992,7 @@ ifneq ($(KBUILD_SRC),)
 endif
 
 # prepare2 creates a makefile if using a separate output directory
-prepare2: prepare3 outputmakefile
+prepare2: prepare3 outputmakefile gcc-plugins
 
 prepare1: prepare2 include/linux/version.h include/linux/utsrelease.h \
                    include/asm include/config/auto.conf
@@ -1198,7 +1220,7 @@ MRPROPER_FILES += .config .config.old include/asm .version .old_version \
                   include/linux/autoconf.h include/linux/version.h      \
                   include/linux/utsrelease.h                            \
                   include/linux/bounds.h include/asm*/asm-offsets.h     \
-		  Module.symvers Module.markers tags TAGS cscope*
+		  Module.symvers Module.markers tags TAGS cscope* GPATH GTAGS GRTAGS GSYMS
 
 # clean - Delete most, but leave enough to build external modules
 #
@@ -1289,6 +1311,7 @@ help:
 	@echo  '  modules_prepare - Set up for building external modules'
 	@echo  '  tags/TAGS	  - Generate tags file for editors'
 	@echo  '  cscope	  - Generate cscope index'
+	@echo  '  gtags           - Generate GNU GLOBAL index'
 	@echo  '  kernelrelease	  - Output the release version string'
 	@echo  '  kernelversion	  - Output the version stored in Makefile'
 	@echo  '  headers_install - Install sanitised kernel headers to INSTALL_HDR_PATH'; \
@@ -1421,7 +1444,7 @@ clean: $(clean-dirs)
 	$(call cmd,rmdirs)
 	$(call cmd,rmfiles)
 	@find $(KBUILD_EXTMOD) $(RCS_FIND_IGNORE) \
-		\( -name '*.[oas]' -o -name '*.ko' -o -name '.*.cmd' \
+		\( -name '*.[oas]' -o -name '*.[ks]o' -o -name '.*.cmd' \
 		-o -name '.*.d' -o -name '.*.tmp' -o -name '*.mod.c' \
 		-o -name '*.gcno' \) -type f -print | xargs rm -f
 
@@ -1445,7 +1468,7 @@ endif # KBUILD_EXTMOD
 quiet_cmd_tags = GEN     $@
       cmd_tags = $(CONFIG_SHELL) $(srctree)/scripts/tags.sh $@
 
-tags TAGS cscope: FORCE
+tags TAGS cscope gtags: FORCE
 	$(call cmd,tags)
 
 # Scripts to check various things for consistency

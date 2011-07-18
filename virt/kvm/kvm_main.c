@@ -2494,7 +2494,7 @@ asmlinkage void kvm_handle_fault_on_reboot(void)
 	if (kvm_rebooting)
 		/* spin while reset goes on */
 		while (true)
-			;
+			cpu_relax();
 	/* Fault while not rebooting.  We want the trace. */
 	BUG();
 }
@@ -2714,7 +2714,7 @@ static void kvm_sched_out(struct preempt_notifier *pn,
 	kvm_arch_vcpu_put(vcpu);
 }
 
-int kvm_init(void *opaque, unsigned int vcpu_size,
+int kvm_init(const void *opaque, unsigned int vcpu_size,
 		  struct module *module)
 {
 	int r;
@@ -2767,15 +2767,17 @@ int kvm_init(void *opaque, unsigned int vcpu_size,
 	/* A kmem cache lets us meet the alignment requirements of fx_save. */
 	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", vcpu_size,
 					   __alignof__(struct kvm_vcpu),
-					   0, NULL);
+					   SLAB_USERCOPY, NULL);
 	if (!kvm_vcpu_cache) {
 		r = -ENOMEM;
 		goto out_free_5;
 	}
 
-	kvm_chardev_ops.owner = module;
-	kvm_vm_fops.owner = module;
-	kvm_vcpu_fops.owner = module;
+	pax_open_kernel();
+	*(void **)&kvm_chardev_ops.owner = module;
+	*(void **)&kvm_vm_fops.owner = module;
+	*(void **)&kvm_vcpu_fops.owner = module;
+	pax_close_kernel();
 
 	r = misc_register(&kvm_dev);
 	if (r) {

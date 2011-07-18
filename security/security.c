@@ -24,7 +24,7 @@ static __initdata char chosen_lsm[SECURITY_NAME_MAX + 1];
 extern struct security_operations default_security_ops;
 extern void security_fixup_ops(struct security_operations *ops);
 
-struct security_operations *security_ops;	/* Initialized to NULL */
+struct security_operations *security_ops __read_only; /* Initialized to NULL */
 
 static inline int verify(struct security_operations *ops)
 {
@@ -117,7 +117,9 @@ int register_security(struct security_operations *ops)
 	if (security_ops != &default_security_ops)
 		return -EAGAIN;
 
+	pax_open_kernel();
 	security_ops = ops;
+	pax_close_kernel();
 
 	return 0;
 }
