@@ -30,11 +30,11 @@ struct nmi_watchdog_ctlblk {
 
 /* Interface defining a CPU specific perfctr watchdog */
 struct wd_ops {
-	int (* const reserve)(void);
-	void (* const unreserve)(void);
-	int (* const setup)(unsigned nmi_hz);
-	void (* const rearm)(struct nmi_watchdog_ctlblk *wd, unsigned nmi_hz);
-	void (* const stop)(void);
+	int (*reserve)(void);
+	void (*unreserve)(void);
+	int (*setup)(unsigned nmi_hz);
+	void (*rearm)(struct nmi_watchdog_ctlblk *wd, unsigned nmi_hz);
+	void (*stop)(void);
 	unsigned perfctr;
 	unsigned evntsel;
 	u64 checkbit;
@@ -645,7 +645,6 @@ static const struct wd_ops p4_wd_ops = {
 #define ARCH_PERFMON_NMI_EVENT_SEL	ARCH_PERFMON_UNHALTED_CORE_CYCLES_SEL
 #define ARCH_PERFMON_NMI_EVENT_UMASK	ARCH_PERFMON_UNHALTED_CORE_CYCLES_UMASK
 
-/* cannot be const */
 static struct wd_ops intel_arch_wd_ops;
 
 static int setup_intel_arch_watchdog(unsigned nmi_hz)
@@ -698,7 +697,6 @@ static int setup_intel_arch_watchdog(unsigned nmi_hz)
 	return 1;
 }
 
-/* cannot be const */
 static struct wd_ops intel_arch_wd_ops __read_mostly = {
 	.reserve	= single_msr_reserve,
 	.unreserve	= single_msr_unreserve,

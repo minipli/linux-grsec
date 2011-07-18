@@ -805,7 +805,7 @@ dma_fail:
 	return rc;
 }
 
-static const struct file_operations audio_evrc_fops = {
+static struct file_operations audio_evrc_fops = {
 	.owner = THIS_MODULE,
 	.open = audevrc_open,
 	.release = audevrc_release,

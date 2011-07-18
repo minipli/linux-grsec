@@ -816,7 +816,7 @@ err:
 	return rc;
 }
 
-static const struct file_operations audio_qcelp_fops = {
+static struct file_operations audio_qcelp_fops = {
 	.owner = THIS_MODULE,
 	.open = audqcelp_open,
 	.release = audqcelp_release,

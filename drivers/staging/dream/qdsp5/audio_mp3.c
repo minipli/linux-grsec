@@ -941,7 +941,7 @@ done:
 	return rc;
 }
 
-static const struct file_operations audio_mp3_fops = {
+static struct file_operations audio_mp3_fops = {
 	.owner		= THIS_MODULE,
 	.open		= audio_open,
 	.release	= audio_release,

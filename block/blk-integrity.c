@@ -278,7 +278,7 @@ static struct attribute *integrity_attrs[] = {
 	NULL,
 };
 
-static const struct sysfs_ops integrity_ops = {
+static struct sysfs_ops integrity_ops = {
 	.show	= &integrity_attr_show,
 	.store	= &integrity_attr_store,
 };

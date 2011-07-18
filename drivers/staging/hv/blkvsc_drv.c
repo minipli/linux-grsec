@@ -153,7 +153,7 @@ static int blkvsc_ringbuffer_size = BLKVSC_RING_BUFFER_SIZE;
 /* The one and only one */
 static struct blkvsc_driver_context g_blkvsc_drv;
 
-static const struct block_device_operations block_ops = {
+static struct block_device_operations block_ops = {
 	.owner = THIS_MODULE,
 	.open = blkvsc_open,
 	.release = blkvsc_release,

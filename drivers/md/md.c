@@ -2517,7 +2517,7 @@ static void rdev_free(struct kobject *ko)
 	mdk_rdev_t *rdev = container_of(ko, mdk_rdev_t, kobj);
 	kfree(rdev);
 }
-static const struct sysfs_ops rdev_sysfs_ops = {
+static struct sysfs_ops rdev_sysfs_ops = {
 	.show		= rdev_attr_show,
 	.store		= rdev_attr_store,
 };
@@ -3887,7 +3887,7 @@ static void md_free(struct kobject *ko)
 	kfree(mddev);
 }
 
-static const struct sysfs_ops md_sysfs_ops = {
+static struct sysfs_ops md_sysfs_ops = {
 	.show	= md_attr_show,
 	.store	= md_attr_store,
 };

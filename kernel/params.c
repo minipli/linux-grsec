@@ -725,7 +725,7 @@ static ssize_t module_attr_store(struct kobject *kobj,
 	return ret;
 }
 
-static const struct sysfs_ops module_sysfs_ops = {
+static struct sysfs_ops module_sysfs_ops = {
 	.show = module_attr_show,
 	.store = module_attr_store,
 };
@@ -739,7 +739,7 @@ static int uevent_filter(struct kset *kset, struct kobject *kobj)
 	return 0;
 }
 
-static const struct kset_uevent_ops module_uevent_ops = {
+static struct kset_uevent_ops module_uevent_ops = {
 	.filter = uevent_filter,
 };
 

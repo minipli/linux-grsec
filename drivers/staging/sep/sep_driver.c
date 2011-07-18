@@ -2603,7 +2603,7 @@ static struct pci_driver sep_pci_driver = {
 static dev_t sep_devno;
 
 /* the files operations structure of the driver */
-static const struct file_operations sep_file_operations = {
+static struct file_operations sep_file_operations = {
 	.owner = THIS_MODULE,
 	.ioctl = sep_ioctl,
 	.poll = sep_poll,

@@ -2076,7 +2076,7 @@ static void prealloc_protection_domains(void)
 	}
 }
 
-static const struct dma_map_ops amd_iommu_dma_ops = {
+static struct dma_map_ops amd_iommu_dma_ops = {
 	.alloc_coherent = alloc_coherent,
 	.free_coherent = free_coherent,
 	.map_page = map_page,

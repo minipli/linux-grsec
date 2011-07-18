@@ -536,7 +536,7 @@ struct kvm_x86_ops {
 	const struct trace_print_flags *exit_reasons_str;
 };
 
-extern const struct kvm_x86_ops *kvm_x86_ops;
+extern struct kvm_x86_ops *kvm_x86_ops;
 
 int kvm_mmu_module_init(void);
 void kvm_mmu_module_exit(void);

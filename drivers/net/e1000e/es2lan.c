@@ -207,7 +207,6 @@ static s32 e1000_init_mac_params_80003es2lan(struct e1000_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
 	struct e1000_mac_info *mac = &hw->mac;
-	/* cannot be const */
 	struct e1000_mac_operations *func = &mac->ops;
 
 	/* Set media type */
@@ -230,16 +229,16 @@ static s32 e1000_init_mac_params_80003es2lan(struct e1000_adapter *adapter)
 	/* check for link */
 	switch (hw->phy.media_type) {
 	case e1000_media_type_copper:
-		func->setup_physical_interface = e1000_setup_copper_link_80003es2lan;
-		func->check_for_link = e1000e_check_for_copper_link;
+		*(void **)&func->setup_physical_interface = e1000_setup_copper_link_80003es2lan;
+		*(void **)&func->check_for_link = e1000e_check_for_copper_link;
 		break;
 	case e1000_media_type_fiber:
-		func->setup_physical_interface = e1000e_setup_fiber_serdes_link;
-		func->check_for_link = e1000e_check_for_fiber_link;
+		*(void **)&func->setup_physical_interface = e1000e_setup_fiber_serdes_link;
+		*(void **)&func->check_for_link = e1000e_check_for_fiber_link;
 		break;
 	case e1000_media_type_internal_serdes:
-		func->setup_physical_interface = e1000e_setup_fiber_serdes_link;
-		func->check_for_link = e1000e_check_for_serdes_link;
+		*(void **)&func->setup_physical_interface = e1000e_setup_fiber_serdes_link;
+		*(void **)&func->check_for_link = e1000e_check_for_serdes_link;
 		break;
 	default:
 		return -E1000_ERR_CONFIG;
@@ -1366,7 +1365,7 @@ static void e1000_clear_hw_cntrs_80003es2lan(struct e1000_hw *hw)
 	temp = er32(ICRXDMTC);
 }
 
-static const struct e1000_mac_operations es2_mac_ops = {
+static struct e1000_mac_operations es2_mac_ops = {
 	.id_led_init		= e1000e_id_led_init,
 	.check_mng_mode		= e1000e_check_mng_mode_generic,
 	/* check_for_link dependent on media type */
@@ -1384,7 +1383,7 @@ static const struct e1000_mac_operations es2_mac_ops = {
 	.setup_led		= e1000e_setup_led_generic,
 };
 
-static const struct e1000_phy_operations es2_phy_ops = {
+static struct e1000_phy_operations es2_phy_ops = {
 	.acquire_phy		= e1000_acquire_phy_80003es2lan,
 	.check_reset_block	= e1000e_check_reset_block_generic,
 	.commit_phy	 	= e1000e_phy_sw_reset,
@@ -1401,7 +1400,7 @@ static const struct e1000_phy_operations es2_phy_ops = {
 	.cfg_on_link_up      	= e1000_cfg_on_link_up_80003es2lan,
 };
 
-static const struct e1000_nvm_operations es2_nvm_ops = {
+static struct e1000_nvm_operations es2_nvm_ops = {
 	.acquire_nvm		= e1000_acquire_nvm_80003es2lan,
 	.read_nvm		= e1000e_read_nvm_eerd,
 	.release_nvm		= e1000_release_nvm_80003es2lan,

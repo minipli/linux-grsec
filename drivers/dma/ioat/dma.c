@@ -1146,7 +1146,7 @@ ioat_attr_show(struct kobject *kobj, struct attribute *attr, char *page)
 	return entry->show(&chan->common, page);
 }
 
-const struct sysfs_ops ioat_sysfs_ops = {
+struct sysfs_ops ioat_sysfs_ops = {
 	.show	= ioat_attr_show,
 };
 

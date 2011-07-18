@@ -67,7 +67,7 @@ static struct attribute *ttm_bo_global_attrs[] = {
 	NULL
 };
 
-static const struct sysfs_ops ttm_bo_global_ops = {
+static struct sysfs_ops ttm_bo_global_ops = {
 	.show = &ttm_bo_global_show
 };
 

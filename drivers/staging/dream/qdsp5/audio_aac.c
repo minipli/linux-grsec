@@ -1022,7 +1022,7 @@ done:
 	return rc;
 }
 
-static const struct file_operations audio_aac_fops = {
+static struct file_operations audio_aac_fops = {
 	.owner = THIS_MODULE,
 	.open = audio_open,
 	.release = audio_release,

@@ -74,7 +74,7 @@ static struct attribute *def_attrs[] = {
 	NULL
 };
 
-static const struct sysfs_ops memmap_attr_ops = {
+static struct sysfs_ops memmap_attr_ops = {
 	.show = memmap_attr_show,
 };
 

@@ -149,7 +149,7 @@ static int dst_bdev_release(struct gendisk *disk, fmode_t mode)
 	return 0;
 }
 
-static const struct block_device_operations dst_blk_ops = {
+static struct block_device_operations dst_blk_ops = {
 	.open		= dst_bdev_open,
 	.release	= dst_bdev_release,
 	.owner		= THIS_MODULE,

@@ -401,7 +401,7 @@ static void omap3_pm_end(void)
 	return;
 }
 
-static const struct platform_suspend_ops omap_pm_ops = {
+static struct platform_suspend_ops omap_pm_ops = {
 	.begin		= omap3_pm_begin,
 	.end		= omap3_pm_end,
 	.prepare	= omap3_pm_prepare,

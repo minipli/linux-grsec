@@ -12,19 +12,19 @@
 extern unsigned int mtrr_usage_table[MTRR_MAX_VAR_RANGES];
 
 struct mtrr_ops {
-	const u32	vendor;
-	const u32	use_intel_if;
-	void	(* const set)(unsigned int reg, unsigned long base,
+	u32	vendor;
+	u32	use_intel_if;
+	void	(*set)(unsigned int reg, unsigned long base,
 		       unsigned long size, mtrr_type type);
-	void	(* const set_all)(void);
+	void	(*set_all)(void);
 
-	void	(* const get)(unsigned int reg, unsigned long *base,
+	void	(*get)(unsigned int reg, unsigned long *base,
 		       unsigned long *size, mtrr_type *type);
-	int	(* const get_free_region)(unsigned long base, unsigned long size,
+	int	(*get_free_region)(unsigned long base, unsigned long size,
 				   int replace_reg);
-	int	(* const validate_add_page)(unsigned long base, unsigned long size,
+	int	(*validate_add_page)(unsigned long base, unsigned long size,
 				     unsigned int type);
-	int	(* const have_wrcomb)(void);
+	int	(*have_wrcomb)(void);
 };
 
 extern int generic_get_free_region(unsigned long base, unsigned long size,
@@ -32,7 +32,7 @@ extern int generic_get_free_region(unsigned long base, unsigned long size,
 extern int generic_validate_add_page(unsigned long base, unsigned long size,
 				     unsigned int type);
 
-extern const struct mtrr_ops generic_mtrr_ops;
+extern struct mtrr_ops generic_mtrr_ops;
 
 extern int positive_have_wrcomb(void);
 
@@ -53,10 +53,10 @@ void fill_mtrr_var_range(unsigned int index,
 		u32 base_lo, u32 base_hi, u32 mask_lo, u32 mask_hi);
 void get_mtrr_state(void);
 
-extern void set_mtrr_ops(const struct mtrr_ops *ops);
+extern void set_mtrr_ops(struct mtrr_ops *ops);
 
 extern u64 size_or_mask, size_and_mask;
-extern const struct mtrr_ops *mtrr_if;
+extern struct mtrr_ops *mtrr_if;
 
 #define is_cpu(vnd)	(mtrr_if && mtrr_if->vendor == X86_VENDOR_##vnd)
 #define use_intel()	(mtrr_if && mtrr_if->use_intel_if == 1)

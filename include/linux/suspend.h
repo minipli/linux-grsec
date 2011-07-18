@@ -104,15 +104,15 @@ typedef int __bitwise suspend_state_t;
  *	which require special recovery actions in that situation.
  */
 struct platform_suspend_ops {
-	int (* const valid)(suspend_state_t state);
-	int (* const begin)(suspend_state_t state);
-	int (* const prepare)(void);
-	int (* const prepare_late)(void);
-	int (* const enter)(suspend_state_t state);
-	void (* const wake)(void);
-	void (* const finish)(void);
-	void (* const end)(void);
-	void (* const recover)(void);
+	int (*valid)(suspend_state_t state);
+	int (*begin)(suspend_state_t state);
+	int (*prepare)(void);
+	int (*prepare_late)(void);
+	int (*enter)(suspend_state_t state);
+	void (*wake)(void);
+	void (*finish)(void);
+	void (*end)(void);
+	void (*recover)(void);
 };
 
 #ifdef CONFIG_SUSPEND
@@ -120,7 +120,7 @@ struct platform_suspend_ops {
  * suspend_set_ops - set platform dependent suspend operations
  * @ops: The new suspend operations to set.
  */
-extern void suspend_set_ops(const struct platform_suspend_ops *ops);
+extern void suspend_set_ops(struct platform_suspend_ops *ops);
 extern int suspend_valid_only_mem(suspend_state_t state);
 
 /**
@@ -145,7 +145,7 @@ extern int pm_suspend(suspend_state_t state);
 #else /* !CONFIG_SUSPEND */
 #define suspend_valid_only_mem	NULL
 
-static inline void suspend_set_ops(const struct platform_suspend_ops *ops) {}
+static inline void suspend_set_ops(struct platform_suspend_ops *ops) {}
 static inline int pm_suspend(suspend_state_t state) { return -ENOSYS; }
 #endif /* !CONFIG_SUSPEND */
 
@@ -215,16 +215,16 @@ extern void mark_free_pages(struct zone *zone);
  *	platforms which require special recovery actions in that situation.
  */
 struct platform_hibernation_ops {
-	int (* const begin)(void);
-	void (* const end)(void);
-	int (* const pre_snapshot)(void);
-	void (* const finish)(void);
-	int (* const prepare)(void);
-	int (* const enter)(void);
-	void (* const leave)(void);
-	int (* const pre_restore)(void);
-	void (* const restore_cleanup)(void);
-	void (* const recover)(void);
+	int (*begin)(void);
+	void (*end)(void);
+	int (*pre_snapshot)(void);
+	void (*finish)(void);
+	int (*prepare)(void);
+	int (*enter)(void);
+	void (*leave)(void);
+	int (*pre_restore)(void);
+	void (*restore_cleanup)(void);
+	void (*recover)(void);
 };
 
 #ifdef CONFIG_HIBERNATION
@@ -243,7 +243,7 @@ extern void swsusp_set_page_free(struct page *);
 extern void swsusp_unset_page_free(struct page *);
 extern unsigned long get_safe_page(gfp_t gfp_mask);
 
-extern void hibernation_set_ops(const struct platform_hibernation_ops *ops);
+extern void hibernation_set_ops(struct platform_hibernation_ops *ops);
 extern int hibernate(void);
 extern bool system_entering_hibernation(void);
 #else /* CONFIG_HIBERNATION */
@@ -251,7 +251,7 @@ static inline int swsusp_page_is_forbidden(struct page *p) { return 0; }
 static inline void swsusp_set_page_free(struct page *p) {}
 static inline void swsusp_unset_page_free(struct page *p) {}
 
-static inline void hibernation_set_ops(const struct platform_hibernation_ops *ops) {}
+static inline void hibernation_set_ops(struct platform_hibernation_ops *ops) {}
 static inline int hibernate(void) { return -ENOSYS; }
 static inline bool system_entering_hibernation(void) { return false; }
 #endif /* CONFIG_HIBERNATION */

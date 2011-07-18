@@ -318,7 +318,7 @@ static struct scsi_host_template piix_sht = {
 	ATA_BMDMA_SHT(DRV_NAME),
 };
 
-static const struct ata_port_operations piix_pata_ops = {
+static struct ata_port_operations piix_pata_ops = {
 	.inherits		= &ata_bmdma32_port_ops,
 	.cable_detect		= ata_cable_40wire,
 	.set_piomode		= piix_set_piomode,
@@ -326,22 +326,22 @@ static const struct ata_port_operations piix_pata_ops = {
 	.prereset		= piix_pata_prereset,
 };
 
-static const struct ata_port_operations piix_vmw_ops = {
+static struct ata_port_operations piix_vmw_ops = {
 	.inherits		= &piix_pata_ops,
 	.bmdma_status		= piix_vmw_bmdma_status,
 };
 
-static const struct ata_port_operations ich_pata_ops = {
+static struct ata_port_operations ich_pata_ops = {
 	.inherits		= &piix_pata_ops,
 	.cable_detect		= ich_pata_cable_detect,
 	.set_dmamode		= ich_set_dmamode,
 };
 
-static const struct ata_port_operations piix_sata_ops = {
+static struct ata_port_operations piix_sata_ops = {
 	.inherits		= &ata_bmdma_port_ops,
 };
 
-static const struct ata_port_operations piix_sidpr_sata_ops = {
+static struct ata_port_operations piix_sidpr_sata_ops = {
 	.inherits		= &piix_sata_ops,
 	.hardreset		= sata_std_hardreset,
 	.scr_read		= piix_sidpr_scr_read,

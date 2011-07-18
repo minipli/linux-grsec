@@ -601,12 +601,11 @@ static void vio_dma_iommu_unmap_sg(struct device *dev,
 	vio_cmo_dealloc(viodev, alloc_size);
 }
 
-static const struct dma_map_ops vio_dma_mapping_ops = {
+static struct dma_map_ops vio_dma_mapping_ops = {
 	.alloc_coherent = vio_dma_iommu_alloc_coherent,
 	.free_coherent  = vio_dma_iommu_free_coherent,
 	.map_sg         = vio_dma_iommu_map_sg,
 	.unmap_sg       = vio_dma_iommu_unmap_sg,
-	.dma_supported  = dma_iommu_dma_supported,
 	.map_page       = vio_dma_iommu_map_page,
 	.unmap_page     = vio_dma_iommu_unmap_page,
 

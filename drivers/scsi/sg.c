@@ -2292,7 +2292,7 @@ struct sg_proc_leaf {
 	const struct file_operations * fops;
 };
 
-static const struct sg_proc_leaf sg_proc_leaf_arr[] = {
+static struct sg_proc_leaf sg_proc_leaf_arr[] = {
 	{"allow_dio", &adio_fops},
 	{"debug", &debug_fops},
 	{"def_reserved_size", &dressz_fops},

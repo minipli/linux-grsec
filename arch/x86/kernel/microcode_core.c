@@ -90,7 +90,7 @@ MODULE_LICENSE("GPL");
 
 #define MICROCODE_VERSION	"2.00"
 
-static const struct microcode_ops	*microcode_ops;
+static struct microcode_ops	*microcode_ops;
 
 /*
  * Synchronization.

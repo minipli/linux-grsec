@@ -212,7 +212,6 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
 	struct e1000_mac_info *mac = &hw->mac;
-	/* cannot be const */
 	struct e1000_mac_operations *func = &mac->ops;
 	u32 swsm = 0;
 	u32 swsm2 = 0;
@@ -246,22 +245,22 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 	/* check for link */
 	switch (hw->phy.media_type) {
 	case e1000_media_type_copper:
-		func->setup_physical_interface = e1000_setup_copper_link_82571;
-		func->check_for_link = e1000e_check_for_copper_link;
-		func->get_link_up_info = e1000e_get_speed_and_duplex_copper;
+		*(void **)&func->setup_physical_interface = e1000_setup_copper_link_82571;
+		*(void **)&func->check_for_link = e1000e_check_for_copper_link;
+		*(void **)&func->get_link_up_info = e1000e_get_speed_and_duplex_copper;
 		break;
 	case e1000_media_type_fiber:
-		func->setup_physical_interface =
+		*(void **)&func->setup_physical_interface =
 			e1000_setup_fiber_serdes_link_82571;
-		func->check_for_link = e1000e_check_for_fiber_link;
-		func->get_link_up_info =
+		*(void **)&func->check_for_link = e1000e_check_for_fiber_link;
+		*(void **)&func->get_link_up_info =
 			e1000e_get_speed_and_duplex_fiber_serdes;
 		break;
 	case e1000_media_type_internal_serdes:
-		func->setup_physical_interface =
+		*(void **)&func->setup_physical_interface =
 			e1000_setup_fiber_serdes_link_82571;
-		func->check_for_link = e1000_check_for_serdes_link_82571;
-		func->get_link_up_info =
+		*(void **)&func->check_for_link = e1000_check_for_serdes_link_82571;
+		*(void **)&func->get_link_up_info =
 			e1000e_get_speed_and_duplex_fiber_serdes;
 		break;
 	default:
@@ -272,12 +271,12 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 	switch (hw->mac.type) {
 	case e1000_82574:
 	case e1000_82583:
-		func->check_mng_mode = e1000_check_mng_mode_82574;
-		func->led_on = e1000_led_on_82574;
+		*(void **)&func->check_mng_mode = e1000_check_mng_mode_82574;
+		*(void **)&func->led_on = e1000_led_on_82574;
 		break;
 	default:
-		func->check_mng_mode = e1000e_check_mng_mode_generic;
-		func->led_on = e1000e_led_on_generic;
+		*(void **)&func->check_mng_mode = e1000e_check_mng_mode_generic;
+		*(void **)&func->led_on = e1000e_led_on_generic;
 		break;
 	}
 
@@ -1657,7 +1656,7 @@ static void e1000_clear_hw_cntrs_82571(struct e1000_hw *hw)
 	temp = er32(ICRXDMTC);
 }
 
-static const struct e1000_mac_operations e82571_mac_ops = {
+static struct e1000_mac_operations e82571_mac_ops = {
 	/* .check_mng_mode: mac type dependent */
 	/* .check_for_link: media type dependent */
 	.id_led_init		= e1000e_id_led_init,
@@ -1675,7 +1674,7 @@ static const struct e1000_mac_operations e82571_mac_ops = {
 	.setup_led		= e1000e_setup_led_generic,
 };
 
-static const struct e1000_phy_operations e82_phy_ops_igp = {
+static struct e1000_phy_operations e82_phy_ops_igp = {
 	.acquire_phy		= e1000_get_hw_semaphore_82571,
 	.check_reset_block	= e1000e_check_reset_block_generic,
 	.commit_phy		= NULL,
@@ -1692,7 +1691,7 @@ static const struct e1000_phy_operations e82_phy_ops_igp = {
 	.cfg_on_link_up      	= NULL,
 };
 
-static const struct e1000_phy_operations e82_phy_ops_m88 = {
+static struct e1000_phy_operations e82_phy_ops_m88 = {
 	.acquire_phy		= e1000_get_hw_semaphore_82571,
 	.check_reset_block	= e1000e_check_reset_block_generic,
 	.commit_phy		= e1000e_phy_sw_reset,
@@ -1709,7 +1708,7 @@ static const struct e1000_phy_operations e82_phy_ops_m88 = {
 	.cfg_on_link_up      	= NULL,
 };
 
-static const struct e1000_phy_operations e82_phy_ops_bm = {
+static struct e1000_phy_operations e82_phy_ops_bm = {
 	.acquire_phy		= e1000_get_hw_semaphore_82571,
 	.check_reset_block	= e1000e_check_reset_block_generic,
 	.commit_phy		= e1000e_phy_sw_reset,
@@ -1726,7 +1725,7 @@ static const struct e1000_phy_operations e82_phy_ops_bm = {
 	.cfg_on_link_up      	= NULL,
 };
 
-static const struct e1000_nvm_operations e82571_nvm_ops = {
+static struct e1000_nvm_operations e82571_nvm_ops = {
 	.acquire_nvm		= e1000_acquire_nvm_82571,
 	.read_nvm		= e1000e_read_nvm_eerd,
 	.release_nvm		= e1000_release_nvm_82571,

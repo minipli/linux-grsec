@@ -3983,7 +3983,7 @@ static bool vmx_gb_page_enable(void)
 	return false;
 }
 
-static const struct kvm_x86_ops vmx_x86_ops = {
+static struct kvm_x86_ops vmx_x86_ops = {
 	.cpu_has_kvm_support = cpu_has_kvm_support,
 	.disabled_by_bios = vmx_disabled_by_bios,
 	.hardware_setup = hardware_setup,

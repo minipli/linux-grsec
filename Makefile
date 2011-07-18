@@ -375,25 +375,12 @@ export MODVERDIR := $(if $(KBUILD_EXTMOD),$(firstword $(KBUILD_EXTMOD))/).tmp_ve
 RCS_FIND_IGNORE := \( -name SCCS -o -name BitKeeper -o -name .svn -o -name CVS -o -name .pc -o -name .hg -o -name .git \) -prune -o
 export RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn --exclude CVS --exclude .pc --exclude .hg --exclude .git
 
-ifeq ($(CONFIG_PAX_MEMORY_STACKLEAK),y)
-KBUILD_CFLAGS += $(call cc-ifversion, -ge, 0405, -fplugin=$(objtree)/tools/gcc/pax_plugin.so -fplugin-arg-pax_plugin-track-lowest-sp=100)
-endif
-PHONY += pax_plugin
-pax-plugin:
-ifneq (,$(findstring pax_plugin, $(KBUILD_CFLAGS)))
-	$(Q)$(MAKE) $(build)=tools/gcc
-else
-ifeq ($(CONFIG_PAX_MEMORY_STACKLEAK),y)
-	$(Q)echo "warning, your gcc does not support plugins, PAX_MEMORY_STACKLEAK will be less secure"
-endif
-endif
-
 # ===========================================================================
 # Rules shared between *config targets and build targets
 
 # Basic helpers built in scripts/
-PHONY += scripts_basic
-scripts_basic: pax-plugin
+PHONY += scripts_basic gcc-plugins
+scripts_basic: gcc-plugins
 	$(Q)$(MAKE) $(build)=scripts/basic
 
 # To avoid any implicit rule to kick in, define an empty command.
@@ -540,6 +527,25 @@ ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os
 else
 KBUILD_CFLAGS	+= -O2
+endif
+
+ifeq ($(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-plugin.sh $(HOSTCC)), y)
+CONSTIFY_PLUGIN := -fplugin=$(objtree)/tools/gcc/constify_plugin.so
+ifdef CONFIG_PAX_MEMORY_STACKLEAK
+STACKLEAK_PLUGIN := -fplugin=$(objtree)/tools/gcc/stackleak_plugin.so -fplugin-arg-stackleak_plugin-track-lowest-sp=100
+endif
+KBUILD_CFLAGS += $(CONSTIFY_PLUGIN) $(STACKLEAK_PLUGIN)
+export CONSTIFY_PLUGIN STACKLEAK_PLUGIN
+gcc-plugins:
+	$(Q)$(MAKE) $(build)=tools/gcc
+else
+gcc-plugins:
+ifeq ($(call cc-ifversion, -ge, 0405, y), y)
+	$(Q)echo "warning, your gcc installation does not support plugins, perhaps the necessary headers are missing?"
+else
+	$(Q)echo "warning, your gcc version does not support plugins, you should upgrade it to gcc 4.5 at least"
+endif
+	$(Q)echo "PAX_MEMORY_STACKLEAK and other  will be less secure"
 endif
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
@@ -986,7 +992,7 @@ ifneq ($(KBUILD_SRC),)
 endif
 
 # prepare2 creates a makefile if using a separate output directory
-prepare2: prepare3 outputmakefile pax-plugin
+prepare2: prepare3 outputmakefile gcc-plugins
 
 prepare1: prepare2 include/linux/version.h include/linux/utsrelease.h \
                    include/asm include/config/auto.conf

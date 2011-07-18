@@ -130,7 +130,7 @@ static ssize_t map_type_show(struct kobject *kobj, struct attribute *attr,
 	return entry->show(mem, buf);
 }
 
-static const struct sysfs_ops map_sysfs_ops = {
+static struct sysfs_ops map_sysfs_ops = {
 	.show = map_type_show,
 };
 
@@ -218,7 +218,7 @@ static ssize_t portio_type_show(struct kobject *kobj, struct attribute *attr,
 	return entry->show(port, buf);
 }
 
-static const struct sysfs_ops portio_sysfs_ops = {
+static struct sysfs_ops portio_sysfs_ops = {
 	.show = portio_type_show,
 };
 

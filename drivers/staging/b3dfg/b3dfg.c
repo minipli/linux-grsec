@@ -455,7 +455,7 @@ static int b3dfg_vma_fault(struct vm_area_struct *vma,
 	return VM_FAULT_NOPAGE;
 }
 
-static const struct vm_operations_struct b3dfg_vm_ops = {
+static struct vm_operations_struct b3dfg_vm_ops = {
 	.fault = b3dfg_vma_fault,
 };
 
@@ -848,7 +848,7 @@ static int b3dfg_mmap(struct file *filp, struct vm_area_struct *vma)
 	return r;
 }
 
-static const struct file_operations b3dfg_fops = {
+static struct file_operations b3dfg_fops = {
 	.owner = THIS_MODULE,
 	.open = b3dfg_open,
 	.release = b3dfg_release,

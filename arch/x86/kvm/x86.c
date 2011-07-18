@@ -82,7 +82,7 @@ static void update_cr8_intercept(struct kvm_vcpu *vcpu);
 static int kvm_dev_ioctl_get_supported_cpuid(struct kvm_cpuid2 *cpuid,
 				    struct kvm_cpuid_entry2 __user *entries);
 
-const struct kvm_x86_ops *kvm_x86_ops;
+struct kvm_x86_ops *kvm_x86_ops;
 EXPORT_SYMBOL_GPL(kvm_x86_ops);
 
 int ignore_msrs = 0;
@@ -3272,7 +3272,7 @@ static struct notifier_block kvmclock_cpufreq_notifier_block = {
 int kvm_arch_init(const void *opaque)
 {
 	int r, cpu;
-	const struct kvm_x86_ops *ops = (const struct kvm_x86_ops *)opaque;
+	struct kvm_x86_ops *ops = (struct kvm_x86_ops *)opaque;
 
 	if (kvm_x86_ops) {
 		printk(KERN_ERR "kvm: already loaded the other module\n");
