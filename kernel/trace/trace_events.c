@@ -951,6 +951,8 @@ static LIST_HEAD(ftrace_module_file_list);
  * Modules must own their file_operations to keep up with
  * reference counting.
  */
+
+/* cannot be const */
 struct ftrace_module_file_ops {
 	struct list_head		list;
 	struct module			*mod;

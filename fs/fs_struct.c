@@ -4,6 +4,7 @@
 #include <linux/path.h>
 #include <linux/slab.h>
 #include <linux/fs_struct.h>
+#include <linux/grsecurity.h>
 
 /*
  * Replace the fs->{rootmnt,root} with {mnt,dentry}. Put the old values.
@@ -17,6 +18,7 @@ void set_fs_root(struct fs_struct *fs, struct path *path)
 	old_root = fs->root;
 	fs->root = *path;
 	path_get(path);
+	gr_set_chroot_entries(current, path);
 	write_unlock(&fs->lock);
 	if (old_root.dentry)
 		path_put(&old_root);
@@ -56,6 +58,7 @@ void chroot_fs_refs(struct path *old_root, struct path *new_root)
 			    && fs->root.mnt == old_root->mnt) {
 				path_get(new_root);
 				fs->root = *new_root;
+				gr_set_chroot_entries(p, new_root);
 				count++;
 			}
 			if (fs->pwd.dentry == old_root->dentry
@@ -89,7 +92,8 @@ void exit_fs(struct task_struct *tsk)
 		task_lock(tsk);
 		write_lock(&fs->lock);
 		tsk->fs = NULL;
-		kill = !--fs->users;
+		gr_clear_chroot_entries(tsk);
+		kill = !atomic_dec_return(&fs->users);
 		write_unlock(&fs->lock);
 		task_unlock(tsk);
 		if (kill)
@@ -102,7 +106,7 @@ struct fs_struct *copy_fs_struct(struct fs_struct *old)
 	struct fs_struct *fs = kmem_cache_alloc(fs_cachep, GFP_KERNEL);
 	/* We don't need to lock fs - think why ;-) */
 	if (fs) {
-		fs->users = 1;
+		atomic_set(&fs->users, 1);
 		fs->in_exec = 0;
 		rwlock_init(&fs->lock);
 		fs->umask = old->umask;
@@ -127,8 +131,9 @@ int unshare_fs_struct(void)
 
 	task_lock(current);
 	write_lock(&fs->lock);
-	kill = !--fs->users;
+	kill = !atomic_dec_return(&fs->users);
 	current->fs = new_fs;
+	gr_set_chroot_entries(current, &new_fs->root);
 	write_unlock(&fs->lock);
 	task_unlock(current);
 
@@ -147,7 +152,7 @@ EXPORT_SYMBOL(current_umask);
 
 /* to be mentioned only in INIT_TASK */
 struct fs_struct init_fs = {
-	.users		= 1,
+	.users		= ATOMIC_INIT(1),
 	.lock		= __RW_LOCK_UNLOCKED(init_fs.lock),
 	.umask		= 0022,
 };
@@ -162,12 +167,13 @@ void daemonize_fs_struct(void)
 		task_lock(current);
 
 		write_lock(&init_fs.lock);
-		init_fs.users++;
+		atomic_inc(&init_fs.users);
 		write_unlock(&init_fs.lock);
 
 		write_lock(&fs->lock);
 		current->fs = &init_fs;
-		kill = !--fs->users;
+		gr_set_chroot_entries(current, &current->fs->root);
+		kill = !atomic_dec_return(&fs->users);
 		write_unlock(&fs->lock);
 
 		task_unlock(current);

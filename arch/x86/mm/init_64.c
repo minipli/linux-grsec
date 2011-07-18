@@ -164,7 +164,9 @@ void set_pte_vaddr_pud(pud_t *pud_page, unsigned long vaddr, pte_t new_pte)
 	pmd = fill_pmd(pud, vaddr);
 	pte = fill_pte(pmd, vaddr);
 
+	pax_open_kernel();
 	set_pte(pte, new_pte);
+	pax_close_kernel();
 
 	/*
 	 * It's enough to flush this one mapping.
@@ -223,14 +225,12 @@ static void __init __init_extra_mapping(unsigned long phys, unsigned long size,
 		pgd = pgd_offset_k((unsigned long)__va(phys));
 		if (pgd_none(*pgd)) {
 			pud = (pud_t *) spp_getpage();
-			set_pgd(pgd, __pgd(__pa(pud) | _KERNPG_TABLE |
-						_PAGE_USER));
+			set_pgd(pgd, __pgd(__pa(pud) | _PAGE_TABLE));
 		}
 		pud = pud_offset(pgd, (unsigned long)__va(phys));
 		if (pud_none(*pud)) {
 			pmd = (pmd_t *) spp_getpage();
-			set_pud(pud, __pud(__pa(pmd) | _KERNPG_TABLE |
-						_PAGE_USER));
+			set_pud(pud, __pud(__pa(pmd) | _PAGE_TABLE));
 		}
 		pmd = pmd_offset(pud, phys);
 		BUG_ON(!pmd_none(*pmd));
@@ -675,6 +675,12 @@ void __init mem_init(void)
 
 	pci_iommu_alloc();
 
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	clone_pgd_range(get_cpu_pgd(0) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+#endif
+
 	/* clear_bss() already clear the empty_zero_page */
 
 	reservedpages = 0;
@@ -861,8 +867,8 @@ int kern_addr_valid(unsigned long addr)
 static struct vm_area_struct gate_vma = {
 	.vm_start	= VSYSCALL_START,
 	.vm_end		= VSYSCALL_START + (VSYSCALL_MAPPED_PAGES * PAGE_SIZE),
-	.vm_page_prot	= PAGE_READONLY_EXEC,
-	.vm_flags	= VM_READ | VM_EXEC
+	.vm_page_prot	= PAGE_READONLY,
+	.vm_flags	= VM_READ
 };
 
 struct vm_area_struct *get_gate_vma(struct task_struct *tsk)
@@ -896,7 +902,7 @@ int in_gate_area_no_task(unsigned long addr)
 
 const char *arch_vma_name(struct vm_area_struct *vma)
 {
-	if (vma->vm_mm && vma->vm_start == (long)vma->vm_mm->context.vdso)
+	if (vma->vm_mm && vma->vm_start == vma->vm_mm->context.vdso)
 		return "[vdso]";
 	if (vma == &gate_vma)
 		return "[vsyscall]";

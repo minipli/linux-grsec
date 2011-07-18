@@ -14,6 +14,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/sched.h>
+#include <linux/grsecurity.h>
 #include <linux/sysdev.h>
 #include <linux/clocksource.h>
 #include <linux/jiffies.h>
@@ -180,7 +181,7 @@ void update_xtime_cache(u64 nsec)
 	 */
 	struct timespec ts = xtime;
 	timespec_add_ns(&ts, nsec);
-	ACCESS_ONCE(xtime_cache) = ts;
+	ACCESS_ONCE_RW(xtime_cache) = ts;
 }
 
 /* must hold xtime_lock */
@@ -332,6 +333,8 @@ int do_settimeofday(struct timespec *tv)
 
 	if ((unsigned long)tv->tv_nsec >= NSEC_PER_SEC)
 		return -EINVAL;
+
+	gr_log_timechange();
 
 	write_seqlock_irqsave(&xtime_lock, flags);
 

@@ -2111,7 +2111,7 @@ MODULE_DESCRIPTION("IEEE-1394 SBP-2 protocol driver");
 MODULE_SUPPORTED_DEVICE(SBP2_DEVICE_NAME);
 MODULE_LICENSE("GPL");
 
-static int sbp2_module_init(void)
+static int __init sbp2_module_init(void)
 {
 	int ret;
 

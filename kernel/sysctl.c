@@ -63,6 +63,13 @@
 static int deprecated_sysctl_warning(struct __sysctl_args *args);
 
 #if defined(CONFIG_SYSCTL)
+#include <linux/grsecurity.h>
+#include <linux/grinternal.h>
+
+extern __u32 gr_handle_sysctl(const ctl_table *table, const int op);
+extern int gr_handle_sysctl_mod(const char *dirname, const char *name,
+				const int op);
+extern int gr_handle_chroot_sysctl(const int op);
 
 /* External variables not in a header file. */
 extern int C_A_D;
@@ -168,6 +175,7 @@ static int proc_do_cad_pid(struct ctl_table *table, int write,
 static int proc_taint(struct ctl_table *table, int write,
 			       void __user *buffer, size_t *lenp, loff_t *ppos);
 #endif
+extern ctl_table grsecurity_table[];
 
 static struct ctl_table root_table[];
 static struct ctl_table_root sysctl_table_root;
@@ -198,6 +206,21 @@ extern struct ctl_table epoll_table[];
 
 #ifdef HAVE_ARCH_PICK_MMAP_LAYOUT
 int sysctl_legacy_va_layout;
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+static ctl_table pax_table[] = {
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "softmode",
+		.data		= &pax_softmode,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0600,
+		.proc_handler	= &proc_dointvec,
+	},
+
+	{ .ctl_name = 0 }
+};
 #endif
 
 extern int prove_locking;
@@ -251,6 +274,24 @@ static int max_wakeup_granularity_ns = NSEC_PER_SEC;	/* 1 second */
 #endif
 
 static struct ctl_table kern_table[] = {
+#if defined(CONFIG_GRKERNSEC_SYSCTL) || defined(CONFIG_GRKERNSEC_ROFS)
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "grsecurity",
+		.mode		= 0500,
+		.child		= grsecurity_table,
+	},
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.ctl_name	= CTL_UNNUMBERED,
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 	{
 		.ctl_name	= CTL_UNNUMBERED,
 		.procname	= "sched_child_runs_first",
@@ -567,8 +608,8 @@ static struct ctl_table kern_table[] = {
 		.data		= &modprobe_path,
 		.maxlen		= KMOD_PATH_LEN,
 		.mode		= 0644,
-		.proc_handler	= &proc_dostring,
-		.strategy	= &sysctl_string,
+		.proc_handler	= &proc_dostring_modpriv,
+		.strategy	= &sysctl_string_modpriv,
 	},
 	{
 		.ctl_name	= CTL_UNNUMBERED,
@@ -1247,6 +1288,13 @@ static struct ctl_table vm_table[] = {
 		.mode		= 0644,
 		.proc_handler	= &proc_dointvec
 	},
+	{
+		.procname	= "heap_stack_gap",
+		.data		= &sysctl_heap_stack_gap,
+		.maxlen		= sizeof(sysctl_heap_stack_gap),
+		.mode		= 0644,
+		.proc_handler	= proc_doulongvec_minmax,
+	},
 #else
 	{
 		.ctl_name	= CTL_UNNUMBERED,
@@ -1803,6 +1851,8 @@ static int do_sysctl_strategy(struct ctl_table_root *root,
 	return 0;
 }
 
+static int sysctl_perm_nochk(struct ctl_table_root *root, struct ctl_table *table, int op);
+
 static int parse_table(int __user *name, int nlen,
 		       void __user *oldval, size_t __user *oldlenp,
 		       void __user *newval, size_t newlen,
@@ -1821,7 +1871,7 @@ repeat:
 		if (n == table->ctl_name) {
 			int error;
 			if (table->child) {
-				if (sysctl_perm(root, table, MAY_EXEC))
+				if (sysctl_perm_nochk(root, table, MAY_EXEC))
 					return -EPERM;
 				name++;
 				nlen--;
@@ -1902,6 +1952,33 @@ static int test_perm(int mode, int op)
 }
 
 int sysctl_perm(struct ctl_table_root *root, struct ctl_table *table, int op)
+{
+	int error;
+	int mode;
+
+	if (table->parent != NULL && table->parent->procname != NULL &&
+	   table->procname != NULL &&
+	    gr_handle_sysctl_mod(table->parent->procname, table->procname, op))
+		return -EACCES;
+	if (gr_handle_chroot_sysctl(op))
+		return -EACCES;
+	error = gr_handle_sysctl(table, op);
+	if (error)
+		return error;
+
+	error = security_sysctl(table, op & (MAY_READ | MAY_WRITE | MAY_EXEC));
+	if (error)
+		return error;
+
+	if (root->permissions)
+		mode = root->permissions(root, current->nsproxy, table);
+	else
+		mode = table->mode;
+
+	return test_perm(mode, op);
+}
+
+int sysctl_perm_nochk(struct ctl_table_root *root, struct ctl_table *table, int op)
 {
 	int error;
 	int mode;
@@ -2335,6 +2412,16 @@ int proc_dostring(struct ctl_table *table, int write,
 			       buffer, lenp, ppos);
 }
 
+int proc_dostring_modpriv(struct ctl_table *table, int write,
+		  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	if (write && !capable(CAP_SYS_MODULE))
+		return -EPERM;
+
+	return _proc_do_string(table->data, table->maxlen, write,
+			       buffer, lenp, ppos);
+}
+
 
 static int do_proc_dointvec_conv(int *negp, unsigned long *lvalp,
 				 int *valp,
@@ -2609,7 +2696,7 @@ static int __do_proc_doulongvec_minmax(void *data, struct ctl_table *table, int 
 	vleft = table->maxlen / sizeof(unsigned long);
 	left = *lenp;
 	
-	for (; left && vleft--; i++, min++, max++, first=0) {
+	for (; left && vleft--; i++, first=0) {
 		if (write) {
 			while (left) {
 				char c;
@@ -2910,6 +2997,12 @@ int proc_dostring(struct ctl_table *table, int write,
 	return -ENOSYS;
 }
 
+int proc_dostring_modpriv(struct ctl_table *table, int write,
+		  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	return -ENOSYS;
+}
+
 int proc_dointvec(struct ctl_table *table, int write,
 		  void __user *buffer, size_t *lenp, loff_t *ppos)
 {
@@ -3036,6 +3129,16 @@ int sysctl_string(struct ctl_table *table,
 		((char *) table->data)[len] = 0;
 	}
 	return 1;
+}
+
+int sysctl_string_modpriv(struct ctl_table *table,
+		  void __user *oldval, size_t __user *oldlenp,
+		  void __user *newval, size_t newlen)
+{
+	if (newval && newlen && !capable(CAP_SYS_MODULE))
+		return -EPERM;
+
+	return sysctl_string(table, oldval, oldlenp, newval, newlen);
 }
 
 /*
@@ -3182,6 +3285,13 @@ int sysctl_string(struct ctl_table *table,
 	return -ENOSYS;
 }
 
+int sysctl_string_modpriv(struct ctl_table *table,
+		  void __user *oldval, size_t __user *oldlenp,
+		  void __user *newval, size_t newlen)
+{
+	return -ENOSYS;
+}
+
 int sysctl_intvec(struct ctl_table *table,
 		void __user *oldval, size_t __user *oldlenp,
 		void __user *newval, size_t newlen)
@@ -3246,6 +3356,7 @@ EXPORT_SYMBOL(proc_dointvec_minmax);
 EXPORT_SYMBOL(proc_dointvec_userhz_jiffies);
 EXPORT_SYMBOL(proc_dointvec_ms_jiffies);
 EXPORT_SYMBOL(proc_dostring);
+EXPORT_SYMBOL(proc_dostring_modpriv);
 EXPORT_SYMBOL(proc_doulongvec_minmax);
 EXPORT_SYMBOL(proc_doulongvec_ms_jiffies_minmax);
 EXPORT_SYMBOL(register_sysctl_table);
@@ -3254,5 +3365,6 @@ EXPORT_SYMBOL(sysctl_intvec);
 EXPORT_SYMBOL(sysctl_jiffies);
 EXPORT_SYMBOL(sysctl_ms_jiffies);
 EXPORT_SYMBOL(sysctl_string);
+EXPORT_SYMBOL(sysctl_string_modpriv);
 EXPORT_SYMBOL(sysctl_data);
 EXPORT_SYMBOL(unregister_sysctl_table);

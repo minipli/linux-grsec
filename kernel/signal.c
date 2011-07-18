@@ -41,12 +41,12 @@
 
 static struct kmem_cache *sigqueue_cachep;
 
-static void __user *sig_handler(struct task_struct *t, int sig)
+static __sighandler_t sig_handler(struct task_struct *t, int sig)
 {
 	return t->sighand->action[sig - 1].sa.sa_handler;
 }
 
-static int sig_handler_ignored(void __user *handler, int sig)
+static int sig_handler_ignored(__sighandler_t handler, int sig)
 {
 	/* Is it explicitly or implicitly ignored? */
 	return handler == SIG_IGN ||
@@ -56,7 +56,7 @@ static int sig_handler_ignored(void __user *handler, int sig)
 static int sig_task_ignored(struct task_struct *t, int sig,
 		int from_ancestor_ns)
 {
-	void __user *handler;
+	__sighandler_t handler;
 
 	handler = sig_handler(t, sig);
 
@@ -207,6 +207,9 @@ static struct sigqueue *__sigqueue_alloc(struct task_struct *t, gfp_t flags,
 	 */
 	user = get_uid(__task_cred(t)->user);
 	atomic_inc(&user->sigpending);
+
+	if (!override_rlimit)
+		gr_learn_resource(t, RLIMIT_SIGPENDING, atomic_read(&user->sigpending), 1);
 	if (override_rlimit ||
 	    atomic_read(&user->sigpending) <=
 			t->signal->rlim[RLIMIT_SIGPENDING].rlim_cur)
@@ -327,7 +330,7 @@ flush_signal_handlers(struct task_struct *t, int force_default)
 
 int unhandled_signal(struct task_struct *tsk, int sig)
 {
-	void __user *handler = tsk->sighand->action[sig-1].sa.sa_handler;
+	__sighandler_t handler = tsk->sighand->action[sig-1].sa.sa_handler;
 	if (is_global_init(tsk))
 		return 1;
 	if (handler != SIG_IGN && handler != SIG_DFL)
@@ -626,6 +629,9 @@ static int check_kill_permission(int sig, struct siginfo *info,
 			return -EPERM;
 		}
 	}
+
+	if (gr_handle_signal(t, sig))
+		return -EPERM;
 
 	return security_task_kill(t, info, sig, 0);
 }
@@ -968,7 +974,7 @@ __group_send_sig_info(int sig, struct siginfo *info, struct task_struct *p)
 	return send_signal(sig, info, p, 1);
 }
 
-static int
+int
 specific_send_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 {
 	return send_signal(sig, info, t, 0);
@@ -1005,6 +1011,7 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	unsigned long int flags;
 	int ret, blocked, ignored;
 	struct k_sigaction *action;
+	int is_unhandled = 0;
 
 	spin_lock_irqsave(&t->sighand->siglock, flags);
 	action = &t->sighand->action[sig-1];
@@ -1019,8 +1026,17 @@ force_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 	}
 	if (action->sa.sa_handler == SIG_DFL)
 		t->signal->flags &= ~SIGNAL_UNKILLABLE;
+	if (action->sa.sa_handler == SIG_IGN || action->sa.sa_handler == SIG_DFL)
+		is_unhandled = 1;
 	ret = specific_send_sig_info(sig, info, t);
 	spin_unlock_irqrestore(&t->sighand->siglock, flags);
+
+	/* only deal with unhandled signals, java etc trigger SIGSEGV during
+	   normal operation */
+	if (is_unhandled) {
+		gr_log_signal(sig, !is_si_special(info) ? info->si_addr : NULL, t);
+		gr_handle_crash(t, sig);
+	}
 
 	return ret;
 }
@@ -1081,8 +1097,11 @@ int group_send_sig_info(int sig, struct siginfo *info, struct task_struct *p)
 {
 	int ret = check_kill_permission(sig, info, p);
 
-	if (!ret && sig)
+	if (!ret && sig) {
 		ret = do_send_sig_info(sig, info, p, true);
+		if (!ret)
+			gr_log_signal(sig, !is_si_special(info) ? info->si_addr : NULL, p);
+	}
 
 	return ret;
 }
@@ -1643,6 +1662,8 @@ static void ptrace_stop(int exit_code, int clear_code, siginfo_t *info)
 void ptrace_notify(int exit_code)
 {
 	siginfo_t info;
+
+	pax_track_stack();
 
 	BUG_ON((exit_code & (0x7f | ~0xffff)) != SIGTRAP);
 

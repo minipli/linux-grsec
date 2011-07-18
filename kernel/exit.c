@@ -55,6 +55,10 @@
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 
+#ifdef CONFIG_GRKERNSEC
+extern rwlock_t grsec_exec_file_lock;
+#endif
+
 static void exit_mm(struct task_struct * tsk);
 
 static void __unhash_process(struct task_struct *p)
@@ -174,6 +178,8 @@ void release_task(struct task_struct * p)
 	struct task_struct *leader;
 	int zap_leader;
 repeat:
+	gr_del_task_from_ip_table(p);
+
 	tracehook_prepare_release_task(p);
 	/* don't need to get the RCU readlock here - the process is dead and
 	 * can't be modifying its own credentials */
@@ -341,10 +347,21 @@ static void reparent_to_kthreadd(void)
 {
 	write_lock_irq(&tasklist_lock);
 
+#ifdef CONFIG_GRKERNSEC
+	write_lock(&grsec_exec_file_lock);
+	if (current->exec_file) {
+		fput(current->exec_file);
+		current->exec_file = NULL;
+	}
+	write_unlock(&grsec_exec_file_lock);
+#endif
+
 	ptrace_unlink(current);
 	/* Reparent to init */
 	current->real_parent = current->parent = kthreadd_task;
 	list_move_tail(&current->sibling, &current->real_parent->children);
+
+	gr_set_kernel_label(current);
 
 	/* Set the exit signal to SIGCHLD so we signal init on exit */
 	current->exit_signal = SIGCHLD;
@@ -397,7 +414,7 @@ int allow_signal(int sig)
 	 * know it'll be handled, so that they don't get converted to
 	 * SIGKILL or just silently dropped.
 	 */
-	current->sighand->action[(sig)-1].sa.sa_handler = (void __user *)2;
+	current->sighand->action[(sig)-1].sa.sa_handler = (__force void __user *)2;
 	recalc_sigpending();
 	spin_unlock_irq(&current->sighand->siglock);
 	return 0;
@@ -432,6 +449,17 @@ void daemonize(const char *name, ...)
 	va_start(args, name);
 	vsnprintf(current->comm, sizeof(current->comm), name, args);
 	va_end(args);
+
+#ifdef CONFIG_GRKERNSEC
+	write_lock(&grsec_exec_file_lock);
+	if (current->exec_file) {
+		fput(current->exec_file);
+		current->exec_file = NULL;
+	}
+	write_unlock(&grsec_exec_file_lock);
+#endif
+
+	gr_set_kernel_label(current);
 
 	/*
 	 * If we were started as result of loading a module, close all of the
@@ -897,23 +925,30 @@ NORET_TYPE void do_exit(long code)
 	struct task_struct *tsk = current;
 	int group_dead;
 
-	profile_task_exit(tsk);
-
-	WARN_ON(atomic_read(&tsk->fs_excl));
-
+	/*
+	 * Check this first since set_fs() below depends on
+	 * current_thread_info(), which we better not access when we're in
+	 * interrupt context.  Other than that, we want to do the set_fs()
+	 * as early as possible.
+	 */
 	if (unlikely(in_interrupt()))
 		panic("Aiee, killing interrupt handler!");
-	if (unlikely(!tsk->pid))
-		panic("Attempted to kill the idle task!");
 
 	/*
-	 * If do_exit is called because this processes oopsed, it's possible
+	 * If do_exit is called because this processes Oops'ed, it's possible
 	 * that get_fs() was left as KERNEL_DS, so reset it to USER_DS before
 	 * continuing. Amongst other possible reasons, this is to prevent
 	 * mm_release()->clear_child_tid() from writing to a user-controlled
 	 * kernel address.
 	 */
 	set_fs(USER_DS);
+
+	profile_task_exit(tsk);
+
+	WARN_ON(atomic_read(&tsk->fs_excl));
+
+	if (unlikely(!tsk->pid))
+		panic("Attempted to kill the idle task!");
 
 	tracehook_report_exit(&code);
 
@@ -972,6 +1007,9 @@ NORET_TYPE void do_exit(long code)
 
 	tsk->exit_code = code;
 	taskstats_exit(tsk, group_dead);
+
+	gr_acl_handle_psacct(tsk, code);
+	gr_acl_handle_exit();
 
 	exit_mm(tsk);
 
@@ -1188,7 +1226,7 @@ static int wait_task_zombie(struct wait_opts *wo, struct task_struct *p)
 
 	if (unlikely(wo->wo_flags & WNOWAIT)) {
 		int exit_code = p->exit_code;
-		int why, status;
+		int why;
 
 		get_task_struct(p);
 		read_unlock(&tasklist_lock);
