@@ -1881,9 +1881,9 @@ static int __devinit igb_probe(struct pci_dev *pdev,
 	hw->subsystem_device_id = pdev->subsystem_device;
 
 	/* Copy the default MAC, PHY and NVM function pointers */
-	memcpy(&hw->mac.ops, ei->mac_ops, sizeof(hw->mac.ops));
-	memcpy(&hw->phy.ops, ei->phy_ops, sizeof(hw->phy.ops));
-	memcpy(&hw->nvm.ops, ei->nvm_ops, sizeof(hw->nvm.ops));
+	memcpy((void *)&hw->mac.ops, ei->mac_ops, sizeof(hw->mac.ops));
+	memcpy((void *)&hw->phy.ops, ei->phy_ops, sizeof(hw->phy.ops));
+	memcpy((void *)&hw->nvm.ops, ei->nvm_ops, sizeof(hw->nvm.ops));
 	/* Initialize skew-specific constants */
 	err = ei->get_invariants(hw);
 	if (err)

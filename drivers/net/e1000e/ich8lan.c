@@ -290,14 +290,14 @@ static s32 e1000_init_phy_params_pchlan(struct e1000_hw *hw)
 	phy->addr                     = 1;
 	phy->reset_delay_us           = 100;
 
-	phy->ops.read_reg             = e1000_read_phy_reg_hv;
-	phy->ops.read_reg_locked      = e1000_read_phy_reg_hv_locked;
-	phy->ops.set_d0_lplu_state    = e1000_set_lplu_state_pchlan;
-	phy->ops.set_d3_lplu_state    = e1000_set_lplu_state_pchlan;
-	phy->ops.write_reg            = e1000_write_phy_reg_hv;
-	phy->ops.write_reg_locked     = e1000_write_phy_reg_hv_locked;
-	phy->ops.power_up             = e1000_power_up_phy_copper;
-	phy->ops.power_down           = e1000_power_down_phy_copper_ich8lan;
+	*(void **)&phy->ops.read_reg             = e1000_read_phy_reg_hv;
+	*(void **)&phy->ops.read_reg_locked      = e1000_read_phy_reg_hv_locked;
+	*(void **)&phy->ops.set_d0_lplu_state    = e1000_set_lplu_state_pchlan;
+	*(void **)&phy->ops.set_d3_lplu_state    = e1000_set_lplu_state_pchlan;
+	*(void **)&phy->ops.write_reg            = e1000_write_phy_reg_hv;
+	*(void **)&phy->ops.write_reg_locked     = e1000_write_phy_reg_hv_locked;
+	*(void **)&phy->ops.power_up             = e1000_power_up_phy_copper;
+	*(void **)&phy->ops.power_down           = e1000_power_down_phy_copper_ich8lan;
 	phy->autoneg_mask             = AUTONEG_ADVERTISE_SPEED_DEFAULT;
 
 	/*
@@ -369,18 +369,18 @@ static s32 e1000_init_phy_params_pchlan(struct e1000_hw *hw)
 	switch (phy->type) {
 	case e1000_phy_82577:
 	case e1000_phy_82579:
-		phy->ops.check_polarity = e1000_check_polarity_82577;
-		phy->ops.force_speed_duplex =
+		*(void **)&phy->ops.check_polarity = e1000_check_polarity_82577;
+		*(void **)&phy->ops.force_speed_duplex =
 		    e1000_phy_force_speed_duplex_82577;
-		phy->ops.get_cable_length = e1000_get_cable_length_82577;
-		phy->ops.get_info = e1000_get_phy_info_82577;
-		phy->ops.commit = e1000e_phy_sw_reset;
+		*(void **)&phy->ops.get_cable_length = e1000_get_cable_length_82577;
+		*(void **)&phy->ops.get_info = e1000_get_phy_info_82577;
+		*(void **)&phy->ops.commit = e1000e_phy_sw_reset;
 		break;
 	case e1000_phy_82578:
-		phy->ops.check_polarity = e1000_check_polarity_m88;
-		phy->ops.force_speed_duplex = e1000e_phy_force_speed_duplex_m88;
-		phy->ops.get_cable_length = e1000e_get_cable_length_m88;
-		phy->ops.get_info = e1000e_get_phy_info_m88;
+		*(void **)&phy->ops.check_polarity = e1000_check_polarity_m88;
+		*(void **)&phy->ops.force_speed_duplex = e1000e_phy_force_speed_duplex_m88;
+		*(void **)&phy->ops.get_cable_length = e1000e_get_cable_length_m88;
+		*(void **)&phy->ops.get_info = e1000e_get_phy_info_m88;
 		break;
 	default:
 		ret_val = -E1000_ERR_PHY;
@@ -406,8 +406,8 @@ static s32 e1000_init_phy_params_ich8lan(struct e1000_hw *hw)
 	phy->addr			= 1;
 	phy->reset_delay_us		= 100;
 
-	phy->ops.power_up               = e1000_power_up_phy_copper;
-	phy->ops.power_down             = e1000_power_down_phy_copper_ich8lan;
+	*(void **)&phy->ops.power_up               = e1000_power_up_phy_copper;
+	*(void **)&phy->ops.power_down             = e1000_power_down_phy_copper_ich8lan;
 
 	/*
 	 * We may need to do this twice - once for IGP and if that fails,
@@ -415,8 +415,8 @@ static s32 e1000_init_phy_params_ich8lan(struct e1000_hw *hw)
 	 */
 	ret_val = e1000e_determine_phy_address(hw);
 	if (ret_val) {
-		phy->ops.write_reg = e1000e_write_phy_reg_bm;
-		phy->ops.read_reg  = e1000e_read_phy_reg_bm;
+		*(void **)&phy->ops.write_reg = e1000e_write_phy_reg_bm;
+		*(void **)&phy->ops.read_reg  = e1000e_read_phy_reg_bm;
 		ret_val = e1000e_determine_phy_address(hw);
 		if (ret_val) {
 			e_dbg("Cannot determine PHY addr. Erroring out\n");
@@ -438,30 +438,30 @@ static s32 e1000_init_phy_params_ich8lan(struct e1000_hw *hw)
 	case IGP03E1000_E_PHY_ID:
 		phy->type = e1000_phy_igp_3;
 		phy->autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
-		phy->ops.read_reg_locked = e1000e_read_phy_reg_igp_locked;
-		phy->ops.write_reg_locked = e1000e_write_phy_reg_igp_locked;
-		phy->ops.get_info = e1000e_get_phy_info_igp;
-		phy->ops.check_polarity = e1000_check_polarity_igp;
-		phy->ops.force_speed_duplex = e1000e_phy_force_speed_duplex_igp;
+		*(void **)&phy->ops.read_reg_locked = e1000e_read_phy_reg_igp_locked;
+		*(void **)&phy->ops.write_reg_locked = e1000e_write_phy_reg_igp_locked;
+		*(void **)&phy->ops.get_info = e1000e_get_phy_info_igp;
+		*(void **)&phy->ops.check_polarity = e1000_check_polarity_igp;
+		*(void **)&phy->ops.force_speed_duplex = e1000e_phy_force_speed_duplex_igp;
 		break;
 	case IFE_E_PHY_ID:
 	case IFE_PLUS_E_PHY_ID:
 	case IFE_C_E_PHY_ID:
 		phy->type = e1000_phy_ife;
 		phy->autoneg_mask = E1000_ALL_NOT_GIG;
-		phy->ops.get_info = e1000_get_phy_info_ife;
-		phy->ops.check_polarity = e1000_check_polarity_ife;
-		phy->ops.force_speed_duplex = e1000_phy_force_speed_duplex_ife;
+		*(void **)&phy->ops.get_info = e1000_get_phy_info_ife;
+		*(void **)&phy->ops.check_polarity = e1000_check_polarity_ife;
+		*(void **)&phy->ops.force_speed_duplex = e1000_phy_force_speed_duplex_ife;
 		break;
 	case BME1000_E_PHY_ID:
 		phy->type = e1000_phy_bm;
 		phy->autoneg_mask = AUTONEG_ADVERTISE_SPEED_DEFAULT;
-		phy->ops.read_reg = e1000e_read_phy_reg_bm;
-		phy->ops.write_reg = e1000e_write_phy_reg_bm;
-		phy->ops.commit = e1000e_phy_sw_reset;
-		phy->ops.get_info = e1000e_get_phy_info_m88;
-		phy->ops.check_polarity = e1000_check_polarity_m88;
-		phy->ops.force_speed_duplex = e1000e_phy_force_speed_duplex_m88;
+		*(void **)&phy->ops.read_reg = e1000e_read_phy_reg_bm;
+		*(void **)&phy->ops.write_reg = e1000e_write_phy_reg_bm;
+		*(void **)&phy->ops.commit = e1000e_phy_sw_reset;
+		*(void **)&phy->ops.get_info = e1000e_get_phy_info_m88;
+		*(void **)&phy->ops.check_polarity = e1000_check_polarity_m88;
+		*(void **)&phy->ops.force_speed_duplex = e1000e_phy_force_speed_duplex_m88;
 		break;
 	default:
 		return -E1000_ERR_PHY;
@@ -561,30 +561,30 @@ static s32 e1000_init_mac_params_ich8lan(struct e1000_adapter *adapter)
 	case e1000_ich9lan:
 	case e1000_ich10lan:
 		/* check management mode */
-		mac->ops.check_mng_mode = e1000_check_mng_mode_ich8lan;
+		*(void **)&mac->ops.check_mng_mode = e1000_check_mng_mode_ich8lan;
 		/* ID LED init */
-		mac->ops.id_led_init = e1000e_id_led_init;
+		*(void **)&mac->ops.id_led_init = e1000e_id_led_init;
 		/* setup LED */
-		mac->ops.setup_led = e1000e_setup_led_generic;
+		*(void **)&mac->ops.setup_led = e1000e_setup_led_generic;
 		/* cleanup LED */
-		mac->ops.cleanup_led = e1000_cleanup_led_ich8lan;
+		*(void **)&mac->ops.cleanup_led = e1000_cleanup_led_ich8lan;
 		/* turn on/off LED */
-		mac->ops.led_on = e1000_led_on_ich8lan;
-		mac->ops.led_off = e1000_led_off_ich8lan;
+		*(void **)&mac->ops.led_on = e1000_led_on_ich8lan;
+		*(void **)&mac->ops.led_off = e1000_led_off_ich8lan;
 		break;
 	case e1000_pchlan:
 	case e1000_pch2lan:
 		/* check management mode */
-		mac->ops.check_mng_mode = e1000_check_mng_mode_pchlan;
+		*(void **)&mac->ops.check_mng_mode = e1000_check_mng_mode_pchlan;
 		/* ID LED init */
-		mac->ops.id_led_init = e1000_id_led_init_pchlan;
+		*(void **)&mac->ops.id_led_init = e1000_id_led_init_pchlan;
 		/* setup LED */
-		mac->ops.setup_led = e1000_setup_led_pchlan;
+		*(void **)&mac->ops.setup_led = e1000_setup_led_pchlan;
 		/* cleanup LED */
-		mac->ops.cleanup_led = e1000_cleanup_led_pchlan;
+		*(void **)&mac->ops.cleanup_led = e1000_cleanup_led_pchlan;
 		/* turn on/off LED */
-		mac->ops.led_on = e1000_led_on_pchlan;
-		mac->ops.led_off = e1000_led_off_pchlan;
+		*(void **)&mac->ops.led_on = e1000_led_on_pchlan;
+		*(void **)&mac->ops.led_off = e1000_led_off_pchlan;
 		break;
 	default:
 		break;
@@ -3866,7 +3866,7 @@ static void e1000_clear_hw_cntrs_ich8lan(struct e1000_hw *hw)
 	}
 }
 
-static const struct e1000_mac_operations ich8_mac_ops = {
+static struct e1000_mac_operations ich8_mac_ops = {
 	.id_led_init		= e1000e_id_led_init,
 	/* check_mng_mode dependent on mac type */
 	.check_for_link		= e1000_check_for_copper_link_ich8lan,
@@ -3885,7 +3885,7 @@ static const struct e1000_mac_operations ich8_mac_ops = {
 	/* id_led_init dependent on mac type */
 };
 
-static const struct e1000_phy_operations ich8_phy_ops = {
+static struct e1000_phy_operations ich8_phy_ops = {
 	.acquire		= e1000_acquire_swflag_ich8lan,
 	.check_reset_block	= e1000_check_reset_block_ich8lan,
 	.commit			= NULL,
@@ -3899,7 +3899,7 @@ static const struct e1000_phy_operations ich8_phy_ops = {
 	.write_reg		= e1000e_write_phy_reg_igp,
 };
 
-static const struct e1000_nvm_operations ich8_nvm_ops = {
+static struct e1000_nvm_operations ich8_nvm_ops = {
 	.acquire		= e1000_acquire_nvm_ich8lan,
 	.read		 	= e1000_read_nvm_ich8lan,
 	.release		= e1000_release_nvm_ich8lan,

@@ -1124,7 +1124,7 @@ static void generic_hdmi_free(struct hda_codec *codec)
 	kfree(spec);
 }
 
-static const struct hda_codec_ops generic_hdmi_patch_ops = {
+static struct hda_codec_ops generic_hdmi_patch_ops = {
 	.init			= generic_hdmi_init,
 	.free			= generic_hdmi_free,
 	.build_pcms		= generic_hdmi_build_pcms,
@@ -1147,7 +1147,7 @@ static int patch_generic_hdmi(struct hda_codec *codec)
 		kfree(spec);
 		return -EINVAL;
 	}
-	codec->patch_ops = generic_hdmi_patch_ops;
+	memcpy((void *)&codec->patch_ops, &generic_hdmi_patch_ops, sizeof(generic_hdmi_patch_ops));
 
 	for (i = 0; i < spec->num_pins; i++)
 		snd_hda_eld_proc_new(codec, &spec->sink_eld[i], i);
@@ -1465,14 +1465,14 @@ static struct hda_pcm_stream nvhdmi_pcm_playback_2ch = {
 	},
 };
 
-static const struct hda_codec_ops nvhdmi_patch_ops_8ch_7x = {
+static struct hda_codec_ops nvhdmi_patch_ops_8ch_7x = {
 	.build_controls = generic_hdmi_build_controls,
 	.build_pcms = generic_hdmi_build_pcms,
 	.init = nvhdmi_7x_init,
 	.free = generic_hdmi_free,
 };
 
-static const struct hda_codec_ops nvhdmi_patch_ops_2ch = {
+static struct hda_codec_ops nvhdmi_patch_ops_2ch = {
 	.build_controls = generic_hdmi_build_controls,
 	.build_pcms = generic_hdmi_build_pcms,
 	.init = nvhdmi_7x_init,
@@ -1509,7 +1509,7 @@ static int patch_nvhdmi_2ch(struct hda_codec *codec)
 	spec->cvt[0] = nvhdmi_master_con_nid_7x;
 	spec->pcm_playback = &nvhdmi_pcm_playback_2ch;
 
-	codec->patch_ops = nvhdmi_patch_ops_2ch;
+	memcpy((void *)&codec->patch_ops, &nvhdmi_patch_ops_2ch, sizeof(nvhdmi_patch_ops_2ch));
 
 	return 0;
 }
@@ -1524,7 +1524,7 @@ static int patch_nvhdmi_8ch_7x(struct hda_codec *codec)
 	spec = codec->spec;
 	spec->multiout.max_channels = 8;
 	spec->pcm_playback = &nvhdmi_pcm_playback_8ch_7x;
-	codec->patch_ops = nvhdmi_patch_ops_8ch_7x;
+	memcpy((void *)&codec->patch_ops, &nvhdmi_patch_ops_8ch_7x, sizeof(nvhdmi_patch_ops_8ch_7x));
 
 	/* Initialize the audio infoframe channel mask and checksum to something
 	 * valid */
@@ -1599,7 +1599,7 @@ static int atihdmi_init(struct hda_codec *codec)
 	return 0;
 }
 
-static const struct hda_codec_ops atihdmi_patch_ops = {
+static struct hda_codec_ops atihdmi_patch_ops = {
 	.build_controls = generic_hdmi_build_controls,
 	.build_pcms = generic_hdmi_build_pcms,
 	.init = atihdmi_init,
@@ -1625,7 +1625,7 @@ static int patch_atihdmi(struct hda_codec *codec)
 	spec->pin[0] = ATIHDMI_PIN_NID;
 	spec->pcm_playback = &atihdmi_pcm_digital_playback;
 
-	codec->patch_ops = atihdmi_patch_ops;
+	memcpy((void *)&codec->patch_ops, &atihdmi_patch_ops, sizeof(atihdmi_patch_ops));
 
 	return 0;
 }

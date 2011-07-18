@@ -235,7 +235,7 @@ static int cryptd_blkcipher_enqueue(struct ablkcipher_request *req,
 	struct cryptd_queue *queue;
 
 	queue = cryptd_get_queue(crypto_ablkcipher_tfm(tfm));
-	rctx->complete = req->base.complete;
+	*(void **)&rctx->complete = req->base.complete;
 	req->base.complete = complete;
 
 	return cryptd_enqueue_request(queue, &req->base);
@@ -668,7 +668,7 @@ static int cryptd_aead_enqueue(struct aead_request *req,
 	struct crypto_aead *tfm = crypto_aead_reqtfm(req);
 	struct cryptd_queue *queue = cryptd_get_queue(crypto_aead_tfm(tfm));
 
-	rctx->complete = req->base.complete;
+	*(void **)&rctx->complete = req->base.complete;
 	req->base.complete = complete;
 	return cryptd_enqueue_request(queue, &req->base);
 }

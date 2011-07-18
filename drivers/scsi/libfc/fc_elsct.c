@@ -77,7 +77,7 @@ EXPORT_SYMBOL(fc_elsct_send);
 int fc_elsct_init(struct fc_lport *lport)
 {
 	if (!lport->tt.elsct_send)
-		lport->tt.elsct_send = fc_elsct_send;
+		*(void **)&lport->tt.elsct_send = fc_elsct_send;
 
 	return 0;
 }

@@ -111,10 +111,10 @@ struct i2c_adapter *i2c_add_mux_adapter(struct i2c_adapter *parent,
 	 * of time what sort of physical adapter we'll be dealing with.
 	 */
 	if (parent->algo->master_xfer)
-		priv->algo.master_xfer = i2c_mux_master_xfer;
+		*(void **)&priv->algo.master_xfer = i2c_mux_master_xfer;
 	if (parent->algo->smbus_xfer)
-		priv->algo.smbus_xfer = i2c_mux_smbus_xfer;
-	priv->algo.functionality = i2c_mux_functionality;
+		*(void **)&priv->algo.smbus_xfer = i2c_mux_smbus_xfer;
+	*(void **)&priv->algo.functionality = i2c_mux_functionality;
 
 	/* Now fill out new adapter structure */
 	snprintf(priv->adap.name, sizeof(priv->adap.name),

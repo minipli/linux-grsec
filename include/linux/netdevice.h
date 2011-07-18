@@ -1302,7 +1302,7 @@ struct net_device {
 
 	/* mid-layer private */
 	union {
-		void				*ml_priv;
+		struct ieee802154_mlme_ops	*ml_priv;
 		struct pcpu_lstats __percpu	*lstats; /* loopback stats */
 		struct pcpu_tstats __percpu	*tstats; /* tunnel stats */
 		struct pcpu_dstats __percpu	*dstats; /* dummy stats */

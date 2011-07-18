@@ -2374,34 +2374,34 @@ EXPORT_SYMBOL(fc_exch_recv);
 int fc_exch_init(struct fc_lport *lport)
 {
 	if (!lport->tt.seq_start_next)
-		lport->tt.seq_start_next = fc_seq_start_next;
+		*(void **)&lport->tt.seq_start_next = fc_seq_start_next;
 
 	if (!lport->tt.seq_set_resp)
-		lport->tt.seq_set_resp = fc_seq_set_resp;
+		*(void **)&lport->tt.seq_set_resp = fc_seq_set_resp;
 
 	if (!lport->tt.exch_seq_send)
-		lport->tt.exch_seq_send = fc_exch_seq_send;
+		*(void **)&lport->tt.exch_seq_send = fc_exch_seq_send;
 
 	if (!lport->tt.seq_send)
-		lport->tt.seq_send = fc_seq_send;
+		*(void **)&lport->tt.seq_send = fc_seq_send;
 
 	if (!lport->tt.seq_els_rsp_send)
-		lport->tt.seq_els_rsp_send = fc_seq_els_rsp_send;
+		*(void **)&lport->tt.seq_els_rsp_send = fc_seq_els_rsp_send;
 
 	if (!lport->tt.exch_done)
-		lport->tt.exch_done = fc_exch_done;
+		*(void **)&lport->tt.exch_done = fc_exch_done;
 
 	if (!lport->tt.exch_mgr_reset)
-		lport->tt.exch_mgr_reset = fc_exch_mgr_reset;
+		*(void **)&lport->tt.exch_mgr_reset = fc_exch_mgr_reset;
 
 	if (!lport->tt.seq_exch_abort)
-		lport->tt.seq_exch_abort = fc_seq_exch_abort;
+		*(void **)&lport->tt.seq_exch_abort = fc_seq_exch_abort;
 
 	if (!lport->tt.seq_assign)
-		lport->tt.seq_assign = fc_seq_assign;
+		*(void **)&lport->tt.seq_assign = fc_seq_assign;
 
 	if (!lport->tt.seq_release)
-		lport->tt.seq_release = fc_seq_release;
+		*(void **)&lport->tt.seq_release = fc_seq_release;
 
 	return 0;
 }

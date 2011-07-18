@@ -866,7 +866,7 @@ static int bnx2fc_libfc_config(struct fc_lport *lport)
 {
 
 	/* Set the function pointers set by bnx2fc driver */
-	memcpy(&lport->tt, &bnx2fc_libfc_fcn_templ,
+	memcpy((void *)&lport->tt, &bnx2fc_libfc_fcn_templ,
 		sizeof(struct libfc_function_template));
 	fc_elsct_init(lport);
 	fc_exch_init(lport);
@@ -1536,7 +1536,7 @@ start_disc:
 	/* Kick off Fabric discovery*/
 	if (test_bit(BNX2FC_CREATE_DONE, &hba->init_done)) {
 		printk(KERN_ERR PFX "ulp_init: start discovery\n");
-		lport->tt.frame_send = bnx2fc_xmit;
+		*(void **)&lport->tt.frame_send = bnx2fc_xmit;
 		bnx2fc_start_disc(hba);
 	}
 }

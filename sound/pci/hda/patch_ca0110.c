@@ -389,7 +389,7 @@ static void ca0110_free(struct hda_codec *codec)
 	kfree(codec->spec);
 }
 
-static const struct hda_codec_ops ca0110_patch_ops = {
+static struct hda_codec_ops ca0110_patch_ops = {
 	.build_controls = ca0110_build_controls,
 	.build_pcms = ca0110_build_pcms,
 	.init = ca0110_init,
@@ -525,7 +525,7 @@ static int patch_ca0110(struct hda_codec *codec)
 	if (err < 0)
 		goto error;
 
-	codec->patch_ops = ca0110_patch_ops;
+	memcpy((void *)&codec->patch_ops, &ca0110_patch_ops, sizeof(ca0110_patch_ops));
 
 	return 0;
 

@@ -1038,7 +1038,7 @@ static int generic_check_power_status(struct hda_codec *codec, hda_nid_t nid)
 
 /*
  */
-static const struct hda_codec_ops generic_patch_ops = {
+static struct hda_codec_ops generic_patch_ops = {
 	.build_controls = build_generic_controls,
 	.build_pcms = build_generic_pcms,
 	.free = snd_hda_generic_free,
@@ -1073,7 +1073,7 @@ int snd_hda_parse_generic_codec(struct hda_codec *codec)
 	    (err = parse_output(codec)) < 0)
 		goto error;
 
-	codec->patch_ops = generic_patch_ops;
+	memcpy((void *)&codec->patch_ops, &generic_patch_ops, sizeof(generic_patch_ops));
 
 	return 0;
 

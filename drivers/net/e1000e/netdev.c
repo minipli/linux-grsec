@@ -5893,9 +5893,9 @@ static int __devinit e1000_probe(struct pci_dev *pdev,
 	if (err)
 		goto err_sw_init;
 
-	memcpy(&hw->mac.ops, ei->mac_ops, sizeof(hw->mac.ops));
-	memcpy(&hw->nvm.ops, ei->nvm_ops, sizeof(hw->nvm.ops));
-	memcpy(&hw->phy.ops, ei->phy_ops, sizeof(hw->phy.ops));
+	memcpy((void *)&hw->mac.ops, ei->mac_ops, sizeof(hw->mac.ops));
+	memcpy((void *)&hw->nvm.ops, ei->nvm_ops, sizeof(hw->nvm.ops));
+	memcpy((void *)&hw->phy.ops, ei->phy_ops, sizeof(hw->phy.ops));
 
 	err = ei->get_variants(adapter);
 	if (err)

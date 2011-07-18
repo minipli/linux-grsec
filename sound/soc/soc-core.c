@@ -2105,13 +2105,14 @@ static int soc_new_pcm(struct snd_soc_pcm_runtime *rtd, int num)
 
 	rtd->pcm = pcm;
 	pcm->private_data = rtd;
-	soc_pcm_ops.mmap = platform->driver->ops->mmap;
-	soc_pcm_ops.pointer = platform->driver->ops->pointer;
-	soc_pcm_ops.ioctl = platform->driver->ops->ioctl;
-	soc_pcm_ops.copy = platform->driver->ops->copy;
-	soc_pcm_ops.silence = platform->driver->ops->silence;
-	soc_pcm_ops.ack = platform->driver->ops->ack;
-	soc_pcm_ops.page = platform->driver->ops->page;
+	/* this whole logic is broken... */
+	*(void **)&soc_pcm_ops.mmap = platform->driver->ops->mmap;
+	*(void **)&soc_pcm_ops.pointer = platform->driver->ops->pointer;
+	*(void **)&soc_pcm_ops.ioctl = platform->driver->ops->ioctl;
+	*(void **)&soc_pcm_ops.copy = platform->driver->ops->copy;
+	*(void **)&soc_pcm_ops.silence = platform->driver->ops->silence;
+	*(void **)&soc_pcm_ops.ack = platform->driver->ops->ack;
+	*(void **)&soc_pcm_ops.page = platform->driver->ops->page;
 
 	if (playback)
 		snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &soc_pcm_ops);

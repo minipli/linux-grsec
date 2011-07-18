@@ -4683,7 +4683,7 @@ static unsigned long kvm_get_guest_ip(void)
 	return ip;
 }
 
-static const struct perf_guest_info_callbacks kvm_guest_cbs = {
+static struct perf_guest_info_callbacks kvm_guest_cbs = {
 	.is_in_guest		= kvm_is_in_guest,
 	.is_user_mode		= kvm_is_user_mode,
 	.get_guest_ip		= kvm_get_guest_ip,

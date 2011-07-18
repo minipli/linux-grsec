@@ -99,8 +99,8 @@ static s32 e1000_init_phy_params_82571(struct e1000_hw *hw)
 	phy->autoneg_mask		 = AUTONEG_ADVERTISE_SPEED_DEFAULT;
 	phy->reset_delay_us		 = 100;
 
-	phy->ops.power_up		 = e1000_power_up_phy_copper;
-	phy->ops.power_down		 = e1000_power_down_phy_copper_82571;
+	*(void **)&phy->ops.power_up		 = e1000_power_up_phy_copper;
+	*(void **)&phy->ops.power_down		 = e1000_power_down_phy_copper_82571;
 
 	switch (hw->mac.type) {
 	case e1000_82571:
@@ -113,10 +113,10 @@ static s32 e1000_init_phy_params_82571(struct e1000_hw *hw)
 	case e1000_82574:
 	case e1000_82583:
 		phy->type		 = e1000_phy_bm;
-		phy->ops.acquire = e1000_get_hw_semaphore_82574;
-		phy->ops.release = e1000_put_hw_semaphore_82574;
-		phy->ops.set_d0_lplu_state = e1000_set_d0_lplu_state_82574;
-		phy->ops.set_d3_lplu_state = e1000_set_d3_lplu_state_82574;
+		*(void **)&phy->ops.acquire = e1000_get_hw_semaphore_82574;
+		*(void **)&phy->ops.release = e1000_put_hw_semaphore_82574;
+		*(void **)&phy->ops.set_d0_lplu_state = e1000_set_d0_lplu_state_82574;
+		*(void **)&phy->ops.set_d3_lplu_state = e1000_set_d3_lplu_state_82574;
 		break;
 	default:
 		return -E1000_ERR_PHY;
@@ -221,8 +221,8 @@ static s32 e1000_init_nvm_params_82571(struct e1000_hw *hw)
 	switch (hw->mac.type) {
 	case e1000_82574:
 	case e1000_82583:
-		nvm->ops.acquire = e1000_get_hw_semaphore_82574;
-		nvm->ops.release = e1000_put_hw_semaphore_82574;
+		*(void **)&nvm->ops.acquire = e1000_get_hw_semaphore_82574;
+		*(void **)&nvm->ops.release = e1000_put_hw_semaphore_82574;
 		break;
 	default:
 		break;
@@ -239,7 +239,7 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
 	struct e1000_mac_info *mac = &hw->mac;
-	struct e1000_mac_operations *func = &mac->ops;	/* cannot be const */
+	struct e1000_mac_operations *func = &mac->ops;
 	u32 swsm = 0;
 	u32 swsm2 = 0;
 	bool force_clear_smbi = false;
@@ -272,22 +272,22 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 	/* check for link */
 	switch (hw->phy.media_type) {
 	case e1000_media_type_copper:
-		func->setup_physical_interface = e1000_setup_copper_link_82571;
-		func->check_for_link = e1000e_check_for_copper_link;
-		func->get_link_up_info = e1000e_get_speed_and_duplex_copper;
+		*(void **)&func->setup_physical_interface = e1000_setup_copper_link_82571;
+		*(void **)&func->check_for_link = e1000e_check_for_copper_link;
+		*(void **)&func->get_link_up_info = e1000e_get_speed_and_duplex_copper;
 		break;
 	case e1000_media_type_fiber:
-		func->setup_physical_interface =
+		*(void **)&func->setup_physical_interface =
 			e1000_setup_fiber_serdes_link_82571;
-		func->check_for_link = e1000e_check_for_fiber_link;
-		func->get_link_up_info =
+		*(void **)&func->check_for_link = e1000e_check_for_fiber_link;
+		*(void **)&func->get_link_up_info =
 			e1000e_get_speed_and_duplex_fiber_serdes;
 		break;
 	case e1000_media_type_internal_serdes:
-		func->setup_physical_interface =
+		*(void **)&func->setup_physical_interface =
 			e1000_setup_fiber_serdes_link_82571;
-		func->check_for_link = e1000_check_for_serdes_link_82571;
-		func->get_link_up_info =
+		*(void **)&func->check_for_link = e1000_check_for_serdes_link_82571;
+		*(void **)&func->get_link_up_info =
 			e1000e_get_speed_and_duplex_fiber_serdes;
 		break;
 	default:
@@ -297,9 +297,9 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 
 	switch (hw->mac.type) {
 	case e1000_82573:
-		func->set_lan_id = e1000_set_lan_id_single_port;
-		func->check_mng_mode = e1000e_check_mng_mode_generic;
-		func->led_on = e1000e_led_on_generic;
+		*(void **)&func->set_lan_id = e1000_set_lan_id_single_port;
+		*(void **)&func->check_mng_mode = e1000e_check_mng_mode_generic;
+		*(void **)&func->led_on = e1000e_led_on_generic;
 
 		/* FWSM register */
 		mac->has_fwsm = true;
@@ -313,13 +313,13 @@ static s32 e1000_init_mac_params_82571(struct e1000_adapter *adapter)
 		break;
 	case e1000_82574:
 	case e1000_82583:
-		func->set_lan_id = e1000_set_lan_id_single_port;
-		func->check_mng_mode = e1000_check_mng_mode_82574;
-		func->led_on = e1000_led_on_82574;
+		*(void **)&func->set_lan_id = e1000_set_lan_id_single_port;
+		*(void **)&func->check_mng_mode = e1000_check_mng_mode_82574;
+		*(void **)&func->led_on = e1000_led_on_82574;
 		break;
 	default:
-		func->check_mng_mode = e1000e_check_mng_mode_generic;
-		func->led_on = e1000e_led_on_generic;
+		*(void **)&func->check_mng_mode = e1000e_check_mng_mode_generic;
+		*(void **)&func->led_on = e1000e_led_on_generic;
 
 		/* FWSM register */
 		mac->has_fwsm = true;
@@ -1930,7 +1930,7 @@ static void e1000_clear_hw_cntrs_82571(struct e1000_hw *hw)
 	er32(ICRXDMTC);
 }
 
-static const struct e1000_mac_operations e82571_mac_ops = {
+static struct e1000_mac_operations e82571_mac_ops = {
 	/* .check_mng_mode: mac type dependent */
 	/* .check_for_link: media type dependent */
 	.id_led_init		= e1000e_id_led_init,
@@ -1952,7 +1952,7 @@ static const struct e1000_mac_operations e82571_mac_ops = {
 	.read_mac_addr		= e1000_read_mac_addr_82571,
 };
 
-static const struct e1000_phy_operations e82_phy_ops_igp = {
+static struct e1000_phy_operations e82_phy_ops_igp = {
 	.acquire		= e1000_get_hw_semaphore_82571,
 	.check_polarity		= e1000_check_polarity_igp,
 	.check_reset_block	= e1000e_check_reset_block_generic,
@@ -1970,7 +1970,7 @@ static const struct e1000_phy_operations e82_phy_ops_igp = {
 	.cfg_on_link_up      	= NULL,
 };
 
-static const struct e1000_phy_operations e82_phy_ops_m88 = {
+static struct e1000_phy_operations e82_phy_ops_m88 = {
 	.acquire		= e1000_get_hw_semaphore_82571,
 	.check_polarity		= e1000_check_polarity_m88,
 	.check_reset_block	= e1000e_check_reset_block_generic,
@@ -1988,7 +1988,7 @@ static const struct e1000_phy_operations e82_phy_ops_m88 = {
 	.cfg_on_link_up      	= NULL,
 };
 
-static const struct e1000_phy_operations e82_phy_ops_bm = {
+static struct e1000_phy_operations e82_phy_ops_bm = {
 	.acquire		= e1000_get_hw_semaphore_82571,
 	.check_polarity		= e1000_check_polarity_m88,
 	.check_reset_block	= e1000e_check_reset_block_generic,
@@ -2006,7 +2006,7 @@ static const struct e1000_phy_operations e82_phy_ops_bm = {
 	.cfg_on_link_up      	= NULL,
 };
 
-static const struct e1000_nvm_operations e82571_nvm_ops = {
+static struct e1000_nvm_operations e82571_nvm_ops = {
 	.acquire		= e1000_acquire_nvm_82571,
 	.read			= e1000e_read_nvm_eerd,
 	.release		= e1000_release_nvm_82571,

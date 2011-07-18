@@ -615,7 +615,7 @@ struct hda_bus_ops {
 	/* notify power-up/down from codec to controller */
 	void (*pm_notify)(struct hda_bus *bus);
 #endif
-};
+} __no_const;
 
 /* template to pass to the bus constructor */
 struct hda_bus_template {
@@ -743,7 +743,7 @@ struct hda_pcm_ops {
 		       struct snd_pcm_substream *substream);
 	int (*cleanup)(struct hda_pcm_stream *info, struct hda_codec *codec,
 		       struct snd_pcm_substream *substream);
-};
+} __no_const;
 
 /* PCM information for each substream */
 struct hda_pcm_stream {

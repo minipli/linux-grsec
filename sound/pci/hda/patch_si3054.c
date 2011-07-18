@@ -263,7 +263,7 @@ static void si3054_free(struct hda_codec *codec)
 /*
  */
 
-static const struct hda_codec_ops si3054_patch_ops = {
+static struct hda_codec_ops si3054_patch_ops = {
 	.build_controls = si3054_build_controls,
 	.build_pcms = si3054_build_pcms,
 	.init = si3054_init,
@@ -276,7 +276,7 @@ static int patch_si3054(struct hda_codec *codec)
 	if (spec == NULL)
 		return -ENOMEM;
 	codec->spec = spec;
-	codec->patch_ops = si3054_patch_ops;
+	memcpy((void *)&codec->patch_ops, &si3054_patch_ops, sizeof(si3054_patch_ops));
 	return 0;
 }
 

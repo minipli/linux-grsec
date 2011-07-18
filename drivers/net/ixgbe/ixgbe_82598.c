@@ -151,20 +151,20 @@ static s32 ixgbe_init_phy_ops_82598(struct ixgbe_hw *hw)
 
 	/* Overwrite the link function pointers if copper PHY */
 	if (mac->ops.get_media_type(hw) == ixgbe_media_type_copper) {
-		mac->ops.setup_link = &ixgbe_setup_copper_link_82598;
-		mac->ops.get_link_capabilities =
+		*(void **)&mac->ops.setup_link = &ixgbe_setup_copper_link_82598;
+		*(void **)&mac->ops.get_link_capabilities =
 			&ixgbe_get_copper_link_capabilities_generic;
 	}
 
 	switch (hw->phy.type) {
 	case ixgbe_phy_tn:
-		phy->ops.setup_link = &ixgbe_setup_phy_link_tnx;
-		phy->ops.check_link = &ixgbe_check_phy_link_tnx;
-		phy->ops.get_firmware_version =
+		*(void **)&phy->ops.setup_link = &ixgbe_setup_phy_link_tnx;
+		*(void **)&phy->ops.check_link = &ixgbe_check_phy_link_tnx;
+		*(void **)&phy->ops.get_firmware_version =
 		             &ixgbe_get_phy_firmware_version_tnx;
 		break;
 	case ixgbe_phy_nl:
-		phy->ops.reset = &ixgbe_reset_phy_nl;
+		*(void **)&phy->ops.reset = &ixgbe_reset_phy_nl;
 
 		/* Call SFP+ identify routine to get the SFP+ module type */
 		ret_val = phy->ops.identify_sfp(hw);

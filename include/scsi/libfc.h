@@ -202,7 +202,7 @@ struct fc_rport_priv {
 	struct mutex                rp_mutex;
 	struct delayed_work	    retry_work;
 	enum fc_rport_event         event;
-	const struct fc_rport_operations  *ops;
+	struct fc_rport_operations  *ops;
 	struct list_head            peers;
 	struct work_struct          event_work;
 	u32			    supported_classes;

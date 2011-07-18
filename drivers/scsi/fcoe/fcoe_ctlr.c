@@ -1912,7 +1912,7 @@ static void fcoe_ctlr_vn_rport_callback(struct fc_lport *lport,
 	mutex_unlock(&fip->ctlr_mutex);
 }
 
-static const struct fc_rport_operations fcoe_ctlr_vn_rport_ops = {
+static struct fc_rport_operations fcoe_ctlr_vn_rport_ops = {
 	.event_callback = fcoe_ctlr_vn_rport_callback,
 };
 
@@ -2656,7 +2656,7 @@ int fcoe_libfc_config(struct fc_lport *lport, struct fcoe_ctlr *fip,
 		      const struct libfc_function_template *tt, int init_fcp)
 {
 	/* Set the function pointers set by the LLDD */
-	memcpy(&lport->tt, tt, sizeof(*tt));
+	memcpy((void *)&lport->tt, tt, sizeof(*tt));
 	if (init_fcp && fc_fcp_init(lport))
 		return -ENOMEM;
 	fc_exch_init(lport);
@@ -2667,10 +2667,10 @@ int fcoe_libfc_config(struct fc_lport *lport, struct fcoe_ctlr *fip,
 	fc_rport_init(lport);
 	if (fip->mode == FIP_MODE_VN2VN) {
 		lport->point_to_multipoint = 1;
-		lport->tt.disc_recv_req = fcoe_ctlr_disc_recv;
-		lport->tt.disc_start = fcoe_ctlr_disc_start;
-		lport->tt.disc_stop = fcoe_ctlr_disc_stop;
-		lport->tt.disc_stop_final = fcoe_ctlr_disc_stop_final;
+		*(void **)&lport->tt.disc_recv_req = fcoe_ctlr_disc_recv;
+		*(void **)&lport->tt.disc_start = fcoe_ctlr_disc_start;
+		*(void **)&lport->tt.disc_stop = fcoe_ctlr_disc_stop;
+		*(void **)&lport->tt.disc_stop_final = fcoe_ctlr_disc_stop_final;
 		mutex_init(&lport->disc.disc_mutex);
 		INIT_LIST_HEAD(&lport->disc.rports);
 		lport->disc.priv = fip;

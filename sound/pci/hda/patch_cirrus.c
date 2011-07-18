@@ -1126,7 +1126,7 @@ static void cs_unsol_event(struct hda_codec *codec, unsigned int res)
 	}
 }
 
-static const struct hda_codec_ops cs_patch_ops = {
+static struct hda_codec_ops cs_patch_ops = {
 	.build_controls = cs_build_controls,
 	.build_pcms = cs_build_pcms,
 	.init = cs_init,
@@ -1269,7 +1269,7 @@ static int patch_cs420x(struct hda_codec *codec)
 	if (err < 0)
 		goto error;
 
-	codec->patch_ops = cs_patch_ops;
+	memcpy((void *)&codec->patch_ops, &cs_patch_ops, sizeof(cs_patch_ops));
 
 	return 0;
 

@@ -3329,10 +3329,10 @@ static int __devinit ixgbevf_probe(struct pci_dev *pdev,
 	adapter->bd_number = cards_found;
 
 	/* Setup hw api */
-	memcpy(&hw->mac.ops, ii->mac_ops, sizeof(hw->mac.ops));
+	memcpy((void *)&hw->mac.ops, ii->mac_ops, sizeof(hw->mac.ops));
 	hw->mac.type  = ii->mac;
 
-	memcpy(&hw->mbx.ops, &ixgbevf_mbx_ops,
+	memcpy((void *)&hw->mbx.ops, &ixgbevf_mbx_ops,
 	       sizeof(struct ixgbe_mac_operations));
 
 	adapter->flags &= ~IXGBE_FLAG_RX_PS_CAPABLE;

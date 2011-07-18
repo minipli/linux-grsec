@@ -4968,7 +4968,7 @@ static int stac92xx_suspend(struct hda_codec *codec, pm_message_t state)
 }
 #endif
 
-static const struct hda_codec_ops stac92xx_patch_ops = {
+static struct hda_codec_ops stac92xx_patch_ops = {
 	.build_controls = stac92xx_build_controls,
 	.build_pcms = stac92xx_build_pcms,
 	.init = stac92xx_init,
@@ -5040,7 +5040,7 @@ static int patch_stac9200(struct hda_codec *codec)
 	if (spec->board_config == STAC_9200_PANASONIC)
 		spec->hp_detect = 0;
 
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 
 	return 0;
 }
@@ -5124,7 +5124,7 @@ static int patch_stac925x(struct hda_codec *codec)
 		return err;
 	}
 
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 
 	return 0;
 }
@@ -5270,7 +5270,7 @@ again:
 	if (spec->board_config == STAC_92HD73XX_NO_JD)
 		spec->hp_detect = 0;
 
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 
 	codec->proc_widget_hook = stac92hd7x_proc_hook;
 
@@ -5481,7 +5481,7 @@ again:
 		break;
 	}
 
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 
 	if (find_mute_led_gpio(codec, 0))
 		snd_printd("mute LED gpio %d polarity %d\n",
@@ -5494,7 +5494,7 @@ again:
 		spec->gpio_dir |= spec->gpio_led;
 		spec->gpio_data |= spec->gpio_led;
 		/* register check_power_status callback. */
-		codec->patch_ops.check_power_status =
+		*(void **)&codec->patch_ops.check_power_status =
 			stac92xx_hp_check_power_status;
 	}
 #endif	
@@ -5623,7 +5623,7 @@ static int patch_stac92hd71bxx(struct hda_codec *codec)
 	codec->no_trigger_sense = 1;
 	codec->spec = spec;
 	spec->linear_tone_beep = 0;
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 	spec->num_pins = STAC92HD71BXX_NUM_PINS;
 	switch (codec->vendor_id) {
 	case 0x111d76b6:
@@ -5831,7 +5831,7 @@ again:
 		spec->gpio_dir |= spec->gpio_led;
 		spec->gpio_data |= spec->gpio_led;
 		/* register check_power_status callback. */
-		codec->patch_ops.check_power_status =
+		*(void **)&codec->patch_ops.check_power_status =
 			stac92xx_hp_check_power_status;
 	}
 #endif	
@@ -5962,7 +5962,7 @@ static int patch_stac922x(struct hda_codec *codec)
 		return err;
 	}
 
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 
 	/* Fix Mux capture level; max to 2 */
 	snd_hda_override_amp_caps(codec, 0x12, HDA_OUTPUT,
@@ -6087,7 +6087,7 @@ static int patch_stac927x(struct hda_codec *codec)
 		return err;
 	}
 
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 
 	codec->proc_widget_hook = stac927x_proc_hook;
 
@@ -6212,7 +6212,7 @@ static int patch_stac9205(struct hda_codec *codec)
 		return err;
 	}
 
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 
 	codec->proc_widget_hook = stac9205_proc_hook;
 
@@ -6308,7 +6308,7 @@ static int patch_stac9872(struct hda_codec *codec)
 		return -EINVAL;
 	}
 	spec->input_mux = &spec->private_imux;
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 	return 0;
 }
 

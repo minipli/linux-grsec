@@ -869,9 +869,9 @@ void snd_usb_init_substream(struct snd_usb_stream *as,
 	subs->direction = stream;
 	subs->dev = as->chip->dev;
 	subs->txfr_quirk = as->chip->txfr_quirk;
-	subs->ops = audio_urb_ops[stream];
+	memcpy((void *)&subs->ops, &audio_urb_ops[stream], sizeof(subs->ops));
 	if (snd_usb_get_speed(subs->dev) >= USB_SPEED_HIGH)
-		subs->ops.prepare_sync = prepare_capture_sync_urb_hs;
+		*(void **)&subs->ops.prepare_sync = prepare_capture_sync_urb_hs;
 
 	snd_usb_set_pcm_ops(as->pcm, stream);
 
@@ -889,12 +889,12 @@ int snd_usb_substream_playback_trigger(struct snd_pcm_substream *substream, int 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-		subs->ops.prepare = prepare_playback_urb;
+		*(void **)&subs->ops.prepare = prepare_playback_urb;
 		return 0;
 	case SNDRV_PCM_TRIGGER_STOP:
 		return deactivate_urbs(subs, 0, 0);
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-		subs->ops.prepare = prepare_nodata_playback_urb;
+		*(void **)&subs->ops.prepare = prepare_nodata_playback_urb;
 		return 0;
 	}
 
@@ -907,15 +907,15 @@ int snd_usb_substream_capture_trigger(struct snd_pcm_substream *substream, int c
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
-		subs->ops.retire = retire_capture_urb;
+		*(void **)&subs->ops.retire = retire_capture_urb;
 		return start_urbs(subs, substream->runtime);
 	case SNDRV_PCM_TRIGGER_STOP:
 		return deactivate_urbs(subs, 0, 0);
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-		subs->ops.retire = retire_paused_capture_urb;
+		*(void **)&subs->ops.retire = retire_paused_capture_urb;
 		return 0;
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-		subs->ops.retire = retire_capture_urb;
+		*(void **)&subs->ops.retire = retire_capture_urb;
 		return 0;
 	}
 
@@ -932,7 +932,7 @@ int snd_usb_substream_prepare(struct snd_usb_substream *subs,
 	/* for playback, submit the URBs now; otherwise, the first hwptr_done
 	 * updates for all URBs would happen at the same time when starting */
 	if (subs->direction == SNDRV_PCM_STREAM_PLAYBACK) {
-		subs->ops.prepare = prepare_nodata_playback_urb;
+		*(void **)&subs->ops.prepare = prepare_nodata_playback_urb;
 		return start_urbs(subs, runtime);
 	}
 

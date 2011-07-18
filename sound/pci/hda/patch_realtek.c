@@ -4273,7 +4273,7 @@ static int alc_resume(struct hda_codec *codec)
 
 /*
  */
-static const struct hda_codec_ops alc_patch_ops = {
+static struct hda_codec_ops alc_patch_ops = {
 	.build_controls = alc_build_controls,
 	.build_pcms = alc_build_pcms,
 	.init = alc_init,
@@ -5736,7 +5736,7 @@ static int patch_alc880(struct hda_codec *codec)
 
 	spec->vmaster_nid = 0x0c;
 
-	codec->patch_ops = alc_patch_ops;
+	memcpy((void *)&codec->patch_ops, &alc_patch_ops, sizeof(alc_patch_ops));
 	if (board_config == ALC880_AUTO)
 		spec->init_hook = alc880_auto_init;
 #ifdef CONFIG_SND_HDA_POWER_SAVE
@@ -7380,7 +7380,7 @@ static int patch_alc260(struct hda_codec *codec)
 
 	spec->vmaster_nid = 0x08;
 
-	codec->patch_ops = alc_patch_ops;
+	memcpy((void *)&codec->patch_ops, &alc_patch_ops, sizeof(alc_patch_ops));
 	if (board_config == ALC260_AUTO)
 		spec->init_hook = alc260_auto_init;
 #ifdef CONFIG_SND_HDA_POWER_SAVE
@@ -11104,7 +11104,7 @@ static int patch_alc882(struct hda_codec *codec)
 
 	spec->vmaster_nid = 0x0c;
 
-	codec->patch_ops = alc_patch_ops;
+	memcpy((void *)&codec->patch_ops, &alc_patch_ops, sizeof(alc_patch_ops));
 	if (board_config == ALC882_AUTO)
 		spec->init_hook = alc882_auto_init;
 
@@ -13007,7 +13007,7 @@ static int patch_alc262(struct hda_codec *codec)
 
 	spec->vmaster_nid = 0x0c;
 
-	codec->patch_ops = alc_patch_ops;
+	memcpy((void *)&codec->patch_ops, &alc_patch_ops, sizeof(alc_patch_ops));
 	if (board_config == ALC262_AUTO)
 		spec->init_hook = alc262_auto_init;
 
@@ -14082,7 +14082,7 @@ static int patch_alc268(struct hda_codec *codec)
 
 	spec->vmaster_nid = 0x02;
 
-	codec->patch_ops = alc_patch_ops;
+	memcpy((void *)&codec->patch_ops, &alc_patch_ops, sizeof(alc_patch_ops));
 	if (board_config == ALC268_AUTO)
 		spec->init_hook = alc268_auto_init;
 
@@ -15312,12 +15312,12 @@ static int patch_alc269(struct hda_codec *codec)
 
 	spec->vmaster_nid = 0x02;
 
-	codec->patch_ops = alc_patch_ops;
+	memcpy((void *)&codec->patch_ops, &alc_patch_ops, sizeof(alc_patch_ops));
 #ifdef CONFIG_SND_HDA_POWER_SAVE
-	codec->patch_ops.suspend = alc269_suspend;
+	*(void **)&codec->patch_ops.suspend = alc269_suspend;
 #endif
 #ifdef SND_HDA_NEEDS_RESUME
-	codec->patch_ops.resume = alc269_resume;
+	*(void **)&codec->patch_ops.resume = alc269_resume;
 #endif
 	if (board_config == ALC269_AUTO)
 		spec->init_hook = alc269_auto_init;
@@ -15327,7 +15327,7 @@ static int patch_alc269(struct hda_codec *codec)
 	if (!spec->loopback.amplist)
 		spec->loopback.amplist = alc269_loopbacks;
 	if (alc269_mic2_for_mute_led(codec))
-		codec->patch_ops.check_power_status = alc269_mic2_mute_check_ps;
+		*(void **)&codec->patch_ops.check_power_status = alc269_mic2_mute_check_ps;
 #endif
 
 	return 0;
@@ -16448,7 +16448,7 @@ static int patch_alc861(struct hda_codec *codec)
 
 	alc_apply_fixup(codec, ALC_FIXUP_ACT_PROBE);
 
-	codec->patch_ops = alc_patch_ops;
+	memcpy((void *)&codec->patch_ops, &alc_patch_ops, sizeof(alc_patch_ops));
 	if (board_config == ALC861_AUTO) {
 		spec->init_hook = alc861_auto_init;
 #ifdef CONFIG_SND_HDA_POWER_SAVE
@@ -17422,7 +17422,7 @@ static int patch_alc861vd(struct hda_codec *codec)
 
 	alc_apply_fixup(codec, ALC_FIXUP_ACT_PROBE);
 
-	codec->patch_ops = alc_patch_ops;
+	memcpy((void *)&codec->patch_ops, &alc_patch_ops, sizeof(alc_patch_ops));
 
 	if (board_config == ALC861VD_AUTO)
 		spec->init_hook = alc861vd_auto_init;
@@ -19623,7 +19623,7 @@ static int patch_alc662(struct hda_codec *codec)
 
 	alc_apply_fixup(codec, ALC_FIXUP_ACT_PROBE);
 
-	codec->patch_ops = alc_patch_ops;
+	memcpy((void *)&codec->patch_ops, &alc_patch_ops, sizeof(alc_patch_ops));
 	if (board_config == ALC662_AUTO)
 		spec->init_hook = alc662_auto_init;
 
@@ -20094,7 +20094,7 @@ static int patch_alc680(struct hda_codec *codec)
 
 	spec->vmaster_nid = 0x02;
 
-	codec->patch_ops = alc_patch_ops;
+	memcpy((void *)&codec->patch_ops, &alc_patch_ops, sizeof(alc_patch_ops));
 	if (board_config == ALC680_AUTO)
 		spec->init_hook = alc680_auto_init;
 
