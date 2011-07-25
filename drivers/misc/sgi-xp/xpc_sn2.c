@@ -2414,9 +2414,7 @@ xpc_init_sn2(void)
 	int ret;
 	size_t buf_size;
 
-	pax_open_kernel();
-	memcpy((void *)&xpc_arch_ops, xpc_arch_ops_sn2, sizeof(xpc_arch_ops_sn2));
-	pax_close_kernel();
+	xpc_arch_ops = xpc_arch_ops_sn2;
 
 	if (offsetof(struct xpc_msg_sn2, payload) > XPC_MSG_HDR_MAX_SIZE) {
 		dev_err(xpc_part, "header portion of struct xpc_msg_sn2 is "

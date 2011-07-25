@@ -1109,55 +1109,55 @@ static int patch_cxt5045(struct hda_codec *codec)
 
 	set_beep_amp(spec, 0x16, 0, 1);
 
-	memcpy((void *)&codec->patch_ops, &conexant_patch_ops, sizeof(conexant_patch_ops));
+	codec->patch_ops = conexant_patch_ops;
 
 	board_config = snd_hda_check_board_config(codec, CXT5045_MODELS,
 						  cxt5045_models,
 						  cxt5045_cfg_tbl);
 	switch (board_config) {
 	case CXT5045_LAPTOP_HPSENSE:
-		*(void **)&codec->patch_ops.unsol_event = cxt5045_hp_unsol_event;
+		codec->patch_ops.unsol_event = cxt5045_hp_unsol_event;
 		spec->input_mux = &cxt5045_capture_source;
 		spec->num_init_verbs = 2;
 		spec->init_verbs[1] = cxt5045_hp_sense_init_verbs;
 		spec->mixers[0] = cxt5045_mixers;
-		*(void **)&codec->patch_ops.init = cxt5045_init;
+		codec->patch_ops.init = cxt5045_init;
 		break;
 	case CXT5045_LAPTOP_MICSENSE:
-		*(void **)&codec->patch_ops.unsol_event = cxt5045_hp_unsol_event;
+		codec->patch_ops.unsol_event = cxt5045_hp_unsol_event;
 		spec->input_mux = &cxt5045_capture_source;
 		spec->num_init_verbs = 2;
 		spec->init_verbs[1] = cxt5045_mic_sense_init_verbs;
 		spec->mixers[0] = cxt5045_mixers;
-		*(void **)&codec->patch_ops.init = cxt5045_init;
+		codec->patch_ops.init = cxt5045_init;
 		break;
 	default:
 	case CXT5045_LAPTOP_HPMICSENSE:
-		*(void **)&codec->patch_ops.unsol_event = cxt5045_hp_unsol_event;
+		codec->patch_ops.unsol_event = cxt5045_hp_unsol_event;
 		spec->input_mux = &cxt5045_capture_source;
 		spec->num_init_verbs = 3;
 		spec->init_verbs[1] = cxt5045_hp_sense_init_verbs;
 		spec->init_verbs[2] = cxt5045_mic_sense_init_verbs;
 		spec->mixers[0] = cxt5045_mixers;
-		*(void **)&codec->patch_ops.init = cxt5045_init;
+		codec->patch_ops.init = cxt5045_init;
 		break;
 	case CXT5045_BENQ:
-		*(void **)&codec->patch_ops.unsol_event = cxt5045_hp_unsol_event;
+		codec->patch_ops.unsol_event = cxt5045_hp_unsol_event;
 		spec->input_mux = &cxt5045_capture_source_benq;
 		spec->num_init_verbs = 1;
 		spec->init_verbs[0] = cxt5045_benq_init_verbs;
 		spec->mixers[0] = cxt5045_mixers;
 		spec->mixers[1] = cxt5045_benq_mixers;
 		spec->num_mixers = 2;
-		*(void **)&codec->patch_ops.init = cxt5045_init;
+		codec->patch_ops.init = cxt5045_init;
 		break;
 	case CXT5045_LAPTOP_HP530:
-		*(void **)&codec->patch_ops.unsol_event = cxt5045_hp_unsol_event;
+		codec->patch_ops.unsol_event = cxt5045_hp_unsol_event;
 		spec->input_mux = &cxt5045_capture_source_hp530;
 		spec->num_init_verbs = 2;
 		spec->init_verbs[1] = cxt5045_hp_sense_init_verbs;
 		spec->mixers[0] = cxt5045_mixers_hp530;
-		*(void **)&codec->patch_ops.init = cxt5045_init;
+		codec->patch_ops.init = cxt5045_init;
 		break;
 #ifdef CONFIG_SND_DEBUG
 	case CXT5045_TEST:
@@ -1538,7 +1538,7 @@ static int patch_cxt5047(struct hda_codec *codec)
 	spec->num_channel_mode = ARRAY_SIZE(cxt5047_modes),
 	spec->channel_mode = cxt5047_modes,
 
-	memcpy((void *)&codec->patch_ops, &conexant_patch_ops, sizeof(conexant_patch_ops));
+	codec->patch_ops = conexant_patch_ops;
 
 	board_config = snd_hda_check_board_config(codec, CXT5047_MODELS,
 						  cxt5047_models,
@@ -1547,13 +1547,13 @@ static int patch_cxt5047(struct hda_codec *codec)
 	case CXT5047_LAPTOP:
 		spec->num_mixers = 2;
 		spec->mixers[1] = cxt5047_hp_spk_mixers;
-		*(void **)&codec->patch_ops.unsol_event = cxt5047_hp_unsol_event;
+		codec->patch_ops.unsol_event = cxt5047_hp_unsol_event;
 		break;
 	case CXT5047_LAPTOP_HP:
 		spec->num_mixers = 2;
 		spec->mixers[1] = cxt5047_hp_only_mixers;
-		*(void **)&codec->patch_ops.unsol_event = cxt5047_hp_unsol_event;
-		*(void **)&codec->patch_ops.init = cxt5047_hp_init;
+		codec->patch_ops.unsol_event = cxt5047_hp_unsol_event;
+		codec->patch_ops.init = cxt5047_hp_init;
 		break;
 	case CXT5047_LAPTOP_EAPD:
 		spec->input_mux = &cxt5047_toshiba_capture_source;
@@ -1561,14 +1561,14 @@ static int patch_cxt5047(struct hda_codec *codec)
 		spec->mixers[1] = cxt5047_hp_spk_mixers;
 		spec->num_init_verbs = 2;
 		spec->init_verbs[1] = cxt5047_toshiba_init_verbs;
-		*(void **)&codec->patch_ops.unsol_event = cxt5047_hp_unsol_event;
+		codec->patch_ops.unsol_event = cxt5047_hp_unsol_event;
 		break;
 #ifdef CONFIG_SND_DEBUG
 	case CXT5047_TEST:
 		spec->input_mux = &cxt5047_test_capture_source;
 		spec->mixers[0] = cxt5047_test_mixer;
 		spec->init_verbs[0] = cxt5047_test_init_verbs;
-		*(void **)&codec->patch_ops.unsol_event = cxt5047_hp_unsol_event;
+		codec->patch_ops.unsol_event = cxt5047_hp_unsol_event;
 #endif	
 	}
 	spec->vmaster_nid = 0x13;
@@ -1943,8 +1943,8 @@ static int patch_cxt5051(struct hda_codec *codec)
 	codec->spec = spec;
 	codec->pin_amp_workaround = 1;
 
-	memcpy((void *)&codec->patch_ops, &conexant_patch_ops, sizeof(conexant_patch_ops));
-	*(void **)&codec->patch_ops.init = cxt5051_init;
+	codec->patch_ops = conexant_patch_ops;
+	codec->patch_ops.init = cxt5051_init;
 
 	spec->multiout.max_channels = 2;
 	spec->multiout.num_dacs = ARRAY_SIZE(cxt5051_dac_nids);
@@ -1965,7 +1965,7 @@ static int patch_cxt5051(struct hda_codec *codec)
 
 	set_beep_amp(spec, 0x13, 0, HDA_OUTPUT);
 
-	*(void **)&codec->patch_ops.unsol_event = cxt5051_hp_unsol_event;
+	codec->patch_ops.unsol_event = cxt5051_hp_unsol_event;
 
 	board_config = snd_hda_check_board_config(codec, CXT5051_MODELS,
 						  cxt5051_models,
@@ -3052,8 +3052,8 @@ static int patch_cxt5066(struct hda_codec *codec)
 		return -ENOMEM;
 	codec->spec = spec;
 
-	memcpy((void *)&codec->patch_ops, &conexant_patch_ops, sizeof(conexant_patch_ops));
-	*(void **)&codec->patch_ops.init = conexant_init;
+	codec->patch_ops = conexant_patch_ops;
+	codec->patch_ops.init = conexant_init;
 
 	spec->dell_automute = 0;
 	spec->multiout.max_channels = 2;
@@ -3096,8 +3096,8 @@ static int patch_cxt5066(struct hda_codec *codec)
 		break;
 	case CXT5066_ASUS:
 	case CXT5066_HP_LAPTOP:
-		*(void **)&codec->patch_ops.init = cxt5066_init;
-		*(void **)&codec->patch_ops.unsol_event = cxt5066_unsol_event;
+		codec->patch_ops.init = cxt5066_init;
+		codec->patch_ops.unsol_event = cxt5066_unsol_event;
 		spec->init_verbs[spec->num_init_verbs] =
 			cxt5066_init_verbs_hp_laptop;
 		spec->num_init_verbs++;
@@ -3115,8 +3115,8 @@ static int patch_cxt5066(struct hda_codec *codec)
 		break;
 
 	case CXT5066_OLPC_XO_1_5:
-		*(void **)&codec->patch_ops.init = cxt5066_olpc_init;
-		*(void **)&codec->patch_ops.unsol_event = cxt5066_olpc_unsol_event;
+		codec->patch_ops.init = cxt5066_olpc_init;
+		codec->patch_ops.unsol_event = cxt5066_olpc_unsol_event;
 		spec->init_verbs[0] = cxt5066_init_verbs_olpc;
 		spec->mixers[spec->num_mixers++] = cxt5066_mixer_master_olpc;
 		spec->mixers[spec->num_mixers++] = cxt5066_mixer_olpc_dc;
@@ -3136,8 +3136,8 @@ static int patch_cxt5066(struct hda_codec *codec)
 		spec->capture_cleanup = cxt5066_olpc_capture_cleanup;
 		break;
 	case CXT5066_DELL_VOSTRO:
-		*(void **)&codec->patch_ops.init = cxt5066_init;
-		*(void **)&codec->patch_ops.unsol_event = cxt5066_unsol_event;
+		codec->patch_ops.init = cxt5066_init;
+		codec->patch_ops.unsol_event = cxt5066_unsol_event;
 		spec->init_verbs[0] = cxt5066_init_verbs_vostro;
 		spec->mixers[spec->num_mixers++] = cxt5066_mixer_master_olpc;
 		spec->mixers[spec->num_mixers++] = cxt5066_mixers;
@@ -3153,8 +3153,8 @@ static int patch_cxt5066(struct hda_codec *codec)
 		spec->input_mux = NULL;
 		break;
 	case CXT5066_IDEAPAD:
-		*(void **)&codec->patch_ops.init = cxt5066_init;
-		*(void **)&codec->patch_ops.unsol_event = cxt5066_unsol_event;
+		codec->patch_ops.init = cxt5066_init;
+		codec->patch_ops.unsol_event = cxt5066_unsol_event;
 		spec->mixers[spec->num_mixers++] = cxt5066_mixer_master;
 		spec->mixers[spec->num_mixers++] = cxt5066_mixers;
 		spec->init_verbs[0] = cxt5066_init_verbs_ideapad;
@@ -3169,8 +3169,8 @@ static int patch_cxt5066(struct hda_codec *codec)
 		spec->input_mux = NULL;
 		break;
 	case CXT5066_THINKPAD:
-		*(void **)&codec->patch_ops.init = cxt5066_init;
-		*(void **)&codec->patch_ops.unsol_event = cxt5066_unsol_event;
+		codec->patch_ops.init = cxt5066_init;
+		codec->patch_ops.unsol_event = cxt5066_unsol_event;
 		spec->mixers[spec->num_mixers++] = cxt5066_mixer_master;
 		spec->mixers[spec->num_mixers++] = cxt5066_mixers;
 		spec->init_verbs[0] = cxt5066_init_verbs_thinkpad;
@@ -3822,7 +3822,7 @@ static int patch_conexant_auto(struct hda_codec *codec)
 		codec->spec = NULL;
 		return err;
 	}
-	memcpy((void *)&codec->patch_ops, &cx_auto_patch_ops, sizeof(cx_auto_patch_ops));
+	codec->patch_ops = cx_auto_patch_ops;
 	if (spec->beep_amp)
 		snd_hda_attach_beep_device(codec, spec->beep_amp);
 	return 0;

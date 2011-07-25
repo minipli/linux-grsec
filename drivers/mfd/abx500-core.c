@@ -14,7 +14,7 @@ static LIST_HEAD(abx500_list);
 
 struct abx500_device_entry {
 	struct list_head list;
-	struct abx500_ops ops;
+	abx500_ops_no_const ops;
 	struct device *dev;
 };
 
@@ -41,7 +41,7 @@ int abx500_register_ops(struct device *dev, struct abx500_ops *ops)
 		return -ENOMEM;
 	}
 	dev_entry->dev = dev;
-	memcpy((void *)&dev_entry->ops, ops, sizeof(struct abx500_ops));
+	memcpy(&dev_entry->ops, ops, sizeof(struct abx500_ops));
 
 	list_add_tail(&dev_entry->list, &abx500_list);
 	return 0;

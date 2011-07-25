@@ -1734,9 +1734,7 @@ static struct xpc_arch_operations xpc_arch_ops_uv = {
 int
 xpc_init_uv(void)
 {
-	pax_open_kernel();
-	memcpy((void *)&xpc_arch_ops, &xpc_arch_ops_uv, sizeof(xpc_arch_ops_uv));
-	pax_close_kernel();
+	xpc_arch_ops = xpc_arch_ops_uv;
 
 	if (sizeof(struct xpc_notify_mq_msghdr_uv) > XPC_MSG_HDR_MAX_SIZE) {
 		dev_err(xpc_part, "xpc_notify_mq_msghdr_uv is larger than %d\n",

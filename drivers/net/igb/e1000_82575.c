@@ -193,9 +193,9 @@ static s32 igb_get_invariants_82575(struct e1000_hw *hw)
 		mac->rar_entry_count = E1000_RAR_ENTRIES_I350;
 	/* reset */
 	if (mac->type >= e1000_82580)
-		*(void **)&mac->ops.reset_hw = igb_reset_hw_82580;
+		mac->ops.reset_hw = igb_reset_hw_82580;
 	else
-		*(void **)&mac->ops.reset_hw = igb_reset_hw_82575;
+		mac->ops.reset_hw = igb_reset_hw_82575;
 	/* Set if part includes ASF firmware */
 	mac->asf_firmware_present = true;
 	/* Set if manageability features are enabled. */
@@ -208,7 +208,7 @@ static s32 igb_get_invariants_82575(struct e1000_hw *hw)
 	else
 		dev_spec->eee_disable = true;
 	/* physical interface link setup */
-	*(void **)&mac->ops.setup_physical_interface =
+	mac->ops.setup_physical_interface =
 		(hw->phy.media_type == e1000_media_type_copper)
 			? igb_setup_copper_link_82575
 			: igb_setup_serdes_link_82575;
@@ -249,27 +249,27 @@ static s32 igb_get_invariants_82575(struct e1000_hw *hw)
 		nvm->page_size = 128;
 
 	/* NVM Function Pointers */
-	*(void **)&nvm->ops.acquire = igb_acquire_nvm_82575;
+	nvm->ops.acquire = igb_acquire_nvm_82575;
 	if (nvm->word_size < (1 << 15))
-		*(void **)&nvm->ops.read = igb_read_nvm_eerd;
+		nvm->ops.read = igb_read_nvm_eerd;
 	else
-		*(void **)&nvm->ops.read = igb_read_nvm_spi;
+		nvm->ops.read = igb_read_nvm_spi;
 
-	*(void **)&nvm->ops.release = igb_release_nvm_82575;
+	nvm->ops.release = igb_release_nvm_82575;
 	switch (hw->mac.type) {
 	case e1000_82580:
-		*(void **)&nvm->ops.validate = igb_validate_nvm_checksum_82580;
-		*(void **)&nvm->ops.update = igb_update_nvm_checksum_82580;
+		nvm->ops.validate = igb_validate_nvm_checksum_82580;
+		nvm->ops.update = igb_update_nvm_checksum_82580;
 		break;
 	case e1000_i350:
-		*(void **)&nvm->ops.validate = igb_validate_nvm_checksum_i350;
-		*(void **)&nvm->ops.update = igb_update_nvm_checksum_i350;
+		nvm->ops.validate = igb_validate_nvm_checksum_i350;
+		nvm->ops.update = igb_update_nvm_checksum_i350;
 		break;
 	default:
-		*(void **)&nvm->ops.validate = igb_validate_nvm_checksum;
-		*(void **)&nvm->ops.update = igb_update_nvm_checksum;
+		nvm->ops.validate = igb_validate_nvm_checksum;
+		nvm->ops.update = igb_update_nvm_checksum;
 	}
-	*(void **)&nvm->ops.write = igb_write_nvm_spi;
+	nvm->ops.write = igb_write_nvm_spi;
 
 	/* if part supports SR-IOV then initialize mailbox parameters */
 	switch (mac->type) {
@@ -294,10 +294,10 @@ static s32 igb_get_invariants_82575(struct e1000_hw *hw)
 
 	/* PHY function pointers */
 	if (igb_sgmii_active_82575(hw)) {
-		*(void **)&phy->ops.reset      = igb_phy_hw_reset_sgmii_82575;
+		phy->ops.reset      = igb_phy_hw_reset_sgmii_82575;
 		ctrl_ext |= E1000_CTRL_I2C_ENA;
 	} else {
-		*(void **)&phy->ops.reset      = igb_phy_hw_reset;
+		phy->ops.reset      = igb_phy_hw_reset;
 		ctrl_ext &= ~E1000_CTRL_I2C_ENA;
 	}
 
@@ -305,14 +305,14 @@ static s32 igb_get_invariants_82575(struct e1000_hw *hw)
 	igb_reset_mdicnfg_82580(hw);
 
 	if (igb_sgmii_active_82575(hw) && !igb_sgmii_uses_mdio_82575(hw)) {
-		*(void **)&phy->ops.read_reg   = igb_read_phy_reg_sgmii_82575;
-		*(void **)&phy->ops.write_reg  = igb_write_phy_reg_sgmii_82575;
+		phy->ops.read_reg   = igb_read_phy_reg_sgmii_82575;
+		phy->ops.write_reg  = igb_write_phy_reg_sgmii_82575;
 	} else if (hw->mac.type >= e1000_82580) {
-		*(void **)&phy->ops.read_reg   = igb_read_phy_reg_82580;
-		*(void **)&phy->ops.write_reg  = igb_write_phy_reg_82580;
+		phy->ops.read_reg   = igb_read_phy_reg_82580;
+		phy->ops.write_reg  = igb_write_phy_reg_82580;
 	} else {
-		*(void **)&phy->ops.read_reg   = igb_read_phy_reg_igp;
-		*(void **)&phy->ops.write_reg  = igb_write_phy_reg_igp;
+		phy->ops.read_reg   = igb_read_phy_reg_igp;
+		phy->ops.write_reg  = igb_write_phy_reg_igp;
 	}
 
 	/* set lan id */
@@ -330,30 +330,30 @@ static s32 igb_get_invariants_82575(struct e1000_hw *hw)
 	case M88E1112_E_PHY_ID:
 	case M88E1111_I_PHY_ID:
 		phy->type                   = e1000_phy_m88;
-		*(void **)&phy->ops.get_phy_info       = igb_get_phy_info_m88;
+		phy->ops.get_phy_info       = igb_get_phy_info_m88;
 
 		if (phy->id == I347AT4_E_PHY_ID ||
 		    phy->id == M88E1112_E_PHY_ID)
-			*(void **)&phy->ops.get_cable_length = igb_get_cable_length_m88_gen2;
+			phy->ops.get_cable_length = igb_get_cable_length_m88_gen2;
 		else
-			*(void **)&phy->ops.get_cable_length = igb_get_cable_length_m88;
+			phy->ops.get_cable_length = igb_get_cable_length_m88;
 
-		*(void **)&phy->ops.force_speed_duplex = igb_phy_force_speed_duplex_m88;
+		phy->ops.force_speed_duplex = igb_phy_force_speed_duplex_m88;
 		break;
 	case IGP03E1000_E_PHY_ID:
 		phy->type                   = e1000_phy_igp_3;
-		*(void **)&phy->ops.get_phy_info       = igb_get_phy_info_igp;
-		*(void **)&phy->ops.get_cable_length   = igb_get_cable_length_igp_2;
-		*(void **)&phy->ops.force_speed_duplex = igb_phy_force_speed_duplex_igp;
-		*(void **)&phy->ops.set_d0_lplu_state  = igb_set_d0_lplu_state_82575;
-		*(void **)&phy->ops.set_d3_lplu_state  = igb_set_d3_lplu_state;
+		phy->ops.get_phy_info       = igb_get_phy_info_igp;
+		phy->ops.get_cable_length   = igb_get_cable_length_igp_2;
+		phy->ops.force_speed_duplex = igb_phy_force_speed_duplex_igp;
+		phy->ops.set_d0_lplu_state  = igb_set_d0_lplu_state_82575;
+		phy->ops.set_d3_lplu_state  = igb_set_d3_lplu_state;
 		break;
 	case I82580_I_PHY_ID:
 	case I350_I_PHY_ID:
 		phy->type                   = e1000_phy_82580;
-		*(void **)&phy->ops.force_speed_duplex = igb_phy_force_speed_duplex_82580;
-		*(void **)&phy->ops.get_cable_length   = igb_get_cable_length_82580;
-		*(void **)&phy->ops.get_phy_info       = igb_get_phy_info_82580;
+		phy->ops.force_speed_duplex = igb_phy_force_speed_duplex_82580;
+		phy->ops.get_cable_length   = igb_get_cable_length_82580;
+		phy->ops.get_phy_info       = igb_get_phy_info_82580;
 		break;
 	default:
 		return -E1000_ERR_PHY;

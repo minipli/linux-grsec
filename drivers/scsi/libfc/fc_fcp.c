@@ -2268,13 +2268,13 @@ int fc_fcp_init(struct fc_lport *lport)
 	struct fc_fcp_internal *si;
 
 	if (!lport->tt.fcp_cmd_send)
-		*(void **)&lport->tt.fcp_cmd_send = fc_fcp_cmd_send;
+		lport->tt.fcp_cmd_send = fc_fcp_cmd_send;
 
 	if (!lport->tt.fcp_cleanup)
-		*(void **)&lport->tt.fcp_cleanup = fc_fcp_cleanup;
+		lport->tt.fcp_cleanup = fc_fcp_cleanup;
 
 	if (!lport->tt.fcp_abort_io)
-		*(void **)&lport->tt.fcp_abort_io = fc_fcp_abort_io;
+		lport->tt.fcp_abort_io = fc_fcp_abort_io;
 
 	si = kzalloc(sizeof(struct fc_fcp_internal), GFP_KERNEL);
 	if (!si)

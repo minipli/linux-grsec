@@ -316,8 +316,8 @@ static void start_mpc(struct mpoa_client *mpc, struct net_device *dev)
 		pr_info("(%s) not starting\n", dev->name);
 	else {
 		mpc->old_ops = dev->netdev_ops;
-		memcpy((void *)&mpc->new_ops, mpc->old_ops, sizeof(mpc->new_ops));
-		*(void **)&mpc->new_ops.ndo_start_xmit = mpc_send_packet;
+		mpc->new_ops = *mpc->old_ops;
+		mpc->new_ops.ndo_start_xmit = mpc_send_packet;
 		dev->netdev_ops = &mpc->new_ops;
 	}
 }

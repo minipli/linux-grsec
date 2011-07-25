@@ -979,6 +979,7 @@ struct net_device_ops {
 	int			(*ndo_set_features)(struct net_device *dev,
 						    u32 features);
 };
+typedef struct net_device_ops __no_const net_device_ops_no_const;
 
 /*
  *	The DEVICE structure.
@@ -1302,7 +1303,7 @@ struct net_device {
 
 	/* mid-layer private */
 	union {
-		struct ieee802154_mlme_ops	*ml_priv;
+		void				*ml_priv;
 		struct pcpu_lstats __percpu	*lstats; /* loopback stats */
 		struct pcpu_tstats __percpu	*tstats; /* tunnel stats */
 		struct pcpu_dstats __percpu	*dstats; /* dummy stats */

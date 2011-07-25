@@ -63,7 +63,7 @@ struct cryptd_blkcipher_ctx {
 
 struct cryptd_blkcipher_request_ctx {
 	crypto_completion_t complete;
-};
+} __no_const;
 
 struct cryptd_hash_ctx {
 	struct crypto_shash *child;
@@ -80,7 +80,7 @@ struct cryptd_aead_ctx {
 
 struct cryptd_aead_request_ctx {
 	crypto_completion_t complete;
-};
+} __no_const;
 
 static void cryptd_queue_worker(struct work_struct *work);
 
@@ -235,7 +235,7 @@ static int cryptd_blkcipher_enqueue(struct ablkcipher_request *req,
 	struct cryptd_queue *queue;
 
 	queue = cryptd_get_queue(crypto_ablkcipher_tfm(tfm));
-	*(void **)&rctx->complete = req->base.complete;
+	rctx->complete = req->base.complete;
 	req->base.complete = complete;
 
 	return cryptd_enqueue_request(queue, &req->base);
@@ -668,7 +668,7 @@ static int cryptd_aead_enqueue(struct aead_request *req,
 	struct crypto_aead *tfm = crypto_aead_reqtfm(req);
 	struct cryptd_queue *queue = cryptd_get_queue(crypto_aead_tfm(tfm));
 
-	*(void **)&rctx->complete = req->base.complete;
+	rctx->complete = req->base.complete;
 	req->base.complete = complete;
 	return cryptd_enqueue_request(queue, &req->base);
 }

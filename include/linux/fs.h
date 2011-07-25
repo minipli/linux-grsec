@@ -1563,6 +1563,7 @@ struct file_operations {
 	long (*fallocate)(struct file *file, int mode, loff_t offset,
 			  loff_t len);
 };
+typedef struct file_operations __no_const file_operations_no_const;
 
 #define IPERM_FLAG_RCU	0x0001
 

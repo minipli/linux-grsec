@@ -68,28 +68,28 @@ static void ixgbe_init_mac_link_ops_82599(struct ixgbe_hw *hw)
 
 	/* enable the laser control functions for SFP+ fiber */
 	if (mac->ops.get_media_type(hw) == ixgbe_media_type_fiber) {
-		*(void **)&mac->ops.disable_tx_laser =
+		mac->ops.disable_tx_laser =
 		                       &ixgbe_disable_tx_laser_multispeed_fiber;
-		*(void **)&mac->ops.enable_tx_laser =
+		mac->ops.enable_tx_laser =
 		                        &ixgbe_enable_tx_laser_multispeed_fiber;
-		*(void **)&mac->ops.flap_tx_laser = &ixgbe_flap_tx_laser_multispeed_fiber;
+		mac->ops.flap_tx_laser = &ixgbe_flap_tx_laser_multispeed_fiber;
 	} else {
-		*(void **)&mac->ops.disable_tx_laser = NULL;
-		*(void **)&mac->ops.enable_tx_laser = NULL;
-		*(void **)&mac->ops.flap_tx_laser = NULL;
+		mac->ops.disable_tx_laser = NULL;
+		mac->ops.enable_tx_laser = NULL;
+		mac->ops.flap_tx_laser = NULL;
 	}
 
 	if (hw->phy.multispeed_fiber) {
 		/* Set up dual speed SFP+ support */
-		*(void **)&mac->ops.setup_link = &ixgbe_setup_mac_link_multispeed_fiber;
+		mac->ops.setup_link = &ixgbe_setup_mac_link_multispeed_fiber;
 	} else {
 		if ((mac->ops.get_media_type(hw) ==
 		     ixgbe_media_type_backplane) &&
 		    (hw->phy.smart_speed == ixgbe_smart_speed_auto ||
 		     hw->phy.smart_speed == ixgbe_smart_speed_on))
-			*(void **)&mac->ops.setup_link = &ixgbe_setup_mac_link_smartspeed;
+			mac->ops.setup_link = &ixgbe_setup_mac_link_smartspeed;
 		else
-			*(void **)&mac->ops.setup_link = &ixgbe_setup_mac_link_82599;
+			mac->ops.setup_link = &ixgbe_setup_mac_link_82599;
 	}
 }
 
@@ -103,7 +103,7 @@ static s32 ixgbe_setup_sfp_modules_82599(struct ixgbe_hw *hw)
 	if (hw->phy.sfp_type != ixgbe_sfp_type_unknown) {
 		ixgbe_init_mac_link_ops_82599(hw);
 
-		*(void **)&hw->phy.ops.reset = NULL;
+		hw->phy.ops.reset = NULL;
 
 		ret_val = ixgbe_get_sfp_init_sequence_offsets(hw, &list_offset,
 		                                              &data_offset);
@@ -198,20 +198,20 @@ static s32 ixgbe_init_phy_ops_82599(struct ixgbe_hw *hw)
 
 	/* If copper media, overwrite with copper function pointers */
 	if (mac->ops.get_media_type(hw) == ixgbe_media_type_copper) {
-		*(void **)&mac->ops.setup_link = &ixgbe_setup_copper_link_82599;
-		*(void **)&mac->ops.get_link_capabilities =
+		mac->ops.setup_link = &ixgbe_setup_copper_link_82599;
+		mac->ops.get_link_capabilities =
 			&ixgbe_get_copper_link_capabilities_generic;
 	}
 
 	/* Set necessary function pointers based on phy type */
 	switch (hw->phy.type) {
 	case ixgbe_phy_tn:
-		*(void **)&phy->ops.check_link = &ixgbe_check_phy_link_tnx;
-		*(void **)&phy->ops.get_firmware_version =
+		phy->ops.check_link = &ixgbe_check_phy_link_tnx;
+		phy->ops.get_firmware_version =
 		             &ixgbe_get_phy_firmware_version_tnx;
 		break;
 	case ixgbe_phy_aq:
-		*(void **)&phy->ops.get_firmware_version =
+		phy->ops.get_firmware_version =
 			&ixgbe_get_phy_firmware_version_generic;
 		break;
 	default:

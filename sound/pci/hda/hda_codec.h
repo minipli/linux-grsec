@@ -713,6 +713,7 @@ struct hda_codec_ops {
 #endif
 	void (*reboot_notify)(struct hda_codec *codec);
 };
+typedef struct hda_codec_ops __no_const hda_codec_ops_no_const;
 
 /* record for amp information cache */
 struct hda_cache_head {
@@ -801,7 +802,7 @@ struct hda_codec {
 	const char *modelname;	/* model name for preset */
 
 	/* set by patch */
-	struct hda_codec_ops patch_ops;
+	hda_codec_ops_no_const patch_ops;
 
 	/* PCM to create, set by patch_ops.build_pcms callback */
 	unsigned int num_pcms;

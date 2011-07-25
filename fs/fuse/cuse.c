@@ -540,6 +540,7 @@ static int cuse_channel_release(struct inode *inode, struct file *file)
 
 static struct file_operations cuse_channel_fops; /* initialized during init */
 
+
 /**************************************************************************
  * Misc stuff and module initializatiion
  *
