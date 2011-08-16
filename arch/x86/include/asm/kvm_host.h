@@ -419,7 +419,7 @@ struct kvm_arch {
 	unsigned int n_used_mmu_pages;
 	unsigned int n_requested_mmu_pages;
 	unsigned int n_max_mmu_pages;
-	atomic_t invlpg_counter;
+	atomic_unchecked_t invlpg_counter;
 	struct hlist_head mmu_page_hash[KVM_NUM_MMU_PAGES];
 	/*
 	 * Hash table of struct kvm_mmu_page.
@@ -589,7 +589,7 @@ struct kvm_x86_ops {
 	void (*write_tsc_offset)(struct kvm_vcpu *vcpu, u64 offset);
 
 	void (*get_exit_info)(struct kvm_vcpu *vcpu, u64 *info1, u64 *info2);
-	const struct trace_print_flags *exit_reasons_str;
+	const struct trace_print_flags * const exit_reasons_str;
 };
 
 struct kvm_arch_async_pf {

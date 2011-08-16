@@ -43,6 +43,7 @@
 #include <linux/idr.h>
 #include <linux/posix-clock.h>
 #include <linux/posix-timers.h>
+#include <linux/grsecurity.h>
 #include <linux/syscalls.h>
 #include <linux/wait.h>
 #include <linux/workqueue.h>
@@ -129,7 +130,7 @@ static DEFINE_SPINLOCK(idr_lock);
  *	    which we beg off on and pass to do_sys_settimeofday().
  */
 
-static struct k_clock posix_clocks[MAX_CLOCKS];
+static struct k_clock *posix_clocks[MAX_CLOCKS];
 
 /*
  * These ones are defined below.
@@ -271,6 +272,8 @@ static __init int init_posix_timers(void)
 		.timer_get	= common_timer_get,
 		.timer_del	= common_timer_del,
 	};
+
+	pax_track_stack();
 
 	posix_timers_register_clock(CLOCK_REALTIME, &clock_realtime);
 	posix_timers_register_clock(CLOCK_MONOTONIC, &clock_monotonic);
@@ -473,7 +476,7 @@ void posix_timers_register_clock(const clockid_t clock_id,
 		return;
 	}
 
-	posix_clocks[clock_id] = *new_clock;
+	posix_clocks[clock_id] = new_clock;
 }
 EXPORT_SYMBOL_GPL(posix_timers_register_clock);
 
@@ -512,9 +515,9 @@ static struct k_clock *clockid_to_kclock(const clockid_t id)
 		return (id & CLOCKFD_MASK) == CLOCKFD ?
 			&clock_posix_dynamic : &clock_posix_cpu;
 
-	if (id >= MAX_CLOCKS || !posix_clocks[id].clock_getres)
+	if (id >= MAX_CLOCKS || !posix_clocks[id]->clock_getres)
 		return NULL;
-	return &posix_clocks[id];
+	return posix_clocks[id];
 }
 
 static int common_timer_create(struct k_itimer *new_timer)
@@ -955,6 +958,13 @@ SYSCALL_DEFINE2(clock_settime, const clockid_t, which_clock,
 
 	if (copy_from_user(&new_tp, tp, sizeof (*tp)))
 		return -EFAULT;
+
+	/* only the CLOCK_REALTIME clock can be set, all other clocks
+	   have their clock_set fptr set to a nosettime dummy function
+	   CLOCK_REALTIME has a NULL clock_set fptr which causes it to
+	   call common_clock_set, which calls do_sys_settimeofday, which
+	   we hook
+	*/
 
 	return kc->clock_set(which_clock, &new_tp);
 }

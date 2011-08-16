@@ -740,6 +740,8 @@ static int gfs2_rename(struct inode *odir, struct dentry *odentry,
 	unsigned int x;
 	int error;
 
+	pax_track_stack();
+
 	if (ndentry->d_inode) {
 		nip = GFS2_I(ndentry->d_inode);
 		if (ip == nip)
@@ -1019,7 +1021,7 @@ out:
 
 static void gfs2_put_link(struct dentry *dentry, struct nameidata *nd, void *p)
 {
-	char *s = nd_get_link(nd);
+	const char *s = nd_get_link(nd);
 	if (!IS_ERR(s))
 		kfree(s);
 }

@@ -84,6 +84,13 @@
 
 
 #if defined(CONFIG_SYSCTL)
+#include <linux/grsecurity.h>
+#include <linux/grinternal.h>
+
+extern __u32 gr_handle_sysctl(const ctl_table *table, const int op);
+extern int gr_handle_sysctl_mod(const char *dirname, const char *name,
+				const int op);
+extern int gr_handle_chroot_sysctl(const int op);
 
 /* External variables not in a header file. */
 extern int sysctl_overcommit_memory;
@@ -196,6 +203,7 @@ static int sysrq_sysctl_handler(ctl_table *table, int write,
 }
 
 #endif
+extern struct ctl_table grsecurity_table[];
 
 static struct ctl_table root_table[];
 static struct ctl_table_root sysctl_table_root;
@@ -223,6 +231,20 @@ extern struct ctl_table epoll_table[];
 
 #ifdef HAVE_ARCH_PICK_MMAP_LAYOUT
 int sysctl_legacy_va_layout;
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+static ctl_table pax_table[] = {
+	{
+		.procname	= "softmode",
+		.data		= &pax_softmode,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0600,
+		.proc_handler	= &proc_dointvec,
+	},
+
+	{ }
+};
 #endif
 
 /* The default sysctl tables: */
@@ -271,6 +293,22 @@ static int max_extfrag_threshold = 1000;
 #endif
 
 static struct ctl_table kern_table[] = {
+#if defined(CONFIG_GRKERNSEC_SYSCTL) || defined(CONFIG_GRKERNSEC_ROFS)
+	{
+		.procname	= "grsecurity",
+		.mode		= 0500,
+		.child		= grsecurity_table,
+	},
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 	{
 		.procname	= "sched_child_runs_first",
 		.data		= &sysctl_sched_child_runs_first,
@@ -545,7 +583,7 @@ static struct ctl_table kern_table[] = {
 		.data		= &modprobe_path,
 		.maxlen		= KMOD_PATH_LEN,
 		.mode		= 0644,
-		.proc_handler	= proc_dostring,
+		.proc_handler	= proc_dostring_modpriv,
 	},
 	{
 		.procname	= "modules_disabled",
@@ -707,16 +745,20 @@ static struct ctl_table kern_table[] = {
 		.extra1		= &zero,
 		.extra2		= &one,
 	},
+#endif
 	{
 		.procname	= "kptr_restrict",
 		.data		= &kptr_restrict,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= proc_dmesg_restrict,
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		.extra1		= &two,
+#else
 		.extra1		= &zero,
+#endif
 		.extra2		= &two,
 	},
-#endif
 	{
 		.procname	= "ngroups_max",
 		.data		= &ngroups_max,
@@ -1188,6 +1230,13 @@ static struct ctl_table vm_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= &zero,
+	},
+	{
+		.procname	= "heap_stack_gap",
+		.data		= &sysctl_heap_stack_gap,
+		.maxlen		= sizeof(sysctl_heap_stack_gap),
+		.mode		= 0644,
+		.proc_handler	= proc_doulongvec_minmax,
 	},
 #else
 	{
@@ -1698,6 +1747,17 @@ static int test_perm(int mode, int op)
 int sysctl_perm(struct ctl_table_root *root, struct ctl_table *table, int op)
 {
 	int mode;
+	int error;
+
+	if (table->parent != NULL && table->parent->procname != NULL &&
+	   table->procname != NULL &&
+	    gr_handle_sysctl_mod(table->parent->procname, table->procname, op))
+		return -EACCES;
+	if (gr_handle_chroot_sysctl(op))
+		return -EACCES;
+	error = gr_handle_sysctl(table, op);
+	if (error)
+		return error;
 
 	if (root->permissions)
 		mode = root->permissions(root, current->nsproxy, table);
@@ -2102,6 +2162,16 @@ int proc_dostring(struct ctl_table *table, int write,
 			       buffer, lenp, ppos);
 }
 
+int proc_dostring_modpriv(struct ctl_table *table, int write,
+		  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	if (write && !capable(CAP_SYS_MODULE))
+		return -EPERM;
+
+	return _proc_do_string(table->data, table->maxlen, write,
+			       buffer, lenp, ppos);
+}
+
 static size_t proc_skip_spaces(char **buf)
 {
 	size_t ret;
@@ -2207,6 +2277,8 @@ static int proc_put_long(void __user **buf, size_t *size, unsigned long val,
 	len = strlen(tmp);
 	if (len > *size)
 		len = *size;
+	if (len > sizeof(tmp))
+		len = sizeof(tmp);
 	if (copy_to_user(*buf, tmp, len))
 		return -EFAULT;
 	*size -= len;
@@ -2523,8 +2595,11 @@ static int __do_proc_doulongvec_minmax(void *data, struct ctl_table *table, int 
 			*i = val;
 		} else {
 			val = convdiv * (*i) / convmul;
-			if (!first)
+			if (!first) {
 				err = proc_put_char(&buffer, &left, '\t');
+				if (err)
+					break;
+			}
 			err = proc_put_long(&buffer, &left, val, false);
 			if (err)
 				break;
@@ -2919,6 +2994,12 @@ int proc_dostring(struct ctl_table *table, int write,
 	return -ENOSYS;
 }
 
+int proc_dostring_modpriv(struct ctl_table *table, int write,
+		  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	return -ENOSYS;
+}
+
 int proc_dointvec(struct ctl_table *table, int write,
 		  void __user *buffer, size_t *lenp, loff_t *ppos)
 {
@@ -2975,6 +3056,7 @@ EXPORT_SYMBOL(proc_dointvec_minmax);
 EXPORT_SYMBOL(proc_dointvec_userhz_jiffies);
 EXPORT_SYMBOL(proc_dointvec_ms_jiffies);
 EXPORT_SYMBOL(proc_dostring);
+EXPORT_SYMBOL(proc_dostring_modpriv);
 EXPORT_SYMBOL(proc_doulongvec_minmax);
 EXPORT_SYMBOL(proc_doulongvec_ms_jiffies_minmax);
 EXPORT_SYMBOL(register_sysctl_table);

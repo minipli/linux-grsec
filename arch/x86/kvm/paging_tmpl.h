@@ -552,6 +552,8 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr, u32 error_code,
 	unsigned long mmu_seq;
 	bool map_writable;
 
+	pax_track_stack();
+
 	pgprintk("%s: addr %lx err %x\n", __func__, addr, error_code);
 
 	r = mmu_topup_memory_caches(vcpu);
@@ -672,7 +674,7 @@ static void FNAME(invlpg)(struct kvm_vcpu *vcpu, gva_t gva)
 	if (need_flush)
 		kvm_flush_remote_tlbs(vcpu->kvm);
 
-	atomic_inc(&vcpu->kvm->arch.invlpg_counter);
+	atomic_inc_unchecked(&vcpu->kvm->arch.invlpg_counter);
 
 	spin_unlock(&vcpu->kvm->mmu_lock);
 

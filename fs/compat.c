@@ -566,7 +566,7 @@ ssize_t compat_rw_copy_check_uvector(int type,
 		goto out;
 
 	ret = -EINVAL;
-	if (nr_segs > UIO_MAXIOV || nr_segs < 0)
+	if (nr_segs > UIO_MAXIOV)
 		goto out;
 	if (nr_segs > fast_segs) {
 		ret = -ENOMEM;
@@ -848,6 +848,7 @@ struct compat_old_linux_dirent {
 
 struct compat_readdir_callback {
 	struct compat_old_linux_dirent __user *dirent;
+	struct file * file;
 	int result;
 };
 
@@ -865,6 +866,10 @@ static int compat_fillonedir(void *__buf, const char *name, int namlen,
 		buf->result = -EOVERFLOW;
 		return -EOVERFLOW;
 	}
+
+	if (!gr_acl_handle_filldir(buf->file, name, namlen, ino))
+		return 0;
+
 	buf->result++;
 	dirent = buf->dirent;
 	if (!access_ok(VERIFY_WRITE, dirent,
@@ -897,6 +902,7 @@ asmlinkage long compat_sys_old_readdir(unsigned int fd,
 
 	buf.result = 0;
 	buf.dirent = dirent;
+	buf.file = file;
 
 	error = vfs_readdir(file, compat_fillonedir, &buf);
 	if (buf.result)
@@ -917,6 +923,7 @@ struct compat_linux_dirent {
 struct compat_getdents_callback {
 	struct compat_linux_dirent __user *current_dir;
 	struct compat_linux_dirent __user *previous;
+	struct file * file;
 	int count;
 	int error;
 };
@@ -938,6 +945,10 @@ static int compat_filldir(void *__buf, const char *name, int namlen,
 		buf->error = -EOVERFLOW;
 		return -EOVERFLOW;
 	}
+
+	if (!gr_acl_handle_filldir(buf->file, name, namlen, ino))
+		return 0;
+
 	dirent = buf->previous;
 	if (dirent) {
 		if (__put_user(offset, &dirent->d_off))
@@ -985,6 +996,7 @@ asmlinkage long compat_sys_getdents(unsigned int fd,
 	buf.previous = NULL;
 	buf.count = count;
 	buf.error = 0;
+	buf.file = file;
 
 	error = vfs_readdir(file, compat_filldir, &buf);
 	if (error >= 0)
@@ -1006,6 +1018,7 @@ out:
 struct compat_getdents_callback64 {
 	struct linux_dirent64 __user *current_dir;
 	struct linux_dirent64 __user *previous;
+	struct file * file;
 	int count;
 	int error;
 };
@@ -1022,6 +1035,10 @@ static int compat_filldir64(void * __buf, const char * name, int namlen, loff_t 
 	buf->error = -EINVAL;	/* only used if we fail.. */
 	if (reclen > buf->count)
 		return -EINVAL;
+
+	if (!gr_acl_handle_filldir(buf->file, name, namlen, ino))
+		return 0;
+
 	dirent = buf->previous;
 
 	if (dirent) {
@@ -1073,6 +1090,7 @@ asmlinkage long compat_sys_getdents64(unsigned int fd,
 	buf.previous = NULL;
 	buf.count = count;
 	buf.error = 0;
+	buf.file = file;
 
 	error = vfs_readdir(file, compat_filldir64, &buf);
 	if (error >= 0)
@@ -1436,6 +1454,11 @@ int compat_do_execve(char * filename,
 	compat_uptr_t __user *envp,
 	struct pt_regs * regs)
 {
+#ifdef CONFIG_GRKERNSEC
+	struct file *old_exec_file;
+	struct acl_subject_label *old_acl;
+	struct rlimit old_rlim[RLIM_NLIMITS];
+#endif
 	struct linux_binprm *bprm;
 	struct file *file;
 	struct files_struct *displaced;
@@ -1472,6 +1495,19 @@ int compat_do_execve(char * filename,
 	bprm->filename = filename;
 	bprm->interp = filename;
 
+	if (gr_process_user_ban()) {
+		retval = -EPERM;
+		goto out_file;
+	}
+
+	gr_learn_resource(current, RLIMIT_NPROC, atomic_read(&current->cred->user->processes), 1);
+	retval = -EAGAIN;
+	if (gr_handle_nproc())
+		goto out_file;
+	retval = -EACCES;
+	if (!gr_acl_handle_execve(file->f_dentry, file->f_vfsmnt))
+		goto out_file;
+
 	retval = bprm_mm_init(bprm);
 	if (retval)
 		goto out_file;
@@ -1501,9 +1537,40 @@ int compat_do_execve(char * filename,
 	if (retval < 0)
 		goto out;
 
+	if (!gr_tpe_allow(file)) {
+		retval = -EACCES;
+		goto out;
+	}
+
+	if (gr_check_crash_exec(file)) {
+		retval = -EACCES;
+		goto out;
+	}
+
+	gr_log_chroot_exec(file->f_dentry, file->f_vfsmnt);
+
+	gr_handle_exec_args_compat(bprm, argv);
+
+#ifdef CONFIG_GRKERNSEC
+	old_acl = current->acl;
+	memcpy(old_rlim, current->signal->rlim, sizeof(old_rlim));
+	old_exec_file = current->exec_file;
+	get_file(file);
+	current->exec_file = file;
+#endif
+
+	retval = gr_set_proc_label(file->f_dentry, file->f_vfsmnt,
+				   bprm->unsafe & LSM_UNSAFE_SHARE);
+	if (retval < 0)
+		goto out_fail;
+
 	retval = search_binary_handler(bprm, regs);
 	if (retval < 0)
-		goto out;
+		goto out_fail;
+#ifdef CONFIG_GRKERNSEC
+	if (old_exec_file)
+		fput(old_exec_file);
+#endif
 
 	/* execve succeeded */
 	current->fs->in_exec = 0;
@@ -1513,6 +1580,14 @@ int compat_do_execve(char * filename,
 	if (displaced)
 		put_files_struct(displaced);
 	return retval;
+
+out_fail:
+#ifdef CONFIG_GRKERNSEC
+	current->acl = old_acl;
+	memcpy(current->signal->rlim, old_rlim, sizeof(old_rlim));
+	fput(current->exec_file);
+	current->exec_file = old_exec_file;
+#endif
 
 out:
 	if (bprm->mm) {
@@ -1680,6 +1755,8 @@ int compat_core_sys_select(int n, compat_ulong_t __user *inp,
 	int size, max_fds, ret = -EINVAL;
 	struct fdtable *fdt;
 	long stack_fds[SELECT_STACK_ALLOC/sizeof(long)];
+
+	pax_track_stack();
 
 	if (n < 0)
 		goto out_nofds;
