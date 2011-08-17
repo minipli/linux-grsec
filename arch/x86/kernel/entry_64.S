@@ -53,6 +53,7 @@
 #include <asm/paravirt.h>
 #include <asm/ftrace.h>
 #include <asm/percpu.h>
+#include <asm/pgtable.h>
 
 /* Avoid __ASSEMBLER__'ifying <linux/audit.h> just for this.  */
 #include <linux/elf-em.h>
@@ -174,6 +175,257 @@ ENTRY(native_usergs_sysret64)
 ENDPROC(native_usergs_sysret64)
 #endif /* CONFIG_PARAVIRT */
 
+	.macro ljmpq sel, off
+#if defined(CONFIG_MPSC) || defined(CONFIG_MCORE2) || defined (CONFIG_MATOM)
+	.byte 0x48; ljmp *1234f(%rip)
+	.pushsection .rodata
+	.align 16
+	1234: .quad \off; .word \sel
+	.popsection
+#else
+	pushq $\sel
+	pushq $\off
+	lretq
+#endif
+	.endm
+
+	.macro pax_enter_kernel
+#ifdef CONFIG_PAX_KERNEXEC
+	call pax_enter_kernel
+#endif
+	.endm
+
+	.macro pax_exit_kernel
+#ifdef CONFIG_PAX_KERNEXEC
+	call pax_exit_kernel
+#endif
+	.endm
+
+#ifdef CONFIG_PAX_KERNEXEC
+ENTRY(pax_enter_kernel)
+	pushq %rdi
+
+#ifdef CONFIG_PARAVIRT
+	PV_SAVE_REGS(CLBR_RDI)
+#endif
+
+	GET_CR0_INTO_RDI
+	bts $16,%rdi
+	jnc 1f
+	mov %cs,%edi
+	cmp $__KERNEL_CS,%edi
+	jz 3f
+	ljmpq __KERNEL_CS,3f
+1:	ljmpq __KERNEXEC_KERNEL_CS,2f
+2:	SET_RDI_INTO_CR0
+3:
+
+#ifdef CONFIG_PARAVIRT
+	PV_RESTORE_REGS(CLBR_RDI)
+#endif
+
+	popq %rdi
+	retq
+ENDPROC(pax_enter_kernel)
+
+ENTRY(pax_exit_kernel)
+	pushq %rdi
+
+#ifdef CONFIG_PARAVIRT
+	PV_SAVE_REGS(CLBR_RDI)
+#endif
+
+	mov %cs,%rdi
+	cmp $__KERNEXEC_KERNEL_CS,%edi
+	jnz 2f
+	GET_CR0_INTO_RDI
+	btr $16,%rdi
+	ljmpq __KERNEL_CS,1f
+1:	SET_RDI_INTO_CR0
+2:
+
+#ifdef CONFIG_PARAVIRT
+	PV_RESTORE_REGS(CLBR_RDI);
+#endif
+
+	popq %rdi
+	retq
+ENDPROC(pax_exit_kernel)
+#endif
+
+	.macro pax_enter_kernel_user
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	call pax_enter_kernel_user
+#endif
+	.endm
+
+	.macro pax_exit_kernel_user
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	call pax_exit_kernel_user
+#endif
+#ifdef CONFIG_PAX_RANDKSTACK
+	push %rax
+	call pax_randomize_kstack
+	pop %rax
+#endif
+	pax_erase_kstack
+	.endm
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+ENTRY(pax_enter_kernel_user)
+	pushq %rdi
+	pushq %rbx
+
+#ifdef CONFIG_PARAVIRT
+	PV_SAVE_REGS(CLBR_RDI)
+#endif
+
+	GET_CR3_INTO_RDI
+	mov %rdi,%rbx
+	add $__START_KERNEL_map,%rbx
+	sub phys_base(%rip),%rbx
+
+#ifdef CONFIG_PARAVIRT
+	pushq %rdi
+	cmpl $0, pv_info+PARAVIRT_enabled
+	jz 1f
+	i = 0
+	.rept USER_PGD_PTRS
+	mov i*8(%rbx),%rsi
+	mov $0,%sil
+	lea i*8(%rbx),%rdi
+	call PARA_INDIRECT(pv_mmu_ops+PV_MMU_set_pgd)
+	i = i + 1
+	.endr
+	jmp 2f
+1:
+#endif
+
+	i = 0
+	.rept USER_PGD_PTRS
+	movb $0,i*8(%rbx)
+	i = i + 1
+	.endr
+
+#ifdef CONFIG_PARAVIRT
+2:	popq %rdi
+#endif
+	SET_RDI_INTO_CR3
+
+#ifdef CONFIG_PAX_KERNEXEC
+	GET_CR0_INTO_RDI
+	bts $16,%rdi
+	SET_RDI_INTO_CR0
+#endif
+
+#ifdef CONFIG_PARAVIRT
+	PV_RESTORE_REGS(CLBR_RDI)
+#endif
+
+	popq %rbx
+	popq %rdi
+	retq
+ENDPROC(pax_enter_kernel_user)
+
+ENTRY(pax_exit_kernel_user)
+	push %rdi
+
+#ifdef CONFIG_PARAVIRT
+	pushq %rbx
+	PV_SAVE_REGS(CLBR_RDI)
+#endif
+
+#ifdef CONFIG_PAX_KERNEXEC
+	GET_CR0_INTO_RDI
+	btr $16,%rdi
+	SET_RDI_INTO_CR0
+#endif
+
+	GET_CR3_INTO_RDI
+	add $__START_KERNEL_map,%rdi
+	sub phys_base(%rip),%rdi
+
+#ifdef CONFIG_PARAVIRT
+	cmpl $0, pv_info+PARAVIRT_enabled
+	jz 1f
+	mov %rdi,%rbx
+	i = 0
+	.rept USER_PGD_PTRS
+	mov i*8(%rbx),%rsi
+	mov $0x67,%sil
+	lea i*8(%rbx),%rdi
+	call PARA_INDIRECT(pv_mmu_ops+PV_MMU_set_pgd)
+	i = i + 1
+	.endr
+	jmp 2f
+1:
+#endif
+
+	i = 0
+	.rept USER_PGD_PTRS
+	movb $0x67,i*8(%rdi)
+	i = i + 1
+	.endr
+
+#ifdef CONFIG_PARAVIRT
+2:	PV_RESTORE_REGS(CLBR_RDI)
+	popq %rbx
+#endif
+
+	popq %rdi
+	retq
+ENDPROC(pax_exit_kernel_user)
+#endif
+
+.macro pax_erase_kstack
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+	call pax_erase_kstack
+#endif
+.endm
+
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+/*
+ * r10: thread_info
+ * rcx, rdx: can be clobbered
+ */
+ENTRY(pax_erase_kstack)
+	pushq %rdi
+	pushq %rax
+
+	GET_THREAD_INFO(%r10)
+	mov TI_lowest_stack(%r10), %rdi
+	mov $-0xBEEF, %rax
+	std
+
+1:	mov %edi, %ecx
+	and $THREAD_SIZE_asm - 1, %ecx
+	shr $3, %ecx
+	repne scasq
+	jecxz 2f
+
+	cmp $2*8, %ecx
+	jc 2f
+
+	mov $2*8, %ecx
+	repe scasq
+	jecxz 2f
+	jne 1b
+
+2:	cld
+	mov %esp, %ecx
+	sub %edi, %ecx
+	shr $3, %ecx
+	rep stosq
+
+	mov TI_task_thread_sp0(%r10), %rdi
+	sub $256, %rdi
+	mov %rdi, TI_lowest_stack(%r10)
+
+	popq %rax
+	popq %rdi
+	ret
+ENDPROC(pax_erase_kstack)
+#endif
 
 .macro TRACE_IRQS_IRETQ offset=ARGOFFSET
 #ifdef CONFIG_TRACE_IRQFLAGS
@@ -317,7 +569,7 @@ ENTRY(save_args)
 	leaq -ARGOFFSET+16(%rsp),%rdi	/* arg1 for handler */
 	movq_cfi rbp, 8		/* push %rbp */
 	leaq 8(%rsp), %rbp		/* mov %rsp, %ebp */
-	testl $3, CS(%rdi)
+	testb $3, CS(%rdi)
 	je 1f
 	SWAPGS
 	/*
@@ -409,7 +661,7 @@ ENTRY(ret_from_fork)
 
 	RESTORE_REST
 
-	testl $3, CS-ARGOFFSET(%rsp)		# from kernel_thread?
+	testb $3, CS-ARGOFFSET(%rsp)		# from kernel_thread?
 	je   int_ret_from_sys_call
 
 	testl $_TIF_IA32, TI_flags(%rcx)	# 32-bit compat task needs IRET
@@ -455,7 +707,7 @@ END(ret_from_fork)
 ENTRY(system_call)
 	CFI_STARTPROC	simple
 	CFI_SIGNAL_FRAME
-	CFI_DEF_CFA	rsp,KERNEL_STACK_OFFSET
+	CFI_DEF_CFA	rsp,0
 	CFI_REGISTER	rip,rcx
 	/*CFI_REGISTER	rflags,r11*/
 	SWAPGS_UNSAFE_STACK
@@ -468,12 +720,13 @@ ENTRY(system_call_after_swapgs)
 
 	movq	%rsp,PER_CPU_VAR(old_rsp)
 	movq	PER_CPU_VAR(kernel_stack),%rsp
+	pax_enter_kernel_user
 	/*
 	 * No need to follow this irqs off/on section - it's straight
 	 * and short:
 	 */
 	ENABLE_INTERRUPTS(CLBR_NONE)
-	SAVE_ARGS 8,1
+	SAVE_ARGS 8*6,1
 	movq  %rax,ORIG_RAX-ARGOFFSET(%rsp)
 	movq  %rcx,RIP-ARGOFFSET(%rsp)
 	CFI_REL_OFFSET rip,RIP-ARGOFFSET
@@ -502,6 +755,7 @@ sysret_check:
 	andl %edi,%edx
 	jnz  sysret_careful
 	CFI_REMEMBER_STATE
+	pax_exit_kernel_user
 	/*
 	 * sysretq will re-enable interrupts:
 	 */
@@ -562,6 +816,9 @@ auditsys:
 	movq %rax,%rsi			/* 2nd arg: syscall number */
 	movl $AUDIT_ARCH_X86_64,%edi	/* 1st arg: audit arch */
 	call audit_syscall_entry
+
+	pax_erase_kstack
+
 	LOAD_ARGS 0		/* reload call-clobbered registers */
 	jmp system_call_fastpath
 
@@ -592,6 +849,9 @@ tracesys:
 	FIXUP_TOP_OF_STACK %rdi
 	movq %rsp,%rdi
 	call syscall_trace_enter
+
+	pax_erase_kstack
+
 	/*
 	 * Reload arg registers from stack in case ptrace changed them.
 	 * We don't reload %rax because syscall_trace_enter() returned
@@ -613,7 +873,7 @@ tracesys:
 GLOBAL(int_ret_from_sys_call)
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	TRACE_IRQS_OFF
-	testl $3,CS-ARGOFFSET(%rsp)
+	testb $3,CS-ARGOFFSET(%rsp)
 	je retint_restore_args
 	movl $_TIF_ALLWORK_MASK,%edi
 	/* edi:	mask to check */
@@ -800,6 +1060,16 @@ END(interrupt)
 	CFI_ADJUST_CFA_OFFSET 10*8
 	call save_args
 	PARTIAL_FRAME 0
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	testb $3, CS(%rdi)
+	jnz 1f
+	pax_enter_kernel
+	jmp 2f
+1:	pax_enter_kernel_user
+2:
+#else
+	pax_enter_kernel
+#endif
 	call \func
 	.endm
 
@@ -822,7 +1092,7 @@ ret_from_intr:
 	CFI_ADJUST_CFA_OFFSET	-8
 exit_intr:
 	GET_THREAD_INFO(%rcx)
-	testl $3,CS-ARGOFFSET(%rsp)
+	testb $3,CS-ARGOFFSET(%rsp)
 	je retint_kernel
 
 	/* Interrupt came from user space */
@@ -844,12 +1114,14 @@ retint_swapgs:		/* return to user-space */
 	 * The iretq could re-enable interrupts:
 	 */
 	DISABLE_INTERRUPTS(CLBR_ANY)
+	pax_exit_kernel_user
 	TRACE_IRQS_IRETQ
 	SWAPGS
 	jmp restore_args
 
 retint_restore_args:	/* return to kernel space */
 	DISABLE_INTERRUPTS(CLBR_ANY)
+	pax_exit_kernel
 	/*
 	 * The iretq could re-enable interrupts:
 	 */
@@ -1032,6 +1304,16 @@ ENTRY(\sym)
 	CFI_ADJUST_CFA_OFFSET 15*8
 	call error_entry
 	DEFAULT_FRAME 0
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	testb $3, CS(%rsp)
+	jnz 1f
+	pax_enter_kernel
+	jmp 2f
+1:	pax_enter_kernel_user
+2:
+#else
+	pax_enter_kernel
+#endif
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
 	call \do_sym
@@ -1049,6 +1331,16 @@ ENTRY(\sym)
 	subq $15*8, %rsp
 	call save_paranoid
 	TRACE_IRQS_OFF
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	testb $3, CS(%rsp)
+	jnz 1f
+	pax_enter_kernel
+	jmp 2f
+1:	pax_enter_kernel_user
+2:
+#else
+	pax_enter_kernel
+#endif
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
 	call \do_sym
@@ -1066,9 +1358,24 @@ ENTRY(\sym)
 	subq $15*8, %rsp
 	call save_paranoid
 	TRACE_IRQS_OFF
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	testb $3, CS(%rsp)
+	jnz 1f
+	pax_enter_kernel
+	jmp 2f
+1:	pax_enter_kernel_user
+2:
+#else
+	pax_enter_kernel
+#endif
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
-	PER_CPU(init_tss, %rbp)
+#ifdef CONFIG_SMP
+	imul $TSS_size, PER_CPU_VAR(cpu_number), %ebp
+	lea init_tss(%rbp), %rbp
+#else
+	lea init_tss(%rip), %rbp
+#endif
 	subq $EXCEPTION_STKSZ, TSS_ist + (\ist - 1) * 8(%rbp)
 	call \do_sym
 	addq $EXCEPTION_STKSZ, TSS_ist + (\ist - 1) * 8(%rbp)
@@ -1085,6 +1392,16 @@ ENTRY(\sym)
 	CFI_ADJUST_CFA_OFFSET 15*8
 	call error_entry
 	DEFAULT_FRAME 0
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	testb $3, CS(%rsp)
+	jnz 1f
+	pax_enter_kernel
+	jmp 2f
+1:	pax_enter_kernel_user
+2:
+#else
+	pax_enter_kernel
+#endif
 	movq %rsp,%rdi			/* pt_regs pointer */
 	movq ORIG_RAX(%rsp),%rsi	/* get error code */
 	movq $-1,ORIG_RAX(%rsp)		/* no syscall to restart */
@@ -1104,6 +1421,16 @@ ENTRY(\sym)
 	call save_paranoid
 	DEFAULT_FRAME 0
 	TRACE_IRQS_OFF
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	testb $3, CS(%rsp)
+	jnz 1f
+	pax_enter_kernel
+	jmp 2f
+1:	pax_enter_kernel_user
+2:
+#else
+	pax_enter_kernel
+#endif
 	movq %rsp,%rdi			/* pt_regs pointer */
 	movq ORIG_RAX(%rsp),%rsi	/* get error code */
 	movq $-1,ORIG_RAX(%rsp)		/* no syscall to restart */
@@ -1405,14 +1732,27 @@ ENTRY(paranoid_exit)
 	TRACE_IRQS_OFF
 	testl %ebx,%ebx				/* swapgs needed? */
 	jnz paranoid_restore
-	testl $3,CS(%rsp)
+	testb $3,CS(%rsp)
 	jnz   paranoid_userspace
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	pax_exit_kernel
+	TRACE_IRQS_IRETQ 0
+	SWAPGS_UNSAFE_STACK
+	RESTORE_ALL 8
+	jmp irq_return
+#endif
 paranoid_swapgs:
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	pax_exit_kernel_user
+#else
+	pax_exit_kernel
+#endif
 	TRACE_IRQS_IRETQ 0
 	SWAPGS_UNSAFE_STACK
 	RESTORE_ALL 8
 	jmp irq_return
 paranoid_restore:
+	pax_exit_kernel
 	TRACE_IRQS_IRETQ 0
 	RESTORE_ALL 8
 	jmp irq_return
@@ -1470,7 +1810,7 @@ ENTRY(error_entry)
 	movq_cfi r14, R14+8
 	movq_cfi r15, R15+8
 	xorl %ebx,%ebx
-	testl $3,CS+8(%rsp)
+	testb $3,CS+8(%rsp)
 	je error_kernelspace
 error_swapgs:
 	SWAPGS
@@ -1529,6 +1869,16 @@ ENTRY(nmi)
 	CFI_ADJUST_CFA_OFFSET 15*8
 	call save_paranoid
 	DEFAULT_FRAME 0
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	testb $3, CS(%rsp)
+	jnz 1f
+	pax_enter_kernel
+	jmp 2f
+1:	pax_enter_kernel_user
+2:
+#else
+	pax_enter_kernel
+#endif
 	/* paranoidentry do_nmi, 0; without TRACE_IRQS_OFF */
 	movq %rsp,%rdi
 	movq $-1,%rsi
@@ -1539,11 +1889,25 @@ ENTRY(nmi)
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	testl %ebx,%ebx				/* swapgs needed? */
 	jnz nmi_restore
-	testl $3,CS(%rsp)
+	testb $3,CS(%rsp)
 	jnz nmi_userspace
-nmi_swapgs:
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	pax_exit_kernel
 	SWAPGS_UNSAFE_STACK
+	RESTORE_ALL 8
+	jmp irq_return
+#endif
+nmi_swapgs:
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	pax_exit_kernel_user
+#else
+	pax_exit_kernel
+#endif
+	SWAPGS_UNSAFE_STACK
+	RESTORE_ALL 8
+	jmp irq_return
 nmi_restore:
+	pax_exit_kernel
 	RESTORE_ALL 8
 	jmp irq_return
 nmi_userspace:

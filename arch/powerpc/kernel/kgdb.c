@@ -126,7 +126,7 @@ static int kgdb_handle_breakpoint(struct pt_regs *regs)
 	if (kgdb_handle_exception(0, SIGTRAP, 0, regs) != 0)
 		return 0;
 
-	if (*(u32 *) (regs->nip) == *(u32 *) (&arch_kgdb_ops.gdb_bpt_instr))
+	if (*(u32 *) (regs->nip) == *(const u32 *) (&arch_kgdb_ops.gdb_bpt_instr))
 		regs->nip += 4;
 
 	return 1;
@@ -353,7 +353,7 @@ int kgdb_arch_handle_exception(int vector, int signo, int err_code,
 /*
  * Global data
  */
-struct kgdb_arch arch_kgdb_ops = {
+const struct kgdb_arch arch_kgdb_ops = {
 	.gdb_bpt_instr = {0x7d, 0x82, 0x10, 0x08},
 };
 
