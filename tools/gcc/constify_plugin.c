@@ -5,8 +5,8 @@
  * This gcc plugin constifies all structures which contain only function pointers and const fields.
  *
  * Usage:
- * $ gcc -I`gcc -print-file-name=plugin`/include -fPIC -shared -O2 -o const_plugin.so const_plugin.c
- * $ gcc -fplugin=const_plugin.so test.c  -O2
+ * $ gcc -I`gcc -print-file-name=plugin`/include -fPIC -shared -O2 -o constify_plugin.so constify_plugin.c
+ * $ gcc -fplugin=constify_plugin.so test.c  -O2
  */
 
 #include "gcc-plugin.h"
@@ -26,12 +26,72 @@
 int plugin_is_GPL_compatible;
 
 static struct plugin_info const_plugin_info = {
-	.version	= "20110706",
+	.version	= "20110817",
 	.help		= "no-constify\tturn off constification\n",
 };
 
+static bool walk_struct(tree node);
+
+static void deconstify_node(tree node)
+{
+	tree field;
+
+	for (field = TYPE_FIELDS(node); field; field = TREE_CHAIN(field)) {
+		enum tree_code code = TREE_CODE(TREE_TYPE(field));
+		if (code == RECORD_TYPE || code == UNION_TYPE)
+			deconstify_node(TREE_TYPE(field));
+		TREE_READONLY(field) = 0;
+		TREE_READONLY(TREE_TYPE(field)) = 0;
+	}
+}
+
 static tree handle_no_const_attribute(tree *node, tree name, tree args, int flags, bool *no_add_attrs)
 {
+	tree type;
+
+	*no_add_attrs = true;
+	if (TREE_CODE(*node) == FUNCTION_DECL) {
+		error("%qE attribute does not apply to functions", name);
+		return NULL_TREE;
+	}
+
+	if (TREE_CODE(*node) == VAR_DECL) {
+		error("%qE attribute does not apply to variables", name);
+		return NULL_TREE;
+	}
+
+	if (!DECL_P(*node)) {
+		if (TREE_CODE(*node) == RECORD_TYPE || TREE_CODE(*node) == UNION_TYPE)
+			*no_add_attrs = false;
+		else
+			error("%qE attribute applies to struct and union types only", name);
+		return NULL_TREE;
+	}
+
+	type = TREE_TYPE(*node);
+
+	if (TREE_CODE(type) != RECORD_TYPE && TREE_CODE(type) != UNION_TYPE) {
+		error("%qE attribute applies to struct and union types only", name);
+		return NULL_TREE;
+	}
+
+	if (lookup_attribute("no_const", TYPE_ATTRIBUTES(type))) {
+		error("%qE attribute is already applied to the type", name);
+		return NULL_TREE;
+	}
+
+	if (TREE_CODE(*node) == TYPE_DECL && !TREE_READONLY(type)) {
+		error("%qE attribute used on type that is not constified", name);
+		return NULL_TREE;
+	}
+
+	if (TREE_CODE(*node) == TYPE_DECL) {
+		TREE_TYPE(*node) = build_qualified_type(type, TYPE_QUALS(type) & ~TYPE_QUAL_CONST);
+		TYPE_FIELDS(TREE_TYPE(*node)) = copy_list(TYPE_FIELDS(TREE_TYPE(*node)));
+		deconstify_node(TREE_TYPE(*node));
+		return NULL_TREE;
+	}
+
 	return NULL_TREE;
 }
 
@@ -49,23 +109,6 @@ static void register_attributes(void *event_data, void *data)
 {
 	register_attribute(&no_const_attr);
 }
-
-/*
-static void printnode(char *prefix, tree node)
-{
-	enum tree_code code;
-	enum tree_code_class tclass;
-
-	tclass = TREE_CODE_CLASS(TREE_CODE (node));
-
-	code = TREE_CODE(node);
-	fprintf(stderr, "\n%s node: %p, code: %d type: %s\n", prefix, node, code, tree_code_name[(int)code]);
-	if (DECL_CONTEXT(node) != NULL_TREE && TYPE_NAME(DECL_CONTEXT(node)) != NULL_TREE)
-		fprintf(stderr, "struct name: %s\n", IDENTIFIER_POINTER(TYPE_NAME(DECL_CONTEXT(node))));
-	if (tclass == tcc_declaration && DECL_NAME(node) != NULL_TREE)
-		fprintf(stderr, "field name: %s\n", IDENTIFIER_POINTER(DECL_NAME(node)));
-}
-*/
 
 static void constify_node(tree node)
 {
@@ -86,10 +129,17 @@ static bool walk_struct(tree node)
 {
 	tree field;
 
+	if (lookup_attribute("no_const", TYPE_ATTRIBUTES(node)))
+		return false;
+
+	if (TYPE_FIELDS(node) == NULL_TREE)
+		return false;
+
 	for (field = TYPE_FIELDS(node); field; field = TREE_CHAIN(field)) {
-		enum tree_code code = TREE_CODE(TREE_TYPE(field));
-		if (code == RECORD_TYPE) {
-			if (!(walk_struct(TREE_TYPE(field))))
+		tree type = TREE_TYPE(field);
+		enum tree_code code = TREE_CODE(type);
+		if (code == RECORD_TYPE || code == UNION_TYPE) {
+			if (!(walk_struct(type)))
 				return false;
 		} else if (is_fptr(field) == false && !TREE_READONLY(field))
 			return false;
@@ -104,17 +154,62 @@ static void finish_type(void *event_data, void *data)
 	if (node == NULL_TREE)
 		return;
 
-	if (lookup_attribute("no_const", TYPE_ATTRIBUTES(node)))
-		return;
-
 	if (TREE_READONLY(node))
-		return;
-
-	if (TYPE_FIELDS(node) == NULL_TREE)
 		return;
 
 	if (walk_struct(node))
 		constify_node(node);
+}
+
+static unsigned int check_local_variables(void);
+
+struct gimple_opt_pass pass_local_variable = {
+	{
+		.type			= GIMPLE_PASS,
+		.name			= "check_local_variables",
+		.gate			= NULL,
+		.execute		= check_local_variables,
+		.sub			= NULL,
+		.next			= NULL,
+		.static_pass_number	= 0,
+		.tv_id			= TV_NONE,
+		.properties_required	= 0,
+		.properties_provided	= 0,
+		.properties_destroyed	= 0,
+		.todo_flags_start	= 0,
+		.todo_flags_finish	= 0
+	}
+};
+
+static unsigned int check_local_variables(void)
+{
+	tree var;
+	referenced_var_iterator rvi;
+
+	FOR_EACH_REFERENCED_VAR(var, rvi) {
+		tree type = TREE_TYPE(var);
+
+		if (!DECL_P(var) || TREE_STATIC(var) || DECL_EXTERNAL(var))
+			continue;
+
+		if (TREE_CODE(type) != RECORD_TYPE && TREE_CODE(type) != UNION_TYPE)
+			continue;
+
+		if (!TREE_READONLY(type))
+			continue;
+
+//		if (lookup_attribute("no_const", DECL_ATTRIBUTES(var)))
+//			continue;
+
+//		if (lookup_attribute("no_const", TYPE_ATTRIBUTES(type)))
+//			continue;
+
+		if (walk_struct(type)) {
+			error("constified variable %qE cannot be local", var);
+			return 1;
+		}
+	}
+	return 0;
 }
 
 int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version *version)
@@ -124,6 +219,13 @@ int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version 
 	const struct plugin_argument * const argv = plugin_info->argv;
 	int i;
 	bool constify = true;
+
+	struct register_pass_info local_variable_pass_info = {
+		.pass				= &pass_local_variable.pass,
+		.reference_pass_name		= "*referenced_vars",
+		.ref_pass_instance_number	= 0,
+		.pos_op				= PASS_POS_INSERT_AFTER
+	};
 
 	if (!plugin_default_version_check(version, &gcc_version)) {
 		error(G_("incompatible gcc/plugin versions"));
@@ -139,8 +241,10 @@ int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version 
 	}
 
 	register_callback(plugin_name, PLUGIN_INFO, NULL, &const_plugin_info);
-	if (constify)
+	if (constify) {
 		register_callback(plugin_name, PLUGIN_FINISH_TYPE, finish_type, NULL);
+		register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &local_variable_pass_info);
+	}
 	register_callback(plugin_name, PLUGIN_ATTRIBUTES, register_attributes, NULL);
 
 	return 0;

@@ -648,6 +648,11 @@ static inline void set_pgd(pgd_t *pgdp, pgd_t pgd)
 			    val);
 }
 
+static inline void set_pgd_batched(pgd_t *pgdp, pgd_t pgd)
+{
+	set_pgd(pgdp, pgd);
+}
+
 static inline void pgd_clear(pgd_t *pgdp)
 {
 	set_pgd(pgdp, __pgd(0));
