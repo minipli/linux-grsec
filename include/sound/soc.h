@@ -624,7 +624,7 @@ struct snd_soc_platform_driver {
 		struct snd_soc_dai *);
 
 	/* platform stream ops */
-	struct snd_pcm_ops *ops;
+	struct snd_pcm_ops * const ops;
 };
 
 struct snd_soc_platform {

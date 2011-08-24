@@ -1535,7 +1535,7 @@ struct block_device_operations;
  * the big kernel lock held in all filesystems.
  */
 struct file_operations {
-	struct module *owner;
+	struct module * const owner;
 	loff_t (*llseek) (struct file *, loff_t, int);
 	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
 	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
@@ -1563,6 +1563,7 @@ struct file_operations {
 	long (*fallocate)(struct file *file, int mode, loff_t offset,
 			  loff_t len);
 };
+typedef struct file_operations __no_const file_operations_no_const;
 
 #define IPERM_FLAG_RCU	0x0001
 

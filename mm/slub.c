@@ -2183,6 +2183,8 @@ void kmem_cache_free(struct kmem_cache *s, void *x)
 
 	page = virt_to_head_page(x);
 
+	BUG_ON(!PageSlab(page));
+
 	slab_free(s, page, x, _RET_IP_);
 
 	trace_kmem_cache_free(_RET_IP_, x);
@@ -2216,7 +2218,7 @@ static int slub_min_objects;
  * Merge control. If this is set then no merging of slab caches will occur.
  * (Could be removed. This was introduced to pacify the merge skeptics.)
  */
-static int slub_nomerge;
+static int slub_nomerge = 1;
 
 /*
  * Calculate the order of allocation given an slab object size.
@@ -2644,7 +2646,7 @@ static int kmem_cache_open(struct kmem_cache *s,
 	 * list to avoid pounding the page allocator excessively.
 	 */
 	set_min_partial(s, ilog2(s->size));
-	s->refcount = 1;
+	atomic_set(&s->refcount, 1);
 #ifdef CONFIG_NUMA
 	s->remote_node_defrag_ratio = 1000;
 #endif
@@ -2750,8 +2752,7 @@ static inline int kmem_cache_close(struct kmem_cache *s)
 void kmem_cache_destroy(struct kmem_cache *s)
 {
 	down_write(&slub_lock);
-	s->refcount--;
-	if (!s->refcount) {
+	if (atomic_dec_and_test(&s->refcount)) {
 		list_del(&s->list);
 		if (kmem_cache_close(s)) {
 			printk(KERN_ERR "SLUB %s: %s called for cache that "
@@ -2960,6 +2961,46 @@ void *__kmalloc_node(size_t size, gfp_t flags, int node)
 }
 EXPORT_SYMBOL(__kmalloc_node);
 #endif
+
+void check_object_size(const void *ptr, unsigned long n, bool to)
+{
+
+#ifdef CONFIG_PAX_USERCOPY
+	struct page *page;
+	struct kmem_cache *s = NULL;
+	unsigned long offset;
+
+	if (!n)
+		return;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		goto report;
+
+	if (!virt_addr_valid(ptr))
+		return;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page)) {
+		if (object_is_on_stack(ptr, n) == -1)
+			goto report;
+		return;
+	}
+
+	s = page->slab;
+	if (!(s->flags & SLAB_USERCOPY))
+		goto report;
+
+	offset = (ptr - page_address(page)) % s->size;
+	if (offset <= s->objsize && n <= s->objsize - offset)
+		return;
+
+report:
+	pax_report_usercopy(ptr, n, to, s ? s->name : NULL);
+#endif
+
+}
+EXPORT_SYMBOL(check_object_size);
 
 size_t ksize(const void *object)
 {
@@ -3205,7 +3246,7 @@ static void __init kmem_cache_bootstrap_fixup(struct kmem_cache *s)
 	int node;
 
 	list_add(&s->list, &slab_caches);
-	s->refcount = -1;
+	atomic_set(&s->refcount, -1);
 
 	for_each_node_state(node, N_NORMAL_MEMORY) {
 		struct kmem_cache_node *n = get_node(s, node);
@@ -3322,17 +3363,17 @@ void __init kmem_cache_init(void)
 
 	/* Caches that are not of the two-to-the-power-of size */
 	if (KMALLOC_MIN_SIZE <= 32) {
-		kmalloc_caches[1] = create_kmalloc_cache("kmalloc-96", 96, 0);
+		kmalloc_caches[1] = create_kmalloc_cache("kmalloc-96", 96, SLAB_USERCOPY);
 		caches++;
 	}
 
 	if (KMALLOC_MIN_SIZE <= 64) {
-		kmalloc_caches[2] = create_kmalloc_cache("kmalloc-192", 192, 0);
+		kmalloc_caches[2] = create_kmalloc_cache("kmalloc-192", 192, SLAB_USERCOPY);
 		caches++;
 	}
 
 	for (i = KMALLOC_SHIFT_LOW; i < SLUB_PAGE_SHIFT; i++) {
-		kmalloc_caches[i] = create_kmalloc_cache("kmalloc", 1 << i, 0);
+		kmalloc_caches[i] = create_kmalloc_cache("kmalloc", 1 << i, SLAB_USERCOPY);
 		caches++;
 	}
 
@@ -3400,7 +3441,7 @@ static int slab_unmergeable(struct kmem_cache *s)
 	/*
 	 * We may have set a slab to be unmergeable during bootstrap.
 	 */
-	if (s->refcount < 0)
+	if (atomic_read(&s->refcount) < 0)
 		return 1;
 
 	return 0;
@@ -3459,7 +3500,7 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 	down_write(&slub_lock);
 	s = find_mergeable(size, align, flags, name, ctor);
 	if (s) {
-		s->refcount++;
+		atomic_inc(&s->refcount);
 		/*
 		 * Adjust the object sizes so that we clear
 		 * the complete object on kzalloc.
@@ -3468,7 +3509,7 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 		s->inuse = max_t(int, s->inuse, ALIGN(size, sizeof(void *)));
 
 		if (sysfs_slab_alias(s, name)) {
-			s->refcount--;
+			atomic_dec(&s->refcount);
 			goto err;
 		}
 		up_write(&slub_lock);
@@ -4201,7 +4242,7 @@ SLAB_ATTR_RO(ctor);
 
 static ssize_t aliases_show(struct kmem_cache *s, char *buf)
 {
-	return sprintf(buf, "%d\n", s->refcount - 1);
+	return sprintf(buf, "%d\n", atomic_read(&s->refcount) - 1);
 }
 SLAB_ATTR_RO(aliases);
 
