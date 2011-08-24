@@ -226,7 +226,7 @@ static int ceph_readdir(struct file *filp, void *dirent, filldir_t filldir)
 	struct ceph_fs_client *fsc = ceph_inode_to_client(inode);
 	struct ceph_mds_client *mdsc = fsc->mdsc;
 	unsigned frag = fpos_frag(filp->f_pos);
-	int off = fpos_off(filp->f_pos);
+	unsigned int off = fpos_off(filp->f_pos);
 	int err;
 	u32 ftype;
 	struct ceph_mds_reply_info_parsed *rinfo;

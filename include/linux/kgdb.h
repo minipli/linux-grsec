@@ -53,7 +53,7 @@ extern int kgdb_connected;
 extern int kgdb_io_module_registered;
 
 extern atomic_t			kgdb_setting_breakpoint;
-extern atomic_t			kgdb_cpu_doing_single_step;
+extern atomic_unchecked_t	kgdb_cpu_doing_single_step;
 
 extern struct task_struct	*kgdb_usethread;
 extern struct task_struct	*kgdb_contthread;
@@ -241,8 +241,8 @@ extern void kgdb_arch_late(void);
  * hardware debug registers.
  */
 struct kgdb_arch {
-	unsigned char		gdb_bpt_instr[BREAK_INSTR_SIZE];
-	unsigned long		flags;
+	const unsigned char	gdb_bpt_instr[BREAK_INSTR_SIZE];
+	const unsigned long	flags;
 
 	int	(*set_breakpoint)(unsigned long, char *);
 	int	(*remove_breakpoint)(unsigned long, char *);
@@ -268,14 +268,14 @@ struct kgdb_arch {
  * not a console
  */
 struct kgdb_io {
-	const char		*name;
+	const char * const	name;
 	int			(*read_char) (void);
 	void			(*write_char) (u8);
 	void			(*flush) (void);
 	int			(*init) (void);
 	void			(*pre_exception) (void);
 	void			(*post_exception) (void);
-	int			is_console;
+	const int		is_console;
 };
 
 extern struct kgdb_arch		arch_kgdb_ops;

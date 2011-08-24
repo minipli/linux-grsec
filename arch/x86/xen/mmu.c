@@ -1679,6 +1679,8 @@ pgd_t * __init xen_setup_kernel_pagetable(pgd_t *pgd,
 	convert_pfn_mfn(init_level4_pgt);
 	convert_pfn_mfn(level3_ident_pgt);
 	convert_pfn_mfn(level3_kernel_pgt);
+	convert_pfn_mfn(level3_vmalloc_pgt);
+	convert_pfn_mfn(level3_vmemmap_pgt);
 
 	l3 = m2v(pgd[pgd_index(__START_KERNEL_map)].pgd);
 	l2 = m2v(l3[pud_index(__START_KERNEL_map)].pud);
@@ -1697,7 +1699,10 @@ pgd_t * __init xen_setup_kernel_pagetable(pgd_t *pgd,
 	set_page_prot(init_level4_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_ident_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_kernel_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level3_vmalloc_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level3_vmemmap_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_user_vsyscall, PAGE_KERNEL_RO);
+	set_page_prot(level2_vmemmap_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level2_kernel_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level2_fixmap_pgt, PAGE_KERNEL_RO);
 

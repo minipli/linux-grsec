@@ -46,6 +46,7 @@
 #include <asm/ipi.h>
 #include <asm/mce.h>
 #include <asm/msr.h>
+#include <asm/local.h>
 
 #include "mce-internal.h"
 
@@ -208,7 +209,7 @@ static void print_mce(struct mce *m)
 			!(m->mcgstatus & MCG_STATUS_EIPV) ? " !INEXACT!" : "",
 				m->cs, m->ip);
 
-		if (m->cs == __KERNEL_CS)
+		if (m->cs == __KERNEL_CS || m->cs == __KERNEXEC_KERNEL_CS)
 			print_symbol("{%s}", m->ip);
 		pr_cont("\n");
 	}
@@ -236,10 +237,10 @@ static void print_mce(struct mce *m)
 
 #define PANIC_TIMEOUT 5 /* 5 seconds */
 
-static atomic_t mce_paniced;
+static atomic_unchecked_t mce_paniced;
 
 static int fake_panic;
-static atomic_t mce_fake_paniced;
+static atomic_unchecked_t mce_fake_paniced;
 
 /* Panic in progress. Enable interrupts and wait for final IPI */
 static void wait_for_panic(void)
@@ -263,7 +264,7 @@ static void mce_panic(char *msg, struct mce *final, char *exp)
 		/*
 		 * Make sure only one CPU runs in machine check panic
 		 */
-		if (atomic_inc_return(&mce_paniced) > 1)
+		if (atomic_inc_return_unchecked(&mce_paniced) > 1)
 			wait_for_panic();
 		barrier();
 
@@ -271,7 +272,7 @@ static void mce_panic(char *msg, struct mce *final, char *exp)
 		console_verbose();
 	} else {
 		/* Don't log too much for fake panic */
-		if (atomic_inc_return(&mce_fake_paniced) > 1)
+		if (atomic_inc_return_unchecked(&mce_fake_paniced) > 1)
 			return;
 	}
 	/* First print corrected ones that are still unlogged */
@@ -638,7 +639,7 @@ static int mce_timed_out(u64 *t)
 	 * might have been modified by someone else.
 	 */
 	rmb();
-	if (atomic_read(&mce_paniced))
+	if (atomic_read_unchecked(&mce_paniced))
 		wait_for_panic();
 	if (!monarch_timeout)
 		goto out;
@@ -1452,14 +1453,14 @@ void __cpuinit mcheck_cpu_init(struct cpuinfo_x86 *c)
  */
 
 static DEFINE_SPINLOCK(mce_state_lock);
-static int		open_count;		/* #times opened */
+static local_t		open_count;		/* #times opened */
 static int		open_exclu;		/* already open exclusive? */
 
 static int mce_open(struct inode *inode, struct file *file)
 {
 	spin_lock(&mce_state_lock);
 
-	if (open_exclu || (open_count && (file->f_flags & O_EXCL))) {
+	if (open_exclu || (local_read(&open_count) && (file->f_flags & O_EXCL))) {
 		spin_unlock(&mce_state_lock);
 
 		return -EBUSY;
@@ -1467,7 +1468,7 @@ static int mce_open(struct inode *inode, struct file *file)
 
 	if (file->f_flags & O_EXCL)
 		open_exclu = 1;
-	open_count++;
+	local_inc(&open_count);
 
 	spin_unlock(&mce_state_lock);
 
@@ -1478,7 +1479,7 @@ static int mce_release(struct inode *inode, struct file *file)
 {
 	spin_lock(&mce_state_lock);
 
-	open_count--;
+	local_dec(&open_count);
 	open_exclu = 0;
 
 	spin_unlock(&mce_state_lock);
@@ -2163,7 +2164,7 @@ struct dentry *mce_get_debugfs_dir(void)
 static void mce_reset(void)
 {
 	cpu_missing = 0;
-	atomic_set(&mce_fake_paniced, 0);
+	atomic_set_unchecked(&mce_fake_paniced, 0);
 	atomic_set(&mce_executing, 0);
 	atomic_set(&mce_callin, 0);
 	atomic_set(&global_nwo, 0);
