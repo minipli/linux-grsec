@@ -157,6 +157,9 @@ static void finish_type(void *event_data, void *data)
 	if (TREE_READONLY(node))
 		return;
 
+	if (TYPE_FIELDS(node) == NULL_TREE)
+		return;
+
 	if (walk_struct(node))
 		constify_node(node);
 }
