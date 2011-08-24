@@ -1856,7 +1856,7 @@ static int pohmelfs_fill_super(struct super_block *sb, void *data, int silent)
 	mutex_init(&psb->mcache_lock);
 	psb->mcache_root = RB_ROOT;
 	psb->mcache_timeout = msecs_to_jiffies(5000);
-	atomic_long_set(&psb->mcache_gen, 0);
+	atomic_long_set_unchecked(&psb->mcache_gen, 0);
 
 	psb->trans_max_pages = 100;
 
@@ -1871,7 +1871,7 @@ static int pohmelfs_fill_super(struct super_block *sb, void *data, int silent)
 	INIT_LIST_HEAD(&psb->crypto_ready_list);
 	INIT_LIST_HEAD(&psb->crypto_active_list);
 
-	atomic_set(&psb->trans_gen, 1);
+	atomic_set_unchecked(&psb->trans_gen, 1);
 	atomic_long_set(&psb->total_inodes, 0);
 
 	mutex_init(&psb->state_lock);

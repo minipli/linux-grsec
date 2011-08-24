@@ -188,7 +188,7 @@ i915_gem_object_set_to_gpu_domain(struct drm_i915_gem_object *obj,
 		i915_gem_clflush_object(obj);
 
 	if (obj->base.pending_write_domain)
-		cd->flips |= atomic_read(&obj->pending_flip);
+		cd->flips |= atomic_read_unchecked(&obj->pending_flip);
 
 	/* The actual obj->write_domain will be updated with
 	 * pending_write_domain after we emit the accumulated flush for all
