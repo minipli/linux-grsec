@@ -660,7 +660,14 @@ static inline void set_pgd(pgd_t *pgdp, pgd_t pgd)
 
 static inline void set_pgd_batched(pgd_t *pgdp, pgd_t pgd)
 {
-	set_pgd(pgdp, pgd);
+	pgdval_t val = native_pgd_val(pgd);
+
+	if (sizeof(pgdval_t) > sizeof(long))
+		PVOP_VCALL3(pv_mmu_ops.set_pgd_batched, pgdp,
+			    val, (u64)val >> 32);
+	else
+		PVOP_VCALL2(pv_mmu_ops.set_pgd_batched, pgdp,
+			    val);
 }
 
 static inline void pgd_clear(pgd_t *pgdp)
