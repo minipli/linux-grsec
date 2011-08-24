@@ -1442,7 +1442,7 @@ struct fiemap_extent_info {
 	unsigned int fi_flags;		/* Flags as passed from user */
 	unsigned int fi_extents_mapped;	/* Number of mapped extents */
 	unsigned int fi_extents_max;	/* Size of fiemap_extent array */
-	struct fiemap_extent *fi_extents_start; /* Start of fiemap_extent
+	struct fiemap_extent __user *fi_extents_start; /* Start of fiemap_extent
 						 * array */
 };
 int fiemap_fill_next_extent(struct fiemap_extent_info *info, u64 logical,
@@ -1486,7 +1486,7 @@ struct block_device_operations;
  * can be called without the big kernel lock held in all filesystems.
  */
 struct file_operations {
-	struct module *owner;
+	struct module * const owner;
 	loff_t (*llseek) (struct file *, loff_t, int);
 	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
 	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);

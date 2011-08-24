@@ -1068,7 +1068,7 @@ static int __udp_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 		if (rc == -ENOMEM) {
 			UDP_INC_STATS_BH(sock_net(sk), UDP_MIB_RCVBUFERRORS,
 					 is_udplite);
-			atomic_inc(&sk->sk_drops);
+			atomic_inc_unchecked(&sk->sk_drops);
 		}
 		goto drop;
 	}
@@ -1719,14 +1719,14 @@ int udp_proc_register(struct net *net, struct udp_seq_afinfo *afinfo)
 	struct proc_dir_entry *p;
 	int rc = 0;
 
-	afinfo->seq_fops.open		= udp_seq_open;
-	afinfo->seq_fops.read		= seq_read;
-	afinfo->seq_fops.llseek		= seq_lseek;
-	afinfo->seq_fops.release	= seq_release_net;
+	*(void **)&afinfo->seq_fops.open	= udp_seq_open;
+	*(void **)&afinfo->seq_fops.read	= seq_read;
+	*(void **)&afinfo->seq_fops.llseek	= seq_lseek;
+	*(void **)&afinfo->seq_fops.release	= seq_release_net;
 
-	afinfo->seq_ops.start		= udp_seq_start;
-	afinfo->seq_ops.next		= udp_seq_next;
-	afinfo->seq_ops.stop		= udp_seq_stop;
+	*(void **)&afinfo->seq_ops.start	= udp_seq_start;
+	*(void **)&afinfo->seq_ops.next		= udp_seq_next;
+	*(void **)&afinfo->seq_ops.stop		= udp_seq_stop;
 
 	p = proc_create_data(afinfo->name, S_IRUGO, net->proc_net,
 			     &afinfo->seq_fops, afinfo);
@@ -1759,7 +1759,7 @@ static void udp4_format_sock(struct sock *sp, struct seq_file *f,
 		sk_rmem_alloc_get(sp),
 		0, 0L, 0, sock_i_uid(sp), 0, sock_i_ino(sp),
 		atomic_read(&sp->sk_refcnt), sp,
-		atomic_read(&sp->sk_drops), len);
+		atomic_read_unchecked(&sp->sk_drops), len);
 }
 
 int udp4_seq_show(struct seq_file *seq, void *v)

@@ -124,7 +124,7 @@ struct neighbour
 
 struct neigh_ops
 {
-	int			family;
+	const int		family;
 	void			(*solicit)(struct neighbour *, struct sk_buff*);
 	void			(*error_report)(struct neighbour *, struct sk_buff*);
 	int			(*output)(struct sk_buff*);

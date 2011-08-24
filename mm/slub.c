@@ -1893,6 +1893,8 @@ void kmem_cache_free(struct kmem_cache *s, void *x)
 
 	page = virt_to_head_page(x);
 
+	BUG_ON(!PageSlab(page));
+
 	slab_free(s, page, x, _RET_IP_);
 
 	trace_kmem_cache_free(_RET_IP_, x);
@@ -1937,7 +1939,7 @@ static int slub_min_objects;
  * Merge control. If this is set then no merging of slab caches will occur.
  * (Could be removed. This was introduced to pacify the merge skeptics.)
  */
-static int slub_nomerge;
+static int slub_nomerge = 1;
 
 /*
  * Calculate the order of allocation given an slab object size.
@@ -2493,7 +2495,7 @@ static int kmem_cache_open(struct kmem_cache *s, gfp_t gfpflags,
 	 * list to avoid pounding the page allocator excessively.
 	 */
 	set_min_partial(s, ilog2(s->size));
-	s->refcount = 1;
+	atomic_set(&s->refcount, 1);
 #ifdef CONFIG_NUMA
 	s->remote_node_defrag_ratio = 1000;
 #endif
@@ -2630,8 +2632,7 @@ static inline int kmem_cache_close(struct kmem_cache *s)
 void kmem_cache_destroy(struct kmem_cache *s)
 {
 	down_write(&slub_lock);
-	s->refcount--;
-	if (!s->refcount) {
+	if (atomic_dec_and_test(&s->refcount)) {
 		list_del(&s->list);
 		up_write(&slub_lock);
 		if (kmem_cache_close(s)) {
@@ -2691,12 +2692,10 @@ static int __init setup_slub_nomerge(char *str)
 __setup("slub_nomerge", setup_slub_nomerge);
 
 static struct kmem_cache *create_kmalloc_cache(struct kmem_cache *s,
-		const char *name, int size, gfp_t gfp_flags)
+		const char *name, int size, gfp_t gfp_flags, unsigned int flags)
 {
-	unsigned int flags = 0;
-
 	if (gfp_flags & SLUB_DMA)
-		flags = SLAB_CACHE_DMA;
+		flags |= SLAB_CACHE_DMA;
 
 	/*
 	 * This function is called with IRQs disabled during early-boot on
@@ -2914,6 +2913,46 @@ void *__kmalloc_node(size_t size, gfp_t flags, int node)
 }
 EXPORT_SYMBOL(__kmalloc_node);
 #endif
+
+void check_object_size(const void *ptr, unsigned long n, bool to)
+{
+
+#ifdef CONFIG_PAX_USERCOPY
+	struct page *page;
+	struct kmem_cache *s = NULL;
+	unsigned long offset;
+
+	if (!n)
+		return;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		goto report;
+
+	if (!virt_addr_valid(ptr))
+		return;
+
+	page = get_object_page(ptr);
+
+	if (!page) {
+		if (object_is_on_stack(ptr, n) == -1)
+			goto report;
+		return;
+	}
+
+	s = page->slab;
+	if (!(s->flags & SLAB_USERCOPY))
+		goto report;
+
+	offset = (ptr - page_address(page)) % s->size;
+	if (offset <= s->objsize && n <= s->objsize - offset)
+		return;
+
+report:
+	pax_report_usercopy(ptr, n, to, s ? s->name : NULL);
+#endif
+
+}
+EXPORT_SYMBOL(check_object_size);
 
 size_t ksize(const void *object)
 {
@@ -3185,8 +3224,8 @@ void __init kmem_cache_init(void)
 	 * kmem_cache_open for slab_state == DOWN.
 	 */
 	create_kmalloc_cache(&kmalloc_caches[0], "kmem_cache_node",
-		sizeof(struct kmem_cache_node), GFP_NOWAIT);
-	kmalloc_caches[0].refcount = -1;
+		sizeof(struct kmem_cache_node), GFP_NOWAIT, 0);
+	atomic_set(&kmalloc_caches[0].refcount, -1);
 	caches++;
 
 	hotplug_memory_notifier(slab_memory_callback, SLAB_CALLBACK_PRI);
@@ -3198,18 +3237,18 @@ void __init kmem_cache_init(void)
 	/* Caches that are not of the two-to-the-power-of size */
 	if (KMALLOC_MIN_SIZE <= 32) {
 		create_kmalloc_cache(&kmalloc_caches[1],
-				"kmalloc-96", 96, GFP_NOWAIT);
+				"kmalloc-96", 96, GFP_NOWAIT, SLAB_USERCOPY);
 		caches++;
 	}
 	if (KMALLOC_MIN_SIZE <= 64) {
 		create_kmalloc_cache(&kmalloc_caches[2],
-				"kmalloc-192", 192, GFP_NOWAIT);
+				"kmalloc-192", 192, GFP_NOWAIT, SLAB_USERCOPY);
 		caches++;
 	}
 
 	for (i = KMALLOC_SHIFT_LOW; i < SLUB_PAGE_SHIFT; i++) {
 		create_kmalloc_cache(&kmalloc_caches[i],
-			"kmalloc", 1 << i, GFP_NOWAIT);
+			"kmalloc", 1 << i, GFP_NOWAIT, SLAB_USERCOPY);
 		caches++;
 	}
 
@@ -3293,7 +3332,7 @@ static int slab_unmergeable(struct kmem_cache *s)
 	/*
 	 * We may have set a slab to be unmergeable during bootstrap.
 	 */
-	if (s->refcount < 0)
+	if (atomic_read(&s->refcount) < 0)
 		return 1;
 
 	return 0;
@@ -3353,7 +3392,7 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 	if (s) {
 		int cpu;
 
-		s->refcount++;
+		atomic_inc(&s->refcount);
 		/*
 		 * Adjust the object sizes so that we clear
 		 * the complete object on kzalloc.
@@ -3372,7 +3411,7 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size,
 
 		if (sysfs_slab_alias(s, name)) {
 			down_write(&slub_lock);
-			s->refcount--;
+			atomic_dec(&s->refcount);
 			up_write(&slub_lock);
 			goto err;
 		}
@@ -4101,7 +4140,7 @@ SLAB_ATTR_RO(ctor);
 
 static ssize_t aliases_show(struct kmem_cache *s, char *buf)
 {
-	return sprintf(buf, "%d\n", s->refcount - 1);
+	return sprintf(buf, "%d\n", atomic_read(&s->refcount) - 1);
 }
 SLAB_ATTR_RO(aliases);
 
