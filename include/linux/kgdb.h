@@ -226,8 +226,8 @@ extern int kgdb_arch_remove_breakpoint(unsigned long addr, char *bundle);
  * hardware debug registers.
  */
 struct kgdb_arch {
-	const unsigned char	gdb_bpt_instr[BREAK_INSTR_SIZE];
-	const unsigned long	flags;
+	unsigned char		gdb_bpt_instr[BREAK_INSTR_SIZE];
+	unsigned long		flags;
 
 	int	(*set_breakpoint)(unsigned long, char *);
 	int	(*remove_breakpoint)(unsigned long, char *);
@@ -235,7 +235,7 @@ struct kgdb_arch {
 	int	(*remove_hw_breakpoint)(unsigned long, int, enum kgdb_bptype);
 	void	(*remove_all_hw_break)(void);
 	void	(*correct_hw_break)(void);
-};
+} __do_const;
 
 /**
  * struct kgdb_io - Describe the interface for an I/O driver to talk with KGDB.
@@ -250,14 +250,14 @@ struct kgdb_arch {
  * for the I/O driver.
  */
 struct kgdb_io {
-	const char * const	name;
+	const char		*name;
 	int			(*read_char) (void);
 	void			(*write_char) (u8);
 	void			(*flush) (void);
 	int			(*init) (void);
 	void			(*pre_exception) (void);
 	void			(*post_exception) (void);
-};
+} __do_const;
 
 extern struct kgdb_arch		arch_kgdb_ops;
 

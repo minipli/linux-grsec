@@ -531,7 +531,7 @@ KBUILD_CFLAGS	+= -O2
 endif
 
 ifeq ($(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-plugin.sh $(HOSTCC)), y)
-CONSTIFY_PLUGIN := -fplugin=$(objtree)/tools/gcc/constify_plugin.so
+CONSTIFY_PLUGIN := -fplugin=$(objtree)/tools/gcc/constify_plugin.so -DCONSTIFY_PLUGIN
 ifdef CONFIG_PAX_MEMORY_STACKLEAK
 STACKLEAK_PLUGIN := -fplugin=$(objtree)/tools/gcc/stackleak_plugin.so -fplugin-arg-stackleak_plugin-track-lowest-sp=100
 endif
@@ -1415,6 +1415,7 @@ PHONY += $(module-dirs) modules
 $(module-dirs): crmodverdir $(objtree)/Module.symvers
 	$(Q)$(MAKE) $(build)=$(patsubst _module_%,%,$@)
 
+modules: KBUILD_CFLAGS += $(CONSTIFY_PLUGIN) $(STACKLEAK_PLUGIN)
 modules: $(module-dirs)
 	@$(kecho) '  Building modules, stage 2.';
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
