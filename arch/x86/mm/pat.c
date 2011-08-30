@@ -258,7 +258,7 @@ chk_conflict(struct memtype *new, struct memtype *entry, unsigned long *type)
 
  conflict:
 	printk(KERN_INFO "%s:%d conflicting memory types "
-	       "%Lx-%Lx %s<->%s\n", current->comm, current->pid, new->start,
+	       "%Lx-%Lx %s<->%s\n", current->comm, task_pid_nr(current), new->start,
 	       new->end, cattr_name(new->type), cattr_name(entry->type));
 	return -EBUSY;
 }
@@ -559,7 +559,7 @@ unlock_ret:
 
 	if (err) {
 		printk(KERN_INFO "%s:%d freeing invalid memtype %Lx-%Lx\n",
-			current->comm, current->pid, start, end);
+			current->comm, task_pid_nr(current), start, end);
 	}
 
 	dprintk("free_memtype request 0x%Lx-0x%Lx\n", start, end);
@@ -689,8 +689,8 @@ static inline int range_is_allowed(unsigned long pfn, unsigned long size)
 	while (cursor < to) {
 		if (!devmem_is_allowed(pfn)) {
 			printk(KERN_INFO
-		"Program %s tried to access /dev/mem between %Lx->%Lx.\n",
-				current->comm, from, to);
+		"Program %s tried to access /dev/mem between %Lx->%Lx (%Lx).\n",
+				current->comm, from, to, cursor);
 			return 0;
 		}
 		cursor += PAGE_SIZE;
@@ -755,7 +755,7 @@ int kernel_map_sync_memtype(u64 base, unsigned long size, unsigned long flags)
 		printk(KERN_INFO
 			"%s:%d ioremap_change_attr failed %s "
 			"for %Lx-%Lx\n",
-			current->comm, current->pid,
+			current->comm, task_pid_nr(current),
 			cattr_name(flags),
 			base, (unsigned long long)(base + size));
 		return -EINVAL;
@@ -813,7 +813,7 @@ static int reserve_pfn_range(u64 paddr, unsigned long size, pgprot_t *vma_prot,
 			free_memtype(paddr, paddr + size);
 			printk(KERN_ERR "%s:%d map pfn expected mapping type %s"
 				" for %Lx-%Lx, got %s\n",
-				current->comm, current->pid,
+				current->comm, task_pid_nr(current),
 				cattr_name(want_flags),
 				(unsigned long long)paddr,
 				(unsigned long long)(paddr + size),

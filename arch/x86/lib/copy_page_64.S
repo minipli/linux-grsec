@@ -104,7 +104,7 @@ ENDPROC(copy_page)
 
 #include <asm/cpufeature.h>
 
-	.section .altinstr_replacement,"ax"
+	.section .altinstr_replacement,"a"
 1:	.byte 0xeb					/* jmp <disp8> */
 	.byte (copy_page_c - copy_page) - (2f - 1b)	/* offset */
 2:

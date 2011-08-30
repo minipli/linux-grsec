@@ -85,7 +85,7 @@ static inline void alternatives_smp_switch(int smp) {}
       "	 .byte 662b-661b\n"			/* sourcelen       */	\
       "	 .byte 664f-663f\n"			/* replacementlen  */	\
       ".previous\n"							\
-      ".section .altinstr_replacement, \"ax\"\n"			\
+      ".section .altinstr_replacement, \"a\"\n"			\
       "663:\n\t" newinstr "\n664:\n"		/* replacement     */	\
       ".previous"
 

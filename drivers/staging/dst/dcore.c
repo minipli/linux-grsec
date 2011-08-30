@@ -149,7 +149,7 @@ static int dst_bdev_release(struct gendisk *disk, fmode_t mode)
 	return 0;
 }
 
-static struct block_device_operations dst_blk_ops = {
+static const struct block_device_operations dst_blk_ops = {
 	.open		= dst_bdev_open,
 	.release	= dst_bdev_release,
 	.owner		= THIS_MODULE,
@@ -588,7 +588,7 @@ static struct dst_node *dst_alloc_node(struct dst_ctl *ctl,
 	n->size = ctl->size;
 
 	atomic_set(&n->refcnt, 1);
-	atomic_long_set(&n->gen, 0);
+	atomic_long_set_unchecked(&n->gen, 0);
 	snprintf(n->name, sizeof(n->name), "%s", ctl->name);
 
 	err = dst_node_sysfs_init(n);

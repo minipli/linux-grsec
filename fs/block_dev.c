@@ -664,7 +664,7 @@ int bd_claim(struct block_device *bdev, void *holder)
 	else if (bdev->bd_contains == bdev)
 		res = 0;  	 /* is a whole device which isn't held */
 
-	else if (bdev->bd_contains->bd_holder == bd_claim)
+	else if (bdev->bd_contains->bd_holder == (void *)bd_claim)
 		res = 0; 	 /* is a partition of a device that is being partitioned */
 	else if (bdev->bd_contains->bd_holder != NULL)
 		res = -EBUSY;	 /* is a partition of a held device */

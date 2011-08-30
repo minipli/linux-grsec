@@ -272,7 +272,7 @@ struct sock {
 	rwlock_t		sk_callback_lock;
 	int			sk_err,
 				sk_err_soft;
-	atomic_t		sk_drops;
+	atomic_unchecked_t	sk_drops;
 	unsigned short		sk_ack_backlog;
 	unsigned short		sk_max_ack_backlog;
 	__u32			sk_priority;
@@ -737,7 +737,7 @@ static inline void sk_refcnt_debug_release(const struct sock *sk)
 extern void sock_prot_inuse_add(struct net *net, struct proto *prot, int inc);
 extern int sock_prot_inuse_get(struct net *net, struct proto *proto);
 #else
-static void inline sock_prot_inuse_add(struct net *net, struct proto *prot,
+static inline void sock_prot_inuse_add(struct net *net, struct proto *prot,
 		int inc)
 {
 }
