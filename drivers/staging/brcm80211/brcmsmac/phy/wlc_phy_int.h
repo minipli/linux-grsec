@@ -593,7 +593,7 @@ struct phy_func_ptr {
 	initfn_t carrsuppr;
 	rxsigpwrfn_t rxsigpwr;
 	detachfn_t detach;
-};
+} __no_const;
 typedef struct phy_func_ptr phy_func_ptr_t;
 
 struct phy_info {

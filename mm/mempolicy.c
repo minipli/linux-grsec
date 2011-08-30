@@ -639,6 +639,10 @@ static int mbind_range(struct mm_struct *mm, unsigned long start,
 	unsigned long vmstart;
 	unsigned long vmend;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	struct vm_area_struct *vma_m;
+#endif
+
 	vma = find_vma_prev(mm, start, &prev);
 	if (!vma || vma->vm_start > start)
 		return -EFAULT;
@@ -669,6 +673,16 @@ static int mbind_range(struct mm_struct *mm, unsigned long start,
 		err = policy_vma(vma, new_pol);
 		if (err)
 			goto out;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		vma_m = pax_find_mirror_vma(vma);
+		if (vma_m) {
+			err = policy_vma(vma_m, new_pol);
+			if (err)
+				goto out;
+		}
+#endif
+
 	}
 
  out:
@@ -1102,6 +1116,17 @@ static long do_mbind(unsigned long start, unsigned long len,
 
 	if (end < start)
 		return -EINVAL;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (mm->pax_flags & MF_PAX_SEGMEXEC) {
+		if (end > SEGMEXEC_TASK_SIZE)
+			return -EINVAL;
+	} else
+#endif
+
+	if (end > TASK_SIZE)
+		return -EINVAL;
+
 	if (end == start)
 		return 0;
 
@@ -1320,6 +1345,14 @@ SYSCALL_DEFINE4(migrate_pages, pid_t, pid, unsigned long, maxnode,
 	if (!mm)
 		goto out;
 
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	if (mm != current->mm &&
+	    (mm->pax_flags & MF_PAX_RANDMMAP || mm->pax_flags & MF_PAX_SEGMEXEC)) {
+		err = -EPERM;
+		goto out;
+	}
+#endif
+
 	/*
 	 * Check if this process has the right to modify the specified
 	 * process. The right exists if the process has administrative
@@ -1329,8 +1362,7 @@ SYSCALL_DEFINE4(migrate_pages, pid_t, pid, unsigned long, maxnode,
 	rcu_read_lock();
 	tcred = __task_cred(task);
 	if (cred->euid != tcred->suid && cred->euid != tcred->uid &&
-	    cred->uid  != tcred->suid && cred->uid  != tcred->uid &&
-	    !capable(CAP_SYS_NICE)) {
+	    cred->uid  != tcred->suid && !capable(CAP_SYS_NICE)) {
 		rcu_read_unlock();
 		err = -EPERM;
 		goto out;

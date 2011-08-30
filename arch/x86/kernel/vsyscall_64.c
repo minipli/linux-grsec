@@ -53,7 +53,7 @@ DEFINE_VVAR(int, vgetcpu_mode);
 DEFINE_VVAR(struct vsyscall_gtod_data, vsyscall_gtod_data) =
 {
 	.lock = __SEQLOCK_UNLOCKED(__vsyscall_gtod_data.lock),
-	.sysctl_enabled = 1,
+	.sysctl_enabled = 0,
 };
 
 void update_vsyscall_tz(void)
@@ -231,7 +231,7 @@ static long __vsyscall(3) venosys_1(void)
 static ctl_table kernel_table2[] = {
 	{ .procname = "vsyscall64",
 	  .data = &vsyscall_gtod_data.sysctl_enabled, .maxlen = sizeof(int),
-	  .mode = 0644,
+	  .mode = 0444,
 	  .proc_handler = proc_dointvec },
 	{}
 };

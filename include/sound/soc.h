@@ -636,7 +636,7 @@ struct snd_soc_platform_driver {
 
 	/* platform stream ops */
 	struct snd_pcm_ops *ops;
-};
+} __do_const;
 
 struct snd_soc_platform {
 	const char *name;

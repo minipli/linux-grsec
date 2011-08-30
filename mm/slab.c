@@ -151,7 +151,7 @@
 
 /* Legal flag mask for kmem_cache_create(). */
 #if DEBUG
-# define CREATE_MASK	(SLAB_RED_ZONE | \
+# define CREATE_MASK	(SLAB_USERCOPY | SLAB_RED_ZONE | \
 			 SLAB_POISON | SLAB_HWCACHE_ALIGN | \
 			 SLAB_CACHE_DMA | \
 			 SLAB_STORE_USER | \
@@ -159,7 +159,7 @@
 			 SLAB_DESTROY_BY_RCU | SLAB_MEM_SPREAD | \
 			 SLAB_DEBUG_OBJECTS | SLAB_NOLEAKTRACE | SLAB_NOTRACK)
 #else
-# define CREATE_MASK	(SLAB_HWCACHE_ALIGN | \
+# define CREATE_MASK	(SLAB_USERCOPY | SLAB_HWCACHE_ALIGN | \
 			 SLAB_CACHE_DMA | \
 			 SLAB_RECLAIM_ACCOUNT | SLAB_PANIC | \
 			 SLAB_DESTROY_BY_RCU | SLAB_MEM_SPREAD | \
@@ -288,7 +288,7 @@ struct kmem_list3 {
  * Need this for bootstrapping a per node allocator.
  */
 #define NUM_INIT_LISTS (3 * MAX_NUMNODES)
-static struct kmem_list3 __initdata initkmem_list3[NUM_INIT_LISTS];
+static struct kmem_list3 initkmem_list3[NUM_INIT_LISTS];
 #define	CACHE_CACHE 0
 #define	SIZE_AC MAX_NUMNODES
 #define	SIZE_L3 (2 * MAX_NUMNODES)
@@ -389,10 +389,10 @@ static void kmem_list3_init(struct kmem_list3 *parent)
 		if ((x)->max_freeable < i)				\
 			(x)->max_freeable = i;				\
 	} while (0)
-#define STATS_INC_ALLOCHIT(x)	atomic_inc(&(x)->allochit)
-#define STATS_INC_ALLOCMISS(x)	atomic_inc(&(x)->allocmiss)
-#define STATS_INC_FREEHIT(x)	atomic_inc(&(x)->freehit)
-#define STATS_INC_FREEMISS(x)	atomic_inc(&(x)->freemiss)
+#define STATS_INC_ALLOCHIT(x)	atomic_inc_unchecked(&(x)->allochit)
+#define STATS_INC_ALLOCMISS(x)	atomic_inc_unchecked(&(x)->allocmiss)
+#define STATS_INC_FREEHIT(x)	atomic_inc_unchecked(&(x)->freehit)
+#define STATS_INC_FREEMISS(x)	atomic_inc_unchecked(&(x)->freemiss)
 #else
 #define	STATS_INC_ACTIVE(x)	do { } while (0)
 #define	STATS_DEC_ACTIVE(x)	do { } while (0)
@@ -538,7 +538,7 @@ static inline void *index_to_obj(struct kmem_cache *cache, struct slab *slab,
  *   reciprocal_divide(offset, cache->reciprocal_buffer_size)
  */
 static inline unsigned int obj_to_index(const struct kmem_cache *cache,
-					const struct slab *slab, void *obj)
+					const struct slab *slab, const void *obj)
 {
 	u32 offset = (obj - slab->s_mem);
 	return reciprocal_divide(offset, cache->reciprocal_buffer_size);
@@ -564,7 +564,7 @@ struct cache_names {
 static struct cache_names __initdata cache_names[] = {
 #define CACHE(x) { .name = "size-" #x, .name_dma = "size-" #x "(DMA)" },
 #include <linux/kmalloc_sizes.h>
-	{NULL,}
+	{NULL}
 #undef CACHE
 };
 
@@ -1530,7 +1530,7 @@ void __init kmem_cache_init(void)
 	sizes[INDEX_AC].cs_cachep = kmem_cache_create(names[INDEX_AC].name,
 					sizes[INDEX_AC].cs_size,
 					ARCH_KMALLOC_MINALIGN,
-					ARCH_KMALLOC_FLAGS|SLAB_PANIC,
+					ARCH_KMALLOC_FLAGS|SLAB_PANIC|SLAB_USERCOPY,
 					NULL);
 
 	if (INDEX_AC != INDEX_L3) {
@@ -1538,7 +1538,7 @@ void __init kmem_cache_init(void)
 			kmem_cache_create(names[INDEX_L3].name,
 				sizes[INDEX_L3].cs_size,
 				ARCH_KMALLOC_MINALIGN,
-				ARCH_KMALLOC_FLAGS|SLAB_PANIC,
+				ARCH_KMALLOC_FLAGS|SLAB_PANIC|SLAB_USERCOPY,
 				NULL);
 	}
 
@@ -1556,7 +1556,7 @@ void __init kmem_cache_init(void)
 			sizes->cs_cachep = kmem_cache_create(names->name,
 					sizes->cs_size,
 					ARCH_KMALLOC_MINALIGN,
-					ARCH_KMALLOC_FLAGS|SLAB_PANIC,
+					ARCH_KMALLOC_FLAGS|SLAB_PANIC|SLAB_USERCOPY,
 					NULL);
 		}
 #ifdef CONFIG_ZONE_DMA
@@ -4272,10 +4272,10 @@ static int s_show(struct seq_file *m, void *p)
 	}
 	/* cpu stats */
 	{
-		unsigned long allochit = atomic_read(&cachep->allochit);
-		unsigned long allocmiss = atomic_read(&cachep->allocmiss);
-		unsigned long freehit = atomic_read(&cachep->freehit);
-		unsigned long freemiss = atomic_read(&cachep->freemiss);
+		unsigned long allochit = atomic_read_unchecked(&cachep->allochit);
+		unsigned long allocmiss = atomic_read_unchecked(&cachep->allocmiss);
+		unsigned long freehit = atomic_read_unchecked(&cachep->freehit);
+		unsigned long freemiss = atomic_read_unchecked(&cachep->freemiss);
 
 		seq_printf(m, " : cpustat %6lu %6lu %6lu %6lu",
 			   allochit, allocmiss, freehit, freemiss);
@@ -4532,14 +4532,65 @@ static const struct file_operations proc_slabstats_operations = {
 
 static int __init slab_proc_init(void)
 {
-	proc_create("slabinfo",S_IWUSR|S_IRUGO,NULL,&proc_slabinfo_operations);
+	mode_t gr_mode = S_IRUGO;
+
+#ifdef CONFIG_GRKERNSEC_PROC_ADD
+	gr_mode = S_IRUSR;
+#endif
+
+	proc_create("slabinfo",S_IWUSR|gr_mode,NULL,&proc_slabinfo_operations);
 #ifdef CONFIG_DEBUG_SLAB_LEAK
-	proc_create("slab_allocators", 0, NULL, &proc_slabstats_operations);
+	proc_create("slab_allocators", gr_mode, NULL, &proc_slabstats_operations);
 #endif
 	return 0;
 }
 module_init(slab_proc_init);
 #endif
+
+void check_object_size(const void *ptr, unsigned long n, bool to)
+{
+
+#ifdef CONFIG_PAX_USERCOPY
+	struct page *page;
+	struct kmem_cache *cachep = NULL;
+	struct slab *slabp;
+	unsigned int objnr;
+	unsigned long offset;
+
+	if (!n)
+		return;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		goto report;
+
+	if (!virt_addr_valid(ptr))
+		return;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page)) {
+		if (object_is_on_stack(ptr, n) == -1)
+			goto report;
+		return;
+	}
+
+	cachep = page_get_cache(page);
+	if (!(cachep->flags & SLAB_USERCOPY))
+		goto report;
+
+	slabp = page_get_slab(page);
+	objnr = obj_to_index(cachep, slabp, ptr);
+	BUG_ON(objnr >= cachep->num);
+	offset = ptr - index_to_obj(cachep, slabp, objnr) - obj_offset(cachep);
+	if (offset <= obj_size(cachep) && n <= obj_size(cachep) - offset)
+		return;
+
+report:
+	pax_report_usercopy(ptr, n, to, cachep ? cachep->name : NULL);
+#endif
+
+}
+EXPORT_SYMBOL(check_object_size);
 
 /**
  * ksize - get the actual amount of memory allocated for a given object
