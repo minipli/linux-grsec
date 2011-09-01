@@ -648,7 +648,7 @@ control:
 	 * i.e only increment in_pkts for Templates.
 	 */
 	if (cp->flags & IP_VS_CONN_F_TEMPLATE) {
-		int pkts = atomic_add_return(1, &cp->in_pkts);
+		int pkts = atomic_add_return_unchecked(1, &cp->in_pkts);
 
 		if (pkts % sysctl_sync_period(ipvs) != 1)
 			return;
@@ -794,7 +794,7 @@ static void ip_vs_proc_conn(struct net *net, struct ip_vs_conn_param *param,
 
 	if (opt)
 		memcpy(&cp->in_seq, opt, sizeof(*opt));
-	atomic_set(&cp->in_pkts, sysctl_sync_threshold(ipvs));
+	atomic_set_unchecked(&cp->in_pkts, sysctl_sync_threshold(ipvs));
 	cp->state = state;
 	cp->old_state = cp->state;
 	/*

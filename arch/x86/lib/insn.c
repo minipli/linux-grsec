@@ -21,6 +21,11 @@
 #include <linux/string.h>
 #include <asm/inat.h>
 #include <asm/insn.h>
+#ifdef __KERNEL__
+#include <asm/pgtable_types.h>
+#else
+#define ktla_ktva(addr) addr
+#endif
 
 #define get_next(t, insn)	\
 	({t r; r = *(t*)insn->next_byte; insn->next_byte += sizeof(t); r; })
@@ -40,8 +45,8 @@
 void insn_init(struct insn *insn, const void *kaddr, int x86_64)
 {
 	memset(insn, 0, sizeof(*insn));
-	insn->kaddr = kaddr;
-	insn->next_byte = kaddr;
+	insn->kaddr = ktla_ktva(kaddr);
+	insn->next_byte = ktla_ktva(kaddr);
 	insn->x86_64 = x86_64 ? 1 : 0;
 	insn->opnd_bytes = 4;
 	if (x86_64)
