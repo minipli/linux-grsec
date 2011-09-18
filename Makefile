@@ -569,9 +569,9 @@ endif
 
 ifeq ($(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-plugin.sh "$(HOSTCC)" "$(CC)"), y)
 CONSTIFY_PLUGIN := -fplugin=$(objtree)/tools/gcc/constify_plugin.so -DCONSTIFY_PLUGIN
-#ifdef CONFIG_PAX_KERNEXEC_PLUGIN
+ifdef CONFIG_PAX_KERNEXEC_PLUGIN
 KERNEXEC_PLUGIN := -fplugin=$(objtree)/tools/gcc/kernexec_plugin.so
-#endif
+endif
 ifdef CONFIG_KALLOCSTAT_PLUGIN
 KALLOCSTAT_PLUGIN := -fplugin=$(objtree)/tools/gcc/kallocstat_plugin.so
 endif
