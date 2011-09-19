@@ -38,7 +38,7 @@ extern void print_gimple_stmt(FILE *, gimple, int, int);
 int plugin_is_GPL_compatible;
 
 static struct plugin_info kernexec_plugin_info = {
-	.version	= "201109191540",
+	.version	= "201109191740",
 };
 
 static unsigned int execute_kernexec_fptr(void);
@@ -83,7 +83,20 @@ static struct rtl_opt_pass kernexec_retaddr_pass = {
 
 static bool kernexec_cmodel_check(void)
 {
-	return ix86_cmodel == CM_KERNEL;
+	tree section;
+
+	if (ix86_cmodel != CM_KERNEL)
+		return false;
+
+	section = lookup_attribute("__section__", DECL_ATTRIBUTES(current_function_decl));
+	if (!section || !TREE_VALUE(section))
+		return true;
+
+	section = TREE_VALUE(TREE_VALUE(section));
+	if (strncmp(TREE_STRING_POINTER(section), ".vsyscall_", 10))
+		return true;
+
+	return false;
 }
 
 /*
