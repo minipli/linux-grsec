@@ -38,17 +38,18 @@ extern void print_gimple_stmt(FILE *, gimple, int, int);
 int plugin_is_GPL_compatible;
 
 static struct plugin_info kernexec_plugin_info = {
-	.version	= "201109191200",
+	.version	= "201109191540",
 };
 
 static unsigned int execute_kernexec_fptr(void);
 static unsigned int execute_kernexec_retaddr(void);
+static bool kernexec_cmodel_check(void);
 
 static struct gimple_opt_pass kernexec_fptr_pass = {
 	.pass = {
 		.type			= GIMPLE_PASS,
 		.name			= "kernexec_fptr",
-		.gate			= NULL,
+		.gate			= kernexec_cmodel_check,
 		.execute		= execute_kernexec_fptr,
 		.sub			= NULL,
 		.next			= NULL,
@@ -66,7 +67,7 @@ static struct rtl_opt_pass kernexec_retaddr_pass = {
 	.pass = {
 		.type			= RTL_PASS,
 		.name			= "kernexec_retaddr",
-		.gate			= NULL,
+		.gate			= kernexec_cmodel_check,
 		.execute		= execute_kernexec_retaddr,
 		.sub			= NULL,
 		.next			= NULL,
@@ -79,6 +80,11 @@ static struct rtl_opt_pass kernexec_retaddr_pass = {
 		.todo_flags_finish	= TODO_dump_func
 	}
 };
+
+static bool kernexec_cmodel_check(void)
+{
+	return ix86_cmodel == CM_KERNEL;
+}
 
 /*
  * add special KERNEXEC instrumentation: force MSB of fptr to 1, which will produce
@@ -255,7 +261,7 @@ int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version 
 	for (i = 0; i < argc; ++i)
 		error(G_("unkown option '-fplugin-arg-%s-%s'"), plugin_name, argv[i].key);
 
-	if (TARGET_64BIT == 0 || ix86_cmodel != CM_KERNEL)
+	if (TARGET_64BIT == 0)
 		return 0;
 
 	register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &kernexec_fptr_pass_info);
