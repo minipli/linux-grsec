@@ -34,6 +34,7 @@
 #include "tree-flow.h"
 
 extern void print_gimple_stmt(FILE *, gimple, int, int);
+extern rtx emit_move_insn(rtx x, rtx y);
 
 int plugin_is_GPL_compatible;
 
@@ -191,24 +192,29 @@ static unsigned int execute_kernexec_fptr(void)
 	return 0;
 }
 
-// add special KERNEXEC instrumentation: orb $0x80,7(%rsp) just before retn
+// add special KERNEXEC instrumentation: movabs $0x8000000000000000,%rcx, or %rcx,(%rsp) just before retn
 static void kernexec_instrument_retaddr(rtx insn)
 {
-	rtx ret_addr, clob, or;
+	rtx rcx, ret_addr, clob, or;
 
 	start_sequence();
 
-	// compute 7(%rsp)
-	ret_addr = gen_rtx_MEM(QImode, gen_rtx_PLUS(Pmode, stack_pointer_rtx, GEN_INT(7)));
+	// create movabs $0x8000000000000000,%rcx
+	rcx = gen_rtx_REG(DImode, CX_REG);
+	emit_move_insn(rcx, GEN_INT(0x8000000000000000));
+
+	// compute (%rsp)
+	ret_addr = gen_rtx_MEM(DImode, stack_pointer_rtx);
 	MEM_VOLATILE_P(ret_addr) = 1;
 
-	// create orb $0x80,7(%rsp)
-	or = gen_rtx_SET(VOIDmode, ret_addr, gen_rtx_IOR(QImode, ret_addr, GEN_INT(0xffffffffffffff80)));
+	// create or %rcx,(%rsp)
+	or = gen_rtx_SET(VOIDmode, ret_addr, gen_rtx_IOR(DImode, ret_addr, rcx));
 	clob = gen_rtx_CLOBBER(VOIDmode, gen_rtx_REG(CCmode, FLAGS_REG));
 
 	// put everything together
-	or = emit_insn(gen_rtx_PARALLEL(VOIDmode, gen_rtvec(2, or, clob)));
+	emit_insn(gen_rtx_PARALLEL(VOIDmode, gen_rtvec(2, or, clob)));
 	RTX_FRAME_RELATED_P(or) = 1;
+	or = get_insns();
 
 	end_sequence();
 
