@@ -39,7 +39,7 @@ extern rtx emit_move_insn(rtx x, rtx y);
 int plugin_is_GPL_compatible;
 
 static struct plugin_info kernexec_plugin_info = {
-	.version	= "201109191740",
+	.version	= "201109201640",
 };
 
 static unsigned int execute_kernexec_fptr(void);
@@ -78,7 +78,7 @@ static struct rtl_opt_pass kernexec_retaddr_pass = {
 		.properties_provided	= 0,
 		.properties_destroyed	= 0,
 		.todo_flags_start	= 0,
-		.todo_flags_finish	= TODO_dump_func
+		.todo_flags_finish	= TODO_dump_func | TODO_ggc_collect
 	}
 };
 
@@ -192,33 +192,22 @@ static unsigned int execute_kernexec_fptr(void)
 	return 0;
 }
 
-// add special KERNEXEC instrumentation: movabs $0x8000000000000000,%rcx, or %rcx,(%rsp) just before retn
+// add special KERNEXEC instrumentation: btsq $63,(%rsp) just before retn
 static void kernexec_instrument_retaddr(rtx insn)
 {
-	rtx rcx, ret_addr, clob, or;
+	rtx btsq;
+	rtvec argvec, constraintvec, labelvec;
+	int line;
 
-	start_sequence();
-
-	// create movabs $0x8000000000000000,%rcx
-	rcx = gen_rtx_REG(DImode, CX_REG);
-	emit_move_insn(rcx, GEN_INT(0x8000000000000000));
-
-	// compute (%rsp)
-	ret_addr = gen_rtx_MEM(DImode, stack_pointer_rtx);
-	MEM_VOLATILE_P(ret_addr) = 1;
-
-	// create or %rcx,(%rsp)
-	or = gen_rtx_SET(VOIDmode, ret_addr, gen_rtx_IOR(DImode, ret_addr, rcx));
-	clob = gen_rtx_CLOBBER(VOIDmode, gen_rtx_REG(CCmode, FLAGS_REG));
-
-	// put everything together
-	emit_insn(gen_rtx_PARALLEL(VOIDmode, gen_rtvec(2, or, clob)));
-	RTX_FRAME_RELATED_P(or) = 1;
-	or = get_insns();
-
-	end_sequence();
-
-	emit_insn_before(or, insn);
+	// create asm volatile("btsq $63,(%%rsp)":::)
+	argvec = rtvec_alloc(0);
+	constraintvec = rtvec_alloc(0);
+	labelvec = rtvec_alloc(0);
+	line = expand_location(RTL_LOCATION(insn)).line;
+	btsq = gen_rtx_ASM_OPERANDS(VOIDmode, "btsq $63,(%%rsp)", empty_string, 0, argvec, constraintvec, labelvec, line);
+	MEM_VOLATILE_P(btsq) = 1;
+	RTX_FRAME_RELATED_P(btsq) = 1;
+	emit_insn_before(btsq, insn);
 }
 
 /*
