@@ -39,7 +39,7 @@ extern rtx emit_move_insn(rtx x, rtx y);
 int plugin_is_GPL_compatible;
 
 static struct plugin_info kernexec_plugin_info = {
-	.version	= "201109201640",
+	.version	= "201110032145",
 };
 
 static unsigned int execute_kernexec_fptr(void);
@@ -118,18 +118,14 @@ static void kernexec_instrument_fptr(gimple_stmt_iterator gsi)
 	mark_sym_for_renaming(intptr);
 	assign_intptr = gimple_build_assign(intptr, fold_convert(long_unsigned_type_node, old_fptr));
 	update_stmt(assign_intptr);
-	gsi_insert_before(&gsi, assign_intptr, GSI_NEW_STMT);
-
-	gsi_next(&gsi);
+	gsi_insert_before(&gsi, assign_intptr, GSI_SAME_STMT);
 
 	// apply logical or to temporary unsigned long and bitmask
 	kernexec_mask = build_int_cstu(long_long_unsigned_type_node, 0x8000000000000000LL);
 //	kernexec_mask = build_int_cstu(long_long_unsigned_type_node, 0xffffffff80000000LL);
 	assign_intptr = gimple_build_assign(intptr, fold_build2(BIT_IOR_EXPR, long_long_unsigned_type_node, intptr, kernexec_mask));
 	update_stmt(assign_intptr);
-	gsi_insert_before(&gsi, assign_intptr, GSI_NEW_STMT);
-
-	gsi_next(&gsi);
+	gsi_insert_before(&gsi, assign_intptr, GSI_SAME_STMT);
 
 	// cast temporary unsigned long back to a temporary fptr variable
 	new_fptr = create_tmp_var(TREE_TYPE(old_fptr), NULL);
@@ -137,9 +133,7 @@ static void kernexec_instrument_fptr(gimple_stmt_iterator gsi)
 	mark_sym_for_renaming(new_fptr);
 	assign_new_fptr = gimple_build_assign(new_fptr, fold_convert(TREE_TYPE(old_fptr), intptr));
 	update_stmt(assign_new_fptr);
-	gsi_insert_before(&gsi, assign_new_fptr, GSI_NEW_STMT);
-
-	gsi_next(&gsi);
+	gsi_insert_before(&gsi, assign_new_fptr, GSI_SAME_STMT);
 
 	// replace call stmt fn with the new fptr
 	gimple_call_set_fn(call_stmt, new_fptr);
