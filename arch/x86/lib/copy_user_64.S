@@ -8,6 +8,7 @@
 
 #include <linux/linkage.h>
 #include <asm/dwarf2.h>
+#include <asm/alternative-asm.h>
 
 #define FIX_ALIGNMENT 1
 
