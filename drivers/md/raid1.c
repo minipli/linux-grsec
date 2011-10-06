@@ -1263,7 +1263,7 @@ static int fix_sync_read_error(r1bio_t *r1_bio)
 				rdev_dec_pending(rdev, mddev);
 				md_error(mddev, rdev);
 			} else
-				atomic_add(s, &rdev->corrected_errors);
+				atomic_add_unchecked(s, &rdev->corrected_errors);
 		}
 		d = start;
 		while (d != r1_bio->read_disk) {
@@ -1492,7 +1492,7 @@ static void fix_read_error(conf_t *conf, int read_disk,
 					/* Well, this device is dead */
 					md_error(mddev, rdev);
 				else {
-					atomic_add(s, &rdev->corrected_errors);
+					atomic_add_unchecked(s, &rdev->corrected_errors);
 					printk(KERN_INFO
 					       "md/raid1:%s: read error corrected "
 					       "(%d sectors at %llu on %s)\n",

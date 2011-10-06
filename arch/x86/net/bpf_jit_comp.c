@@ -589,7 +589,9 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 					module_free(NULL, image);
 					return;
 				}
+				pax_open_kernel();
 				memcpy(image + proglen, temp, ilen);
+				pax_close_kernel();
 			}
 			proglen += ilen;
 			addrs[i] = proglen;
@@ -609,7 +611,7 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 			break;
 		}
 		if (proglen == oldproglen) {
-			image = module_alloc(max_t(unsigned int,
+			image = module_alloc_exec(max_t(unsigned int,
 						   proglen,
 						   sizeof(struct work_struct)));
 			if (!image)
