@@ -34,6 +34,7 @@ memcpy_c:
 	rep movsq
 	movl %edx, %ecx
 	rep movsb
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(memcpy_c)
@@ -118,6 +119,7 @@ ENTRY(memcpy)
 	jnz .Lloop_1
 
 .Lend:
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(memcpy)
