@@ -1124,6 +1124,7 @@ all: modules
 #	using awk while concatenating to the final file.
 
 PHONY += modules
+modules: KBUILD_CFLAGS += $(GCC_PLUGINS)
 modules: $(vmlinux-dirs) $(if $(KBUILD_BUILTIN),vmlinux) modules.builtin
 	$(Q)$(AWK) '!x[$$0]++' $(vmlinux-dirs:%=$(objtree)/%/modules.order) > $(objtree)/modules.order
 	@$(kecho) '  Building modules, stage 2.';
