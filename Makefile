@@ -976,7 +976,6 @@ $(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): $(vmlinux-dirs) ;
 # Error messages still appears in the original language
 
 PHONY += $(vmlinux-dirs)
-$(vmlinux-dirs): KBUILD_CFLAGS += $(GCC_PLUGINS)
 $(vmlinux-dirs): gcc-plugins prepare scripts
 	$(Q)$(MAKE) $(build)=$@
 
