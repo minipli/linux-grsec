@@ -940,8 +940,6 @@ define rule_vmlinux-modpost
 endef
 
 # vmlinux image - including updated kernel symbols
-$(vmlinux-all): KBUILD_CFLAGS += $(GCC_PLUGINS)
-$(vmlinux-all): gcc-plugins
 vmlinux: $(vmlinux-lds) $(vmlinux-init) $(vmlinux-main) vmlinux.o $(kallsyms.o) FORCE
 ifdef CONFIG_HEADERS_CHECK
 	$(Q)$(MAKE) -f $(srctree)/Makefile headers_check
@@ -967,6 +965,7 @@ vmlinux.o: $(modpost-init) $(vmlinux-main) FORCE
 
 # The actual objects are generated when descending, 
 # make sure no implicit rule kicks in
+$(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): KBUILD_CFLAGS += $(GCC_PLUGINS)
 $(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): $(vmlinux-dirs) ;
 
 # Handle descending into subdirectories listed in $(vmlinux-dirs)
