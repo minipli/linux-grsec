@@ -4,6 +4,7 @@
 
 #include <asm/cpufeature.h>
 #include <asm/dwarf2.h>
+#include <asm/alternative-asm.h>
 
 /*
  * memcpy - Copy a memory block.
