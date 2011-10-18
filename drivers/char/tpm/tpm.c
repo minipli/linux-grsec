@@ -414,7 +414,7 @@ static ssize_t tpm_transmit(struct tpm_chip *chip, const char *buf,
 		    chip->vendor.req_complete_val)
 			goto out_recv;
 
-		if ((status == chip->vendor.req_canceled)) {
+		if (status == chip->vendor.req_canceled) {
 			dev_err(chip->dev, "Operation Canceled\n");
 			rc = -ECANCELED;
 			goto out;
@@ -846,6 +846,8 @@ ssize_t tpm_show_pubek(struct device *dev, struct device_attribute *attr,
 	char *str = buf;
 
 	struct tpm_chip *chip = dev_get_drvdata(dev);
+
+	pax_track_stack();
 
 	tpm_cmd.header.in = tpm_readpubek_header;
 	err = transmit_cmd(chip, &tpm_cmd, READ_PUBEK_RESULT_SIZE,

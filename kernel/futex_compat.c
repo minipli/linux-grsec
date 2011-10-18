@@ -10,6 +10,7 @@
 #include <linux/compat.h>
 #include <linux/nsproxy.h>
 #include <linux/futex.h>
+#include <linux/ptrace.h>
 
 #include <asm/uaccess.h>
 
@@ -136,7 +137,10 @@ compat_sys_get_robust_list(int pid, compat_uptr_t __user *head_ptr,
 {
 	struct compat_robust_list_head __user *head;
 	unsigned long ret;
-	const struct cred *cred = current_cred(), *pcred;
+#ifndef CONFIG_GRKERNSEC_PROC_MEMMAP
+	const struct cred *cred = current_cred();
+	const struct cred *pcred;
+#endif
 
 	if (!futex_cmpxchg_enabled)
 		return -ENOSYS;
@@ -152,6 +156,10 @@ compat_sys_get_robust_list(int pid, compat_uptr_t __user *head_ptr,
 		if (!p)
 			goto err_unlock;
 		ret = -EPERM;
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+		if (!ptrace_may_access(p, PTRACE_MODE_READ))
+			goto err_unlock;
+#else
 		pcred = __task_cred(p);
 		/* If victim is in different user_ns, then uids are not
 		   comparable, so we must have CAP_SYS_PTRACE */
@@ -166,6 +174,7 @@ compat_sys_get_robust_list(int pid, compat_uptr_t __user *head_ptr,
 		    !ns_capable(pcred->user->user_ns, CAP_SYS_PTRACE))
 			goto err_unlock;
 ok:
+#endif
 		head = p->compat_robust_list;
 		rcu_read_unlock();
 	}
