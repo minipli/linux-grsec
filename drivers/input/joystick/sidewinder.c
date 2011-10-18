@@ -30,6 +30,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/sched.h>
 #include <linux/init.h>
 #include <linux/input.h>
 #include <linux/gameport.h>
@@ -427,6 +428,8 @@ static int sw_read(struct sw *sw)
 {
 	unsigned char buf[SW_LENGTH];
 	int i;
+
+	pax_track_stack();
 
 	i = sw_read_packet(sw->gameport, buf, sw->length, 0);
 

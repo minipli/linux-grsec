@@ -394,8 +394,8 @@ static int ext4_has_free_blocks(struct ext4_sb_info *sbi,
 	/* Hm, nope.  Are (enough) root reserved blocks available? */
 	if (sbi->s_resuid == current_fsuid() ||
 	    ((sbi->s_resgid != 0) && in_group_p(sbi->s_resgid)) ||
-	    capable(CAP_SYS_RESOURCE) ||
-		(flags & EXT4_MB_USE_ROOT_BLOCKS)) {
+		(flags & EXT4_MB_USE_ROOT_BLOCKS) ||
+	        capable_nolog(CAP_SYS_RESOURCE)) {
 
 		if (free_blocks >= (nblocks + dirty_blocks))
 			return 1;

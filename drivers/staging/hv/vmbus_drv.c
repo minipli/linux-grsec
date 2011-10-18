@@ -668,11 +668,11 @@ int vmbus_child_device_register(struct hv_device *child_device_obj)
 {
 	int ret = 0;
 
-	static atomic_t device_num = ATOMIC_INIT(0);
+	static atomic_unchecked_t device_num = ATOMIC_INIT(0);
 
 	/* Set the device name. Otherwise, device_register() will fail. */
 	dev_set_name(&child_device_obj->device, "vmbus_0_%d",
-		     atomic_inc_return(&device_num));
+		     atomic_inc_return_unchecked(&device_num));
 
 	/* The new device belongs to this bus */
 	child_device_obj->device.bus = &hv_bus; /* device->dev.bus; */
