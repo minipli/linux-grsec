@@ -776,6 +776,7 @@ struct e1000_mac_operations {
 	void (*write_vfta)(struct e1000_hw *, u32, u32);
 	s32  (*read_mac_addr)(struct e1000_hw *);
 };
+typedef struct e1000_mac_operations __no_const e1000_mac_operations_no_const;
 
 /* Function pointers for the PHY. */
 struct e1000_phy_operations {
@@ -799,6 +800,7 @@ struct e1000_phy_operations {
 	void (*power_up)(struct e1000_hw *);
 	void (*power_down)(struct e1000_hw *);
 };
+typedef struct e1000_phy_operations __no_const e1000_phy_operations_no_const;
 
 /* Function pointers for the NVM. */
 struct e1000_nvm_operations {
@@ -810,9 +812,10 @@ struct e1000_nvm_operations {
 	s32  (*validate)(struct e1000_hw *);
 	s32  (*write)(struct e1000_hw *, u16, u16, u16 *);
 };
+typedef struct e1000_nvm_operations __no_const e1000_nvm_operations_no_const;
 
 struct e1000_mac_info {
-	struct e1000_mac_operations ops;
+	e1000_mac_operations_no_const ops;
 	u8 addr[ETH_ALEN];
 	u8 perm_addr[ETH_ALEN];
 
@@ -853,7 +856,7 @@ struct e1000_mac_info {
 };
 
 struct e1000_phy_info {
-	struct e1000_phy_operations ops;
+	e1000_phy_operations_no_const ops;
 
 	enum e1000_phy_type type;
 
@@ -887,7 +890,7 @@ struct e1000_phy_info {
 };
 
 struct e1000_nvm_info {
-	struct e1000_nvm_operations ops;
+	e1000_nvm_operations_no_const ops;
 
 	enum e1000_nvm_type type;
 	enum e1000_nvm_override override;
