@@ -40,6 +40,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/slab.h>
 #include <linux/io-mapping.h>
+#include <linux/sched.h>
 
 #include <linux/mlx4/device.h>
 #include <linux/mlx4/doorbell.h>

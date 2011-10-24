@@ -23,6 +23,7 @@ ENTRY(__write_lock_failed)
 	WRITE_LOCK_SUB($RW_LOCK_BIAS) (%__lock_ptr)
 	jnz	0b
 	ENDFRAME
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 END(__write_lock_failed)
@@ -39,6 +40,7 @@ ENTRY(__read_lock_failed)
 	READ_LOCK_SIZE(dec) (%__lock_ptr)
 	js	0b
 	ENDFRAME
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 END(__read_lock_failed)

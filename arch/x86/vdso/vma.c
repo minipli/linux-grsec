@@ -16,8 +16,6 @@
 #include <asm/vdso.h>
 #include <asm/page.h>
 
-unsigned int __read_mostly vdso_enabled = 1;
-
 extern char vdso_start[], vdso_end[];
 extern unsigned short vdso_sync_cpuid;
 
@@ -100,9 +98,6 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 	unsigned long addr;
 	int ret;
 
-	if (!vdso_enabled)
-		return 0;
-
 	down_write(&mm->mmap_sem);
 	addr = vdso_addr(mm->start_stack, vdso_size);
 	addr = get_unmapped_area(NULL, addr, vdso_size, 0, 0);
@@ -111,26 +106,18 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 		goto up_fail;
 	}
 
-	current->mm->context.vdso = (void *)addr;
+	mm->context.vdso = addr + PAGE_SIZE;
 
 	ret = install_special_mapping(mm, addr, vdso_size,
 				      VM_READ|VM_EXEC|
 				      VM_MAYREAD|VM_MAYWRITE|VM_MAYEXEC|
 				      VM_ALWAYSDUMP,
 				      vdso_pages);
-	if (ret) {
-		current->mm->context.vdso = NULL;
-		goto up_fail;
-	}
+
+	if (ret)
+		mm->context.vdso = 0;
 
 up_fail:
 	up_write(&mm->mmap_sem);
 	return ret;
 }
-
-static __init int vdso_setup(char *s)
-{
-	vdso_enabled = simple_strtoul(s, NULL, 0);
-	return 0;
-}
-__setup("vdso=", vdso_setup);

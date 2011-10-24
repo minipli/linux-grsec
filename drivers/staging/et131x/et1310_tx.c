@@ -635,11 +635,11 @@ inline void et131x_free_send_packet(struct et131x_adapter *etdev,
 	struct net_device_stats *stats = &etdev->net_stats;
 
 	if (tcb->flags & fMP_DEST_BROAD)
-		atomic_inc(&etdev->stats.brdcstxmt);
+		atomic_inc_unchecked(&etdev->stats.brdcstxmt);
 	else if (tcb->flags & fMP_DEST_MULTI)
-		atomic_inc(&etdev->stats.multixmt);
+		atomic_inc_unchecked(&etdev->stats.multixmt);
 	else
-		atomic_inc(&etdev->stats.unixmt);
+		atomic_inc_unchecked(&etdev->stats.unixmt);
 
 	if (tcb->skb) {
 		stats->tx_bytes += tcb->skb->len;
