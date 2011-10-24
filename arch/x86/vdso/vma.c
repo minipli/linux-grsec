@@ -106,7 +106,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 		goto up_fail;
 	}
 
-	mm->context.vdso = addr + PAGE_SIZE;
+	mm->context.vdso = addr;
 
 	ret = install_special_mapping(mm, addr, vdso_size,
 				      VM_READ|VM_EXEC|
