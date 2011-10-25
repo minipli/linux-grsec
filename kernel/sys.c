@@ -158,6 +158,12 @@ static int set_one_prio(struct task_struct *p, int niceval, int error)
 		error = -EACCES;
 		goto out;
 	}
+
+	if (gr_handle_chroot_setpriority(p, niceval)) {
+		error = -EACCES;
+		goto out;
+	}
+
 	no_nice = security_task_setnice(p, niceval);
 	if (no_nice) {
 		error = no_nice;
@@ -541,6 +547,9 @@ SYSCALL_DEFINE2(setregid, gid_t, rgid, gid_t, egid)
 			goto error;
 	}
 
+	if (gr_check_group_change(new->gid, new->egid, -1))
+		goto error;
+
 	if (rgid != (gid_t) -1 ||
 	    (egid != (gid_t) -1 && egid != old->gid))
 		new->sgid = new->egid;
@@ -570,6 +579,10 @@ SYSCALL_DEFINE1(setgid, gid_t, gid)
 	old = current_cred();
 
 	retval = -EPERM;
+
+	if (gr_check_group_change(gid, gid, gid))
+		goto error;
+
 	if (nsown_capable(CAP_SETGID))
 		new->gid = new->egid = new->sgid = new->fsgid = gid;
 	else if (gid == old->gid || gid == old->sgid)
@@ -595,11 +608,18 @@ static int set_user(struct cred *new)
 	if (!new_user)
 		return -EAGAIN;
 
+	/*
+	 * We don't fail in case of NPROC limit excess here because too many
+	 * poorly written programs don't check set*uid() return code, assuming
+	 * it never fails if called by root.  We may still enforce NPROC limit
+	 * for programs doing set*uid()+execve() by harmlessly deferring the
+	 * failure to the execve() stage.
+	 */
 	if (atomic_read(&new_user->processes) >= rlimit(RLIMIT_NPROC) &&
-			new_user != INIT_USER) {
-		free_uid(new_user);
-		return -EAGAIN;
-	}
+			new_user != INIT_USER)
+		current->flags |= PF_NPROC_EXCEEDED;
+	else
+		current->flags &= ~PF_NPROC_EXCEEDED;
 
 	free_uid(new->user);
 	new->user = new_user;
@@ -650,6 +670,9 @@ SYSCALL_DEFINE2(setreuid, uid_t, ruid, uid_t, euid)
 			goto error;
 	}
 
+	if (gr_check_user_change(new->uid, new->euid, -1))
+		goto error;
+
 	if (new->uid != old->uid) {
 		retval = set_user(new);
 		if (retval < 0)
@@ -694,6 +717,12 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
 	old = current_cred();
 
 	retval = -EPERM;
+
+	if (gr_check_crash_uid(uid))
+		goto error;
+	if (gr_check_user_change(uid, uid, uid))
+		goto error;
+
 	if (nsown_capable(CAP_SETUID)) {
 		new->suid = new->uid = uid;
 		if (uid != old->uid) {
@@ -747,6 +776,9 @@ SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)
 		    suid != old->euid  && suid != old->suid)
 			goto error;
 	}
+
+	if (gr_check_user_change(ruid, euid, -1))
+		goto error;
 
 	if (ruid != (uid_t) -1) {
 		new->uid = ruid;
@@ -812,6 +844,9 @@ SYSCALL_DEFINE3(setresgid, gid_t, rgid, gid_t, egid, gid_t, sgid)
 			goto error;
 	}
 
+	if (gr_check_group_change(rgid, egid, -1))
+		goto error;
+
 	if (rgid != (gid_t) -1)
 		new->gid = rgid;
 	if (egid != (gid_t) -1)
@@ -858,6 +893,9 @@ SYSCALL_DEFINE1(setfsuid, uid_t, uid)
 	old = current_cred();
 	old_fsuid = old->fsuid;
 
+	if (gr_check_user_change(-1, -1, uid))
+		goto error;
+
 	if (uid == old->uid  || uid == old->euid  ||
 	    uid == old->suid || uid == old->fsuid ||
 	    nsown_capable(CAP_SETUID)) {
@@ -868,6 +906,7 @@ SYSCALL_DEFINE1(setfsuid, uid_t, uid)
 		}
 	}
 
+error:
 	abort_creds(new);
 	return old_fsuid;
 
@@ -894,12 +933,16 @@ SYSCALL_DEFINE1(setfsgid, gid_t, gid)
 	if (gid == old->gid  || gid == old->egid  ||
 	    gid == old->sgid || gid == old->fsgid ||
 	    nsown_capable(CAP_SETGID)) {
+		if (gr_check_group_change(-1, -1, gid))
+			goto error;
+
 		if (gid != old_fsgid) {
 			new->fsgid = gid;
 			goto change_okay;
 		}
 	}
 
+error:
 	abort_creds(new);
 	return old_fsgid;
 
@@ -1205,19 +1248,19 @@ SYSCALL_DEFINE1(olduname, struct oldold_utsname __user *, name)
 		return -EFAULT;
 
 	down_read(&uts_sem);
-	error = __copy_to_user(&name->sysname, &utsname()->sysname,
+	error = __copy_to_user(name->sysname, &utsname()->sysname,
 			       __OLD_UTS_LEN);
 	error |= __put_user(0, name->sysname + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->nodename, &utsname()->nodename,
+	error |= __copy_to_user(name->nodename, &utsname()->nodename,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->nodename + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->release, &utsname()->release,
+	error |= __copy_to_user(name->release, &utsname()->release,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->release + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->version, &utsname()->version,
+	error |= __copy_to_user(name->version, &utsname()->version,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->version + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->machine, &utsname()->machine,
+	error |= __copy_to_user(name->machine, &utsname()->machine,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->machine + __OLD_UTS_LEN);
 	up_read(&uts_sem);
@@ -1680,7 +1723,7 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			error = get_dumpable(me->mm);
 			break;
 		case PR_SET_DUMPABLE:
-			if (arg2 < 0 || arg2 > 1) {
+			if (arg2 > 1) {
 				error = -EINVAL;
 				break;
 			}
