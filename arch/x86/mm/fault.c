@@ -187,6 +187,10 @@ force_sig_info_fault(int si_signo, int si_code, unsigned long address,
 	force_sig_info(si_signo, &info, tsk);
 }
 
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+static bool pax_is_fetch_fault(struct pt_regs *regs, unsigned long error_code, unsigned long address);
+#endif
+
 #ifdef CONFIG_PAX_EMUTRAMP
 static int pax_handle_fetch_fault(struct pt_regs *regs);
 #endif
@@ -787,11 +791,9 @@ __bad_area_nosemaphore(struct pt_regs *regs, unsigned long error_code,
 {
 	struct task_struct *tsk = current;
 
-#if defined(CONFIG_X86_64) || defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
-	struct mm_struct *mm = tsk->mm;
-#endif
-
 #ifdef CONFIG_X86_64
+	struct mm_struct *mm = tsk->mm;
+
 	if (mm && (error_code & PF_INSTR) && mm->context.vdso) {
 		if (regs->ip == (unsigned long)vgettimeofday) {
 			regs->ip = (unsigned long)VDSO64_SYMBOL(mm->context.vdso, fallback_gettimeofday);
@@ -803,52 +805,6 @@ __bad_area_nosemaphore(struct pt_regs *regs, unsigned long error_code,
 			regs->ip = (unsigned long)VDSO64_SYMBOL(mm->context.vdso, getcpu);
 			return;
 		}
-	}
-#endif
-
-#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
-	if (mm && (error_code & PF_USER)) {
-		unsigned long ip = regs->ip;
-
-		if (v8086_mode(regs))
-			ip = ((regs->cs & 0xffff) << 4) + (ip & 0xffff);
-
-		/*
-		 * It's possible to have interrupts off here:
-		 */
-		local_irq_enable();
-
-#ifdef CONFIG_PAX_PAGEEXEC
-		if ((mm->pax_flags & MF_PAX_PAGEEXEC) &&
-		    ((nx_enabled && (error_code & PF_INSTR)) || (!(error_code & (PF_PROT | PF_WRITE)) && ip == address))) {
-
-#ifdef CONFIG_PAX_EMUTRAMP
-			switch (pax_handle_fetch_fault(regs)) {
-			case 2:
-				return;
-			}
-#endif
-
-			pax_report_fault(regs, (void *)ip, (void *)regs->sp);
-			do_group_exit(SIGKILL);
-		}
-#endif
-
-#ifdef CONFIG_PAX_SEGMEXEC
-		if ((mm->pax_flags & MF_PAX_SEGMEXEC) && !(error_code & (PF_PROT | PF_WRITE)) && (ip + SEGMEXEC_TASK_SIZE == address)) {
-
-#ifdef CONFIG_PAX_EMUTRAMP
-			switch (pax_handle_fetch_fault(regs)) {
-			case 2:
-				return;
-			}
-#endif
-
-			pax_report_fault(regs, (void *)ip, (void *)regs->sp);
-			do_group_exit(SIGKILL);
-		}
-#endif
-
 	}
 #endif
 
@@ -868,6 +824,21 @@ __bad_area_nosemaphore(struct pt_regs *regs, unsigned long error_code,
 
 		if (is_errata100(regs, address))
 			return;
+
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+		if (pax_is_fetch_fault(regs, error_code, address)) {
+
+#ifdef CONFIG_PAX_EMUTRAMP
+			switch (pax_handle_fetch_fault(regs)) {
+			case 2:
+				return;
+			}
+#endif
+
+			pax_report_fault(regs, (void *)regs->ip, (void *)regs->sp);
+			do_group_exit(SIGKILL);
+		}
+#endif
 
 		if (unlikely(show_unhandled_signals))
 			show_signal_msg(regs, error_code, address, tsk);
@@ -1414,6 +1385,37 @@ good_area:
 
 	up_read(&mm->mmap_sem);
 }
+
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+static bool pax_is_fetch_fault(struct pt_regs *regs, unsigned long error_code, unsigned long address)
+{
+	struct mm_struct *mm = current->mm;
+	unsigned long ip = regs->ip;
+
+	if (v8086_mode(regs))
+		ip = ((regs->cs & 0xffff) << 4) + (ip & 0xffff);
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	if (mm->pax_flags & MF_PAX_PAGEEXEC) {
+		if ((__supported_pte_mask & _PAGE_NX) && (error_code & PF_INSTR))
+			return true;
+		if (!(error_code & (PF_PROT | PF_WRITE)) && ip == address)
+			return true;
+		return false;
+	}
+#endif
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (mm->pax_flags & MF_PAX_SEGMEXEC) {
+		if (!(error_code & (PF_PROT | PF_WRITE)) && (ip + SEGMEXEC_TASK_SIZE == address))
+			return true;
+		return false;
+	}
+#endif
+
+	return false;
+}
+#endif
 
 #ifdef CONFIG_PAX_EMUTRAMP
 static int pax_handle_fetch_fault_32(struct pt_regs *regs)
