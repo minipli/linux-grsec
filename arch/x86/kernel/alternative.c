@@ -276,6 +276,13 @@ void __init_or_module apply_alternatives(struct alt_instr *start,
 	 */
 	for (a = start; a < end; a++) {
 		instr = (u8 *)&a->instr_offset + a->instr_offset;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		instr += ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+		if (instr < (u8 *)_text || (u8 *)_einittext <= instr)
+			instr -= ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
 		replacement = (u8 *)&a->repl_offset + a->repl_offset;
 		BUG_ON(a->replacementlen > a->instrlen);
 		BUG_ON(a->instrlen > sizeof(insnbuf));
@@ -307,6 +314,12 @@ static void alternatives_smp_lock(const s32 *start, const s32 *end,
 	for (poff = start; poff < end; poff++) {
 		u8 *ptr = (u8 *)poff + *poff;
 
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		ptr += ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+		if (ptr < (u8 *)_text || (u8 *)_einittext <= ptr)
+			ptr -= ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
 		if (!*poff || ptr < text || ptr >= text_end)
 			continue;
 		/* turn DS segment override prefix into lock prefix */
@@ -327,6 +340,12 @@ static void alternatives_smp_unlock(const s32 *start, const s32 *end,
 	mutex_lock(&text_mutex);
 	for (poff = start; poff < end; poff++) {
 		u8 *ptr = (u8 *)poff + *poff;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		ptr += ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+		if (ptr < (u8 *)_text || (u8 *)_einittext <= ptr)
+			ptr -= ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
 
 		if (!*poff || ptr < text || ptr >= text_end)
 			continue;
