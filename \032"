@@ -341,7 +341,7 @@ void pax_check_alloca(unsigned long size)
 	stack_start = stack_end - EXCEPTION_STKSZ;
 	if (stack_end && stack_start <= sp && sp < stack_end) {
 		unsigned long stack_left = sp & (EXCEPTION_STKSZ - 1);
-		put_cpu();
+		put_cpu(cpu);
 		BUG_ON(stack_left < 256 || size >= stack_left - 256);
 		return;
 	}
@@ -351,5 +351,5 @@ void pax_check_alloca(unsigned long size)
 	/* unknown stack */
 	BUG();
 }
-EXPORT_SYMBOL(pax_check_alloca);
+EXPORT_SYMBOL(pax_track_stack);
 #endif

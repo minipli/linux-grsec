@@ -35,10 +35,13 @@
 #include "emit-rtl.h"
 #include "function.h"
 
+extern void print_gimple_stmt(FILE *, gimple, int, int);
+
 int plugin_is_GPL_compatible;
 
 static int track_frame_size = -1;
 static const char track_function[] = "pax_track_stack";
+static const char check_function[] = "pax_check_alloca";
 static bool init_locals;
 
 static struct plugin_info stackleak_plugin_info = {
@@ -92,20 +95,34 @@ static bool gate_stackleak_track_stack(void)
 	return track_frame_size >= 0;
 }
 
-static void stackleak_add_instrumentation(gimple_stmt_iterator *gsi, bool before)
+static void stackleak_check_alloca(gimple_stmt_iterator gsi)
 {
-	gimple call;
-	tree fndecl, type;
+	gimple check_alloca;
+	tree fndecl, fntype, alloca_size;
+
+	// insert call to void pax_check_alloca(unsigned long size)
+	fntype = build_function_type_list(void_type_node, long_unsigned_type_node, NULL_TREE);
+	fndecl = build_fn_decl(check_function, fntype);
+	DECL_ASSEMBLER_NAME(fndecl); // for LTO
+	alloca_size = gimple_call_arg(gsi_stmt(gsi), 0);
+	check_alloca = gimple_build_call(fndecl, 1, alloca_size);
+	gsi_insert_before(&gsi, check_alloca, GSI_CONTINUE_LINKING);
+}
+
+static void stackleak_add_instrumentation(gimple_stmt_iterator gsi, bool before)
+{
+	gimple track_stack;
+	tree fndecl, fntype;
 
 	// insert call to void pax_track_stack(void)
-	type = build_function_type_list(void_type_node, NULL_TREE);
-	fndecl = build_fn_decl(track_function, type);
+	fntype = build_function_type_list(void_type_node, NULL_TREE);
+	fndecl = build_fn_decl(track_function, fntype);
 	DECL_ASSEMBLER_NAME(fndecl); // for LTO
-	call = gimple_build_call(fndecl, 0);
+	track_stack = gimple_build_call(fndecl, 0);
 	if (before)
-		gsi_insert_before(gsi, call, GSI_CONTINUE_LINKING);
+		gsi_insert_before(&gsi, track_stack, GSI_CONTINUE_LINKING);
 	else
-		gsi_insert_after(gsi, call, GSI_CONTINUE_LINKING);
+		gsi_insert_after(&gsi, track_stack, GSI_CONTINUE_LINKING);
 }
 
 static unsigned int execute_stackleak_tree_instrument(void)
@@ -137,18 +154,22 @@ static unsigned int execute_stackleak_tree_instrument(void)
 			if (DECL_FUNCTION_CODE(fndecl) != BUILT_IN_ALLOCA)
 				continue;
 
-			// 2. insert track call after each __builtin_alloca call
-			stackleak_add_instrumentation(&gsi, false);
+			// 2. insert stack overflow check before each __builtin_alloca call
+			stackleak_check_alloca(gsi);
+
+			// 3. insert track call after each __builtin_alloca call
+			stackleak_add_instrumentation(gsi, false);
 			if (bb == entry_bb)
 				prologue_instrumented = true;
+
 //			print_node(stderr, "pax", fndecl, 4);
 		}
 	}
 
-	// 3. insert track call at the beginning
+	// 4. insert track call at the beginning
 	if (!prologue_instrumented) {
 		gsi = gsi_start_bb(entry_bb);
-		stackleak_add_instrumentation(&gsi, true);
+		stackleak_add_instrumentation(gsi, true);
 	}
 
 	return 0;

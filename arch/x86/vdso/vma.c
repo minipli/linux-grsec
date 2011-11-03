@@ -95,7 +95,7 @@ static unsigned long vdso_addr(unsigned long start, unsigned len)
 int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 {
 	struct mm_struct *mm = current->mm;
-	unsigned long addr;
+	unsigned long addr = 0;
 	int ret;
 
 	down_write(&mm->mmap_sem);
