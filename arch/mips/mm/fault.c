@@ -29,7 +29,7 @@
 #include <linux/kdebug.h>
 
 #ifdef CONFIG_PAX_PAGEEXEC
-void pax_report_insns(void *pc, void *sp)
+void pax_report_insns(struct pt_regs *regs, void *pc, void *sp)
 {
 	unsigned long i;
 

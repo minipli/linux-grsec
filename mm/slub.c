@@ -3236,10 +3236,12 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	struct page *page;
 	struct kmem_cache *s = NULL;
 	unsigned long offset;
+	const char *type;
 
 	if (!n)
 		return;
 
+	type = "<null>";
 	if (ZERO_OR_NULL_PTR(ptr))
 		goto report;
 
@@ -3248,6 +3250,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 
 	page = virt_to_head_page(ptr);
 
+	type = "<process stack>";
 	if (!PageSlab(page)) {
 		if (object_is_on_stack(ptr, n) == -1)
 			goto report;
@@ -3255,6 +3258,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	}
 
 	s = page->slab;
+	type = s->name;
 	if (!(s->flags & SLAB_USERCOPY))
 		goto report;
 
@@ -3263,7 +3267,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 		return;
 
 report:
-	pax_report_usercopy(ptr, n, to, s ? s->name : NULL);
+	pax_report_usercopy(ptr, n, to, type);
 #endif
 
 }
