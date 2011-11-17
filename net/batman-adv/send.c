@@ -326,7 +326,7 @@ void schedule_own_packet(struct hard_iface *hard_iface)
 
 	/* change sequence number to network order */
 	batman_packet->seqno =
-		htonl((uint32_t)atomic_read(&hard_iface->seqno));
+		htonl((uint32_t)atomic_read_unchecked(&hard_iface->seqno));
 
 	batman_packet->ttvn = atomic_read(&bat_priv->ttvn);
 	batman_packet->tt_crc = htons((uint16_t)atomic_read(&bat_priv->tt_crc));
@@ -343,7 +343,7 @@ void schedule_own_packet(struct hard_iface *hard_iface)
 	else
 		batman_packet->gw_flags = NO_FLAGS;
 
-	atomic_inc(&hard_iface->seqno);
+	atomic_inc_unchecked(&hard_iface->seqno);
 
 	slide_own_bcast_window(hard_iface);
 	send_time = own_send_time(bat_priv);

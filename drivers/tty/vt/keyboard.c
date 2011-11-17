@@ -656,6 +656,16 @@ static void k_spec(struct vc_data *vc, unsigned char value, char up_flag)
 	     kbd->kbdmode == VC_OFF) &&
 	     value != KVAL(K_SAK))
 		return;		/* SAK is allowed even in raw mode */
+
+#if defined(CONFIG_GRKERNSEC_PROC) || defined(CONFIG_GRKERNSEC_PROC_MEMMAP)
+	{
+		void *func = fn_handler[value];
+		if (func == fn_show_state || func == fn_show_ptregs ||
+		    func == fn_show_mem)
+			return;
+	}
+#endif
+
 	fn_handler[value](vc);
 }
 

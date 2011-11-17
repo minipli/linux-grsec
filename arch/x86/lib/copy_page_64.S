@@ -9,6 +9,7 @@ copy_page_c:
 	CFI_STARTPROC
 	movl $4096/8,%ecx
 	rep movsq
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(copy_page_c)
@@ -95,6 +96,7 @@ ENTRY(copy_page)
 	CFI_RESTORE r13
 	addq	$3*8,%rsp
 	CFI_ADJUST_CFA_OFFSET -3*8
+	pax_force_retaddr
 	ret
 .Lcopy_page_end:
 	CFI_ENDPROC
@@ -105,7 +107,7 @@ ENDPROC(copy_page)
 
 #include <asm/cpufeature.h>
 
-	.section .altinstr_replacement,"ax"
+	.section .altinstr_replacement,"a"
 1:	.byte 0xeb					/* jmp <disp8> */
 	.byte (copy_page_c - copy_page) - (2f - 1b)	/* offset */
 2:

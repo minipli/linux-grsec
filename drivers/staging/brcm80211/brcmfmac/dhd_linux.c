@@ -451,14 +451,14 @@ static void brcmf_op_if(struct brcmf_if *ifp)
 			free_netdev(ifp->net);
 		}
 		/* Allocate etherdev, including space for private structure */
-		ifp->net = alloc_etherdev(sizeof(drvr_priv));
+		ifp->net = alloc_etherdev(sizeof(*drvr_priv));
 		if (!ifp->net) {
 			BRCMF_ERROR(("%s: OOM - alloc_etherdev\n", __func__));
 			ret = -ENOMEM;
 		}
 		if (ret == 0) {
 			strcpy(ifp->net->name, ifp->name);
-			memcpy(netdev_priv(ifp->net), &drvr_priv, sizeof(drvr_priv));
+			memcpy(netdev_priv(ifp->net), &drvr_priv, sizeof(*drvr_priv));
 			err = brcmf_net_attach(&drvr_priv->pub, ifp->idx);
 			if (err != 0) {
 				BRCMF_ERROR(("%s: brcmf_net_attach failed, "
@@ -1279,7 +1279,7 @@ struct brcmf_pub *brcmf_attach(struct brcmf_bus *bus, uint bus_hdrlen)
 	BRCMF_TRACE(("%s: Enter\n", __func__));
 
 	/* Allocate etherdev, including space for private structure */
-	net = alloc_etherdev(sizeof(drvr_priv));
+	net = alloc_etherdev(sizeof(*drvr_priv));
 	if (!net) {
 		BRCMF_ERROR(("%s: OOM - alloc_etherdev\n", __func__));
 		goto fail;
@@ -1295,7 +1295,7 @@ struct brcmf_pub *brcmf_attach(struct brcmf_bus *bus, uint bus_hdrlen)
 	/*
 	 * Save the brcmf_info into the priv
 	 */
-	memcpy(netdev_priv(net), &drvr_priv, sizeof(drvr_priv));
+	memcpy(netdev_priv(net), &drvr_priv, sizeof(*drvr_priv));
 
 	/* Set network interface name if it was provided as module parameter */
 	if (iface_name[0]) {
@@ -1352,7 +1352,7 @@ struct brcmf_pub *brcmf_attach(struct brcmf_bus *bus, uint bus_hdrlen)
 	/*
 	 * Save the brcmf_info into the priv
 	 */
-	memcpy(netdev_priv(net), &drvr_priv, sizeof(drvr_priv));
+	memcpy(netdev_priv(net), &drvr_priv, sizeof(*drvr_priv));
 
 #if defined(CONFIG_PM_SLEEP)
 	atomic_set(&brcmf_mmc_suspend, false);

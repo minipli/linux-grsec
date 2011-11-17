@@ -560,7 +560,7 @@ struct mwifiex_if_ops {
 
 	void (*update_mp_end_port) (struct mwifiex_adapter *, u16);
 	void (*cleanup_mpa_buf) (struct mwifiex_adapter *);
-};
+} __no_const;
 
 struct mwifiex_adapter {
 	struct mwifiex_private *priv[MWIFIEX_MAX_BSS_NUM];

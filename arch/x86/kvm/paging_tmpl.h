@@ -197,7 +197,7 @@ retry_walk:
 		if (unlikely(kvm_is_error_hva(host_addr)))
 			goto error;
 
-		ptep_user = (pt_element_t __user *)((void *)host_addr + offset);
+		ptep_user = (pt_element_t __force_user *)((void *)host_addr + offset);
 		if (unlikely(__copy_from_user(&pte, ptep_user, sizeof(pte))))
 			goto error;
 
@@ -575,6 +575,8 @@ static int FNAME(page_fault)(struct kvm_vcpu *vcpu, gva_t addr, u32 error_code,
 	unsigned long mmu_seq;
 	bool map_writable;
 
+	pax_track_stack();
+
 	pgprintk("%s: addr %lx err %x\n", __func__, addr, error_code);
 
 	if (unlikely(error_code & PFERR_RSVD_MASK))
@@ -701,7 +703,7 @@ static void FNAME(invlpg)(struct kvm_vcpu *vcpu, gva_t gva)
 	if (need_flush)
 		kvm_flush_remote_tlbs(vcpu->kvm);
 
-	atomic_inc(&vcpu->kvm->arch.invlpg_counter);
+	atomic_inc_unchecked(&vcpu->kvm->arch.invlpg_counter);
 
 	spin_unlock(&vcpu->kvm->mmu_lock);
 
