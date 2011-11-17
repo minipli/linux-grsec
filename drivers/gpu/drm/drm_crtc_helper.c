@@ -573,7 +573,7 @@ static bool drm_encoder_crtc_ok(struct drm_encoder *encoder,
 	struct drm_crtc *tmp;
 	int crtc_mask = 1;
 
-	WARN(!crtc, "checking null crtc?");
+	BUG_ON(!crtc);
 
 	dev = crtc->dev;
 
@@ -641,6 +641,8 @@ bool drm_crtc_helper_set_mode(struct drm_crtc *crtc,
 	bool ret = true;
 
 	adjusted_mode = drm_mode_duplicate(dev, mode);
+
+	pax_track_stack();
 
 	crtc->enabled = drm_helper_crtc_in_use(crtc);
 

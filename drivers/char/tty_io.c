@@ -1773,6 +1773,7 @@ got_driver:
 
 		if (IS_ERR(tty)) {
 			mutex_unlock(&tty_mutex);
+			tty_driver_kref_put(driver);
 			return PTR_ERR(tty);
 		}
 	}
@@ -2582,8 +2583,10 @@ long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	return retval;
 }
 
+EXPORT_SYMBOL(tty_ioctl);
+
 #ifdef CONFIG_COMPAT
-static long tty_compat_ioctl(struct file *file, unsigned int cmd,
+long tty_compat_ioctl(struct file *file, unsigned int cmd,
 				unsigned long arg)
 {
 	struct inode *inode = file->f_dentry->d_inode;
@@ -2607,6 +2610,8 @@ static long tty_compat_ioctl(struct file *file, unsigned int cmd,
 
 	return retval;
 }
+
+EXPORT_SYMBOL(tty_compat_ioctl);
 #endif
 
 /*
@@ -3052,7 +3057,7 @@ EXPORT_SYMBOL_GPL(get_current_tty);
 
 void tty_default_fops(struct file_operations *fops)
 {
-	*fops = tty_fops;
+	memcpy((void *)fops, &tty_fops, sizeof(tty_fops));
 }
 
 /*
