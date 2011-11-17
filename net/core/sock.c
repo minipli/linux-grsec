@@ -291,7 +291,7 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	 */
 	if (atomic_read(&sk->sk_rmem_alloc) + skb->truesize >=
 	    (unsigned)sk->sk_rcvbuf) {
-		atomic_inc(&sk->sk_drops);
+		atomic_inc_unchecked(&sk->sk_drops);
 		return -ENOMEM;
 	}
 
@@ -300,7 +300,7 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 		return err;
 
 	if (!sk_rmem_schedule(sk, skb->truesize)) {
-		atomic_inc(&sk->sk_drops);
+		atomic_inc_unchecked(&sk->sk_drops);
 		return -ENOBUFS;
 	}
 
@@ -320,7 +320,7 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	skb_dst_force(skb);
 
 	spin_lock_irqsave(&list->lock, flags);
-	skb->dropcount = atomic_read(&sk->sk_drops);
+	skb->dropcount = atomic_read_unchecked(&sk->sk_drops);
 	__skb_queue_tail(list, skb);
 	spin_unlock_irqrestore(&list->lock, flags);
 
@@ -340,7 +340,7 @@ int sk_receive_skb(struct sock *sk, struct sk_buff *skb, const int nested)
 	skb->dev = NULL;
 
 	if (sk_rcvqueues_full(sk, skb)) {
-		atomic_inc(&sk->sk_drops);
+		atomic_inc_unchecked(&sk->sk_drops);
 		goto discard_and_relse;
 	}
 	if (nested)
@@ -358,7 +358,7 @@ int sk_receive_skb(struct sock *sk, struct sk_buff *skb, const int nested)
 		mutex_release(&sk->sk_lock.dep_map, 1, _RET_IP_);
 	} else if (sk_add_backlog(sk, skb)) {
 		bh_unlock_sock(sk);
-		atomic_inc(&sk->sk_drops);
+		atomic_inc_unchecked(&sk->sk_drops);
 		goto discard_and_relse;
 	}
 
@@ -921,7 +921,7 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 		if (len > sizeof(peercred))
 			len = sizeof(peercred);
 		cred_to_ucred(sk->sk_peer_pid, sk->sk_peer_cred, &peercred);
-		if (copy_to_user(optval, &peercred, len))
+		if (len > sizeof(peercred) || copy_to_user(optval, &peercred, len))
 			return -EFAULT;
 		goto lenout;
 	}
@@ -934,7 +934,7 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 			return -ENOTCONN;
 		if (lv < len)
 			return -EINVAL;
-		if (copy_to_user(optval, address, len))
+		if (len > sizeof(address) || copy_to_user(optval, address, len))
 			return -EFAULT;
 		goto lenout;
 	}
@@ -967,7 +967,7 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 
 	if (len > lv)
 		len = lv;
-	if (copy_to_user(optval, &v, len))
+	if (len > sizeof(v) || copy_to_user(optval, &v, len))
 		return -EFAULT;
 lenout:
 	if (put_user(len, optlen))
@@ -2024,7 +2024,7 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	 */
 	smp_wmb();
 	atomic_set(&sk->sk_refcnt, 1);
-	atomic_set(&sk->sk_drops, 0);
+	atomic_set_unchecked(&sk->sk_drops, 0);
 }
 EXPORT_SYMBOL(sock_init_data);
 

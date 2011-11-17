@@ -109,6 +109,11 @@ struct inodes_stat_t {
 /* File was opened by fanotify and shouldn't generate fanotify events */
 #define FMODE_NONOTIFY		((__force fmode_t)0x1000000)
 
+/* Hack for grsec so as not to require read permission simply to execute
+ * a binary
+ */
+#define FMODE_GREXEC		((__force fmode_t)0x2000000)
+
 /*
  * The below are the various read and write types that we support. Some of
  * them include behavioral modifiers that send information down to the
@@ -1571,7 +1576,8 @@ struct file_operations {
 	int (*setlease)(struct file *, long, struct file_lock **);
 	long (*fallocate)(struct file *file, int mode, loff_t offset,
 			  loff_t len);
-};
+} __do_const;
+typedef struct file_operations __no_const file_operations_no_const;
 
 #define IPERM_FLAG_RCU	0x0001
 

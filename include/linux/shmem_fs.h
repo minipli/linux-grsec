@@ -10,7 +10,7 @@
 
 #define SHMEM_NR_DIRECT 16
 
-#define SHMEM_SYMLINK_INLINE_LEN (SHMEM_NR_DIRECT * sizeof(swp_entry_t))
+#define SHMEM_SYMLINK_INLINE_LEN 64
 
 struct shmem_inode_info {
 	spinlock_t		lock;

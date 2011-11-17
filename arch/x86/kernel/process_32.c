@@ -65,6 +65,7 @@ asmlinkage void ret_from_fork(void) __asm__("ret_from_fork");
 unsigned long thread_saved_pc(struct task_struct *tsk)
 {
 	return ((unsigned long *)tsk->thread.sp)[3];
+//XXX	return tsk->thread.eip;
 }
 
 #ifndef CONFIG_SMP
@@ -126,15 +127,14 @@ void __show_regs(struct pt_regs *regs, int all)
 	unsigned long sp;
 	unsigned short ss, gs;
 
-	if (user_mode_vm(regs)) {
+	if (user_mode(regs)) {
 		sp = regs->sp;
 		ss = regs->ss & 0xffff;
-		gs = get_user_gs(regs);
 	} else {
 		sp = kernel_stack_pointer(regs);
 		savesegment(ss, ss);
-		savesegment(gs, gs);
 	}
+	gs = get_user_gs(regs);
 
 	show_regs_common();
 
@@ -196,13 +196,14 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	struct task_struct *tsk;
 	int err;
 
-	childregs = task_pt_regs(p);
+	childregs = task_stack_page(p) + THREAD_SIZE - sizeof(struct pt_regs) - 8;
 	*childregs = *regs;
 	childregs->ax = 0;
 	childregs->sp = sp;
 
 	p->thread.sp = (unsigned long) childregs;
 	p->thread.sp0 = (unsigned long) (childregs+1);
+	p->tinfo.lowest_stack = (unsigned long)task_stack_page(p);
 
 	p->thread.ip = (unsigned long) ret_from_fork;
 
@@ -292,7 +293,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	struct thread_struct *prev = &prev_p->thread,
 				 *next = &next_p->thread;
 	int cpu = smp_processor_id();
-	struct tss_struct *tss = &per_cpu(init_tss, cpu);
+	struct tss_struct *tss = init_tss + cpu;
 	bool preload_fpu;
 
 	/* never put a printk in __switch_to... printk() calls wake_up*() indirectly */
@@ -326,6 +327,10 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	 * running inside of a hypervisor layer.
 	 */
 	lazy_save_gs(prev->gs);
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	__set_fs(task_thread_info(next_p)->addr_limit);
+#endif
 
 	/*
 	 * Load the per-thread Thread-Local Storage descriptor.
@@ -362,6 +367,9 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	 */
 	arch_end_context_switch(next_p);
 
+	percpu_write(current_task, next_p);
+	percpu_write(current_tinfo, &next_p->tinfo);
+
 	if (preload_fpu)
 		__math_state_restore();
 
@@ -370,8 +378,6 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	 */
 	if (prev->gs | next->gs)
 		lazy_load_gs(next->gs);
-
-	percpu_write(current_task, next_p);
 
 	return prev_p;
 }
@@ -402,4 +408,3 @@ unsigned long get_wchan(struct task_struct *p)
 	} while (count++ < 16);
 	return 0;
 }
-

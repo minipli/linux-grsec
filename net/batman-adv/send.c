@@ -279,7 +279,7 @@ void schedule_own_packet(struct hard_iface *hard_iface)
 
 	/* change sequence number to network order */
 	batman_packet->seqno =
-		htonl((uint32_t)atomic_read(&hard_iface->seqno));
+		htonl((uint32_t)atomic_read_unchecked(&hard_iface->seqno));
 
 	if (vis_server == VIS_TYPE_SERVER_SYNC)
 		batman_packet->flags |= VIS_SERVER;
@@ -293,7 +293,7 @@ void schedule_own_packet(struct hard_iface *hard_iface)
 	else
 		batman_packet->gw_flags = 0;
 
-	atomic_inc(&hard_iface->seqno);
+	atomic_inc_unchecked(&hard_iface->seqno);
 
 	slide_own_bcast_window(hard_iface);
 	send_time = own_send_time(bat_priv);

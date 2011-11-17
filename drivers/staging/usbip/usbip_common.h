@@ -315,7 +315,7 @@ struct usbip_device {
 		void (*shutdown)(struct usbip_device *);
 		void (*reset)(struct usbip_device *);
 		void (*unusable)(struct usbip_device *);
-	} eh_ops;
+	} __no_const eh_ops;
 };
 
 void usbip_pack_pdu(struct usbip_header *pdu, struct urb *urb, int cmd,

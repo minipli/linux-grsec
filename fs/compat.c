@@ -133,8 +133,8 @@ asmlinkage long compat_sys_utimes(const char __user *filename, struct compat_tim
 static int cp_compat_stat(struct kstat *stat, struct compat_stat __user *ubuf)
 {
 	compat_ino_t ino = stat->ino;
-	typeof(ubuf->st_uid) uid = 0;
-	typeof(ubuf->st_gid) gid = 0;
+	typeof(((struct compat_stat *)0)->st_uid) uid = 0;
+	typeof(((struct compat_stat *)0)->st_gid) gid = 0;
 	int err;
 
 	SET_UID(uid, stat->uid);
@@ -508,7 +508,7 @@ compat_sys_io_setup(unsigned nr_reqs, u32 __user *ctx32p)
 
 	set_fs(KERNEL_DS);
 	/* The __user pointer cast is valid because of the set_fs() */
-	ret = sys_io_setup(nr_reqs, (aio_context_t __user *) &ctx64);
+	ret = sys_io_setup(nr_reqs, (aio_context_t __force_user *) &ctx64);
 	set_fs(oldfs);
 	/* truncating is ok because it's a user address */
 	if (!ret)
@@ -566,7 +566,7 @@ ssize_t compat_rw_copy_check_uvector(int type,
 		goto out;
 
 	ret = -EINVAL;
-	if (nr_segs > UIO_MAXIOV || nr_segs < 0)
+	if (nr_segs > UIO_MAXIOV)
 		goto out;
 	if (nr_segs > fast_segs) {
 		ret = -ENOMEM;
@@ -848,6 +848,7 @@ struct compat_old_linux_dirent {
 
 struct compat_readdir_callback {
 	struct compat_old_linux_dirent __user *dirent;
+	struct file * file;
 	int result;
 };
 
@@ -865,6 +866,10 @@ static int compat_fillonedir(void *__buf, const char *name, int namlen,
 		buf->result = -EOVERFLOW;
 		return -EOVERFLOW;
 	}
+
+	if (!gr_acl_handle_filldir(buf->file, name, namlen, ino))
+		return 0;
+
 	buf->result++;
 	dirent = buf->dirent;
 	if (!access_ok(VERIFY_WRITE, dirent,
@@ -897,6 +902,7 @@ asmlinkage long compat_sys_old_readdir(unsigned int fd,
 
 	buf.result = 0;
 	buf.dirent = dirent;
+	buf.file = file;
 
 	error = vfs_readdir(file, compat_fillonedir, &buf);
 	if (buf.result)
@@ -917,6 +923,7 @@ struct compat_linux_dirent {
 struct compat_getdents_callback {
 	struct compat_linux_dirent __user *current_dir;
 	struct compat_linux_dirent __user *previous;
+	struct file * file;
 	int count;
 	int error;
 };
@@ -938,6 +945,10 @@ static int compat_filldir(void *__buf, const char *name, int namlen,
 		buf->error = -EOVERFLOW;
 		return -EOVERFLOW;
 	}
+
+	if (!gr_acl_handle_filldir(buf->file, name, namlen, ino))
+		return 0;
+
 	dirent = buf->previous;
 	if (dirent) {
 		if (__put_user(offset, &dirent->d_off))
@@ -985,6 +996,7 @@ asmlinkage long compat_sys_getdents(unsigned int fd,
 	buf.previous = NULL;
 	buf.count = count;
 	buf.error = 0;
+	buf.file = file;
 
 	error = vfs_readdir(file, compat_filldir, &buf);
 	if (error >= 0)
@@ -1006,6 +1018,7 @@ out:
 struct compat_getdents_callback64 {
 	struct linux_dirent64 __user *current_dir;
 	struct linux_dirent64 __user *previous;
+	struct file * file;
 	int count;
 	int error;
 };
@@ -1022,6 +1035,10 @@ static int compat_filldir64(void * __buf, const char * name, int namlen, loff_t 
 	buf->error = -EINVAL;	/* only used if we fail.. */
 	if (reclen > buf->count)
 		return -EINVAL;
+
+	if (!gr_acl_handle_filldir(buf->file, name, namlen, ino))
+		return 0;
+
 	dirent = buf->previous;
 
 	if (dirent) {
@@ -1073,13 +1090,14 @@ asmlinkage long compat_sys_getdents64(unsigned int fd,
 	buf.previous = NULL;
 	buf.count = count;
 	buf.error = 0;
+	buf.file = file;
 
 	error = vfs_readdir(file, compat_filldir64, &buf);
 	if (error >= 0)
 		error = buf.error;
 	lastdirent = buf.previous;
 	if (lastdirent) {
-		typeof(lastdirent->d_off) d_off = file->f_pos;
+		typeof(((struct linux_dirent64 *)0)->d_off) d_off = file->f_pos;
 		if (__put_user_unaligned(d_off, &lastdirent->d_off))
 			error = -EFAULT;
 		else
@@ -1445,6 +1463,8 @@ int compat_core_sys_select(int n, compat_ulong_t __user *inp,
 	int size, max_fds, ret = -EINVAL;
 	struct fdtable *fdt;
 	long stack_fds[SELECT_STACK_ALLOC/sizeof(long)];
+
+	pax_track_stack();
 
 	if (n < 0)
 		goto out_nofds;
@@ -1904,7 +1924,7 @@ asmlinkage long compat_sys_nfsservctl(int cmd,
 	oldfs = get_fs();
 	set_fs(KERNEL_DS);
 	/* The __user pointer casts are valid because of the set_fs() */
-	err = sys_nfsservctl(cmd, (void __user *) karg, (void __user *) kres);
+	err = sys_nfsservctl(cmd, (void __force_user *) karg, (void __force_user *) kres);
 	set_fs(oldfs);
 
 	if (err)

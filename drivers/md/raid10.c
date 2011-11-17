@@ -1186,7 +1186,7 @@ static void end_sync_read(struct bio *bio, int error)
 	if (test_bit(BIO_UPTODATE, &bio->bi_flags))
 		set_bit(R10BIO_Uptodate, &r10_bio->state);
 	else {
-		atomic_add(r10_bio->sectors,
+		atomic_add_unchecked(r10_bio->sectors,
 			   &conf->mirrors[d].rdev->corrected_errors);
 		if (!test_bit(MD_RECOVERY_SYNC, &conf->mddev->recovery))
 			md_error(r10_bio->mddev,
@@ -1394,7 +1394,7 @@ static void check_decay_read_errors(mddev_t *mddev, mdk_rdev_t *rdev)
 {
 	struct timespec cur_time_mon;
 	unsigned long hours_since_last;
-	unsigned int read_errors = atomic_read(&rdev->read_errors);
+	unsigned int read_errors = atomic_read_unchecked(&rdev->read_errors);
 
 	ktime_get_ts(&cur_time_mon);
 
@@ -1416,9 +1416,9 @@ static void check_decay_read_errors(mddev_t *mddev, mdk_rdev_t *rdev)
 	 * overflowing the shift of read_errors by hours_since_last.
 	 */
 	if (hours_since_last >= 8 * sizeof(read_errors))
-		atomic_set(&rdev->read_errors, 0);
+		atomic_set_unchecked(&rdev->read_errors, 0);
 	else
-		atomic_set(&rdev->read_errors, read_errors >> hours_since_last);
+		atomic_set_unchecked(&rdev->read_errors, read_errors >> hours_since_last);
 }
 
 /*
@@ -1448,8 +1448,8 @@ static void fix_read_error(conf_t *conf, mddev_t *mddev, r10bio_t *r10_bio)
 		return;
 
 	check_decay_read_errors(mddev, rdev);
-	atomic_inc(&rdev->read_errors);
-	if (atomic_read(&rdev->read_errors) > max_read_errors) {
+	atomic_inc_unchecked(&rdev->read_errors);
+	if (atomic_read_unchecked(&rdev->read_errors) > max_read_errors) {
 		char b[BDEVNAME_SIZE];
 		bdevname(rdev->bdev, b);
 
@@ -1457,7 +1457,7 @@ static void fix_read_error(conf_t *conf, mddev_t *mddev, r10bio_t *r10_bio)
 		       "md/raid10:%s: %s: Raid device exceeded "
 		       "read_error threshold [cur %d:max %d]\n",
 		       mdname(mddev), b,
-		       atomic_read(&rdev->read_errors), max_read_errors);
+		       atomic_read_unchecked(&rdev->read_errors), max_read_errors);
 		printk(KERN_NOTICE
 		       "md/raid10:%s: %s: Failing raid device\n",
 		       mdname(mddev), b);
@@ -1520,7 +1520,7 @@ static void fix_read_error(conf_t *conf, mddev_t *mddev, r10bio_t *r10_bio)
 			    test_bit(In_sync, &rdev->flags)) {
 				atomic_inc(&rdev->nr_pending);
 				rcu_read_unlock();
-				atomic_add(s, &rdev->corrected_errors);
+				atomic_add_unchecked(s, &rdev->corrected_errors);
 				if (sync_page_io(rdev,
 						 r10_bio->devs[sl].addr +
 						 sect,

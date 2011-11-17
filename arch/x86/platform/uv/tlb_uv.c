@@ -370,6 +370,8 @@ static void reset_with_ipi(struct bau_targ_hubmask *distribution, int sender)
 	cpumask_t mask;
 	struct reset_args reset_args;
 
+	pax_track_stack();
+
 	reset_args.sender = sender;
 	cpus_clear(mask);
 	/* find a single cpu for each uvhub in this distribution mask */

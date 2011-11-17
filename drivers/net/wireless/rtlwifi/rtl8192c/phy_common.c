@@ -837,6 +837,8 @@ bool _rtl92c_phy_sw_chnl_step_by_step(struct ieee80211_hw *hw,
 	u8 rfpath;
 	u8 num_total_rfpath = rtlphy->num_total_rfpath;
 
+	pax_track_stack();
+
 	precommoncmdcnt = 0;
 	_rtl92c_phy_set_sw_chnl_cmdarray(precommoncmd, precommoncmdcnt++,
 					 MAX_PRECMD_CNT,

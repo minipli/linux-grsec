@@ -441,7 +441,7 @@ struct kvm_arch {
 	unsigned int n_used_mmu_pages;
 	unsigned int n_requested_mmu_pages;
 	unsigned int n_max_mmu_pages;
-	atomic_t invlpg_counter;
+	atomic_unchecked_t invlpg_counter;
 	struct hlist_head mmu_page_hash[KVM_NUM_MMU_PAGES];
 	/*
 	 * Hash table of struct kvm_mmu_page.
@@ -619,7 +619,7 @@ struct kvm_x86_ops {
 			       enum x86_intercept_stage stage);
 
 	const struct trace_print_flags *exit_reasons_str;
-};
+} __do_const;
 
 struct kvm_arch_async_pf {
 	u32 token;

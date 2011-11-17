@@ -48,14 +48,18 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	do_color_align = 0;
 	if (filp || (flags & MAP_SHARED))
 		do_color_align = 1;
+
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(current->mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (addr) {
 		if (do_color_align)
 			addr = COLOUR_ALIGN(addr, pgoff);
 		else
 			addr = PAGE_ALIGN(addr);
 		vmm = find_vma(current->mm, addr);
-		if (TASK_SIZE - len >= addr &&
-		    (!vmm || addr + len <= vmm->vm_start))
+		if (TASK_SIZE - len >= addr && check_heap_stack_gap(vmm, addr, len))
 			return addr;
 	}
 	addr = current->mm->mmap_base;
@@ -68,7 +72,7 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr,
 		/* At this point:  (!vmm || addr < vmm->vm_end). */
 		if (TASK_SIZE - len < addr)
 			return -ENOMEM;
-		if (!vmm || addr + len <= vmm->vm_start)
+		if (check_heap_stack_gap(vmm, addr, len))
 			return addr;
 		addr = vmm->vm_end;
 		if (do_color_align)
@@ -92,31 +96,4 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 	mm->mmap_base = TASK_UNMAPPED_BASE + random_factor;
 	mm->get_unmapped_area = arch_get_unmapped_area;
 	mm->unmap_area = arch_unmap_area;
-}
-
-static inline unsigned long brk_rnd(void)
-{
-	unsigned long rnd = get_random_int();
-
-	rnd = rnd << PAGE_SHIFT;
-	/* 8MB for 32bit, 256MB for 64bit */
-	if (TASK_IS_32BIT_ADDR)
-		rnd = rnd & 0x7ffffful;
-	else
-		rnd = rnd & 0xffffffful;
-
-	return rnd;
-}
-
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long base = mm->brk;
-	unsigned long ret;
-
-	ret = PAGE_ALIGN(base + brk_rnd());
-
-	if (ret < mm->brk)
-		return mm->brk;
-
-	return ret;
 }

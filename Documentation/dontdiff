@@ -5,6 +5,7 @@
 *.cis
 *.cpio
 *.csp
+*.dbg
 *.dsp
 *.dvi
 *.elf
@@ -48,9 +49,11 @@
 *.tab.h
 *.tex
 *.ver
+*.vim
 *.xml
 *.xz
 *_MODULES
+*_reg_safe.h
 *_vga16.c
 *~
 \#*#
@@ -70,6 +73,7 @@ Kerntypes
 Module.markers
 Module.symvers
 PENDING
+PERF*
 SCCS
 System.map*
 TAGS
@@ -98,14 +102,18 @@ bzImage*
 capability_names.h
 capflags.c
 classlist.h*
+clut_vga16.c
+common-cmds.h
 comp*.log
 compile.h*
 conf
 config
 config-*
 config_data.h*
+config.c
 config.mak
 config.mak.autogen
+config.tmp
 conmakehash
 consolemap_deftbl.c*
 cpustr.h
@@ -126,12 +134,14 @@ fore200e_pca_fw.c*
 gconf
 gconf.glade.h
 gen-devlist
+gen-kdb_cmds.c
 gen_crc32table
 gen_init_cpio
 generated
 genheaders
 genksyms
 *_gray256.c
+hash
 hpet_example
 hugepage-mmap
 hugepage-shm
@@ -146,7 +156,7 @@ int32.c
 int4.c
 int8.c
 kallsyms
-kconfig
+kern_constants.h
 keywords.c
 ksym.c*
 ksym.h*
@@ -154,7 +164,6 @@ kxgettext
 lkc_defs.h
 lex.c
 lex.*.c
-linux
 logo_*.c
 logo_*_clut224.c
 logo_*_mono.c
@@ -166,7 +175,6 @@ machtypes.h
 map
 map_hugetlb
 maui_boot.h
-media
 mconf
 miboot*
 mk_elfconfig
@@ -174,6 +182,7 @@ mkboot
 mkbugboot
 mkcpustr
 mkdep
+mkpiggy
 mkprep
 mkregtable
 mktables
@@ -209,6 +218,7 @@ r300_reg_safe.h
 r420_reg_safe.h
 r600_reg_safe.h
 recordmcount
+regdb.c
 relocs
 rlim_names.h
 rn50_reg_safe.h
@@ -219,6 +229,7 @@ setup
 setup.bin
 setup.elf
 sImage
+slabinfo
 sm_tbl*
 split-include
 syscalltab.h
@@ -229,6 +240,7 @@ tftpboot.img
 timeconst.h
 times.h*
 trix_boot.h
+user_constants.h
 utsrelease.h*
 vdso-syms.lds
 vdso.lds
@@ -246,7 +258,9 @@ vmlinux
 vmlinux-*
 vmlinux.aout
 vmlinux.bin.all
+vmlinux.bin.bz2
 vmlinux.lds
+vmlinux.relocs
 vmlinuz
 voffset.h
 vsyscall.lds
@@ -254,6 +268,7 @@ vsyscall_32.lds
 wanxlfw.inc
 uImage
 unifdef
+utsrelease.h
 wakeup.bin
 wakeup.elf
 wakeup.lds

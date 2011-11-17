@@ -742,6 +742,7 @@ static int lme2510_download_firmware(struct usb_device *dev,
 	usb_control_msg(dev, usb_rcvctrlpipe(dev, 0),
 			0x06, 0x80, 0x0200, 0x00, data, 0x0109, 1000);
 
+	pax_track_stack();
 
 	data[0] = 0x8a;
 	len_in = 1;
@@ -763,6 +764,8 @@ static void lme_coldreset(struct usb_device *dev)
 {
 	int ret = 0, len_in;
 	u8 data[512] = {0};
+
+	pax_track_stack();
 
 	data[0] = 0x0a;
 	len_in = 1;

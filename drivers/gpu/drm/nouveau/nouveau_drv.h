@@ -227,7 +227,7 @@ struct nouveau_channel {
 		struct list_head pending;
 		uint32_t sequence;
 		uint32_t sequence_ack;
-		atomic_t last_sequence_irq;
+		atomic_unchecked_t last_sequence_irq;
 	} fence;
 
 	/* DMA push buffer */
@@ -304,7 +304,7 @@ struct nouveau_exec_engine {
 			   u32 handle, u16 class);
 	void (*set_tile_region)(struct drm_device *dev, int i);
 	void (*tlb_flush)(struct drm_device *, int engine);
-};
+} __no_const;
 
 struct nouveau_instmem_engine {
 	void	*priv;
@@ -325,13 +325,13 @@ struct nouveau_instmem_engine {
 struct nouveau_mc_engine {
 	int  (*init)(struct drm_device *dev);
 	void (*takedown)(struct drm_device *dev);
-};
+} __no_const;
 
 struct nouveau_timer_engine {
 	int      (*init)(struct drm_device *dev);
 	void     (*takedown)(struct drm_device *dev);
 	uint64_t (*read)(struct drm_device *dev);
-};
+} __no_const;
 
 struct nouveau_fb_engine {
 	int num_tiles;
@@ -494,7 +494,7 @@ struct nouveau_vram_engine {
 	void (*put)(struct drm_device *, struct nouveau_mem **);
 
 	bool (*flags_valid)(struct drm_device *, u32 tile_flags);
-};
+} __no_const;
 
 struct nouveau_engine {
 	struct nouveau_instmem_engine instmem;
@@ -640,7 +640,7 @@ struct drm_nouveau_private {
 		struct drm_global_reference mem_global_ref;
 		struct ttm_bo_global_ref bo_global_ref;
 		struct ttm_bo_device bdev;
-		atomic_t validate_sequence;
+		atomic_unchecked_t validate_sequence;
 	} ttm;
 
 	struct {
