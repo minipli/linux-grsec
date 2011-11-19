@@ -139,6 +139,18 @@ void show_registers(struct pt_regs *regs)
 				printk("%02x ", c);
 		}
 	}
+
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+void pax_check_alloca(unsigned long size)
+{
+	unsigned long sp = (unsigned long)&sp, stack_left;
+
+	/* all kernel stacks are of the same size */
+	stack_left = sp & (THREAD_SIZE - 1);
+	BUG_ON(stack_left < 256 || size >= stack_left - 256);
+}
+EXPORT_SYMBOL(pax_check_alloca);
+#endif
 	printk("\n");
 }
 

@@ -936,7 +936,7 @@ do_sigbus(struct pt_regs *regs, unsigned long error_code, unsigned long address,
 	if (fault & VM_FAULT_HWPOISON) {
 		printk(KERN_ERR
 	"MCE: Killing %s:%d due to hardware memory corruption fault at %lx\n",
-			tsk->comm, tsk->pid, address);
+			tsk->comm, task_pid_nr(tsk), address);
 		code = BUS_MCEERR_AR;
 	}
 #endif
@@ -1558,7 +1558,7 @@ static int pax_handle_fetch_fault(struct pt_regs *regs)
 #endif
 
 #if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
-void pax_report_insns(void *pc, void *sp)
+void pax_report_insns(struct pt_regs *regs, void *pc, void *sp)
 {
 	long i;
 
@@ -1575,14 +1575,24 @@ void pax_report_insns(void *pc, void *sp)
 	printk(KERN_ERR "PAX: bytes at SP-%lu: ", (unsigned long)sizeof(long));
 	for (i = -1; i < 80 / (long)sizeof(long); i++) {
 		unsigned long c;
-		if (get_user(c, (unsigned long __force_user *)sp+i))
+		if (get_user(c, (unsigned long __force_user *)sp+i)) {
 #ifdef CONFIG_X86_32
 			printk(KERN_CONT "???????? ");
 #else
-			printk(KERN_CONT "???????????????? ");
+			if ((regs->cs == __USER32_CS || (regs->cs & SEGMENT_LDT)))
+				printk(KERN_CONT "???????? ???????? ");
+			else
+				printk(KERN_CONT "???????????????? ");
 #endif
-		else
-			printk(KERN_CONT "%0*lx ", 2 * (int)sizeof(long), c);
+		} else {
+#ifdef CONFIG_X86_64
+			if ((regs->cs == __USER32_CS || (regs->cs & SEGMENT_LDT))) {
+				printk(KERN_CONT "%08x ", (unsigned int)c);
+				printk(KERN_CONT "%08x ", (unsigned int)(c >> 32));
+			} else
+#endif
+				printk(KERN_CONT "%0*lx ", 2 * (int)sizeof(long), c);
+		}
 	}
 	printk("\n");
 }

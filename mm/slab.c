@@ -4489,10 +4489,12 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	struct slab *slabp;
 	unsigned int objnr;
 	unsigned long offset;
+	const char *type;
 
 	if (!n)
 		return;
 
+	type = "<null>";
 	if (ZERO_OR_NULL_PTR(ptr))
 		goto report;
 
@@ -4501,6 +4503,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 
 	page = virt_to_head_page(ptr);
 
+	type = "<process stack>";
 	if (!PageSlab(page)) {
 		if (object_is_on_stack(ptr, n) == -1)
 			goto report;
@@ -4508,6 +4511,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 	}
 
 	cachep = page_get_cache(page);
+	type = cachep->name;
 	if (!(cachep->flags & SLAB_USERCOPY))
 		goto report;
 
@@ -4519,7 +4523,7 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 		return;
 
 report:
-	pax_report_usercopy(ptr, n, to, cachep ? cachep->name : NULL);
+	pax_report_usercopy(ptr, n, to, type);
 #endif
 
 }

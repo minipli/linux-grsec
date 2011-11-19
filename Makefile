@@ -532,7 +532,8 @@ ifdef CONFIG_PAX_CONSTIFY_PLUGIN
 CONSTIFY_PLUGIN := -fplugin=$(objtree)/tools/gcc/constify_plugin.so -DCONSTIFY_PLUGIN
 endif
 ifdef CONFIG_PAX_MEMORY_STACKLEAK
-STACKLEAK_PLUGIN := -fplugin=$(objtree)/tools/gcc/stackleak_plugin.so -fplugin-arg-stackleak_plugin-track-lowest-sp=100
+STACKLEAK_PLUGIN := -fplugin=$(objtree)/tools/gcc/stackleak_plugin.so -DSTACKLEAK_PLUGIN
+STACKLEAK_PLUGIN += -fplugin-arg-stackleak_plugin-track-lowest-sp=100
 endif
 ifdef CONFIG_KALLOCSTAT_PLUGIN
 KALLOCSTAT_PLUGIN := -fplugin=$(objtree)/tools/gcc/kallocstat_plugin.so
