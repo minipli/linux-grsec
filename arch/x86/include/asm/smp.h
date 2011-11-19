@@ -24,7 +24,7 @@ extern unsigned int num_processors;
 DECLARE_PER_CPU(cpumask_var_t, cpu_sibling_map);
 DECLARE_PER_CPU(cpumask_var_t, cpu_core_map);
 DECLARE_PER_CPU(u16, cpu_llc_id);
-DECLARE_PER_CPU(int, cpu_number);
+DECLARE_PER_CPU(unsigned int, cpu_number);
 
 static inline struct cpumask *cpu_sibling_mask(int cpu)
 {
@@ -60,7 +60,7 @@ struct smp_ops {
 
 	void (*send_call_func_ipi)(const struct cpumask *mask);
 	void (*send_call_func_single_ipi)(int cpu);
-};
+} __no_const;
 
 /* Globals due to paravirt */
 extern void set_cpu_sibling_map(int cpu);
@@ -175,14 +175,8 @@ extern unsigned disabled_cpus __cpuinitdata;
 extern int safe_smp_processor_id(void);
 
 #elif defined(CONFIG_X86_64_SMP)
-#define raw_smp_processor_id() (percpu_read(cpu_number))
-
-#define stack_smp_processor_id()					\
-({								\
-	struct thread_info *ti;						\
-	__asm__("andq %%rsp,%0; ":"=r" (ti) : "0" (CURRENT_MASK));	\
-	ti->cpu;							\
-})
+#define raw_smp_processor_id()		(percpu_read(cpu_number))
+#define stack_smp_processor_id()	raw_smp_processor_id()
 #define safe_smp_processor_id()		smp_processor_id()
 
 #endif

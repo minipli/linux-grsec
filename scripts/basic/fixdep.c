@@ -162,7 +162,7 @@ static void grow_config(int len)
 /*
  * Lookup a value in the configuration string.
  */
-static int is_defined_config(const char * name, int len)
+static int is_defined_config(const char * name, unsigned int len)
 {
 	const char * pconfig;
 	const char * plast = str_config + len_config - len;
@@ -199,7 +199,7 @@ static void clear_config(void)
 /*
  * Record the use of a CONFIG_* word.
  */
-static void use_config(char *m, int slen)
+static void use_config(char *m, unsigned int slen)
 {
 	char s[PATH_MAX];
 	char *p;
@@ -222,9 +222,9 @@ static void use_config(char *m, int slen)
 
 static void parse_config_file(char *map, size_t len)
 {
-	int *end = (int *) (map + len);
+	unsigned int *end = (unsigned int *) (map + len);
 	/* start at +1, so that p can never be < map */
-	int *m   = (int *) map + 1;
+	unsigned int *m   = (unsigned int *) map + 1;
 	char *p, *q;
 
 	for (; m < end; m++) {
@@ -371,7 +371,7 @@ static void print_deps(void)
 static void traps(void)
 {
 	static char test[] __attribute__((aligned(sizeof(int)))) = "CONF";
-	int *p = (int *)test;
+	unsigned int *p = (unsigned int *)test;
 
 	if (*p != INT_CONF) {
 		fprintf(stderr, "fixdep: sizeof(int) != 4 or wrong endianess? %#x\n",

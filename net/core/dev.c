@@ -1654,7 +1654,7 @@ static inline int illegal_highdma(struct net_device *dev, struct sk_buff *skb)
 
 struct dev_gso_cb {
 	void (*destructor)(struct sk_buff *skb);
-};
+} __no_const;
 
 #define DEV_GSO_CB(skb) ((struct dev_gso_cb *)(skb)->cb)
 
@@ -2063,7 +2063,7 @@ int netif_rx_ni(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(netif_rx_ni);
 
-static void net_tx_action(struct softirq_action *h)
+static void net_tx_action(void)
 {
 	struct softnet_data *sd = &__get_cpu_var(softnet_data);
 
@@ -2826,7 +2826,7 @@ void netif_napi_del(struct napi_struct *napi)
 EXPORT_SYMBOL(netif_napi_del);
 
 
-static void net_rx_action(struct softirq_action *h)
+static void net_rx_action(void)
 {
 	struct list_head *list = &__get_cpu_var(softnet_data).poll_list;
 	unsigned long time_limit = jiffies + 2;

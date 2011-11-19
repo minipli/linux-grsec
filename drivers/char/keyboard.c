@@ -1386,7 +1386,7 @@ static const struct input_device_id kbd_ids[] = {
                 .evbit = { BIT_MASK(EV_SND) },
         },
 
-	{ },    /* Terminating entry */
+	{ 0 },    /* Terminating entry */
 };
 
 MODULE_DEVICE_TABLE(input, kbd_ids);

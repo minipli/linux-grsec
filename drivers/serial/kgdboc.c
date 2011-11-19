@@ -18,7 +18,7 @@
 
 #define MAX_CONFIG_LEN		40
 
-static struct kgdb_io		kgdboc_io_ops;
+static struct kgdb_io	kgdboc_io_ops;
 
 /* -1 = init not run yet, 0 = unconfigured, 1 = configured. */
 static int configured		= -1;
