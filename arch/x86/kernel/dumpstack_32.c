@@ -139,6 +139,8 @@ void show_registers(struct pt_regs *regs)
 				printk("%02x ", c);
 		}
 	}
+	printk("\n");
+}
 
 #ifdef CONFIG_PAX_MEMORY_STACKLEAK
 void pax_check_alloca(unsigned long size)
@@ -151,8 +153,6 @@ void pax_check_alloca(unsigned long size)
 }
 EXPORT_SYMBOL(pax_check_alloca);
 #endif
-	printk("\n");
-}
 
 int is_valid_bugaddr(unsigned long ip)
 {
