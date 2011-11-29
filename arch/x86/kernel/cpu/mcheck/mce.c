@@ -1393,7 +1393,7 @@ static void unexpected_machine_check(struct pt_regs *regs, long error_code)
 }
 
 /* Call the installed machine check handler for this CPU setup. */
-void (*machine_check_vector)(struct pt_regs *, long error_code) =
+void (*machine_check_vector)(struct pt_regs *, long error_code) __read_only =
 						unexpected_machine_check;
 
 /*
