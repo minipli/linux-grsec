@@ -335,7 +335,7 @@ static inline int nlmsg_ok(const struct nlmsghdr *nlh, int remaining)
 {
 	return (remaining >= (int) sizeof(struct nlmsghdr) &&
 		nlh->nlmsg_len >= sizeof(struct nlmsghdr) &&
-		nlh->nlmsg_len <= remaining);
+		nlh->nlmsg_len <= (unsigned int)remaining);
 }
 
 /**
@@ -558,7 +558,7 @@ static inline void *nlmsg_get_pos(struct sk_buff *skb)
 static inline void nlmsg_trim(struct sk_buff *skb, const void *mark)
 {
 	if (mark)
-		skb_trim(skb, (unsigned char *) mark - skb->data);
+		skb_trim(skb, (const unsigned char *) mark - skb->data);
 }
 
 /**

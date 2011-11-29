@@ -2,6 +2,7 @@
 
 #include <linux/linkage.h>
 #include <asm/dwarf2.h>
+#include <asm/alternative-asm.h>
 
 /*
  * ISO C memset - set a memory block to a byte value.
@@ -28,6 +29,7 @@ memset_c:
 	movl %r8d,%ecx
 	rep stosb
 	movq %r9,%rax
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(memset_c)
@@ -96,6 +98,7 @@ ENTRY(__memset)
 
 .Lende:
 	movq	%r10,%rax
+	pax_force_retaddr
 	ret
 
 	CFI_RESTORE_STATE
@@ -118,7 +121,7 @@ ENDPROC(__memset)
 
 #include <asm/cpufeature.h>
 
-	.section .altinstr_replacement,"ax"
+	.section .altinstr_replacement,"a"
 1:	.byte 0xeb				/* jmp <disp8> */
 	.byte (memset_c - memset) - (2f - 1b)	/* offset */
 2:

@@ -25,6 +25,17 @@ static inline int atomic_read(const atomic_t *v)
 }
 
 /**
+ * atomic_read_unchecked - read atomic variable
+ * @v: pointer of type atomic_unchecked_t
+ *
+ * Atomically reads the value of @v.
+ */
+static inline int atomic_read_unchecked(const atomic_unchecked_t *v)
+{
+	return v->counter;
+}
+
+/**
  * atomic_set - set atomic variable
  * @v: pointer of type atomic_t
  * @i: required value
@@ -32,6 +43,18 @@ static inline int atomic_read(const atomic_t *v)
  * Atomically sets the value of @v to @i.
  */
 static inline void atomic_set(atomic_t *v, int i)
+{
+	v->counter = i;
+}
+
+/**
+ * atomic_set_unchecked - set atomic variable
+ * @v: pointer of type atomic_unchecked_t
+ * @i: required value
+ *
+ * Atomically sets the value of @v to @i.
+ */
+static inline void atomic_set_unchecked(atomic_unchecked_t *v, int i)
 {
 	v->counter = i;
 }
@@ -45,7 +68,29 @@ static inline void atomic_set(atomic_t *v, int i)
  */
 static inline void atomic_add(int i, atomic_t *v)
 {
-	asm volatile(LOCK_PREFIX "addl %1,%0"
+	asm volatile(LOCK_PREFIX "addl %1,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX "subl %1,%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     : "+m" (v->counter)
+		     : "ir" (i));
+}
+
+/**
+ * atomic_add_unchecked - add integer to atomic variable
+ * @i: integer value to add
+ * @v: pointer of type atomic_unchecked_t
+ *
+ * Atomically adds @i to @v.
+ */
+static inline void atomic_add_unchecked(int i, atomic_unchecked_t *v)
+{
+	asm volatile(LOCK_PREFIX "addl %1,%0\n"
 		     : "+m" (v->counter)
 		     : "ir" (i));
 }
@@ -59,7 +104,29 @@ static inline void atomic_add(int i, atomic_t *v)
  */
 static inline void atomic_sub(int i, atomic_t *v)
 {
-	asm volatile(LOCK_PREFIX "subl %1,%0"
+	asm volatile(LOCK_PREFIX "subl %1,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX "addl %1,%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     : "+m" (v->counter)
+		     : "ir" (i));
+}
+
+/**
+ * atomic_sub_unchecked - subtract integer from atomic variable
+ * @i: integer value to subtract
+ * @v: pointer of type atomic_unchecked_t
+ *
+ * Atomically subtracts @i from @v.
+ */
+static inline void atomic_sub_unchecked(int i, atomic_unchecked_t *v)
+{
+	asm volatile(LOCK_PREFIX "subl %1,%0\n"
 		     : "+m" (v->counter)
 		     : "ir" (i));
 }
@@ -77,7 +144,16 @@ static inline int atomic_sub_and_test(int i, atomic_t *v)
 {
 	unsigned char c;
 
-	asm volatile(LOCK_PREFIX "subl %2,%0; sete %1"
+	asm volatile(LOCK_PREFIX "subl %2,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX "addl %2,%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     "sete %1\n"
 		     : "+m" (v->counter), "=qm" (c)
 		     : "ir" (i) : "memory");
 	return c;
@@ -91,7 +167,27 @@ static inline int atomic_sub_and_test(int i, atomic_t *v)
  */
 static inline void atomic_inc(atomic_t *v)
 {
-	asm volatile(LOCK_PREFIX "incl %0"
+	asm volatile(LOCK_PREFIX "incl %0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX "decl %0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     : "+m" (v->counter));
+}
+
+/**
+ * atomic_inc_unchecked - increment atomic variable
+ * @v: pointer of type atomic_unchecked_t
+ *
+ * Atomically increments @v by 1.
+ */
+static inline void atomic_inc_unchecked(atomic_unchecked_t *v)
+{
+	asm volatile(LOCK_PREFIX "incl %0\n"
 		     : "+m" (v->counter));
 }
 
@@ -103,7 +199,27 @@ static inline void atomic_inc(atomic_t *v)
  */
 static inline void atomic_dec(atomic_t *v)
 {
-	asm volatile(LOCK_PREFIX "decl %0"
+	asm volatile(LOCK_PREFIX "decl %0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX "incl %0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     : "+m" (v->counter));
+}
+
+/**
+ * atomic_dec_unchecked - decrement atomic variable
+ * @v: pointer of type atomic_unchecked_t
+ *
+ * Atomically decrements @v by 1.
+ */
+static inline void atomic_dec_unchecked(atomic_unchecked_t *v)
+{
+	asm volatile(LOCK_PREFIX "decl %0\n"
 		     : "+m" (v->counter));
 }
 
@@ -119,7 +235,16 @@ static inline int atomic_dec_and_test(atomic_t *v)
 {
 	unsigned char c;
 
-	asm volatile(LOCK_PREFIX "decl %0; sete %1"
+	asm volatile(LOCK_PREFIX "decl %0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX "incl %0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     "sete %1\n"
 		     : "+m" (v->counter), "=qm" (c)
 		     : : "memory");
 	return c != 0;
@@ -137,7 +262,35 @@ static inline int atomic_inc_and_test(atomic_t *v)
 {
 	unsigned char c;
 
-	asm volatile(LOCK_PREFIX "incl %0; sete %1"
+	asm volatile(LOCK_PREFIX "incl %0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX "decl %0\n"
+		     "into\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     "sete %1\n"
+		     : "+m" (v->counter), "=qm" (c)
+		     : : "memory");
+	return c != 0;
+}
+
+/**
+ * atomic_inc_and_test_unchecked - increment and test
+ * @v: pointer of type atomic_unchecked_t
+ *
+ * Atomically increments @v by 1
+ * and returns true if the result is zero, or false for all
+ * other cases.
+ */
+static inline int atomic_inc_and_test_unchecked(atomic_unchecked_t *v)
+{
+	unsigned char c;
+
+	asm volatile(LOCK_PREFIX "incl %0\n"
+		     "sete %1\n"
 		     : "+m" (v->counter), "=qm" (c)
 		     : : "memory");
 	return c != 0;
@@ -156,7 +309,16 @@ static inline int atomic_add_negative(int i, atomic_t *v)
 {
 	unsigned char c;
 
-	asm volatile(LOCK_PREFIX "addl %2,%0; sets %1"
+	asm volatile(LOCK_PREFIX "addl %2,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX "subl %2,%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     "sets %1\n"
 		     : "+m" (v->counter), "=qm" (c)
 		     : "ir" (i) : "memory");
 	return c;
@@ -170,6 +332,46 @@ static inline int atomic_add_negative(int i, atomic_t *v)
  * Atomically adds @i to @v and returns @i + @v
  */
 static inline int atomic_add_return(int i, atomic_t *v)
+{
+	int __i;
+#ifdef CONFIG_M386
+	unsigned long flags;
+	if (unlikely(boot_cpu_data.x86 <= 3))
+		goto no_xadd;
+#endif
+	/* Modern 486+ processor */
+	__i = i;
+	asm volatile(LOCK_PREFIX "xaddl %0, %1\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     "movl %0, %1\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     : "+r" (i), "+m" (v->counter)
+		     : : "memory");
+	return i + __i;
+
+#ifdef CONFIG_M386
+no_xadd: /* Legacy 386 processor */
+	local_irq_save(flags);
+	__i = atomic_read(v);
+	atomic_set(v, i + __i);
+	local_irq_restore(flags);
+	return i + __i;
+#endif
+}
+
+/**
+ * atomic_add_return_unchecked - add integer and return
+ * @v: pointer of type atomic_unchecked_t
+ * @i: integer value to add
+ *
+ * Atomically adds @i to @v and returns @i + @v
+ */
+static inline int atomic_add_return_unchecked(int i, atomic_unchecked_t *v)
 {
 	int __i;
 #ifdef CONFIG_M386
@@ -211,7 +413,17 @@ static inline int atomic_cmpxchg(atomic_t *v, int old, int new)
 	return cmpxchg(&v->counter, old, new);
 }
 
+static inline int atomic_cmpxchg_unchecked(atomic_unchecked_t *v, int old, int new)
+{
+	return cmpxchg(&v->counter, old, new);
+}
+
 static inline int atomic_xchg(atomic_t *v, int new)
+{
+	return xchg(&v->counter, new);
+}
+
+static inline int atomic_xchg_unchecked(atomic_unchecked_t *v, int new)
 {
 	return xchg(&v->counter, new);
 }
@@ -227,22 +439,39 @@ static inline int atomic_xchg(atomic_t *v, int new)
  */
 static inline int atomic_add_unless(atomic_t *v, int a, int u)
 {
-	int c, old;
+	int c, old, new;
 	c = atomic_read(v);
 	for (;;) {
-		if (unlikely(c == (u)))
+		if (unlikely(c == u))
 			break;
-		old = atomic_cmpxchg((v), c, c + (a));
+
+		asm volatile("addl %2,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+			     "jno 0f\n"
+			     "subl %2,%0\n"
+			     "int $4\n0:\n"
+			     _ASM_EXTABLE(0b, 0b)
+#endif
+
+			     : "=r" (new)
+			     : "0" (c), "ir" (a));
+
+		old = atomic_cmpxchg(v, c, new);
 		if (likely(old == c))
 			break;
 		c = old;
 	}
-	return c != (u);
+	return c != u;
 }
 
 #define atomic_inc_not_zero(v) atomic_add_unless((v), 1, 0)
 
 #define atomic_inc_return(v)  (atomic_add_return(1, v))
+static inline int atomic_inc_return_unchecked(atomic_unchecked_t *v)
+{
+	return atomic_add_return_unchecked(1, v);
+}
 #define atomic_dec_return(v)  (atomic_sub_return(1, v))
 
 /* These are x86-specific, used by some header files */
@@ -266,9 +495,18 @@ typedef struct {
 	u64 __aligned(8) counter;
 } atomic64_t;
 
+#ifdef CONFIG_PAX_REFCOUNT
+typedef struct {
+	u64 __aligned(8) counter;
+} atomic64_unchecked_t;
+#else
+typedef atomic64_t atomic64_unchecked_t;
+#endif
+
 #define ATOMIC64_INIT(val)	{ (val) }
 
 extern u64 atomic64_cmpxchg(atomic64_t *ptr, u64 old_val, u64 new_val);
+extern u64 atomic64_cmpxchg_unchecked(atomic64_unchecked_t *ptr, u64 old_val, u64 new_val);
 
 /**
  * atomic64_xchg - xchg atomic64 variable
@@ -279,6 +517,7 @@ extern u64 atomic64_cmpxchg(atomic64_t *ptr, u64 old_val, u64 new_val);
  * the old value.
  */
 extern u64 atomic64_xchg(atomic64_t *ptr, u64 new_val);
+extern u64 atomic64_xchg_unchecked(atomic64_unchecked_t *ptr, u64 new_val);
 
 /**
  * atomic64_set - set atomic64 variable
@@ -288,6 +527,15 @@ extern u64 atomic64_xchg(atomic64_t *ptr, u64 new_val);
  * Atomically sets the value of @ptr to @new_val.
  */
 extern void atomic64_set(atomic64_t *ptr, u64 new_val);
+
+/**
+ * atomic64_unchecked_set - set atomic64 variable
+ * @ptr:      pointer to type atomic64_unchecked_t
+ * @new_val:  value to assign
+ *
+ * Atomically sets the value of @ptr to @new_val.
+ */
+extern void atomic64_set_unchecked(atomic64_unchecked_t *ptr, u64 new_val);
 
 /**
  * atomic64_read - read atomic64 variable
@@ -317,7 +565,33 @@ static inline u64 atomic64_read(atomic64_t *ptr)
 	return res;
 }
 
-extern u64 atomic64_read(atomic64_t *ptr);
+/**
+ * atomic64_read_unchecked - read atomic64 variable
+ * @ptr:      pointer to type atomic64_unchecked_t
+ *
+ * Atomically reads the value of @ptr and returns it.
+ */
+static inline u64 atomic64_read_unchecked(atomic64_unchecked_t *ptr)
+{
+	u64 res;
+
+	/*
+	 * Note, we inline this atomic64_unchecked_t primitive because
+	 * it only clobbers EAX/EDX and leaves the others
+	 * untouched. We also (somewhat subtly) rely on the
+	 * fact that cmpxchg8b returns the current 64-bit value
+	 * of the memory location we are touching:
+	 */
+	asm volatile(
+		"mov %%ebx, %%eax\n\t"
+		"mov %%ecx, %%edx\n\t"
+		LOCK_PREFIX "cmpxchg8b %1\n"
+			: "=&A" (res)
+			: "m" (*ptr)
+		);
+
+	return res;
+}
 
 /**
  * atomic64_add_return - add and return
@@ -332,8 +606,11 @@ extern u64 atomic64_add_return(u64 delta, atomic64_t *ptr);
  * Other variants with different arithmetic operators:
  */
 extern u64 atomic64_sub_return(u64 delta, atomic64_t *ptr);
+extern u64 atomic64_sub_return_unchecked(u64 delta, atomic64_unchecked_t *ptr);
 extern u64 atomic64_inc_return(atomic64_t *ptr);
+extern u64 atomic64_inc_return_unchecked(atomic64_unchecked_t *ptr);
 extern u64 atomic64_dec_return(atomic64_t *ptr);
+extern u64 atomic64_dec_return_unchecked(atomic64_unchecked_t *ptr);
 
 /**
  * atomic64_add - add integer to atomic64 variable
@@ -345,6 +622,15 @@ extern u64 atomic64_dec_return(atomic64_t *ptr);
 extern void atomic64_add(u64 delta, atomic64_t *ptr);
 
 /**
+ * atomic64_add_unchecked - add integer to atomic64 variable
+ * @delta: integer value to add
+ * @ptr:   pointer to type atomic64_unchecked_t
+ *
+ * Atomically adds @delta to @ptr.
+ */
+extern void atomic64_add_unchecked(u64 delta, atomic64_unchecked_t *ptr);
+
+/**
  * atomic64_sub - subtract the atomic64 variable
  * @delta: integer value to subtract
  * @ptr:   pointer to type atomic64_t
@@ -352,6 +638,15 @@ extern void atomic64_add(u64 delta, atomic64_t *ptr);
  * Atomically subtracts @delta from @ptr.
  */
 extern void atomic64_sub(u64 delta, atomic64_t *ptr);
+
+/**
+ * atomic64_sub_unchecked - subtract the atomic64 variable
+ * @delta: integer value to subtract
+ * @ptr:   pointer to type atomic64_unchecked_t
+ *
+ * Atomically subtracts @delta from @ptr.
+ */
+extern void atomic64_sub_unchecked(u64 delta, atomic64_unchecked_t *ptr);
 
 /**
  * atomic64_sub_and_test - subtract value from variable and test result
@@ -373,12 +668,28 @@ extern int atomic64_sub_and_test(u64 delta, atomic64_t *ptr);
 extern void atomic64_inc(atomic64_t *ptr);
 
 /**
+ * atomic64_inc_unchecked - increment atomic64 variable
+ * @ptr: pointer to type atomic64_unchecked_t
+ *
+ * Atomically increments @ptr by 1.
+ */
+extern void atomic64_inc_unchecked(atomic64_unchecked_t *ptr);
+
+/**
  * atomic64_dec - decrement atomic64 variable
  * @ptr: pointer to type atomic64_t
  *
  * Atomically decrements @ptr by 1.
  */
 extern void atomic64_dec(atomic64_t *ptr);
+
+/**
+ * atomic64_dec_unchecked - decrement atomic64 variable
+ * @ptr: pointer to type atomic64_unchecked_t
+ *
+ * Atomically decrements @ptr by 1.
+ */
+extern void atomic64_dec_unchecked(atomic64_unchecked_t *ptr);
 
 /**
  * atomic64_dec_and_test - decrement and test
