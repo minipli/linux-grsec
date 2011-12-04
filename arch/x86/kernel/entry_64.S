@@ -197,6 +197,7 @@ ENDPROC(native_usergs_sysret64)
 	.endm
 
 	.macro pax_enter_kernel
+	pax_set_fptr_mask
 #ifdef CONFIG_PAX_KERNEXEC
 	call pax_enter_kernel
 #endif
@@ -263,6 +264,7 @@ ENDPROC(pax_exit_kernel)
 #endif
 
 	.macro pax_enter_kernel_user
+	pax_set_fptr_mask
 #ifdef CONFIG_PAX_MEMORY_UDEREF
 	call pax_enter_kernel_user
 #endif
@@ -395,16 +397,16 @@ ENDPROC(pax_exit_kernel_user)
 
 #ifdef CONFIG_PAX_MEMORY_STACKLEAK
 /*
- * r10: thread_info
+ * r11: thread_info
  * rcx, rdx: can be clobbered
  */
 ENTRY(pax_erase_kstack)
 	pushq %rdi
 	pushq %rax
-	pushq %r10
+	pushq %r11
 
-	GET_THREAD_INFO(%r10)
-	mov TI_lowest_stack(%r10), %rdi
+	GET_THREAD_INFO(%r11)
+	mov TI_lowest_stack(%r11), %rdi
 	mov $0xB4DD00D5BADBABE5, %rax
 	std
 
@@ -434,11 +436,11 @@ ENTRY(pax_erase_kstack)
 	shr $3, %ecx
 	rep stosq
 
-	mov TI_task_thread_sp0(%r10), %rdi
+	mov TI_task_thread_sp0(%r11), %rdi
 	sub $256, %rdi
-	mov %rdi, TI_lowest_stack(%r10)
+	mov %rdi, TI_lowest_stack(%r11)
 
-	popq %r10
+	popq %r11
 	popq %rax
 	popq %rdi
 	pax_force_retaddr
@@ -656,7 +658,7 @@ ENTRY(save_paranoid)
 	js 1f	/* negative -> in kernel */
 	SWAPGS
 	xorl %ebx,%ebx
-1:	pax_force_retaddr
+1:	pax_force_retaddr_bts
 	ret
 	CFI_ENDPROC
 ENDPROC(save_paranoid)
@@ -742,13 +744,13 @@ ENTRY(system_call_after_swapgs)
 
 	movq	%rsp,PER_CPU_VAR(old_rsp)
 	movq	PER_CPU_VAR(kernel_stack),%rsp
+	SAVE_ARGS 8*6,1
 	pax_enter_kernel_user
 	/*
 	 * No need to follow this irqs off/on section - it's straight
 	 * and short:
 	 */
 	ENABLE_INTERRUPTS(CLBR_NONE)
-	SAVE_ARGS 8*6,1
 	movq  %rax,ORIG_RAX-ARGOFFSET(%rsp)
 	movq  %rcx,RIP-ARGOFFSET(%rsp)
 	CFI_REL_OFFSET rip,RIP-ARGOFFSET
@@ -758,7 +760,7 @@ ENTRY(system_call_after_swapgs)
 system_call_fastpath:
 	cmpq $__NR_syscall_max,%rax
 	ja badsys
-	movq %r10,%rcx
+	movq R10-ARGOFFSET(%rsp),%rcx
 	call *sys_call_table(,%rax,8)  # XXX:	 rip relative
 	movq %rax,RAX-ARGOFFSET(%rsp)
 /*
@@ -832,7 +834,7 @@ badsys:
 	 * jump back to the normal fast path.
 	 */
 auditsys:
-	movq %r10,%r9			/* 6th arg: 4th syscall arg */
+	movq R10-ARGOFFSET(%rsp),%r9	/* 6th arg: 4th syscall arg */
 	movq %rdx,%r8			/* 5th arg: 3rd syscall arg */
 	movq %rsi,%rcx			/* 4th arg: 2nd syscall arg */
 	movq %rdi,%rdx			/* 3rd arg: 1st syscall arg */
@@ -843,6 +845,7 @@ auditsys:
 	pax_erase_kstack
 
 	LOAD_ARGS 0		/* reload call-clobbered registers */
+	pax_set_fptr_mask
 	jmp system_call_fastpath
 
 	/*
@@ -881,10 +884,11 @@ tracesys:
 	 * the value it wants us to use in the table lookup.
 	 */
 	LOAD_ARGS ARGOFFSET, 1
+	pax_set_fptr_mask
 	RESTORE_REST
 	cmpq $__NR_syscall_max,%rax
 	ja   int_ret_from_sys_call	/* RAX(%rsp) set to -ENOSYS above */
-	movq %r10,%rcx	/* fixup for C */
+	movq R10-ARGOFFSET(%rsp),%rcx	/* fixup for C */
 	call *sys_call_table(,%rax,8)
 	movq %rax,RAX-ARGOFFSET(%rsp)
 	/* Use IRET because user could have changed frame */
@@ -1849,7 +1853,7 @@ error_swapgs:
 	SWAPGS
 error_sti:
 	TRACE_IRQS_OFF
-	pax_force_retaddr
+	pax_force_retaddr_bts
 	ret
 	CFI_ENDPROC
 

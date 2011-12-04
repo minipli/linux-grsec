@@ -2124,7 +2124,7 @@ static noinline struct module *load_module(void __user *umod,
 	Elf_Ehdr *hdr;
 	Elf_Shdr *sechdrs;
 	char *secstrings, *args, *modmagic, *strtab = NULL;
-	char *staging;
+	char *staging, *license;
 	unsigned int i;
 	unsigned int symindex = 0;
 	unsigned int strindex = 0;
@@ -2221,6 +2221,14 @@ static noinline struct module *load_module(void __user *umod,
 		err = -ENOEXEC;
 		goto free_hdr;
 	}
+
+	license = get_modinfo(sechdrs, infoindex, "license");
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	if (!license || !license_is_gpl_compatible(license)) {
+		err -ENOEXEC;
+		goto free_hdr;
+	}
+#endif
 
 	modmagic = get_modinfo(sechdrs, infoindex, "vermagic");
 	/* This is allowed: modprobe --force will invalidate it. */
@@ -2413,7 +2421,7 @@ static noinline struct module *load_module(void __user *umod,
 		goto free_unload;
 
 	/* Set up license info based on the info section */
-	set_license(mod, get_modinfo(sechdrs, infoindex, "license"));
+	set_license(mod, license);
 
 	/*
 	 * ndiswrapper is under GPL by itself, but loads proprietary modules.
