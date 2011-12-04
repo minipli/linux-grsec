@@ -16,7 +16,7 @@
 #endif
 
 #ifdef CONFIG_PAX_KERNEXEC_PLUGIN
-	.macro pax_force_retaddr_bts rip=0, reload=0
+	.macro pax_force_retaddr_bts rip=0
 	btsq $63,\rip(%rsp)
 	.endm
 #ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_BTS

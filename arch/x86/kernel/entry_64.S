@@ -223,14 +223,11 @@ ENTRY(pax_enter_kernel)
 
 	GET_CR0_INTO_RDI
 	bts $16,%rdi
-	jnc 1f
+	jnc 3f
 	mov %cs,%edi
 	cmp $__KERNEL_CS,%edi
-	jz 3f
-	ljmpq __KERNEL_CS,3f
-1:	ljmpq __KERNEXEC_KERNEL_CS,2f
-2:	SET_RDI_INTO_CR0
-3:
+	jnz 2f
+1:
 
 #ifdef CONFIG_PARAVIRT
 	PV_RESTORE_REGS(CLBR_RDI)
@@ -239,6 +236,11 @@ ENTRY(pax_enter_kernel)
 	popq %rdi
 	pax_force_retaddr
 	retq
+
+2:	ljmpq __KERNEL_CS,1f
+3:	ljmpq __KERNEXEC_KERNEL_CS,4f
+4:	SET_RDI_INTO_CR0
+	jmp 1b
 ENDPROC(pax_enter_kernel)
 
 ENTRY(pax_exit_kernel)
@@ -250,13 +252,22 @@ ENTRY(pax_exit_kernel)
 
 	mov %cs,%rdi
 	cmp $__KERNEXEC_KERNEL_CS,%edi
-	jnz 2f
-	GET_CR0_INTO_RDI
-	btr $16,%rdi
-	ljmpq __KERNEL_CS,1f
-1:	SET_RDI_INTO_CR0
-2:
+	jz 2f
+1:
 
+#ifdef CONFIG_PARAVIRT
+	PV_RESTORE_REGS(CLBR_RDI);
+#endif
+
+	popq %rdi
+	pax_force_retaddr
+	retq
+
+2:	GET_CR0_INTO_RDI
+	btr $16,%rdi
+	ljmpq __KERNEL_CS,3f
+3:	SET_RDI_INTO_CR0
+	jmp 1b
 #ifdef CONFIG_PARAVIRT
 	PV_RESTORE_REGS(CLBR_RDI);
 #endif
@@ -1720,7 +1731,7 @@ ENTRY(paranoid_exit)
 	TRACE_IRQS_IRETQ 0
 	SWAPGS_UNSAFE_STACK
 	RESTORE_ALL 8
-	pax_force_retaddr
+	pax_force_retaddr_bts
 	jmp irq_return
 #endif
 paranoid_swapgs:
@@ -1737,7 +1748,7 @@ paranoid_restore:
 	pax_exit_kernel
 	TRACE_IRQS_IRETQ 0
 	RESTORE_ALL 8
-	pax_force_retaddr
+	pax_force_retaddr_bts
 	jmp irq_return
 paranoid_userspace:
 	GET_THREAD_INFO(%rcx)
@@ -1884,7 +1895,7 @@ ENTRY(nmi)
 	pax_exit_kernel
 	SWAPGS_UNSAFE_STACK
 	RESTORE_ALL 8
-	pax_force_retaddr
+	pax_force_retaddr_bts
 	jmp irq_return
 #endif
 nmi_swapgs:
@@ -1899,7 +1910,7 @@ nmi_swapgs:
 nmi_restore:
 	pax_exit_kernel
 	RESTORE_ALL 8
-	pax_force_retaddr
+	pax_force_retaddr_bts
 	jmp irq_return
 nmi_userspace:
 	GET_THREAD_INFO(%rcx)
