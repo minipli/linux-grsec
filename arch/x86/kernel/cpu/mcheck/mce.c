@@ -1416,7 +1416,9 @@ void __cpuinit mcheck_cpu_init(struct cpuinfo_x86 *c)
 		return;
 	}
 
+	pax_open_kernel();
 	machine_check_vector = do_machine_check;
+	pax_close_kernel();
 
 	__mcheck_cpu_init_generic();
 	__mcheck_cpu_init_vendor(c);

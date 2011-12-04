@@ -193,7 +193,6 @@ ENTRY(ia32_sysenter_target)
 sysenter_do_call:
 	IA32_ARG_FIXUP
 sysenter_dispatch:
-	pax_set_fptr_mask
 	call	*ia32_sys_call_table(,%rax,8)
 	movq	%rax,RAX-ARGOFFSET(%rsp)
 	GET_THREAD_INFO(%r11)

@@ -838,6 +838,7 @@ auditsys:
 	pax_erase_kstack
 
 	LOAD_ARGS 0		/* reload call-clobbered registers */
+	pax_set_fptr_mask
 	jmp system_call_fastpath
 
 	/*
@@ -876,6 +877,7 @@ tracesys:
 	 * the value it wants us to use in the table lookup.
 	 */
 	LOAD_ARGS ARGOFFSET, 1
+	pax_set_fptr_mask
 	RESTORE_REST
 	cmpq $__NR_syscall_max,%rax
 	ja   int_ret_from_sys_call	/* RAX(%rsp) set to -ENOSYS above */
