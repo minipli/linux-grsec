@@ -387,7 +387,7 @@ static int pipe_do_rcv(struct sock *sk, struct sk_buff *skb)
 
 	case PNS_PEP_CTRL_REQ:
 		if (skb_queue_len(&pn->ctrlreq_queue) >= PNPIPE_CTRLREQ_MAX) {
-			atomic_inc(&sk->sk_drops);
+			atomic_inc_unchecked(&sk->sk_drops);
 			break;
 		}
 		__skb_pull(skb, 4);
@@ -408,7 +408,7 @@ static int pipe_do_rcv(struct sock *sk, struct sk_buff *skb)
 		}
 
 		if (pn->rx_credits == 0) {
-			atomic_inc(&sk->sk_drops);
+			atomic_inc_unchecked(&sk->sk_drops);
 			err = -ENOBUFS;
 			break;
 		}
@@ -556,7 +556,7 @@ static int pipe_handler_do_rcv(struct sock *sk, struct sk_buff *skb)
 		}
 
 		if (pn->rx_credits == 0) {
-			atomic_inc(&sk->sk_drops);
+			atomic_inc_unchecked(&sk->sk_drops);
 			err = NET_RX_DROP;
 			break;
 		}
