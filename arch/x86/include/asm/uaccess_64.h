@@ -20,12 +20,12 @@
 
 /* Handles exceptions in both to and from, but doesn't do access_ok */
 __must_check unsigned long
-copy_user_generic_string(void *to, const void *from, unsigned len);
+copy_user_generic_string(void *to, const void *from, unsigned long len);
 __must_check unsigned long
-copy_user_generic_unrolled(void *to, const void *from, unsigned len);
+copy_user_generic_unrolled(void *to, const void *from, unsigned long len);
 
 static __always_inline __must_check unsigned long
-copy_user_generic(void *to, const void *from, unsigned len)
+copy_user_generic(void *to, const void *from, unsigned long len)
 {
 	unsigned ret;
 
@@ -40,21 +40,21 @@ copy_user_generic(void *to, const void *from, unsigned len)
 }
 
 static __always_inline __must_check unsigned long
-__copy_to_user(void __user *to, const void *from, unsigned len);
+__copy_to_user(void __user *to, const void *from, unsigned long len);
 static __always_inline __must_check unsigned long
-__copy_from_user(void *to, const void __user *from, unsigned len);
+__copy_from_user(void *to, const void __user *from, unsigned long len);
 __must_check unsigned long
-copy_in_user(void __user *to, const void __user *from, unsigned len);
+copy_in_user(void __user *to, const void __user *from, unsigned long len);
 
 static inline unsigned long __must_check copy_from_user(void *to,
 					  const void __user *from,
-					  unsigned n)
+					  unsigned long n)
 {
 	might_fault();
 
 	if (access_ok(VERIFY_READ, from, n))
 		n = __copy_from_user(to, from, n);
-	else if ((int)n > 0) {
+	else if (n < INT_MAX) {
 		if (!__builtin_constant_p(n))
 			check_object_size(to, n, false);
 		memset(to, 0, n);
@@ -63,7 +63,7 @@ static inline unsigned long __must_check copy_from_user(void *to,
 }
 
 static __always_inline __must_check
-int copy_to_user(void __user *dst, const void *src, unsigned size)
+int copy_to_user(void __user *dst, const void *src, unsigned long size)
 {
 	might_fault();
 
@@ -73,14 +73,14 @@ int copy_to_user(void __user *dst, const void *src, unsigned size)
 }
 
 static __always_inline __must_check
-unsigned long __copy_from_user(void *dst, const void __user *src, unsigned size)
+unsigned long __copy_from_user(void *dst, const void __user *src, unsigned long size)
 {
 	int sz = __compiletime_object_size(dst);
 	unsigned ret = 0;
 
 	might_fault();
 
-	if ((int)size < 0)
+	if (size > INT_MAX)
 		return size;
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
@@ -148,14 +148,14 @@ unsigned long __copy_from_user(void *dst, const void __user *src, unsigned size)
 }
 
 static __always_inline __must_check
-unsigned long __copy_to_user(void __user *dst, const void *src, unsigned size)
+unsigned long __copy_to_user(void __user *dst, const void *src, unsigned long size)
 {
 	int sz = __compiletime_object_size(src);
 	unsigned ret = 0;
 
 	might_fault();
 
-	if ((int)size < 0)
+	if (size > INT_MAX)
 		return size;
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
@@ -223,13 +223,13 @@ unsigned long __copy_to_user(void __user *dst, const void *src, unsigned size)
 }
 
 static __always_inline __must_check
-unsigned long __copy_in_user(void __user *dst, const void __user *src, unsigned size)
+unsigned long __copy_in_user(void __user *dst, const void __user *src, unsigned long size)
 {
 	unsigned ret = 0;
 
 	might_fault();
 
-	if ((int)size < 0)
+	if (size > INT_MAX)
 		return size;
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
@@ -314,9 +314,9 @@ __must_check unsigned long clear_user(void __user *mem, unsigned long len);
 __must_check unsigned long __clear_user(void __user *mem, unsigned long len);
 
 static __must_check __always_inline int
-__copy_from_user_inatomic(void *dst, const void __user *src, unsigned size)
+__copy_from_user_inatomic(void *dst, const void __user *src, unsigned long size)
 {
-	if ((int)size < 0)
+	if (size > INT_MAX)
 		return size;
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
@@ -331,9 +331,9 @@ __copy_from_user_inatomic(void *dst, const void __user *src, unsigned size)
 }
 
 static __must_check __always_inline unsigned long
-__copy_to_user_inatomic(void __user *dst, const void *src, unsigned size)
+__copy_to_user_inatomic(void __user *dst, const void *src, unsigned long size)
 {
-	if ((int)size < 0)
+	if (size > INT_MAX)
 		return size;
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
@@ -348,13 +348,13 @@ __copy_to_user_inatomic(void __user *dst, const void *src, unsigned size)
 }
 
 extern unsigned long __copy_user_nocache(void *dst, const void __user *src,
-				unsigned size, int zerorest);
+				unsigned long size, int zerorest);
 
-static inline unsigned long __copy_from_user_nocache(void *dst, const void __user *src, unsigned size)
+static inline unsigned long __copy_from_user_nocache(void *dst, const void __user *src, unsigned long size)
 {
 	might_sleep();
 
-	if ((int)size < 0)
+	if (size > INT_MAX)
 		return size;
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
@@ -366,9 +366,9 @@ static inline unsigned long __copy_from_user_nocache(void *dst, const void __use
 }
 
 static inline unsigned long __copy_from_user_inatomic_nocache(void *dst, const void __user *src,
-				  unsigned size)
+				  unsigned long size)
 {
-	if ((int)size < 0)
+	if (size > INT_MAX)
 		return size;
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
@@ -380,6 +380,6 @@ static inline unsigned long __copy_from_user_inatomic_nocache(void *dst, const v
 }
 
 extern unsigned long
-copy_user_handle_tail(char __user *to, char __user *from, unsigned len, unsigned zerorest);
+copy_user_handle_tail(char __user *to, char __user *from, unsigned long len, unsigned zerorest);
 
 #endif /* _ASM_X86_UACCESS_64_H */
