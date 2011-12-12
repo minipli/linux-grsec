@@ -2503,6 +2503,8 @@ static int fcoe_ctlr_vn_recv(struct fcoe_ctlr *fip, struct sk_buff *skb)
 	} buf;
 	int rc;
 
+	pax_track_stack();
+
 	fiph = (struct fip_header *)skb->data;
 	sub = fiph->fip_subcode;
 

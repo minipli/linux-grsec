@@ -261,8 +261,13 @@
 /*
  * Configuration information
  */
+#ifdef CONFIG_GRKERNSEC_RANDNET
+#define INPUT_POOL_WORDS 512
+#define OUTPUT_POOL_WORDS 128
+#else
 #define INPUT_POOL_WORDS 128
 #define OUTPUT_POOL_WORDS 32
+#endif
 #define SEC_XFER_SIZE 512
 #define EXTRACT_SIZE 10
 
@@ -300,10 +305,17 @@ static struct poolinfo {
 	int poolwords;
 	int tap1, tap2, tap3, tap4, tap5;
 } poolinfo_table[] = {
+#ifdef CONFIG_GRKERNSEC_RANDNET
+	/* x^512 + x^411 + x^308 + x^208 +x^104 + x + 1 -- 225 */
+	{ 512,	411,	308,	208,	104,	1 },
+	/* x^128 + x^103 + x^76 + x^51 + x^25 + x + 1 -- 105 */
+	{ 128,	103,	76,	51,	25,	1 },
+#else
 	/* x^128 + x^103 + x^76 + x^51 +x^25 + x + 1 -- 105 */
 	{ 128,	103,	76,	51,	25,	1 },
 	/* x^32 + x^26 + x^20 + x^14 + x^7 + x + 1 -- 15 */
 	{ 32,	26,	20,	14,	7,	1 },
+#endif
 #if 0
 	/* x^2048 + x^1638 + x^1231 + x^819 + x^411 + x + 1  -- 115 */
 	{ 2048,	1638,	1231,	819,	411,	1 },
@@ -909,7 +921,7 @@ static ssize_t extract_entropy_user(struct entropy_store *r, void __user *buf,
 
 		extract_buf(r, tmp);
 		i = min_t(int, nbytes, EXTRACT_SIZE);
-		if (copy_to_user(buf, tmp, i)) {
+		if (i > sizeof(tmp) || copy_to_user(buf, tmp, i)) {
 			ret = -EFAULT;
 			break;
 		}
@@ -1214,7 +1226,7 @@ EXPORT_SYMBOL(generate_random_uuid);
 #include <linux/sysctl.h>
 
 static int min_read_thresh = 8, min_write_thresh;
-static int max_read_thresh = INPUT_POOL_WORDS * 32;
+static int max_read_thresh = OUTPUT_POOL_WORDS * 32;
 static int max_write_thresh = INPUT_POOL_WORDS * 32;
 static char sysctl_bootid[16];
 

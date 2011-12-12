@@ -400,6 +400,8 @@ struct inet_peer *inet_getpeer(const struct inetpeer_addr *daddr, int create)
 	unsigned int sequence;
 	int invalidated, gccnt = 0;
 
+	pax_track_stack();
+
 	/* Attempt a lockless lookup first.
 	 * Because of a concurrent writer, we might not find an existing entry.
 	 */
@@ -436,8 +438,8 @@ relookup:
 	if (p) {
 		p->daddr = *daddr;
 		atomic_set(&p->refcnt, 1);
-		atomic_set(&p->rid, 0);
-		atomic_set(&p->ip_id_count,
+		atomic_set_unchecked(&p->rid, 0);
+		atomic_set_unchecked(&p->ip_id_count,
 				(daddr->family == AF_INET) ?
 					secure_ip_id(daddr->addr.a4) :
 					secure_ipv6_id(daddr->addr.a6));
