@@ -34,7 +34,7 @@ struct v4l2_device;
 #define V4L2_FL_UNREGISTERED	(0)
 
 struct v4l2_file_operations {
-	struct module *owner;
+	struct module * const owner;
 	ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
 	ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
 	unsigned int (*poll) (struct file *, struct poll_table_struct *);
@@ -46,6 +46,7 @@ struct v4l2_file_operations {
 	int (*open) (struct file *);
 	int (*release) (struct file *);
 };
+typedef struct v4l2_file_operations __no_const v4l2_file_operations_no_const;
 
 /*
  * Newer version of video_device, handled by videodev2.c

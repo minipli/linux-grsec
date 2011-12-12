@@ -391,7 +391,7 @@ int udpv6_queue_rcv_skb(struct sock * sk, struct sk_buff *skb)
 		if (rc == -ENOMEM) {
 			UDP6_INC_STATS_BH(sock_net(sk),
 					UDP_MIB_RCVBUFERRORS, is_udplite);
-			atomic_inc(&sk->sk_drops);
+			atomic_inc_unchecked(&sk->sk_drops);
 		}
 		goto drop;
 	}
@@ -1210,7 +1210,7 @@ static void udp6_sock_seq_show(struct seq_file *seq, struct sock *sp, int bucket
 		   sock_i_uid(sp), 0,
 		   sock_i_ino(sp),
 		   atomic_read(&sp->sk_refcnt), sp,
-		   atomic_read(&sp->sk_drops));
+		   atomic_read_unchecked(&sp->sk_drops));
 }
 
 int udp6_seq_show(struct seq_file *seq, void *v)
