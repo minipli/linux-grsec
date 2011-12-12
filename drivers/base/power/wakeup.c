@@ -29,14 +29,14 @@ bool events_check_enabled;
  * They need to be modified together atomically, so it's better to use one
  * atomic variable to hold them both.
  */
-static atomic_t combined_event_count = ATOMIC_INIT(0);
+static atomic_unchecked_t combined_event_count = ATOMIC_INIT(0);
 
 #define IN_PROGRESS_BITS	(sizeof(int) * 4)
 #define MAX_IN_PROGRESS		((1 << IN_PROGRESS_BITS) - 1)
 
 static void split_counters(unsigned int *cnt, unsigned int *inpr)
 {
-	unsigned int comb = atomic_read(&combined_event_count);
+	unsigned int comb = atomic_read_unchecked(&combined_event_count);
 
 	*cnt = (comb >> IN_PROGRESS_BITS);
 	*inpr = comb & MAX_IN_PROGRESS;
@@ -350,7 +350,7 @@ static void wakeup_source_activate(struct wakeup_source *ws)
 	ws->last_time = ktime_get();
 
 	/* Increment the counter of events in progress. */
-	atomic_inc(&combined_event_count);
+	atomic_inc_unchecked(&combined_event_count);
 }
 
 /**
@@ -440,7 +440,7 @@ static void wakeup_source_deactivate(struct wakeup_source *ws)
 	 * Increment the counter of registered wakeup events and decrement the
 	 * couter of wakeup events in progress simultaneously.
 	 */
-	atomic_add(MAX_IN_PROGRESS, &combined_event_count);
+	atomic_add_unchecked(MAX_IN_PROGRESS, &combined_event_count);
 }
 
 /**
