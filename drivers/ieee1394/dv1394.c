@@ -739,7 +739,7 @@ static void frame_prepare(struct video_card *video, unsigned int this_frame)
 	based upon DIF section and sequence
 */
 
-static void inline
+static inline void
 frame_put_packet (struct frame *f, struct packet *p)
 {
 	int section_type = p->data[0] >> 5;           /* section type is in bits 5 - 7 */

@@ -91,7 +91,7 @@ startup_32:
 	movl	$__KERNEL_DS, %eax	# Initialize the %ds segment register
 	movl	%eax, %ds
 
-	movl	$X86_CR4_PAE, %eax
+	movl	$(X86_CR4_PSE | X86_CR4_PAE | X86_CR4_PGE), %eax
 	movl	%eax, %cr4		# Enable PAE mode
 
 					# Setup trampoline 4 level pagetables
@@ -127,7 +127,7 @@ startup_64:
 no_longmode:
 	hlt
 	jmp no_longmode
-#include "verify_cpu_64.S"
+#include "verify_cpu.S"
 
 	# Careful these need to be in the same 64K segment as the above;
 tidt:
@@ -138,7 +138,7 @@ tidt:
 	# so the kernel can live anywhere
 	.balign 4
 tgdt:
-	.short	tgdt_end - tgdt		# gdt limit
+	.short	tgdt_end - tgdt - 1	# gdt limit
 	.long	tgdt - r_base
 	.short 0
 	.quad	0x00cf9b000000ffff	# __KERNEL32_CS

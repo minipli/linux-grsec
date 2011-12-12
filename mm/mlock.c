@@ -13,6 +13,7 @@
 #include <linux/pagemap.h>
 #include <linux/mempolicy.h>
 #include <linux/syscalls.h>
+#include <linux/security.h>
 #include <linux/sched.h>
 #include <linux/module.h>
 #include <linux/rmap.h>
@@ -138,13 +139,6 @@ void munlock_vma_page(struct page *page)
 	}
 }
 
-static inline int stack_guard_page(struct vm_area_struct *vma, unsigned long addr)
-{
-	return (vma->vm_flags & VM_GROWSDOWN) &&
-		(vma->vm_start == addr) &&
-		!vma_stack_continue(vma->vm_prev, addr);
-}
-
 /**
  * __mlock_vma_pages_range() -  mlock a range of pages in the vma.
  * @vma:   target vma
@@ -176,12 +170,6 @@ static long __mlock_vma_pages_range(struct vm_area_struct *vma,
 	gup_flags = FOLL_TOUCH | FOLL_GET;
 	if (vma->vm_flags & VM_WRITE)
 		gup_flags |= FOLL_WRITE;
-
-	/* We don't try to access the guard page of a stack vma */
-	if (stack_guard_page(vma, start)) {
-		addr += PAGE_SIZE;
-		nr_pages--;
-	}
 
 	while (nr_pages > 0) {
 		int i;
@@ -440,7 +428,7 @@ static int do_mlock(unsigned long start, size_t len, int on)
 {
 	unsigned long nstart, end, tmp;
 	struct vm_area_struct * vma, * prev;
-	int error;
+	int error = -EINVAL;
 
 	len = PAGE_ALIGN(len);
 	end = start + len;
@@ -448,6 +436,9 @@ static int do_mlock(unsigned long start, size_t len, int on)
 		return -EINVAL;
 	if (end == start)
 		return 0;
+	if (end > TASK_SIZE)
+		return -EINVAL;
+
 	vma = find_vma_prev(current->mm, start, &prev);
 	if (!vma || vma->vm_start > start)
 		return -ENOMEM;
@@ -457,6 +448,11 @@ static int do_mlock(unsigned long start, size_t len, int on)
 
 	for (nstart = start ; ; ) {
 		unsigned int newflags;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if ((current->mm->pax_flags & MF_PAX_SEGMEXEC) && (vma->vm_start >= SEGMEXEC_TASK_SIZE))
+			break;
+#endif
 
 		/* Here we know that  vma->vm_start <= nstart < vma->vm_end. */
 
@@ -507,6 +503,7 @@ SYSCALL_DEFINE2(mlock, unsigned long, start, size_t, len)
 	lock_limit >>= PAGE_SHIFT;
 
 	/* check against resource limits */
+	gr_learn_resource(current, RLIMIT_MEMLOCK, (current->mm->locked_vm << PAGE_SHIFT) + len, 1);
 	if ((locked <= lock_limit) || capable(CAP_IPC_LOCK))
 		error = do_mlock(start, len, 1);
 	up_write(&current->mm->mmap_sem);
@@ -528,17 +525,23 @@ SYSCALL_DEFINE2(munlock, unsigned long, start, size_t, len)
 static int do_mlockall(int flags)
 {
 	struct vm_area_struct * vma, * prev = NULL;
-	unsigned int def_flags = 0;
 
 	if (flags & MCL_FUTURE)
-		def_flags = VM_LOCKED;
-	current->mm->def_flags = def_flags;
+		current->mm->def_flags |= VM_LOCKED;
+	else
+		current->mm->def_flags &= ~VM_LOCKED;
 	if (flags == MCL_FUTURE)
 		goto out;
 
 	for (vma = current->mm->mmap; vma ; vma = prev->vm_next) {
-		unsigned int newflags;
+		unsigned long newflags;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+		if ((current->mm->pax_flags & MF_PAX_SEGMEXEC) && (vma->vm_start >= SEGMEXEC_TASK_SIZE))
+			break;
+#endif
+
+		BUG_ON(vma->vm_end > TASK_SIZE);
 		newflags = vma->vm_flags | VM_LOCKED;
 		if (!(flags & MCL_CURRENT))
 			newflags &= ~VM_LOCKED;
@@ -570,6 +573,7 @@ SYSCALL_DEFINE1(mlockall, int, flags)
 	lock_limit >>= PAGE_SHIFT;
 
 	ret = -ENOMEM;
+	gr_learn_resource(current, RLIMIT_MEMLOCK, current->mm->total_vm << PAGE_SHIFT, 1);
 	if (!(flags & MCL_CURRENT) || (current->mm->total_vm <= lock_limit) ||
 	    capable(CAP_IPC_LOCK))
 		ret = do_mlockall(flags);

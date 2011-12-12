@@ -44,7 +44,7 @@ static DEFINE_SPINLOCK(sysfs_open_dirent_lock);
 
 struct sysfs_open_dirent {
 	atomic_t		refcnt;
-	atomic_t		event;
+	atomic_unchecked_t	event;
 	wait_queue_head_t	poll;
 	struct list_head	buffers; /* goes through sysfs_buffer.list */
 };
@@ -53,7 +53,7 @@ struct sysfs_buffer {
 	size_t			count;
 	loff_t			pos;
 	char			* page;
-	struct sysfs_ops	* ops;
+	const struct sysfs_ops	* ops;
 	struct mutex		mutex;
 	int			needs_read_fill;
 	int			event;
@@ -75,7 +75,7 @@ static int fill_read_buffer(struct dentry * dentry, struct sysfs_buffer * buffer
 {
 	struct sysfs_dirent *attr_sd = dentry->d_fsdata;
 	struct kobject *kobj = attr_sd->s_parent->s_dir.kobj;
-	struct sysfs_ops * ops = buffer->ops;
+	const struct sysfs_ops * ops = buffer->ops;
 	int ret = 0;
 	ssize_t count;
 
@@ -88,7 +88,7 @@ static int fill_read_buffer(struct dentry * dentry, struct sysfs_buffer * buffer
 	if (!sysfs_get_active_two(attr_sd))
 		return -ENODEV;
 
-	buffer->event = atomic_read(&attr_sd->s_attr.open->event);
+	buffer->event = atomic_read_unchecked(&attr_sd->s_attr.open->event);
 	count = ops->show(kobj, attr_sd->s_attr.attr, buffer->page);
 
 	sysfs_put_active_two(attr_sd);
@@ -199,7 +199,7 @@ flush_write_buffer(struct dentry * dentry, struct sysfs_buffer * buffer, size_t 
 {
 	struct sysfs_dirent *attr_sd = dentry->d_fsdata;
 	struct kobject *kobj = attr_sd->s_parent->s_dir.kobj;
-	struct sysfs_ops * ops = buffer->ops;
+	const struct sysfs_ops * ops = buffer->ops;
 	int rc;
 
 	/* need attr_sd for attr and ops, its parent for kobj */
@@ -294,7 +294,7 @@ static int sysfs_get_open_dirent(struct sysfs_dirent *sd,
 		return -ENOMEM;
 
 	atomic_set(&new_od->refcnt, 0);
-	atomic_set(&new_od->event, 1);
+	atomic_set_unchecked(&new_od->event, 1);
 	init_waitqueue_head(&new_od->poll);
 	INIT_LIST_HEAD(&new_od->buffers);
 	goto retry;
@@ -335,7 +335,7 @@ static int sysfs_open_file(struct inode *inode, struct file *file)
 	struct sysfs_dirent *attr_sd = file->f_path.dentry->d_fsdata;
 	struct kobject *kobj = attr_sd->s_parent->s_dir.kobj;
 	struct sysfs_buffer *buffer;
-	struct sysfs_ops *ops;
+	const struct sysfs_ops *ops;
 	int error = -EACCES;
 	char *p;
 
@@ -444,7 +444,7 @@ static unsigned int sysfs_poll(struct file *filp, poll_table *wait)
 
 	sysfs_put_active_two(attr_sd);
 
-	if (buffer->event != atomic_read(&od->event))
+	if (buffer->event != atomic_read_unchecked(&od->event))
 		goto trigger;
 
 	return DEFAULT_POLLMASK;
@@ -463,7 +463,7 @@ void sysfs_notify_dirent(struct sysfs_dirent *sd)
 
 	od = sd->s_attr.open;
 	if (od) {
-		atomic_inc(&od->event);
+		atomic_inc_unchecked(&od->event);
 		wake_up_interruptible(&od->poll);
 	}
 

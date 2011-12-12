@@ -485,7 +485,7 @@ static ssize_t asd_show_update_bios(struct device *dev,
 			flash_error_table[i].reason);
 }
 
-static DEVICE_ATTR(update_bios, S_IRUGO|S_IWUGO,
+static DEVICE_ATTR(update_bios, S_IRUGO|S_IWUSR,
 	asd_show_update_bios, asd_store_update_bios);
 
 static int asd_create_dev_attrs(struct asd_ha_struct *asd_ha)
@@ -1011,7 +1011,7 @@ static struct sas_domain_function_template aic94xx_transport_functions = {
 	.lldd_control_phy	= asd_control_phy,
 };
 
-static const struct pci_device_id aic94xx_pci_table[] __devinitdata = {
+static const struct pci_device_id aic94xx_pci_table[] __devinitconst = {
 	{PCI_DEVICE(PCI_VENDOR_ID_ADAPTEC2, 0x410),0, 0, 1},
 	{PCI_DEVICE(PCI_VENDOR_ID_ADAPTEC2, 0x412),0, 0, 1},
 	{PCI_DEVICE(PCI_VENDOR_ID_ADAPTEC2, 0x416),0, 0, 1},
