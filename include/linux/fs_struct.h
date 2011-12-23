@@ -4,7 +4,7 @@
 #include <linux/path.h>
 
 struct fs_struct {
-	int users;
+	atomic_t users;
 	rwlock_t lock;
 	int umask;
 	int in_exec;

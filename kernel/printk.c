@@ -278,6 +278,11 @@ int do_syslog(int type, char __user *buf, int len)
 	char c;
 	int error = 0;
 
+#ifdef CONFIG_GRKERNSEC_DMESG
+	if (grsec_enable_dmesg && !capable(CAP_SYS_ADMIN))
+		return -EPERM;
+#endif
+
 	error = security_syslog(type);
 	if (error)
 		return error;
