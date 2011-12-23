@@ -71,7 +71,7 @@
 #include <asm/byteorder.h>
 #include <linux/serial_core.h>
 #include <linux/serial.h>
-
+#include <asm/local.h>
 
 #define MOD_AUTHOR			"Option Wireless"
 #define MOD_DESCRIPTION			"USB High Speed Option driver"
@@ -257,7 +257,7 @@ struct hso_serial {
 
 	/* from usb_serial_port */
 	struct tty_struct *tty;
-	int open_count;
+	local_t open_count;
 	spinlock_t serial_lock;
 
 	int (*write_data) (struct hso_serial *serial);
@@ -1190,7 +1190,7 @@ static void put_rxbuf_data_and_resubmit_ctrl_urb(struct hso_serial *serial)
 	struct urb *urb;
 
 	urb = serial->rx_urb[0];
-	if (serial->open_count > 0) {
+	if (local_read(&serial->open_count) > 0) {
 		count = put_rxbuf_data(urb, serial);
 		if (count == -1)
 			return;
@@ -1226,7 +1226,7 @@ static void hso_std_serial_read_bulk_callback(struct urb *urb)
 	DUMP1(urb->transfer_buffer, urb->actual_length);
 
 	/* Anyone listening? */
-	if (serial->open_count == 0)
+	if (local_read(&serial->open_count) == 0)
 		return;
 
 	if (status == 0) {
@@ -1311,8 +1311,7 @@ static int hso_serial_open(struct tty_struct *tty, struct file *filp)
 	spin_unlock_irq(&serial->serial_lock);
 
 	/* check for port already opened, if not set the termios */
-	serial->open_count++;
-	if (serial->open_count == 1) {
+	if (local_inc_return(&serial->open_count) == 1) {
 		serial->rx_state = RX_IDLE;
 		/* Force default termio settings */
 		_hso_serial_set_termios(tty, NULL);
@@ -1324,7 +1323,7 @@ static int hso_serial_open(struct tty_struct *tty, struct file *filp)
 		result = hso_start_serial_device(serial->parent, GFP_KERNEL);
 		if (result) {
 			hso_stop_serial_device(serial->parent);
-			serial->open_count--;
+			local_dec(&serial->open_count);
 			kref_put(&serial->parent->ref, hso_serial_ref_free);
 		}
 	} else {
@@ -1361,10 +1360,10 @@ static void hso_serial_close(struct tty_struct *tty, struct file *filp)
 
 	/* reset the rts and dtr */
 	/* do the actual close */
-	serial->open_count--;
+	local_dec(&serial->open_count);
 
-	if (serial->open_count <= 0) {
-		serial->open_count = 0;
+	if (local_read(&serial->open_count) <= 0) {
+		local_set(&serial->open_count,  0);
 		spin_lock_irq(&serial->serial_lock);
 		if (serial->tty == tty) {
 			serial->tty->driver_data = NULL;
@@ -1446,7 +1445,7 @@ static void hso_serial_set_termios(struct tty_struct *tty, struct ktermios *old)
 
 	/* the actual setup */
 	spin_lock_irqsave(&serial->serial_lock, flags);
-	if (serial->open_count)
+	if (local_read(&serial->open_count))
 		_hso_serial_set_termios(tty, old);
 	else
 		tty->termios = old;
@@ -1905,7 +1904,7 @@ static void intr_callback(struct urb *urb)
 				D1("Pending read interrupt on port %d\n", i);
 				spin_lock(&serial->serial_lock);
 				if (serial->rx_state == RX_IDLE &&
-					serial->open_count > 0) {
+					local_read(&serial->open_count) > 0) {
 					/* Setup and send a ctrl req read on
 					 * port i */
 					if (!serial->rx_urb_filled[0]) {
@@ -3098,7 +3097,7 @@ static int hso_resume(struct usb_interface *iface)
 	/* Start all serial ports */
 	for (i = 0; i < HSO_SERIAL_TTY_MINORS; i++) {
 		if (serial_table[i] && (serial_table[i]->interface == iface)) {
-			if (dev2ser(serial_table[i])->open_count) {
+			if (local_read(&dev2ser(serial_table[i])->open_count)) {
 				result =
 				    hso_start_serial_device(serial_table[i], GFP_NOIO);
 				hso_kick_transmit(dev2ser(serial_table[i]));
