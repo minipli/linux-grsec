@@ -42,6 +42,7 @@
 #include <linux/compiler.h>
 #include <linux/idr.h>
 #include <linux/posix-timers.h>
+#include <linux/grsecurity.h>
 #include <linux/syscalls.h>
 #include <linux/wait.h>
 #include <linux/workqueue.h>
@@ -131,7 +132,7 @@ static DEFINE_SPINLOCK(idr_lock);
  *	    which we beg off on and pass to do_sys_settimeofday().
  */
 
-static struct k_clock posix_clocks[MAX_CLOCKS];
+static struct k_clock *posix_clocks[MAX_CLOCKS];
 
 /*
  * These ones are defined below.
@@ -157,8 +158,8 @@ static inline void unlock_timer(struct k_itimer *timr, unsigned long flags)
  */
 #define CLOCK_DISPATCH(clock, call, arglist) \
  	((clock) < 0 ? posix_cpu_##call arglist : \
- 	 (posix_clocks[clock].call != NULL \
- 	  ? (*posix_clocks[clock].call) arglist : common_##call arglist))
+ 	 (posix_clocks[clock]->call != NULL \
+ 	  ? (*posix_clocks[clock]->call) arglist : common_##call arglist))
 
 /*
  * Default clock hook functions when the struct k_clock passed
@@ -172,7 +173,7 @@ static inline int common_clock_getres(const clockid_t which_clock,
 				      struct timespec *tp)
 {
 	tp->tv_sec = 0;
-	tp->tv_nsec = posix_clocks[which_clock].res;
+	tp->tv_nsec = posix_clocks[which_clock]->res;
 	return 0;
 }
 
@@ -217,9 +218,11 @@ static inline int invalid_clockid(const clockid_t which_clock)
 		return 0;
 	if ((unsigned) which_clock >= MAX_CLOCKS)
 		return 1;
-	if (posix_clocks[which_clock].clock_getres != NULL)
+	if (posix_clocks[which_clock] == NULL)
 		return 0;
-	if (posix_clocks[which_clock].res != 0)
+	if (posix_clocks[which_clock]->clock_getres != NULL)
+		return 0;
+	if (posix_clocks[which_clock]->res != 0)
 		return 0;
 	return 1;
 }
@@ -266,35 +269,37 @@ int posix_get_coarse_res(const clockid_t which_clock, struct timespec *tp)
  */
 static __init int init_posix_timers(void)
 {
-	struct k_clock clock_realtime = {
+	static struct k_clock clock_realtime = {
 		.clock_getres = hrtimer_get_res,
 	};
-	struct k_clock clock_monotonic = {
+	static struct k_clock clock_monotonic = {
 		.clock_getres = hrtimer_get_res,
 		.clock_get = posix_ktime_get_ts,
 		.clock_set = do_posix_clock_nosettime,
 	};
-	struct k_clock clock_monotonic_raw = {
+	static struct k_clock clock_monotonic_raw = {
 		.clock_getres = hrtimer_get_res,
 		.clock_get = posix_get_monotonic_raw,
 		.clock_set = do_posix_clock_nosettime,
 		.timer_create = no_timer_create,
 		.nsleep = no_nsleep,
 	};
-	struct k_clock clock_realtime_coarse = {
+	static struct k_clock clock_realtime_coarse = {
 		.clock_getres = posix_get_coarse_res,
 		.clock_get = posix_get_realtime_coarse,
 		.clock_set = do_posix_clock_nosettime,
 		.timer_create = no_timer_create,
 		.nsleep = no_nsleep,
 	};
-	struct k_clock clock_monotonic_coarse = {
+	static struct k_clock clock_monotonic_coarse = {
 		.clock_getres = posix_get_coarse_res,
 		.clock_get = posix_get_monotonic_coarse,
 		.clock_set = do_posix_clock_nosettime,
 		.timer_create = no_timer_create,
 		.nsleep = no_nsleep,
 	};
+
+	pax_track_stack();
 
 	register_posix_clock(CLOCK_REALTIME, &clock_realtime);
 	register_posix_clock(CLOCK_MONOTONIC, &clock_monotonic);
@@ -484,7 +489,7 @@ void register_posix_clock(const clockid_t clock_id, struct k_clock *new_clock)
 		return;
 	}
 
-	posix_clocks[clock_id] = *new_clock;
+	posix_clocks[clock_id] = new_clock;
 }
 EXPORT_SYMBOL_GPL(register_posix_clock);
 
@@ -947,6 +952,13 @@ SYSCALL_DEFINE2(clock_settime, const clockid_t, which_clock,
 		return -EINVAL;
 	if (copy_from_user(&new_tp, tp, sizeof (*tp)))
 		return -EFAULT;
+
+	/* only the CLOCK_REALTIME clock can be set, all other clocks
+	   have their clock_set fptr set to a nosettime dummy function
+	   CLOCK_REALTIME has a NULL clock_set fptr which causes it to
+	   call common_clock_set, which calls do_sys_settimeofday, which
+	   we hook
+	*/
 
 	return CLOCK_DISPATCH(which_clock, clock_set, (which_clock, &new_tp));
 }

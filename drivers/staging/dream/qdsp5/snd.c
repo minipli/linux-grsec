@@ -242,7 +242,7 @@ err:
 	return rc;
 }
 
-static struct file_operations snd_fops = {
+static const struct file_operations snd_fops = {
 	.owner		= THIS_MODULE,
 	.open		= snd_open,
 	.release	= snd_release,

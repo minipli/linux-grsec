@@ -609,7 +609,7 @@ static int soc_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 }
 
 /* ASoC PCM operations */
-static struct snd_pcm_ops soc_pcm_ops = {
+static snd_pcm_ops_no_const soc_pcm_ops = {
 	.open		= soc_pcm_open,
 	.close		= soc_codec_close,
 	.hw_params	= soc_pcm_hw_params,
