@@ -50,7 +50,7 @@ struct cryptd_blkcipher_ctx {
 
 struct cryptd_blkcipher_request_ctx {
 	crypto_completion_t complete;
-};
+} __no_const;
 
 struct cryptd_hash_ctx {
 	struct crypto_shash *child;
