@@ -263,7 +263,7 @@ struct brcmf_sdioh_driver {
 			 u16 func, uint bustype, u32 regsva, void *param);
 	/* detach from device */
 	void (*detach) (void *ch);
-};
+} __no_const;
 
 struct sdioh_info;
 

@@ -174,7 +174,7 @@ int first_system_vector = 0xfe;
 /*
  * Debug level, exported for io_apic.c
  */
-unsigned int apic_verbosity;
+int apic_verbosity;
 
 int pic_mode;
 
@@ -1835,7 +1835,7 @@ void smp_error_interrupt(struct pt_regs *regs)
 	apic_write(APIC_ESR, 0);
 	v1 = apic_read(APIC_ESR);
 	ack_APIC_irq();
-	atomic_inc(&irq_err_count);
+	atomic_inc_unchecked(&irq_err_count);
 
 	apic_printk(APIC_DEBUG, KERN_DEBUG "APIC error on CPU%d: %02x(%02x)",
 		    smp_processor_id(), v0 , v1);
@@ -2208,6 +2208,8 @@ static int __cpuinit apic_cluster_num(void)
 	unsigned id;
 	u16 *bios_cpu_apicid;
 	DECLARE_BITMAP(clustermap, NUM_APIC_CLUSTERS);
+
+	pax_track_stack();
 
 	bios_cpu_apicid = early_per_cpu_ptr(x86_bios_cpu_apicid);
 	bitmap_zero(clustermap, NUM_APIC_CLUSTERS);

@@ -1075,7 +1075,7 @@ sg_ioctl(struct file *filp, unsigned int cmd_in, unsigned long arg)
 				       sdp->disk->disk_name,
 				       MKDEV(SCSI_GENERIC_MAJOR, sdp->index),
 				       NULL,
-				       (char *)arg);
+				       (char __user *)arg);
 	case BLKTRACESTART:
 		return blk_trace_startstop(sdp->device->request_queue, 1);
 	case BLKTRACESTOP:
@@ -2310,7 +2310,7 @@ struct sg_proc_leaf {
 	const struct file_operations * fops;
 };
 
-static struct sg_proc_leaf sg_proc_leaf_arr[] = {
+static const struct sg_proc_leaf sg_proc_leaf_arr[] = {
 	{"allow_dio", &adio_fops},
 	{"debug", &debug_fops},
 	{"def_reserved_size", &dressz_fops},
@@ -2325,7 +2325,7 @@ sg_proc_init(void)
 {
 	int k, mask;
 	int num_leaves = ARRAY_SIZE(sg_proc_leaf_arr);
-	struct sg_proc_leaf * leaf;
+	const struct sg_proc_leaf * leaf;
 
 	sg_proc_sgp = proc_mkdir(sg_proc_sg_dirname, NULL);
 	if (!sg_proc_sgp)
