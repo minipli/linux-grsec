@@ -683,7 +683,18 @@ static unsigned long pax_parse_ei_pax(const struct elfhdr * const elf_ex)
 #endif
 
 #else
-	pax_flags = MF_PAX_PAGEEXEC | MF_PAX_MPROTECT | MF_PAX_RANDMMAP;
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	pax_flags |= MF_PAX_PAGEEXEC;
+#endif
+
+#ifdef CONFIG_PAX_MPROTECT
+	pax_flags |= MF_PAX_MPROTECT;
+#endif
+
+#ifdef CONFIG_PAX_RANDMMAP
+	pax_flags |= MF_PAX_RANDMMAP;
+#endif
 
 #ifdef CONFIG_PAX_SEGMEXEC
 	if (!(__supported_pte_mask & _PAGE_NX)) {
