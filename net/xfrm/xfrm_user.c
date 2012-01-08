@@ -1394,6 +1394,8 @@ static int copy_to_user_tmpl(struct xfrm_policy *xp, struct sk_buff *skb)
 	struct xfrm_user_tmpl vec[XFRM_MAX_DEPTH];
 	int i;
 
+	pax_track_stack();
+
 	if (xp->xfrm_nr == 0)
 		return 0;
 
@@ -2061,6 +2063,8 @@ static int xfrm_do_migrate(struct sk_buff *skb, struct nlmsghdr *nlh,
 	u8 type;
 	int err;
 	int n = 0;
+
+	pax_track_stack();
 
 	if (attrs[XFRMA_MIGRATE] == NULL)
 		return -EINVAL;
