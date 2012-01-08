@@ -45,6 +45,13 @@ randomize_stack_top(unsigned long stack_top);
 
 #define elf_read_implies_exec(ex, have_pt_gnu_stack)	(!(have_pt_gnu_stack))
 
+#ifdef CONFIG_PAX_ASLR
+#define PAX_ELF_ET_DYN_BASE	(current->personality == PER_LINUX32 ? 0x08048000UL : 0x4000000000000000UL)
+
+#define PAX_DELTA_MMAP_LEN	(current->personality == PER_LINUX32 ? 16 : 3*PAGE_SHIFT - 13)
+#define PAX_DELTA_STACK_LEN	(current->personality == PER_LINUX32 ? 16 : 3*PAGE_SHIFT - 13)
+#endif
+
 /* Ugly but avoids duplication */
 #include "../../../fs/binfmt_elf.c"
 

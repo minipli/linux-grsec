@@ -544,7 +544,7 @@ static inline union skb_shared_tx *skb_tx(struct sk_buff *skb)
  */
 static inline int skb_queue_empty(const struct sk_buff_head *list)
 {
-	return list->next == (struct sk_buff *)list;
+	return list->next == (const struct sk_buff *)list;
 }
 
 /**
@@ -557,7 +557,7 @@ static inline int skb_queue_empty(const struct sk_buff_head *list)
 static inline bool skb_queue_is_last(const struct sk_buff_head *list,
 				     const struct sk_buff *skb)
 {
-	return (skb->next == (struct sk_buff *) list);
+	return (skb->next == (const struct sk_buff *) list);
 }
 
 /**
@@ -570,7 +570,7 @@ static inline bool skb_queue_is_last(const struct sk_buff_head *list,
 static inline bool skb_queue_is_first(const struct sk_buff_head *list,
 				      const struct sk_buff *skb)
 {
-	return (skb->prev == (struct sk_buff *) list);
+	return (skb->prev == (const struct sk_buff *) list);
 }
 
 /**
@@ -1367,7 +1367,7 @@ static inline int skb_network_offset(const struct sk_buff *skb)
  * headroom, you should not reduce this.
  */
 #ifndef NET_SKB_PAD
-#define NET_SKB_PAD	32
+#define NET_SKB_PAD	(_AC(32,UL))
 #endif
 
 extern int ___pskb_trim(struct sk_buff *skb, unsigned int len);
