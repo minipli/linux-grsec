@@ -39,7 +39,7 @@ enum {
  */
 struct renesas_usbhs_driver_callback {
 	int (*notify_hotplug)(struct platform_device *pdev);
-};
+} __no_const;
 
 /*
  * callback functions for platform
@@ -89,7 +89,7 @@ struct renesas_usbhs_platform_callback {
 	 * VBUS control is needed for Host
 	 */
 	int (*set_vbus)(struct platform_device *pdev, int enable);
-};
+} __no_const;
 
 /*
  * parameters for renesas usbhs

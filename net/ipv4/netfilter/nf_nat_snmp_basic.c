@@ -399,7 +399,7 @@ static unsigned char asn1_octets_decode(struct asn1_ctx *ctx,
 
 	*len = 0;
 
-	*octets = kmalloc(eoc - ctx->pointer, GFP_ATOMIC);
+	*octets = kmalloc((eoc - ctx->pointer), GFP_ATOMIC);
 	if (*octets == NULL)
 		return 0;
 
