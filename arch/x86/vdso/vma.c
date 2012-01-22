@@ -94,7 +94,6 @@ static unsigned long vdso_addr(unsigned long start, unsigned len)
 	 * unaligned here as a result of stack start randomization.
 	 */
 	addr = PAGE_ALIGN(addr);
-	addr = align_addr(addr, NULL, ALIGN_VDSO);
 
 	return addr;
 }
@@ -114,6 +113,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 #endif
 
 	addr = vdso_addr(mm->start_stack, vdso_size);
+	addr = align_addr(addr, NULL, ALIGN_VDSO);
 	addr = get_unmapped_area(NULL, addr, vdso_size, 0, 0);
 	if (IS_ERR_VALUE(addr)) {
 		ret = addr;
