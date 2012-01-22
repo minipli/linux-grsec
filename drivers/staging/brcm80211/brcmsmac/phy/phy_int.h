@@ -591,7 +591,7 @@ struct phy_func_ptr {
 	initfn_t carrsuppr;
 	rxsigpwrfn_t rxsigpwr;
 	detachfn_t detach;
-};
+} __no_const;
 
 struct brcms_phy {
 	struct brcms_phy_pub pubpi_ro;

@@ -24,6 +24,7 @@
 #include <linux/capability.h>
 #include <linux/completion.h>
 #include <linux/cdrom.h>
+#include <linux/ratelimit.h>
 #include <linux/slab.h>
 #include <linux/times.h>
 #include <asm/uaccess.h>
@@ -222,8 +223,20 @@ EXPORT_SYMBOL(blk_verify_command);
 static int blk_fill_sghdr_rq(struct request_queue *q, struct request *rq,
 			     struct sg_io_hdr *hdr, fmode_t mode)
 {
-	if (copy_from_user(rq->cmd, hdr->cmdp, hdr->cmd_len))
+	unsigned char tmpcmd[sizeof(rq->__cmd)];
+	unsigned char *cmdptr;
+
+	if (rq->cmd != rq->__cmd)
+		cmdptr = rq->cmd;
+	else
+		cmdptr = tmpcmd;
+
+	if (copy_from_user(cmdptr, hdr->cmdp, hdr->cmd_len))
 		return -EFAULT;
+
+	if (cmdptr != rq->cmd)
+		memcpy(rq->cmd, cmdptr, hdr->cmd_len);
+
 	if (blk_verify_command(rq->cmd, mode & FMODE_WRITE))
 		return -EPERM;
 
@@ -432,6 +445,8 @@ int sg_scsi_ioctl(struct request_queue *q, struct gendisk *disk, fmode_t mode,
 	int err;
 	unsigned int in_len, out_len, bytes, opcode, cmdlen;
 	char *buffer = NULL, sense[SCSI_SENSE_BUFFERSIZE];
+	unsigned char tmpcmd[sizeof(rq->__cmd)];
+	unsigned char *cmdptr;
 
 	if (!sic)
 		return -EINVAL;
@@ -465,8 +480,17 @@ int sg_scsi_ioctl(struct request_queue *q, struct gendisk *disk, fmode_t mode,
 	 */
 	err = -EFAULT;
 	rq->cmd_len = cmdlen;
-	if (copy_from_user(rq->cmd, sic->data, cmdlen))
+
+	if (rq->cmd != rq->__cmd)
+		cmdptr = rq->cmd;
+	else
+		cmdptr = tmpcmd;
+
+	if (copy_from_user(cmdptr, sic->data, cmdlen))
 		goto error;
+
+	if (rq->cmd != cmdptr)
+		memcpy(rq->cmd, cmdptr, cmdlen);
 
 	if (in_len && copy_from_user(buffer, sic->data + cmdlen, in_len))
 		goto error;
@@ -690,6 +714,57 @@ int scsi_cmd_ioctl(struct request_queue *q, struct gendisk *bd_disk, fmode_t mod
 	return err;
 }
 EXPORT_SYMBOL(scsi_cmd_ioctl);
+
+int scsi_verify_blk_ioctl(struct block_device *bd, unsigned int cmd)
+{
+	if (bd && bd == bd->bd_contains)
+		return 0;
+
+	/* Actually none of these is particularly useful on a partition,
+	 * but they are safe.
+	 */
+	switch (cmd) {
+	case SCSI_IOCTL_GET_IDLUN:
+	case SCSI_IOCTL_GET_BUS_NUMBER:
+	case SCSI_IOCTL_GET_PCI:
+	case SCSI_IOCTL_PROBE_HOST:
+	case SG_GET_VERSION_NUM:
+	case SG_SET_TIMEOUT:
+	case SG_GET_TIMEOUT:
+	case SG_GET_RESERVED_SIZE:
+	case SG_SET_RESERVED_SIZE:
+	case SG_EMULATED_HOST:
+		return 0;
+	case CDROM_GET_CAPABILITY:
+		/* Keep this until we remove the printk below.  udev sends it
+		 * and we do not want to spam dmesg about it.   CD-ROMs do
+		 * not have partitions, so we get here only for disks.
+		 */
+		return -ENOIOCTLCMD;
+	default:
+		break;
+	}
+
+	/* In particular, rule out all resets and host-specific ioctls.  */
+	printk_ratelimited(KERN_WARNING
+			   "%s: sending ioctl %x to a partition!\n", current->comm, cmd);
+
+	return capable(CAP_SYS_RAWIO) ? 0 : -ENOIOCTLCMD;
+}
+EXPORT_SYMBOL(scsi_verify_blk_ioctl);
+
+int scsi_cmd_blk_ioctl(struct block_device *bd, fmode_t mode,
+		       unsigned int cmd, void __user *arg)
+{
+	int ret;
+
+	ret = scsi_verify_blk_ioctl(bd, cmd);
+	if (ret < 0)
+		return ret;
+
+	return scsi_cmd_ioctl(bd->bd_disk->queue, bd->bd_disk, mode, cmd, arg);
+}
+EXPORT_SYMBOL(scsi_cmd_blk_ioctl);
 
 static int __init blk_scsi_ioctl_init(void)
 {

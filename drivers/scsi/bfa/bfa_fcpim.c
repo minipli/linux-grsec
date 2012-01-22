@@ -4179,7 +4179,7 @@ bfa_itn_create(struct bfa_s *bfa, struct bfa_rport_s *rport,
 		void (*isr)(struct bfa_s *bfa, struct bfi_msg_s *m))
 {
 	struct bfa_fcp_mod_s *fcp = BFA_FCP_MOD(bfa);
-	struct bfa_itn_s *itn;
+	bfa_itn_s_no_const *itn;
 
 	itn =  BFA_ITN_FROM_TAG(fcp, rport->rport_tag);
 	itn->isr = isr;
