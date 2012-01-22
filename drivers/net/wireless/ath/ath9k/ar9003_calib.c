@@ -758,6 +758,8 @@ static void ar9003_hw_tx_iq_cal_post_proc(struct ath_hw *ah)
 	int i, im, j;
 	int nmeasurement;
 
+	pax_track_stack();
+
 	for (i = 0; i < AR9300_MAX_CHAINS; i++) {
 		if (ah->txchainmask & (1 << i))
 			num_chains++;

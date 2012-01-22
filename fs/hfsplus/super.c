@@ -347,6 +347,8 @@ static int hfsplus_fill_super(struct super_block *sb, void *data, int silent)
 	u64 last_fs_block, last_fs_page;
 	int err;
 
+	pax_track_stack();
+
 	err = -EINVAL;
 	sbi = kzalloc(sizeof(*sbi), GFP_KERNEL);
 	if (!sbi)
