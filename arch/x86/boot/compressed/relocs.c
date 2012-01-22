@@ -10,8 +10,11 @@
 #define USE_BSD
 #include <endian.h>
 
+#include "../../../../include/linux/autoconf.h"
+
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 static Elf32_Ehdr ehdr;
+static Elf32_Phdr *phdr;
 static unsigned long reloc_count, reloc_idx;
 static unsigned long *relocs;
 
@@ -37,7 +40,7 @@ static const char* safe_abs_relocs[] = {
 
 static int is_safe_abs_reloc(const char* sym_name)
 {
-	int i;
+	unsigned int i;
 
 	for (i = 0; i < ARRAY_SIZE(safe_abs_relocs); i++) {
 		if (!strcmp(sym_name, safe_abs_relocs[i]))
@@ -245,9 +248,39 @@ static void read_ehdr(FILE *fp)
 	}
 }
 
+static void read_phdrs(FILE *fp)
+{
+	unsigned int i;
+
+	phdr = calloc(ehdr.e_phnum, sizeof(Elf32_Phdr));
+	if (!phdr) {
+		die("Unable to allocate %d program headers\n",
+		    ehdr.e_phnum);
+	}
+	if (fseek(fp, ehdr.e_phoff, SEEK_SET) < 0) {
+		die("Seek to %d failed: %s\n",
+			ehdr.e_phoff, strerror(errno));
+	}
+	if (fread(phdr, sizeof(*phdr), ehdr.e_phnum, fp) != ehdr.e_phnum) {
+		die("Cannot read ELF program headers: %s\n",
+			strerror(errno));
+	}
+	for(i = 0; i < ehdr.e_phnum; i++) {
+		phdr[i].p_type      = elf32_to_cpu(phdr[i].p_type);
+		phdr[i].p_offset    = elf32_to_cpu(phdr[i].p_offset);
+		phdr[i].p_vaddr     = elf32_to_cpu(phdr[i].p_vaddr);
+		phdr[i].p_paddr     = elf32_to_cpu(phdr[i].p_paddr);
+		phdr[i].p_filesz    = elf32_to_cpu(phdr[i].p_filesz);
+		phdr[i].p_memsz     = elf32_to_cpu(phdr[i].p_memsz);
+		phdr[i].p_flags     = elf32_to_cpu(phdr[i].p_flags);
+		phdr[i].p_align     = elf32_to_cpu(phdr[i].p_align);
+	}
+
+}
+
 static void read_shdrs(FILE *fp)
 {
-	int i;
+	unsigned int i;
 	Elf32_Shdr shdr;
 
 	secs = calloc(ehdr.e_shnum, sizeof(struct section));
@@ -282,7 +315,7 @@ static void read_shdrs(FILE *fp)
 
 static void read_strtabs(FILE *fp)
 {
-	int i;
+	unsigned int i;
 	for (i = 0; i < ehdr.e_shnum; i++) {
 		struct section *sec = &secs[i];
 		if (sec->shdr.sh_type != SHT_STRTAB) {
@@ -307,7 +340,7 @@ static void read_strtabs(FILE *fp)
 
 static void read_symtabs(FILE *fp)
 {
-	int i,j;
+	unsigned int i,j;
 	for (i = 0; i < ehdr.e_shnum; i++) {
 		struct section *sec = &secs[i];
 		if (sec->shdr.sh_type != SHT_SYMTAB) {
@@ -340,7 +373,9 @@ static void read_symtabs(FILE *fp)
 
 static void read_relocs(FILE *fp)
 {
-	int i,j;
+	unsigned int i,j;
+	uint32_t base;
+
 	for (i = 0; i < ehdr.e_shnum; i++) {
 		struct section *sec = &secs[i];
 		if (sec->shdr.sh_type != SHT_REL) {
@@ -360,9 +395,18 @@ static void read_relocs(FILE *fp)
 			die("Cannot read symbol table: %s\n",
 				strerror(errno));
 		}
+		base = 0;
+		for (j = 0; j < ehdr.e_phnum; j++) {
+			if (phdr[j].p_type != PT_LOAD )
+				continue;
+			if (secs[sec->shdr.sh_info].shdr.sh_offset < phdr[j].p_offset || secs[sec->shdr.sh_info].shdr.sh_offset >= phdr[j].p_offset + phdr[j].p_filesz)
+				continue;
+			base = CONFIG_PAGE_OFFSET + phdr[j].p_paddr - phdr[j].p_vaddr;
+			break;
+		}
 		for (j = 0; j < sec->shdr.sh_size/sizeof(Elf32_Rel); j++) {
 			Elf32_Rel *rel = &sec->reltab[j];
-			rel->r_offset = elf32_to_cpu(rel->r_offset);
+			rel->r_offset = elf32_to_cpu(rel->r_offset) + base;
 			rel->r_info   = elf32_to_cpu(rel->r_info);
 		}
 	}
@@ -371,14 +415,14 @@ static void read_relocs(FILE *fp)
 
 static void print_absolute_symbols(void)
 {
-	int i;
+	unsigned int i;
 	printf("Absolute symbols\n");
 	printf(" Num:    Value Size  Type       Bind        Visibility  Name\n");
 	for (i = 0; i < ehdr.e_shnum; i++) {
 		struct section *sec = &secs[i];
 		char *sym_strtab;
 		Elf32_Sym *sh_symtab;
-		int j;
+		unsigned int j;
 
 		if (sec->shdr.sh_type != SHT_SYMTAB) {
 			continue;
@@ -406,14 +450,14 @@ static void print_absolute_symbols(void)
 
 static void print_absolute_relocs(void)
 {
-	int i, printed = 0;
+	unsigned int i, printed = 0;
 
 	for (i = 0; i < ehdr.e_shnum; i++) {
 		struct section *sec = &secs[i];
 		struct section *sec_applies, *sec_symtab;
 		char *sym_strtab;
 		Elf32_Sym *sh_symtab;
-		int j;
+		unsigned int j;
 		if (sec->shdr.sh_type != SHT_REL) {
 			continue;
 		}
@@ -474,13 +518,13 @@ static void print_absolute_relocs(void)
 
 static void walk_relocs(void (*visit)(Elf32_Rel *rel, Elf32_Sym *sym))
 {
-	int i;
+	unsigned int i;
 	/* Walk through the relocations */
 	for (i = 0; i < ehdr.e_shnum; i++) {
 		char *sym_strtab;
 		Elf32_Sym *sh_symtab;
 		struct section *sec_applies, *sec_symtab;
-		int j;
+		unsigned int j;
 		struct section *sec = &secs[i];
 
 		if (sec->shdr.sh_type != SHT_REL) {
@@ -504,6 +548,21 @@ static void walk_relocs(void (*visit)(Elf32_Rel *rel, Elf32_Sym *sym))
 			if (sym->st_shndx == SHN_ABS) {
 				continue;
 			}
+			/* Don't relocate actual per-cpu variables, they are absolute indices, not addresses */
+			if (!strcmp(sec_name(sym->st_shndx), ".data.percpu") && strcmp(sym_name(sym_strtab, sym), "__per_cpu_load"))
+				continue;
+
+#if defined(CONFIG_PAX_KERNEXEC) && defined(CONFIG_X86_32)
+			/* Don't relocate actual code, they are relocated implicitly by the base address of KERNEL_CS */
+			if (!strcmp(sec_name(sym->st_shndx), ".module.text") && !strcmp(sym_name(sym_strtab, sym), "_etext"))
+				continue;
+			if (!strcmp(sec_name(sym->st_shndx), ".init.text"))
+				continue;
+			if (!strcmp(sec_name(sym->st_shndx), ".exit.text"))
+				continue;
+			if (!strcmp(sec_name(sym->st_shndx), ".text") && strcmp(sym_name(sym_strtab, sym), "__LOAD_PHYSICAL_ADDR"))
+				continue;
+#endif
 			if (r_type == R_386_NONE || r_type == R_386_PC32) {
 				/*
 				 * NONE can be ignored and and PC relative
@@ -541,7 +600,7 @@ static int cmp_relocs(const void *va, const void *vb)
 
 static void emit_relocs(int as_text)
 {
-	int i;
+	unsigned int i;
 	/* Count how many relocations I have and allocate space for them. */
 	reloc_count = 0;
 	walk_relocs(count_reloc);
@@ -634,6 +693,7 @@ int main(int argc, char **argv)
 			fname, strerror(errno));
 	}
 	read_ehdr(fp);
+	read_phdrs(fp);
 	read_shdrs(fp);
 	read_strtabs(fp);
 	read_symtabs(fp);
