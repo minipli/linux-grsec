@@ -36,4 +36,16 @@
    the kernel context */
 #define __cold			__attribute__((__cold__))
 
+#define __alloc_size(...)	__attribute((alloc_size(__VA_ARGS__)))
+#define __bos(ptr, arg)		__builtin_object_size((ptr), (arg))
+#define __bos0(ptr)		__bos((ptr), 0)
+#define __bos1(ptr)		__bos((ptr), 1)
+
+#if __GNUC_MINOR__ >= 5
+#ifdef CONSTIFY_PLUGIN
+#define __no_const __attribute__((no_const))
+#define __do_const __attribute__((do_const))
+#endif
+#endif
+
 #endif

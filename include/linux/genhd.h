@@ -161,7 +161,7 @@ struct gendisk {
 
 	struct timer_rand_state *random;
 
-	atomic_t sync_io;		/* RAID */
+	atomic_unchecked_t sync_io;	/* RAID */
 	struct work_struct async_notify;
 #ifdef  CONFIG_BLK_DEV_INTEGRITY
 	struct blk_integrity *integrity;
