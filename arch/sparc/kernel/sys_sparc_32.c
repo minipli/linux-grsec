@@ -56,7 +56,7 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr, unsi
 	if (ARCH_SUN4C && len > 0x20000000)
 		return -ENOMEM;
 	if (!addr)
-		addr = TASK_UNMAPPED_BASE;
+		addr = current->mm->mmap_base;
 
 	if (flags & MAP_SHARED)
 		addr = COLOUR_ALIGN(addr);
@@ -71,7 +71,7 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr, unsi
 		}
 		if (TASK_SIZE - PAGE_SIZE - len < addr)
 			return -ENOMEM;
-		if (!vmm || addr + len <= vmm->vm_start)
+		if (check_heap_stack_gap(vmm, addr, len))
 			return addr;
 		addr = vmm->vm_end;
 		if (flags & MAP_SHARED)
