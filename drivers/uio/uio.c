@@ -23,6 +23,7 @@
 #include <linux/string.h>
 #include <linux/kobject.h>
 #include <linux/uio_driver.h>
+#include <asm/local.h>
 
 #define UIO_MAX_DEVICES 255
 
@@ -30,10 +31,10 @@ struct uio_device {
 	struct module		*owner;
 	struct device		*dev;
 	int			minor;
-	atomic_t		event;
+	atomic_unchecked_t	event;
 	struct fasync_struct	*async_queue;
 	wait_queue_head_t	wait;
-	int			vma_count;
+	local_t			vma_count;
 	struct uio_info		*info;
 	struct kobject		*map_dir;
 	struct kobject		*portio_dir;
@@ -255,7 +256,7 @@ static ssize_t show_event(struct device *dev,
 	struct uio_device *idev = dev_get_drvdata(dev);
 	if (idev)
 		return sprintf(buf, "%u\n",
-				(unsigned int)atomic_read(&idev->event));
+				(unsigned int)atomic_read_unchecked(&idev->event));
 	else
 		return -ENODEV;
 }
@@ -424,7 +425,7 @@ void uio_event_notify(struct uio_info *info)
 {
 	struct uio_device *idev = info->uio_dev;
 
-	atomic_inc(&idev->event);
+	atomic_inc_unchecked(&idev->event);
 	wake_up_interruptible(&idev->wait);
 	kill_fasync(&idev->async_queue, SIGIO, POLL_IN);
 }
@@ -477,7 +478,7 @@ static int uio_open(struct inode *inode, struct file *filep)
 	}
 
 	listener->dev = idev;
-	listener->event_count = atomic_read(&idev->event);
+	listener->event_count = atomic_read_unchecked(&idev->event);
 	filep->private_data = listener;
 
 	if (idev->info->open) {
@@ -528,7 +529,7 @@ static unsigned int uio_poll(struct file *filep, poll_table *wait)
 		return -EIO;
 
 	poll_wait(filep, &idev->wait, wait);
-	if (listener->event_count != atomic_read(&idev->event))
+	if (listener->event_count != atomic_read_unchecked(&idev->event))
 		return POLLIN | POLLRDNORM;
 	return 0;
 }
@@ -553,7 +554,7 @@ static ssize_t uio_read(struct file *filep, char __user *buf,
 	do {
 		set_current_state(TASK_INTERRUPTIBLE);
 
-		event_count = atomic_read(&idev->event);
+		event_count = atomic_read_unchecked(&idev->event);
 		if (event_count != listener->event_count) {
 			if (copy_to_user(buf, &event_count, count))
 				retval = -EFAULT;
@@ -624,13 +625,13 @@ static int uio_find_mem_index(struct vm_area_struct *vma)
 static void uio_vma_open(struct vm_area_struct *vma)
 {
 	struct uio_device *idev = vma->vm_private_data;
-	idev->vma_count++;
+	local_inc(&idev->vma_count);
 }
 
 static void uio_vma_close(struct vm_area_struct *vma)
 {
 	struct uio_device *idev = vma->vm_private_data;
-	idev->vma_count--;
+	local_dec(&idev->vma_count);
 }
 
 static int uio_vma_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
@@ -840,7 +841,7 @@ int __uio_register_device(struct module *owner,
 	idev->owner = owner;
 	idev->info = info;
 	init_waitqueue_head(&idev->wait);
-	atomic_set(&idev->event, 0);
+	atomic_set_unchecked(&idev->event, 0);
 
 	ret = uio_get_minor(idev);
 	if (ret)
