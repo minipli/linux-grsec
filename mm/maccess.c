@@ -14,7 +14,7 @@
  * Safely read from address @src to the buffer at @dst.  If a kernel fault
  * happens, handle that and return -EFAULT.
  */
-long probe_kernel_read(void *dst, void *src, size_t size)
+long probe_kernel_read(void *dst, const void *src, size_t size)
 {
 	long ret;
 	mm_segment_t old_fs = get_fs();
@@ -22,7 +22,7 @@ long probe_kernel_read(void *dst, void *src, size_t size)
 	set_fs(KERNEL_DS);
 	pagefault_disable();
 	ret = __copy_from_user_inatomic(dst,
-			(__force const void __user *)src, size);
+			(const void __force_user *)src, size);
 	pagefault_enable();
 	set_fs(old_fs);
 
@@ -39,14 +39,14 @@ EXPORT_SYMBOL_GPL(probe_kernel_read);
  * Safely write to address @dst from the buffer at @src.  If a kernel fault
  * happens, handle that and return -EFAULT.
  */
-long notrace __weak probe_kernel_write(void *dst, void *src, size_t size)
+long notrace __weak probe_kernel_write(void *dst, const void *src, size_t size)
 {
 	long ret;
 	mm_segment_t old_fs = get_fs();
 
 	set_fs(KERNEL_DS);
 	pagefault_disable();
-	ret = __copy_to_user_inatomic((__force void __user *)dst, src, size);
+	ret = __copy_to_user_inatomic((void __force_user *)dst, src, size);
 	pagefault_enable();
 	set_fs(old_fs);
 

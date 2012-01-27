@@ -94,14 +94,14 @@ static DEFINE_PER_CPU(struct task_struct *, idle_thread_array);
  */
 static DEFINE_MUTEX(x86_cpu_hotplug_driver_mutex);
 
-void cpu_hotplug_driver_lock()
+void cpu_hotplug_driver_lock(void)
 {
-        mutex_lock(&x86_cpu_hotplug_driver_mutex);
+	mutex_lock(&x86_cpu_hotplug_driver_mutex);
 }
 
-void cpu_hotplug_driver_unlock()
+void cpu_hotplug_driver_unlock(void)
 {
-        mutex_unlock(&x86_cpu_hotplug_driver_mutex);
+	mutex_unlock(&x86_cpu_hotplug_driver_mutex);
 }
 
 ssize_t arch_cpu_probe(const char *buf, size_t count) { return -1; }
@@ -625,7 +625,7 @@ wakeup_secondary_cpu_via_init(int phys_apicid, unsigned long start_eip)
 	 * target processor state.
 	 */
 	startup_ipi_hook(phys_apicid, (unsigned long) start_secondary,
-			 (unsigned long)stack_start.sp);
+			 stack_start);
 
 	/*
 	 * Run STARTUP IPI loop.
@@ -743,6 +743,7 @@ static int __cpuinit do_boot_cpu(int apicid, int cpu)
 	set_idle_for_cpu(cpu, c_idle.idle);
 do_rest:
 	per_cpu(current_task, cpu) = c_idle.idle;
+	per_cpu(current_tinfo, cpu) = &c_idle.idle->tinfo;
 #ifdef CONFIG_X86_32
 	/* Stack for startup_32 can be just as for start_secondary onwards */
 	irq_ctx_init(cpu);
@@ -750,13 +751,15 @@ do_rest:
 #else
 	clear_tsk_thread_flag(c_idle.idle, TIF_FORK);
 	initial_gs = per_cpu_offset(cpu);
-	per_cpu(kernel_stack, cpu) =
-		(unsigned long)task_stack_page(c_idle.idle) -
-		KERNEL_STACK_OFFSET + THREAD_SIZE;
+	per_cpu(kernel_stack, cpu) = (unsigned long)task_stack_page(c_idle.idle) - 16 + THREAD_SIZE;
 #endif
+
+	pax_open_kernel();
 	early_gdt_descr.address = (unsigned long)get_cpu_gdt_table(cpu);
+	pax_close_kernel();
+
 	initial_code = (unsigned long)start_secondary;
-	stack_start.sp = (void *) c_idle.idle->thread.sp;
+	stack_start = c_idle.idle->thread.sp;
 
 	/* start_ip had better be page-aligned! */
 	start_ip = setup_trampoline();
@@ -890,6 +893,12 @@ int __cpuinit native_cpu_up(unsigned int cpu)
 	mtrr_save_state();
 
 	per_cpu(cpu_state, cpu) = CPU_UP_PREPARE;
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	clone_pgd_range(get_cpu_pgd(cpu) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+#endif
 
 	err = do_boot_cpu(apicid, cpu);
 

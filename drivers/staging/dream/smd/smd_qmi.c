@@ -793,7 +793,7 @@ static int qmi_release(struct inode *ip, struct file *fp)
 	return 0;
 }
 
-static struct file_operations qmi_fops = {
+static const struct file_operations qmi_fops = {
 	.owner = THIS_MODULE,
 	.read = qmi_read,
 	.write = qmi_write,

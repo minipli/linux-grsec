@@ -214,7 +214,7 @@ static long rpcrouter_ioctl(struct file *filp, unsigned int cmd,
 	return rc;
 }
 
-static struct file_operations rpcrouter_server_fops = {
+static const struct file_operations rpcrouter_server_fops = {
 	.owner	 = THIS_MODULE,
 	.open	 = rpcrouter_open,
 	.release = rpcrouter_release,
@@ -224,7 +224,7 @@ static struct file_operations rpcrouter_server_fops = {
 	.unlocked_ioctl	 = rpcrouter_ioctl,
 };
 
-static struct file_operations rpcrouter_router_fops = {
+static const struct file_operations rpcrouter_router_fops = {
 	.owner	 = THIS_MODULE,
 	.open	 = rpcrouter_open,
 	.release = rpcrouter_release,
