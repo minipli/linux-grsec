@@ -18,11 +18,18 @@
 #include <linux/module.h>
 #include <linux/smp_lock.h>
 #include <linux/sysctl.h>
+#include <linux/grsecurity.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
 #include "internal.h"
+
+#ifdef CONFIG_PROC_SYSCTL
+extern const struct inode_operations proc_sys_inode_operations;
+extern const struct inode_operations proc_sys_dir_operations;
+#endif
+
 
 struct proc_dir_entry *de_get(struct proc_dir_entry *de)
 {
@@ -62,6 +69,13 @@ static void proc_delete_inode(struct inode *inode)
 		de_put(de);
 	if (PROC_I(inode)->sysctl)
 		sysctl_head_put(PROC_I(inode)->sysctl);
+
+#ifdef CONFIG_PROC_SYSCTL
+	if (inode->i_op == &proc_sys_inode_operations ||
+	    inode->i_op == &proc_sys_dir_operations)
+		gr_handle_delete(inode->i_ino, inode->i_sb->s_dev);
+#endif
+
 	clear_inode(inode);
 }
 
@@ -457,7 +471,11 @@ struct inode *proc_get_inode(struct super_block *sb, unsigned int ino,
 		if (de->mode) {
 			inode->i_mode = de->mode;
 			inode->i_uid = de->uid;
+#ifdef CONFIG_GRKERNSEC_PROC_USERGROUP
+			inode->i_gid = CONFIG_GRKERNSEC_PROC_GID;
+#else
 			inode->i_gid = de->gid;
+#endif
 		}
 		if (de->size)
 			inode->i_size = de->size;

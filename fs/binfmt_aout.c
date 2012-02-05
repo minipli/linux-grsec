@@ -16,6 +16,7 @@
 #include <linux/string.h>
 #include <linux/fs.h>
 #include <linux/file.h>
+#include <linux/security.h>
 #include <linux/stat.h>
 #include <linux/fcntl.h>
 #include <linux/ptrace.h>
@@ -102,6 +103,8 @@ static int aout_core_dump(long signr, struct pt_regs *regs, struct file *file, u
 #endif
 #       define START_STACK(u)   (u.start_stack)
 
+	memset(&dump, 0, sizeof(dump));
+
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 	has_dumped = 1;
@@ -113,10 +116,12 @@ static int aout_core_dump(long signr, struct pt_regs *regs, struct file *file, u
 
 /* If the size of the dump file exceeds the rlimit, then see what would happen
    if we wrote the stack, but not the data area.  */
+	gr_learn_resource(current, RLIMIT_CORE, (dump.u_dsize + dump.u_ssize+1) * PAGE_SIZE, 1);
 	if ((dump.u_dsize + dump.u_ssize+1) * PAGE_SIZE > limit)
 		dump.u_dsize = 0;
 
 /* Make sure we have enough room to write the stack and data areas. */
+	gr_learn_resource(current, RLIMIT_CORE, (dump.u_ssize + 1) * PAGE_SIZE, 1);
 	if ((dump.u_ssize + 1) * PAGE_SIZE > limit)
 		dump.u_ssize = 0;
 
@@ -146,9 +151,7 @@ static int aout_core_dump(long signr, struct pt_regs *regs, struct file *file, u
 		dump_size = dump.u_ssize << PAGE_SHIFT;
 		DUMP_WRITE(dump_start,dump_size);
 	}
-/* Finally dump the task struct.  Not be used by gdb, but could be useful */
-	set_fs(KERNEL_DS);
-	DUMP_WRITE(current,sizeof(*current));
+/* Finally, let's not dump the task struct.  Not be used by gdb, but could be useful to an attacker */
 end_coredump:
 	set_fs(fs);
 	return has_dumped;
@@ -249,6 +252,8 @@ static int load_aout_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 	rlim = current->signal->rlim[RLIMIT_DATA].rlim_cur;
 	if (rlim >= RLIM_INFINITY)
 		rlim = ~0;
+
+	gr_learn_resource(current, RLIMIT_DATA, ex.a_data + ex.a_bss, 1);
 	if (ex.a_data + ex.a_bss > rlim)
 		return -ENOMEM;
 
@@ -276,6 +281,27 @@ static int load_aout_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 
 	install_exec_creds(bprm);
  	current->flags &= ~PF_FORKNOEXEC;
+
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+	current->mm->pax_flags = 0UL;
+#endif
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	if (!(N_FLAGS(ex) & F_PAX_PAGEEXEC)) {
+		current->mm->pax_flags |= MF_PAX_PAGEEXEC;
+
+#ifdef CONFIG_PAX_EMUTRAMP
+		if (N_FLAGS(ex) & F_PAX_EMUTRAMP)
+			current->mm->pax_flags |= MF_PAX_EMUTRAMP;
+#endif
+
+#ifdef CONFIG_PAX_MPROTECT
+		if (!(N_FLAGS(ex) & F_PAX_MPROTECT))
+			current->mm->pax_flags |= MF_PAX_MPROTECT;
+#endif
+
+	}
+#endif
 
 	if (N_MAGIC(ex) == OMAGIC) {
 		unsigned long text_addr, map_size;
@@ -349,7 +375,7 @@ static int load_aout_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 
 		down_write(&current->mm->mmap_sem);
  		error = do_mmap(bprm->file, N_DATADDR(ex), ex.a_data,
-				PROT_READ | PROT_WRITE | PROT_EXEC,
+				PROT_READ | PROT_WRITE,
 				MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE | MAP_EXECUTABLE,
 				fd_offset + ex.a_text);
 		up_write(&current->mm->mmap_sem);

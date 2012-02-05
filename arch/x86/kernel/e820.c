@@ -733,7 +733,7 @@ struct early_res {
 };
 static struct early_res early_res[MAX_EARLY_RES] __initdata = {
 	{ 0, PAGE_SIZE, "BIOS data page" },	/* BIOS data page */
-	{}
+	{ 0, 0, {0}, 0 }
 };
 
 static int __init find_overlapped_early(u64 start, u64 end)
