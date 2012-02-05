@@ -180,7 +180,7 @@ void update_xtime_cache(u64 nsec)
 	 */
 	struct timespec ts = xtime;
 	timespec_add_ns(&ts, nsec);
-	ACCESS_ONCE(xtime_cache) = ts;
+	ACCESS_ONCE_RW(xtime_cache) = ts;
 }
 
 /* must hold xtime_lock */

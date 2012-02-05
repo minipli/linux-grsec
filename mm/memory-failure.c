@@ -46,7 +46,7 @@ int sysctl_memory_failure_early_kill __read_mostly = 0;
 
 int sysctl_memory_failure_recovery __read_mostly = 1;
 
-atomic_long_t mce_bad_pages __read_mostly = ATOMIC_LONG_INIT(0);
+atomic_long_unchecked_t mce_bad_pages __read_mostly = ATOMIC_LONG_INIT(0);
 
 /*
  * Send all the processes who have the page mapped an ``action optional''
@@ -64,7 +64,7 @@ static int kill_proc_ao(struct task_struct *t, unsigned long addr, int trapno,
 	si.si_signo = SIGBUS;
 	si.si_errno = 0;
 	si.si_code = BUS_MCEERR_AO;
-	si.si_addr = (void *)addr;
+	si.si_addr = (void __user *)addr;
 #ifdef __ARCH_SI_TRAPNO
 	si.si_trapno = trapno;
 #endif
@@ -745,7 +745,7 @@ int __memory_failure(unsigned long pfn, int trapno, int ref)
 		return 0;
 	}
 
-	atomic_long_add(1, &mce_bad_pages);
+	atomic_long_add_unchecked(1, &mce_bad_pages);
 
 	/*
 	 * We need/can do nothing about count=0 pages.
