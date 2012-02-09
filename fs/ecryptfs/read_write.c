@@ -48,7 +48,7 @@ int ecryptfs_write_lower(struct inode *ecryptfs_inode, char *data,
 		return -EIO;
 	fs_save = get_fs();
 	set_fs(get_ds());
-	rc = vfs_write(lower_file, data, size, &offset);
+	rc = vfs_write(lower_file, (const char __force_user *)data, size, &offset);
 	set_fs(fs_save);
 	mark_inode_dirty_sync(ecryptfs_inode);
 	return rc;
@@ -130,7 +130,12 @@ int ecryptfs_write(struct inode *ecryptfs_inode, char *data, loff_t offset,
 		pgoff_t ecryptfs_page_idx = (pos >> PAGE_CACHE_SHIFT);
 		size_t start_offset_in_page = (pos & ~PAGE_CACHE_MASK);
 		size_t num_bytes = (PAGE_CACHE_SIZE - start_offset_in_page);
-		size_t total_remaining_bytes = ((offset + size) - pos);
+		loff_t total_remaining_bytes = ((offset + size) - pos);
+
+		if (fatal_signal_pending(current)) {
+			rc = -EINTR;
+			break;
+		}
 
 		if (fatal_signal_pending(current)) {
 			rc = -EINTR;
@@ -141,7 +146,7 @@ int ecryptfs_write(struct inode *ecryptfs_inode, char *data, loff_t offset,
 			num_bytes = total_remaining_bytes;
 		if (pos < offset) {
 			/* remaining zeros to write, up to destination offset */
-			size_t total_remaining_zeros = (offset - pos);
+			loff_t total_remaining_zeros = (offset - pos);
 
 			if (num_bytes > total_remaining_zeros)
 				num_bytes = total_remaining_zeros;
@@ -244,7 +249,7 @@ int ecryptfs_read_lower(char *data, loff_t offset, size_t size,
 		return -EIO;
 	fs_save = get_fs();
 	set_fs(get_ds());
-	rc = vfs_read(lower_file, data, size, &offset);
+	rc = vfs_read(lower_file, (char __force_user *)data, size, &offset);
 	set_fs(fs_save);
 	return rc;
 }
