@@ -160,6 +160,8 @@ static void put_cred_rcu(struct rcu_head *rcu)
  */
 void __put_cred(struct cred *cred)
 {
+	pax_track_stack();
+
 	kdebug("__put_cred(%p{%d,%d})", cred,
 	       atomic_read(&cred->usage),
 	       read_cred_subscribers(cred));
@@ -184,6 +186,8 @@ void exit_creds(struct task_struct *tsk)
 {
 	struct cred *cred;
 
+	pax_track_stack();
+
 	kdebug("exit_creds(%u,%p,%p,{%d,%d})", tsk->pid, tsk->real_cred, tsk->cred,
 	       atomic_read(&tsk->cred->usage),
 	       read_cred_subscribers(tsk->cred));
@@ -206,6 +210,15 @@ void exit_creds(struct task_struct *tsk)
 		validate_creds(cred);
 		put_cred(cred);
 	}
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	cred = (struct cred *) tsk->delayed_cred;
+	if (cred) {
+		tsk->delayed_cred = NULL;
+		validate_creds(cred);
+		put_cred(cred);
+	}
+#endif
 }
 
 /**
@@ -221,6 +234,8 @@ void exit_creds(struct task_struct *tsk)
 const struct cred *get_task_cred(struct task_struct *task)
 {
 	const struct cred *cred;
+
+	pax_track_stack();
 
 	rcu_read_lock();
 
@@ -240,6 +255,8 @@ const struct cred *get_task_cred(struct task_struct *task)
 struct cred *cred_alloc_blank(void)
 {
 	struct cred *new;
+
+	pax_track_stack();
 
 	new = kmem_cache_zalloc(cred_jar, GFP_KERNEL);
 	if (!new)
@@ -289,6 +306,8 @@ struct cred *prepare_creds(void)
 	const struct cred *old;
 	struct cred *new;
 
+	pax_track_stack();
+
 	validate_process_creds();
 
 	new = kmem_cache_alloc(cred_jar, GFP_KERNEL);
@@ -334,6 +353,8 @@ struct cred *prepare_exec_creds(void)
 {
 	struct thread_group_cred *tgcred = NULL;
 	struct cred *new;
+
+	pax_track_stack();
 
 #ifdef CONFIG_KEYS
 	tgcred = kmalloc(sizeof(*tgcred), GFP_KERNEL);
@@ -441,6 +462,8 @@ int copy_creds(struct task_struct *p, unsigned long clone_flags)
 	struct cred *new;
 	int ret;
 
+	pax_track_stack();
+
 	mutex_init(&p->cred_guard_mutex);
 
 	if (
@@ -523,10 +546,12 @@ error_put:
  * Always returns 0 thus allowing this function to be tail-called at the end
  * of, say, sys_setgid().
  */
-int commit_creds(struct cred *new)
+static int __commit_creds(struct cred *new)
 {
 	struct task_struct *task = current;
 	const struct cred *old = task->real_cred;
+
+	pax_track_stack();
 
 	kdebug("commit_creds(%p{%d,%d})", new,
 	       atomic_read(&new->usage),
@@ -543,6 +568,8 @@ int commit_creds(struct cred *new)
 	security_commit_creds(new, old);
 
 	get_cred(new); /* we will require a ref for the subj creds too */
+
+	gr_set_role_label(task, new->uid, new->gid);
 
 	/* dumpability changes */
 	if (old->euid != new->euid ||
@@ -563,10 +590,8 @@ int commit_creds(struct cred *new)
 		key_fsgid_changed(task);
 
 	/* do it
-	 * - What if a process setreuid()'s and this brings the
-	 *   new uid over his NPROC rlimit?  We can check this now
-	 *   cheaply with the new uid cache, so if it matters
-	 *   we should be checking for it.  -DaveM
+	 * RLIMIT_NPROC limits on user->processes have already been checked
+	 * in set_user().
 	 */
 	alter_cred_subscribers(new, 2);
 	if (new->user != old->user)
@@ -595,7 +620,95 @@ int commit_creds(struct cred *new)
 	put_cred(old);
 	return 0;
 }
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+extern int set_user(struct cred *new);
+
+void gr_delayed_cred_worker(void)
+{
+	const struct cred *new = current->delayed_cred;
+	struct cred *ncred;
+
+	current->delayed_cred = NULL;
+
+	if (current_uid() && new != NULL) {
+		// from doing get_cred on it when queueing this
+		put_cred(new);
+		return;
+	} else if (new == NULL)
+		return;
+
+	ncred = prepare_creds();
+	if (!ncred)
+		goto die;
+	// uids
+	ncred->uid = new->uid;
+	ncred->euid = new->euid;
+	ncred->suid = new->suid;
+	ncred->fsuid = new->fsuid;
+	// gids
+	ncred->gid = new->gid;
+	ncred->egid = new->egid;
+	ncred->sgid = new->sgid;
+	ncred->fsgid = new->fsgid;
+	// groups
+	if (set_groups(ncred, new->group_info) < 0) {
+		abort_creds(ncred);
+		goto die;
+	}
+	// caps
+	ncred->securebits = new->securebits;
+	ncred->cap_inheritable = new->cap_inheritable;
+	ncred->cap_permitted = new->cap_permitted;
+	ncred->cap_effective = new->cap_effective;
+	ncred->cap_bset = new->cap_bset;
+
+	if (set_user(ncred)) {
+		abort_creds(ncred);
+		goto die;
+	}
+
+	// from doing get_cred on it when queueing this
+	put_cred(new);
+
+	__commit_creds(ncred);
+	return;
+die:
+	// from doing get_cred on it when queueing this
+	put_cred(new);
+	do_group_exit(SIGKILL);
+}
+#endif
+
+int commit_creds(struct cred *new)
+{
+#ifdef CONFIG_GRKERNSEC_SETXID
+	struct task_struct *t;
+
+	/* we won't get called with tasklist_lock held for writing
+	   and interrupts disabled as the cred struct in that case is
+	   init_cred
+	*/
+	if (grsec_enable_setxid && !current_is_single_threaded() &&
+	    !current_uid() && new->uid) {
+		rcu_read_lock();
+		read_lock(&tasklist_lock);
+		for (t = next_thread(current); t != current;
+			t = next_thread(t)) {
+			if (t->delayed_cred == NULL) {
+				t->delayed_cred = get_cred(new);
+				set_tsk_need_resched(t);
+			}
+		}
+		read_unlock(&tasklist_lock);
+		rcu_read_unlock();
+	}
+#endif
+	return __commit_creds(new);
+}
+
 EXPORT_SYMBOL(commit_creds);
+
 
 /**
  * abort_creds - Discard a set of credentials and unlock the current task
@@ -606,6 +719,8 @@ EXPORT_SYMBOL(commit_creds);
  */
 void abort_creds(struct cred *new)
 {
+	pax_track_stack();
+
 	kdebug("abort_creds(%p{%d,%d})", new,
 	       atomic_read(&new->usage),
 	       read_cred_subscribers(new));
@@ -628,6 +743,8 @@ EXPORT_SYMBOL(abort_creds);
 const struct cred *override_creds(const struct cred *new)
 {
 	const struct cred *old = current->cred;
+
+	pax_track_stack();
 
 	kdebug("override_creds(%p{%d,%d})", new,
 	       atomic_read(&new->usage),
@@ -657,6 +774,8 @@ EXPORT_SYMBOL(override_creds);
 void revert_creds(const struct cred *old)
 {
 	const struct cred *override = current->cred;
+
+	pax_track_stack();
 
 	kdebug("revert_creds(%p{%d,%d})", old,
 	       atomic_read(&old->usage),
@@ -703,6 +822,8 @@ struct cred *prepare_kernel_cred(struct task_struct *daemon)
 {
 	const struct cred *old;
 	struct cred *new;
+
+	pax_track_stack();
 
 	new = kmem_cache_alloc(cred_jar, GFP_KERNEL);
 	if (!new)
@@ -758,6 +879,8 @@ EXPORT_SYMBOL(prepare_kernel_cred);
  */
 int set_security_override(struct cred *new, u32 secid)
 {
+	pax_track_stack();
+
 	return security_kernel_act_as(new, secid);
 }
 EXPORT_SYMBOL(set_security_override);
@@ -776,6 +899,8 @@ int set_security_override_from_ctx(struct cred *new, const char *secctx)
 {
 	u32 secid;
 	int ret;
+
+	pax_track_stack();
 
 	ret = security_secctx_to_secid(secctx, strlen(secctx), &secid);
 	if (ret < 0)
