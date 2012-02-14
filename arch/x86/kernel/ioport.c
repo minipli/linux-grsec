@@ -67,7 +67,7 @@ asmlinkage long sys_ioperm(unsigned long from, unsigned long num, int turn_on)
 	 * because the ->io_bitmap_max value must match the bitmap
 	 * contents:
 	 */
-	tss = &per_cpu(init_tss, get_cpu());
+	tss = init_tss + get_cpu();
 
 	set_bitmap(t->io_bitmap_ptr, from, num, !turn_on);
 
