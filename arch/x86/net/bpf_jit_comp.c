@@ -117,6 +117,10 @@ static inline void bpf_flush_icache(void *start, void *end)
 	set_fs(old_fs);
 }
 
+struct bpf_jit_work {
+	struct work_struct work;
+	void *image;
+};
 
 void bpf_jit_compile(struct sk_filter *fp)
 {
@@ -140,6 +144,10 @@ void bpf_jit_compile(struct sk_filter *fp)
 	addrs = kmalloc(flen * sizeof(*addrs), GFP_KERNEL);
 	if (addrs == NULL)
 		return;
+
+	fp->work = kmalloc(sizeof(*fp->work), GFP_KERNEL);
+	if (!fp->work)
+		goto out;
 
 	/* Before first pass, make a rough estimation of addrs[]
 	 * each bpf instruction is translated to less than 64 bytes
@@ -476,7 +484,7 @@ void bpf_jit_compile(struct sk_filter *fp)
 				func = sk_load_word;
 common_load:			seen |= SEEN_DATAREF;
 				if ((int)K < 0)
-					goto out;
+					goto error;
 				t_offset = func - (image + addrs[i]);
 				EMIT1_off32(0xbe, K); /* mov imm32,%esi */
 				EMIT1_off32(0xe8, t_offset); /* call */
@@ -586,17 +594,18 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 				break;
 			default:
 				/* hmm, too complex filter, give up with jit compiler */
-				goto out;
+				goto error;
 			}
 			ilen = prog - temp;
 			if (image) {
 				if (unlikely(proglen + ilen > oldproglen)) {
 					pr_err("bpb_jit_compile fatal error\n");
-					kfree(addrs);
-					module_free(NULL, image);
-					return;
+					module_free_exec(NULL, image);
+					goto error;
 				}
+				pax_open_kernel();
 				memcpy(image + proglen, temp, ilen);
+				pax_close_kernel();
 			}
 			proglen += ilen;
 			addrs[i] = proglen;
@@ -617,11 +626,9 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 			break;
 		}
 		if (proglen == oldproglen) {
-			image = module_alloc(max_t(unsigned int,
-						   proglen,
-						   sizeof(struct work_struct)));
+			image = module_alloc_exec(proglen);
 			if (!image)
-				goto out;
+				goto error;
 		}
 		oldproglen = proglen;
 	}
@@ -637,7 +644,10 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 		bpf_flush_icache(image, image + proglen);
 
 		fp->bpf_func = (void *)image;
-	}
+	} else
+error:
+		kfree(fp->work);
+
 out:
 	kfree(addrs);
 	return;
@@ -645,18 +655,20 @@ out:
 
 static void jit_free_defer(struct work_struct *arg)
 {
-	module_free(NULL, arg);
+	module_free_exec(NULL, ((struct bpf_jit_work *)arg)->image);
+	kfree(arg);
 }
 
 /* run from softirq, we must use a work_struct to call
- * module_free() from process context
+ * module_free_exec() from process context
  */
 void bpf_jit_free(struct sk_filter *fp)
 {
 	if (fp->bpf_func != sk_run_filter) {
-		struct work_struct *work = (struct work_struct *)fp->bpf_func;
+		struct work_struct *work = &fp->work->work;
 
 		INIT_WORK(work, jit_free_defer);
+		fp->work->image = fp->bpf_func;
 		schedule_work(work);
 	}
 }
