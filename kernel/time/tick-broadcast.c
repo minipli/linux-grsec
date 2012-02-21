@@ -115,7 +115,7 @@ int tick_device_uses_broadcast(struct clock_event_device *dev, int cpu)
 		 * then clear the broadcast bit.
 		 */
 		if (!(dev->features & CLOCK_EVT_FEAT_C3STOP)) {
-			int cpu = smp_processor_id();
+			cpu = smp_processor_id();
 
 			cpumask_clear_cpu(cpu, tick_get_broadcast_mask());
 			tick_broadcast_clear_oneshot(cpu);
