@@ -67,7 +67,7 @@ struct k_itimer {
 };
 
 struct k_clock {
-	const int res;		/* in nanoseconds */
+	int res;		/* in nanoseconds */
 	int (*clock_getres) (const clockid_t which_clock, struct timespec *tp);
 	int (*clock_set) (const clockid_t which_clock, struct timespec * tp);
 	int (*clock_get) (const clockid_t which_clock, struct timespec * tp);
@@ -82,7 +82,8 @@ struct k_clock {
 #define TIMER_RETRY 1
 	void (*timer_get) (struct k_itimer * timr,
 			   struct itimerspec * cur_setting);
-};
+} __do_const;
+typedef struct k_clock __no_const k_clock_no_const;
 
 void register_posix_clock(const clockid_t clock_id, struct k_clock *new_clock);
 
