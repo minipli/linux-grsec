@@ -613,8 +613,13 @@ static int pn_sock_seq_show(struct seq_file *seq, void *v)
 			pn->resource, sk->sk_state,
 			sk_wmem_alloc_get(sk), sk_rmem_alloc_get(sk),
 			sock_i_uid(sk), sock_i_ino(sk),
-			atomic_read(&sk->sk_refcnt), sk,
-			atomic_read(&sk->sk_drops), &len);
+			atomic_read(&sk->sk_refcnt),
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+			NULL,
+#else
+			sk,
+#endif
+			atomic_read_unchecked(&sk->sk_drops), &len);
 	}
 	seq_printf(seq, "%*s\n", 127 - len, "");
 	return 0;
