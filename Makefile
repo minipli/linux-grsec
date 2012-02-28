@@ -529,25 +529,27 @@ endif
 
 ifeq ($(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-plugin.sh "$(HOSTCC)" "$(CC)"), y)
 ifdef CONFIG_PAX_CONSTIFY_PLUGIN
-CONSTIFY_PLUGIN := -fplugin=$(objtree)/tools/gcc/constify_plugin.so -DCONSTIFY_PLUGIN
+CONSTIFY_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/constify_plugin.so -DCONSTIFY_PLUGIN
 endif
 ifdef CONFIG_PAX_MEMORY_STACKLEAK
-STACKLEAK_PLUGIN := -fplugin=$(objtree)/tools/gcc/stackleak_plugin.so -DSTACKLEAK_PLUGIN
-STACKLEAK_PLUGIN += -fplugin-arg-stackleak_plugin-track-lowest-sp=100
+STACKLEAK_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/stackleak_plugin.so -DSTACKLEAK_PLUGIN
+STACKLEAK_PLUGIN_CFLAGS += -fplugin-arg-stackleak_plugin-track-lowest-sp=100
 endif
 ifdef CONFIG_KALLOCSTAT_PLUGIN
-KALLOCSTAT_PLUGIN := -fplugin=$(objtree)/tools/gcc/kallocstat_plugin.so
+KALLOCSTAT_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/kallocstat_plugin.so
 endif
 ifdef CONFIG_PAX_KERNEXEC_PLUGIN
-KERNEXEC_PLUGIN := -fplugin=$(objtree)/tools/gcc/kernexec_plugin.so
-KERNEXEC_PLUGIN += -fplugin-arg-kernexec_plugin-method=$(CONFIG_PAX_KERNEXEC_PLUGIN_METHOD) -DKERNEXEC_PLUGIN
+KERNEXEC_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/kernexec_plugin.so
+KERNEXEC_PLUGIN_CFLAGS += -fplugin-arg-kernexec_plugin-method=$(CONFIG_PAX_KERNEXEC_PLUGIN_METHOD) -DKERNEXEC_PLUGIN
+KERNEXEC_PLUGIN_AFLAGS := -DKERNEXEC_PLUGIN
 endif
 ifdef CONFIG_CHECKER_PLUGIN
 ifeq ($(call cc-ifversion, -ge, 0406, y), y)
-CHECKER_PLUGIN := -fplugin=$(objtree)/tools/gcc/checker_plugin.so -DCHECKER_PLUGIN
+CHECKER_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/checker_plugin.so -DCHECKER_PLUGIN
 endif
 endif
-GCC_PLUGINS := $(CONSTIFY_PLUGIN) $(STACKLEAK_PLUGIN) $(KALLOCSTAT_PLUGIN) $(KERNEXEC_PLUGIN) $(CHECKER_PLUGIN)
+GCC_PLUGINS_CFLAGS := $(CONSTIFY_PLUGIN_CFLAGS) $(STACKLEAK_PLUGIN_CFLAGS) $(KALLOCSTAT_PLUGIN_CFLAGS) $(KERNEXEC_PLUGIN_CFLAGS) $(CHECKER_PLUGIN_CFLAGS)
+GCC_PLUGINS_AFLAGS := $(KERNEXEC_PLUGIN_AFLAGS)
 export CONSTIFY_PLUGIN STACKLEAK_PLUGIN KERNEXEC_PLUGIN CHECKER_PLUGIN
 ifeq ($(KBUILD_EXTMOD),)
 gcc-plugins:
@@ -907,7 +909,8 @@ vmlinux.o: $(modpost-init) $(vmlinux-main) FORCE
 
 # The actual objects are generated when descending, 
 # make sure no implicit rule kicks in
-$(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): KBUILD_CFLAGS += $(GCC_PLUGINS)
+$(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+$(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
 $(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): $(vmlinux-dirs) ;
 
 # Handle descending into subdirectories listed in $(vmlinux-dirs)
@@ -1026,7 +1029,7 @@ prepare0: archprepare FORCE
 	$(Q)$(MAKE) $(build)=. missing-syscalls
 
 # All the preparing..
-prepare: KBUILD_CFLAGS := $(filter-out $(GCC_PLUGINS),$(KBUILD_CFLAGS))
+prepare: KBUILD_CFLAGS := $(filter-out $(GCC_PLUGINS_CFLAGS),$(KBUILD_CFLAGS))
 prepare: prepare0
 
 # The asm symlink changes when $(ARCH) changes.
@@ -1168,7 +1171,8 @@ all: modules
 #	using awk while concatenating to the final file.
 
 PHONY += modules
-modules: KBUILD_CFLAGS += $(GCC_PLUGINS)
+modules: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+modules: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
 modules: $(vmlinux-dirs) $(if $(KBUILD_BUILTIN),vmlinux)
 	$(Q)$(AWK) '!x[$$0]++' $(vmlinux-dirs:%=$(objtree)/%/modules.order) > $(objtree)/modules.order
 	@$(kecho) '  Building modules, stage 2.';
@@ -1436,7 +1440,8 @@ PHONY += $(module-dirs) modules
 $(module-dirs): crmodverdir $(objtree)/Module.symvers
 	$(Q)$(MAKE) $(build)=$(patsubst _module_%,%,$@)
 
-modules: KBUILD_CFLAGS += $(GCC_PLUGINS)
+modules: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+modules: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
 modules: $(module-dirs)
 	@$(kecho) '  Building modules, stage 2.';
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
@@ -1557,12 +1562,14 @@ else
         target-dir = $(if $(KBUILD_EXTMOD),$(dir $<),$(dir $@))
 endif
 
-%.s: KBUILD_CFLAGS += $(GCC_PLUGINS)
+%.s: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+%.s: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
 %.s: %.c gcc-plugins prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
 %.i: %.c prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
-%.o: KBUILD_CFLAGS += $(GCC_PLUGINS)
+%.o: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+%.o: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
 %.o: %.c gcc-plugins prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
 %.lst: %.c prepare scripts FORCE
@@ -1579,12 +1586,14 @@ endif
 	$(cmd_crmodverdir)
 	$(Q)$(MAKE) KBUILD_MODULES=$(if $(CONFIG_MODULES),1) \
 	$(build)=$(build-dir)
-%/: KBUILD_CFLAGS += $(GCC_PLUGINS)
+%/: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+%/: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
 %/: gcc-plugins prepare scripts FORCE
 	$(cmd_crmodverdir)
 	$(Q)$(MAKE) KBUILD_MODULES=$(if $(CONFIG_MODULES),1) \
 	$(build)=$(build-dir)
-%.ko: KBUILD_CFLAGS += $(GCC_PLUGINS)
+%.ko: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+%.ko: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
 %.ko: gcc-plugins prepare scripts FORCE
 	$(cmd_crmodverdir)
 	$(Q)$(MAKE) KBUILD_MODULES=$(if $(CONFIG_MODULES),1)   \
