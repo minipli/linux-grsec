@@ -114,6 +114,7 @@ EXPORT_SYMBOL(memdup_user);
  * allocated buffer. Use this if you don't want to free the buffer immediately
  * like, for example, with RCU.
  */
+#undef __krealloc
 void *__krealloc(const void *p, size_t new_size, gfp_t flags)
 {
 	void *ret;
@@ -147,6 +148,7 @@ EXPORT_SYMBOL(__krealloc);
  * behaves exactly like kmalloc().  If @size is 0 and @p is not a
  * %NULL pointer, the object pointed to is freed.
  */
+#undef krealloc
 void *krealloc(const void *p, size_t new_size, gfp_t flags)
 {
 	void *ret;
@@ -243,6 +245,12 @@ void __vma_link_list(struct mm_struct *mm, struct vm_area_struct *vma,
 void arch_pick_mmap_layout(struct mm_struct *mm)
 {
 	mm->mmap_base = TASK_UNMAPPED_BASE;
+
+#ifdef CONFIG_PAX_RANDMMAP
+	if (mm->pax_flags & MF_PAX_RANDMMAP)
+		mm->mmap_base += mm->delta_mmap;
+#endif
+
 	mm->get_unmapped_area = arch_get_unmapped_area;
 	mm->unmap_area = arch_unmap_area;
 }
