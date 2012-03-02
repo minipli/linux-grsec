@@ -250,7 +250,7 @@ static void core_tmr_drain_task_list(
 			cmd->se_tfo->get_task_tag(cmd), cmd->pr_res_key,
 			cmd->t_task_list_num,
 			atomic_read(&cmd->t_task_cdbs_left),
-			atomic_read(&cmd->t_task_cdbs_sent),
+			atomic_read_unchecked(&cmd->t_task_cdbs_sent),
 			atomic_read(&cmd->t_transport_active),
 			atomic_read(&cmd->t_transport_stop),
 			atomic_read(&cmd->t_transport_sent));
@@ -281,7 +281,7 @@ static void core_tmr_drain_task_list(
 			pr_debug("LUN_RESET: got t_transport_active = 1 for"
 				" task: %p, t_fe_count: %d dev: %p\n", task,
 				fe_count, dev);
-			atomic_set(&cmd->t_transport_aborted, 1);
+			atomic_set_unchecked(&cmd->t_transport_aborted, 1);
 			spin_unlock_irqrestore(&cmd->t_state_lock, flags);
 
 			core_tmr_handle_tas_abort(tmr_nacl, cmd, tas, fe_count);
@@ -289,7 +289,7 @@ static void core_tmr_drain_task_list(
 		}
 		pr_debug("LUN_RESET: Got t_transport_active = 0 for task: %p,"
 			" t_fe_count: %d dev: %p\n", task, fe_count, dev);
-		atomic_set(&cmd->t_transport_aborted, 1);
+		atomic_set_unchecked(&cmd->t_transport_aborted, 1);
 		spin_unlock_irqrestore(&cmd->t_state_lock, flags);
 
 		core_tmr_handle_tas_abort(tmr_nacl, cmd, tas, fe_count);
