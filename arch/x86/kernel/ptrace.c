@@ -925,7 +925,7 @@ static const struct user_regset_view user_x86_32_view; /* Initialized below. */
 long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 {
 	int ret;
-	unsigned long __user *datap = (unsigned long __user *)data;
+	unsigned long __user *datap = (__force unsigned long __user *)data;
 
 	switch (request) {
 	/* read the word at location addr in the USER area. */
@@ -1012,14 +1012,14 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 		if (addr < 0)
 			return -EIO;
 		ret = do_get_thread_area(child, addr,
-					 (struct user_desc __user *) data);
+					 (__force struct user_desc __user *) data);
 		break;
 
 	case PTRACE_SET_THREAD_AREA:
 		if (addr < 0)
 			return -EIO;
 		ret = do_set_thread_area(child, addr,
-					 (struct user_desc __user *) data, 0);
+					 (__force struct user_desc __user *) data, 0);
 		break;
 #endif
 
@@ -1038,12 +1038,12 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 #ifdef CONFIG_X86_PTRACE_BTS
 	case PTRACE_BTS_CONFIG:
 		ret = ptrace_bts_config
-			(child, data, (struct ptrace_bts_config __user *)addr);
+			(child, data, (__force struct ptrace_bts_config __user *)addr);
 		break;
 
 	case PTRACE_BTS_STATUS:
 		ret = ptrace_bts_status
-			(child, data, (struct ptrace_bts_config __user *)addr);
+			(child, data, (__force struct ptrace_bts_config __user *)addr);
 		break;
 
 	case PTRACE_BTS_SIZE:
@@ -1052,7 +1052,7 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 
 	case PTRACE_BTS_GET:
 		ret = ptrace_bts_read_record
-			(child, data, (struct bts_struct __user *) addr);
+			(child, data, (__force struct bts_struct __user *) addr);
 		break;
 
 	case PTRACE_BTS_CLEAR:
@@ -1061,7 +1061,7 @@ long arch_ptrace(struct task_struct *child, long request, long addr, long data)
 
 	case PTRACE_BTS_DRAIN:
 		ret = ptrace_bts_drain
-			(child, data, (struct bts_struct __user *) addr);
+			(child, data, (__force struct bts_struct __user *) addr);
 		break;
 #endif /* CONFIG_X86_PTRACE_BTS */
 
@@ -1450,7 +1450,7 @@ void send_sigtrap(struct task_struct *tsk, struct pt_regs *regs,
 	info.si_code = si_code;
 
 	/* User-mode ip? */
-	info.si_addr = user_mode_vm(regs) ? (void __user *) regs->ip : NULL;
+	info.si_addr = user_mode(regs) ? (__force void __user *) regs->ip : NULL;
 
 	/* Send us the fake SIGTRAP */
 	force_sig_info(SIGTRAP, &info, tsk);
@@ -1469,7 +1469,7 @@ void send_sigtrap(struct task_struct *tsk, struct pt_regs *regs,
  * We must return the syscall number to actually look up in the table.
  * This can be -1L to skip running any syscall at all.
  */
-asmregparm long syscall_trace_enter(struct pt_regs *regs)
+long syscall_trace_enter(struct pt_regs *regs)
 {
 	long ret = 0;
 
@@ -1514,7 +1514,7 @@ asmregparm long syscall_trace_enter(struct pt_regs *regs)
 	return ret ?: regs->orig_ax;
 }
 
-asmregparm void syscall_trace_leave(struct pt_regs *regs)
+void syscall_trace_leave(struct pt_regs *regs)
 {
 	if (unlikely(current->audit_context))
 		audit_syscall_exit(AUDITSC_RESULT(regs->ax), regs->ax);

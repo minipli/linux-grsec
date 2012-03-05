@@ -36,6 +36,7 @@
 #include <linux/string.h>
 #include <linux/timer.h>
 #include <linux/types.h>
+#include <linux/sched.h>
 
 #include <asm/byteorder.h>
 
