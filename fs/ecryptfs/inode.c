@@ -256,10 +256,8 @@ int ecryptfs_lookup_and_interpose_lower(struct dentry *ecryptfs_dentry,
 	struct dentry *lower_dir_dentry;
 	struct vfsmount *lower_mnt;
 	struct inode *lower_inode;
-	struct ecryptfs_mount_crypt_stat *mount_crypt_stat;
 	struct ecryptfs_crypt_stat *crypt_stat;
 	char *page_virt = NULL;
-	u64 file_size;
 	int rc = 0;
 
 	lower_dir_dentry = lower_dentry->d_parent;
@@ -334,18 +332,7 @@ int ecryptfs_lookup_and_interpose_lower(struct dentry *ecryptfs_dentry,
 		}
 		crypt_stat->flags |= ECRYPTFS_METADATA_IN_XATTR;
 	}
-	mount_crypt_stat = &ecryptfs_superblock_to_private(
-		ecryptfs_dentry->d_sb)->mount_crypt_stat;
-	if (mount_crypt_stat->flags & ECRYPTFS_ENCRYPTED_VIEW_ENABLED) {
-		if (crypt_stat->flags & ECRYPTFS_METADATA_IN_XATTR)
-			file_size = (crypt_stat->num_header_bytes_at_front
-				     + i_size_read(lower_dentry->d_inode));
-		else
-			file_size = i_size_read(lower_dentry->d_inode);
-	} else {
-		file_size = get_unaligned_be64(page_virt);
-	}
-	i_size_write(ecryptfs_dentry->d_inode, (loff_t)file_size);
+	ecryptfs_i_size_init(page_virt, ecryptfs_dentry->d_inode);
 out_free_kmem:
 	kmem_cache_free(ecryptfs_header_cache_2, page_virt);
 	goto out;
@@ -660,7 +647,7 @@ static int ecryptfs_readlink_lower(struct dentry *dentry, char **buf,
 	old_fs = get_fs();
 	set_fs(get_ds());
 	rc = lower_dentry->d_inode->i_op->readlink(lower_dentry,
-						   (char __user *)lower_buf,
+						   (char __force_user *)lower_buf,
 						   lower_bufsiz);
 	set_fs(old_fs);
 	if (rc < 0)
@@ -706,7 +693,7 @@ static void *ecryptfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 	}
 	old_fs = get_fs();
 	set_fs(get_ds());
-	rc = dentry->d_inode->i_op->readlink(dentry, (char __user *)buf, len);
+	rc = dentry->d_inode->i_op->readlink(dentry, (__force char __user *)buf, len);
 	set_fs(old_fs);
 	if (rc < 0)
 		goto out_free;
@@ -964,7 +951,8 @@ static int ecryptfs_setattr(struct dentry *dentry, struct iattr *ia)
 				goto out;
 			}
 			rc = 0;
-			crypt_stat->flags &= ~(ECRYPTFS_ENCRYPTED);
+			crypt_stat->flags &= ~(ECRYPTFS_I_SIZE_INITIALIZED
+						| ECRYPTFS_ENCRYPTED);
 		}
 	}
 	mutex_unlock(&crypt_stat->cs_mutex);

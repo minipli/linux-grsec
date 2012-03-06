@@ -27,6 +27,8 @@
 #include <linux/sched.h>
 #include <linux/prctl.h>
 #include <linux/securebits.h>
+#include <linux/syslog.h>
+#include <net/sock.h>
 
 /*
  * If a non-root user executes a setuid-root binary in
@@ -50,9 +52,18 @@ static void warn_setuid_and_fcaps_mixed(char *fname)
 	}
 }
 
+#ifdef CONFIG_NET
+extern kernel_cap_t gr_cap_rtnetlink(struct sock *sk);
+#endif
+
 int cap_netlink_send(struct sock *sk, struct sk_buff *skb)
 {
+#ifdef CONFIG_NET
+	NETLINK_CB(skb).eff_cap = gr_cap_rtnetlink(sk);
+#else
 	NETLINK_CB(skb).eff_cap = current_cap();
+#endif
+	
 	return 0;
 }
 
@@ -582,6 +593,9 @@ int cap_bprm_secureexec(struct linux_binprm *bprm)
 {
 	const struct cred *cred = current_cred();
 
+	if (gr_acl_enable_at_secure())
+		return 1;
+
 	if (cred->uid != 0) {
 		if (bprm->cap_effective)
 			return 1;
@@ -956,13 +970,18 @@ error:
 /**
  * cap_syslog - Determine whether syslog function is permitted
  * @type: Function requested
+ * @from_file: Whether this request came from an open file (i.e. /proc)
  *
  * Determine whether the current process is permitted to use a particular
  * syslog function, returning 0 if permission is granted, -ve if not.
  */
-int cap_syslog(int type)
+int cap_syslog(int type, bool from_file)
 {
-	if ((type != 3 && type != 10) && !capable(CAP_SYS_ADMIN))
+	/* /proc/kmsg can open be opened by CAP_SYS_ADMIN */
+	if (type != SYSLOG_ACTION_OPEN && from_file)
+		return 0;
+	if ((type != SYSLOG_ACTION_READ_ALL &&
+	     type != SYSLOG_ACTION_SIZE_BUFFER) && !capable(CAP_SYS_ADMIN))
 		return -EPERM;
 	return 0;
 }

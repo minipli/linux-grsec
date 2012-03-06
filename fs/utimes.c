@@ -1,6 +1,7 @@
 #include <linux/compiler.h>
 #include <linux/file.h>
 #include <linux/fs.h>
+#include <linux/security.h>
 #include <linux/linkage.h>
 #include <linux/mount.h>
 #include <linux/namei.h>
@@ -101,6 +102,12 @@ static int utimes_common(struct path *path, struct timespec *times)
 				goto mnt_drop_write_and_out;
 		}
 	}
+
+	if (!gr_acl_handle_utime(path->dentry, path->mnt)) {
+		error = -EACCES;
+		goto mnt_drop_write_and_out;
+	}
+
 	mutex_lock(&inode->i_mutex);
 	error = notify_change(path->dentry, &newattrs);
 	mutex_unlock(&inode->i_mutex);

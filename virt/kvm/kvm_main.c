@@ -43,6 +43,8 @@
 #include <linux/swap.h>
 #include <linux/bitops.h>
 #include <linux/spinlock.h>
+#include <linux/namei.h>
+#include <linux/fs.h>
 
 #include <asm/processor.h>
 #include <asm/io.h>
@@ -575,12 +577,73 @@ out:
 	return r;
 }
 
+/*
+ * We want to test whether the caller has been granted permissions to
+ * use this device.  To be able to configure and control the device,
+ * the user needs access to PCI configuration space and BAR resources.
+ * These are accessed through PCI sysfs.  PCI config space is often
+ * passed to the process calling this ioctl via file descriptor, so we
+ * can't rely on access to that file.  We can check for permissions
+ * on each of the BAR resource files, which is a pretty clear
+ * indicator that the user has been granted access to the device.
+ */
+static int probe_sysfs_permissions(struct pci_dev *dev)
+{
+#ifdef CONFIG_SYSFS
+	int i;
+	bool bar_found = false;
+
+	for (i = PCI_STD_RESOURCES; i <= PCI_STD_RESOURCE_END; i++) {
+		char *kpath, *syspath;
+		struct path path;
+		struct inode *inode;
+		int r;
+
+		if (!pci_resource_len(dev, i))
+			continue;
+
+		kpath = kobject_get_path(&dev->dev.kobj, GFP_KERNEL);
+		if (!kpath)
+			return -ENOMEM;
+
+		/* Per sysfs-rules, sysfs is always at /sys */
+		syspath = kasprintf(GFP_KERNEL, "/sys%s/resource%d", kpath, i);
+		kfree(kpath);
+		if (!syspath)
+			return -ENOMEM;
+
+		r = kern_path(syspath, LOOKUP_FOLLOW, &path);
+		kfree(syspath);
+		if (r)
+			return r;
+
+		inode = path.dentry->d_inode;
+
+		r = inode_permission(inode, MAY_READ | MAY_WRITE | MAY_ACCESS);
+		path_put(&path);
+		if (r)
+			return r;
+
+		bar_found = true;
+	}
+
+	/* If no resources, probably something special */
+	if (!bar_found)
+		return -EPERM;
+
+	return 0;
+#else
+	return -EINVAL; /* No way to control the device without sysfs */
+#endif
+}
+
 static int kvm_vm_ioctl_assign_device(struct kvm *kvm,
 				      struct kvm_assigned_pci_dev *assigned_dev)
 {
 	int r = 0;
 	struct kvm_assigned_dev_kernel *match;
 	struct pci_dev *dev;
+	u8 header_type;
 
 	down_read(&kvm->slots_lock);
 	mutex_lock(&kvm->lock);
@@ -607,6 +670,18 @@ static int kvm_vm_ioctl_assign_device(struct kvm *kvm,
 		r = -EINVAL;
 		goto out_free;
 	}
+
+	/* Don't allow bridges to be assigned */
+	pci_read_config_byte(dev, PCI_HEADER_TYPE, &header_type);
+	if ((header_type & PCI_HEADER_TYPE) != PCI_HEADER_TYPE_NORMAL) {
+		r = -EPERM;
+		goto out_put;
+	}
+
+	r = probe_sysfs_permissions(dev);
+	if (r)
+		goto out_put;
+
 	if (pci_enable_device(dev)) {
 		printk(KERN_INFO "%s: Could not enable PCI device\n", __func__);
 		r = -EBUSY;
@@ -2494,7 +2569,7 @@ asmlinkage void kvm_handle_fault_on_reboot(void)
 	if (kvm_rebooting)
 		/* spin while reset goes on */
 		while (true)
-			;
+			cpu_relax();
 	/* Fault while not rebooting.  We want the trace. */
 	BUG();
 }
@@ -2714,7 +2789,7 @@ static void kvm_sched_out(struct preempt_notifier *pn,
 	kvm_arch_vcpu_put(vcpu);
 }
 
-int kvm_init(void *opaque, unsigned int vcpu_size,
+int kvm_init(const void *opaque, unsigned int vcpu_size,
 		  struct module *module)
 {
 	int r;
@@ -2767,15 +2842,17 @@ int kvm_init(void *opaque, unsigned int vcpu_size,
 	/* A kmem cache lets us meet the alignment requirements of fx_save. */
 	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", vcpu_size,
 					   __alignof__(struct kvm_vcpu),
-					   0, NULL);
+					   SLAB_USERCOPY, NULL);
 	if (!kvm_vcpu_cache) {
 		r = -ENOMEM;
 		goto out_free_5;
 	}
 
-	kvm_chardev_ops.owner = module;
-	kvm_vm_fops.owner = module;
-	kvm_vcpu_fops.owner = module;
+	pax_open_kernel();
+	*(void **)&kvm_chardev_ops.owner = module;
+	*(void **)&kvm_vm_fops.owner = module;
+	*(void **)&kvm_vcpu_fops.owner = module;
+	pax_close_kernel();
 
 	r = misc_register(&kvm_dev);
 	if (r) {

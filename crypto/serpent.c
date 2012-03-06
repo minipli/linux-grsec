@@ -21,6 +21,7 @@
 #include <asm/byteorder.h>
 #include <linux/crypto.h>
 #include <linux/types.h>
+#include <linux/sched.h>
 
 /* Key is padded to the maximum of 256 bits before round key generation.
  * Any key length <= 256 bits (32 bytes) is allowed by the algorithm.
@@ -223,6 +224,8 @@ static int serpent_setkey(struct crypto_tfm *tfm, const u8 *key,
 	u8  *k8 = (u8 *)k;
 	u32 r0,r1,r2,r3,r4;
 	int i;
+
+	pax_track_stack();
 
 	/* Copy key, add padding */
 

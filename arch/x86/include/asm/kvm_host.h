@@ -534,9 +534,9 @@ struct kvm_x86_ops {
 	bool (*gb_page_enable)(void);
 
 	const struct trace_print_flags *exit_reasons_str;
-};
+} __do_const;
 
-extern struct kvm_x86_ops *kvm_x86_ops;
+extern const struct kvm_x86_ops *kvm_x86_ops;
 
 int kvm_mmu_module_init(void);
 void kvm_mmu_module_exit(void);

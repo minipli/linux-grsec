@@ -418,17 +418,6 @@ static int ecryptfs_encrypt_extent(struct page *enc_extent_page,
 				rc);
 		goto out;
 	}
-	if (unlikely(ecryptfs_verbosity > 0)) {
-		ecryptfs_printk(KERN_DEBUG, "Encrypting extent "
-				"with iv:\n");
-		ecryptfs_dump_hex(extent_iv, crypt_stat->iv_bytes);
-		ecryptfs_printk(KERN_DEBUG, "First 8 bytes before "
-				"encryption:\n");
-		ecryptfs_dump_hex((char *)
-				  (page_address(page)
-				   + (extent_offset * crypt_stat->extent_size)),
-				  8);
-	}
 	rc = ecryptfs_encrypt_page_offset(crypt_stat, enc_extent_page, 0,
 					  page, (extent_offset
 						 * crypt_stat->extent_size),
@@ -441,14 +430,6 @@ static int ecryptfs_encrypt_extent(struct page *enc_extent_page,
 		goto out;
 	}
 	rc = 0;
-	if (unlikely(ecryptfs_verbosity > 0)) {
-		ecryptfs_printk(KERN_DEBUG, "Encrypt extent [0x%.16x]; "
-				"rc = [%d]\n", (extent_base + extent_offset),
-				rc);
-		ecryptfs_printk(KERN_DEBUG, "First 8 bytes after "
-				"encryption:\n");
-		ecryptfs_dump_hex((char *)(page_address(enc_extent_page)), 8);
-	}
 out:
 	return rc;
 }
@@ -545,17 +526,6 @@ static int ecryptfs_decrypt_extent(struct page *page,
 				rc);
 		goto out;
 	}
-	if (unlikely(ecryptfs_verbosity > 0)) {
-		ecryptfs_printk(KERN_DEBUG, "Decrypting extent "
-				"with iv:\n");
-		ecryptfs_dump_hex(extent_iv, crypt_stat->iv_bytes);
-		ecryptfs_printk(KERN_DEBUG, "First 8 bytes before "
-				"decryption:\n");
-		ecryptfs_dump_hex((char *)
-				  (page_address(enc_extent_page)
-				   + (extent_offset * crypt_stat->extent_size)),
-				  8);
-	}
 	rc = ecryptfs_decrypt_page_offset(crypt_stat, page,
 					  (extent_offset
 					   * crypt_stat->extent_size),
@@ -569,16 +539,6 @@ static int ecryptfs_decrypt_extent(struct page *page,
 		goto out;
 	}
 	rc = 0;
-	if (unlikely(ecryptfs_verbosity > 0)) {
-		ecryptfs_printk(KERN_DEBUG, "Decrypt extent [0x%.16x]; "
-				"rc = [%d]\n", (extent_base + extent_offset),
-				rc);
-		ecryptfs_printk(KERN_DEBUG, "First 8 bytes after "
-				"decryption:\n");
-		ecryptfs_dump_hex((char *)(page_address(page)
-					   + (extent_offset
-					      * crypt_stat->extent_size)), 8);
-	}
 out:
 	return rc;
 }
@@ -1455,6 +1415,25 @@ static void set_default_header_data(struct ecryptfs_crypt_stat *crypt_stat)
 		ECRYPTFS_MINIMUM_HEADER_EXTENT_SIZE;
 }
 
+void ecryptfs_i_size_init(const char *page_virt, struct inode *inode)
+{
+	struct ecryptfs_mount_crypt_stat *mount_crypt_stat;
+	struct ecryptfs_crypt_stat *crypt_stat;
+	u64 file_size;
+
+	crypt_stat = &ecryptfs_inode_to_private(inode)->crypt_stat;
+	mount_crypt_stat =
+		&ecryptfs_superblock_to_private(inode->i_sb)->mount_crypt_stat;
+	if (mount_crypt_stat->flags & ECRYPTFS_ENCRYPTED_VIEW_ENABLED) {
+		file_size = i_size_read(ecryptfs_inode_to_lower(inode));
+		if (crypt_stat->flags & ECRYPTFS_METADATA_IN_XATTR)
+			file_size += crypt_stat->num_header_bytes_at_front;
+	} else
+		file_size = get_unaligned_be64(page_virt);
+	i_size_write(inode, (loff_t)file_size);
+	crypt_stat->flags |= ECRYPTFS_I_SIZE_INITIALIZED;
+}
+
 /**
  * ecryptfs_read_headers_virt
  * @page_virt: The virtual address into which to read the headers
@@ -1485,6 +1464,8 @@ static int ecryptfs_read_headers_virt(char *page_virt,
 		rc = -EINVAL;
 		goto out;
 	}
+	if (!(crypt_stat->flags & ECRYPTFS_I_SIZE_INITIALIZED))
+		ecryptfs_i_size_init(page_virt, ecryptfs_dentry->d_inode);
 	offset += MAGIC_ECRYPTFS_MARKER_SIZE_BYTES;
 	rc = ecryptfs_process_flags(crypt_stat, (page_virt + offset),
 				    &bytes_read);
