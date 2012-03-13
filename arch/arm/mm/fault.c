@@ -670,6 +670,7 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 			current->thread.error_code = ifsr;
 			current->thread.trap_no = 0;
 			pax_report_refcount_overflow(regs);
+			fixup_exception(regs);
 			return;
 		}
 	}
