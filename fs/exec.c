@@ -1804,7 +1804,7 @@ int object_is_on_stack(const void *obj, unsigned long len)
 #endif
 }
 
-NORET_TYPE void pax_report_usercopy(const void *ptr, unsigned long len, bool to, const char *type)
+__noreturn void pax_report_usercopy(const void *ptr, unsigned long len, bool to, const char *type)
 {
 	printk(KERN_ERR "PAX: kernel memory %s attempt detected %s %p (%s) (%lu bytes)\n",
 		to ? "leak" : "overwrite", to ? "from" : "to", ptr, type ? : "unknown", len);
