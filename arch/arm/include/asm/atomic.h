@@ -52,7 +52,6 @@ static inline void atomic_add(int i, atomic_t *v)
 
 #ifdef CONFIG_PAX_REFCOUNT
 "	bvc	3f\n"
-"	mov	%0, %1\n"
 "2:	bkpt	0xf103\n"
 "3:\n"
 #endif
@@ -151,12 +150,11 @@ static inline void atomic_sub(int i, atomic_t *v)
 	int result;
 
 	__asm__ __volatile__("@ atomic_sub\n"
-"1:	ldrex	%0, [%3]\n"
-"	subs	%0, %0, %4\n"
+"1:	ldrex	%1, [%3]\n"
+"	subs	%0, %1, %4\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
 "	bvc	3f\n"
-"	mov	%0, %1\n"
 "2:	bkpt	0xf103\n"
 "3:\n"
 #endif
@@ -199,8 +197,8 @@ static inline int atomic_sub_return(int i, atomic_t *v)
 	smp_mb();
 
 	__asm__ __volatile__("@ atomic_sub_return\n"
-"1:	ldrex	%0, [%3]\n"
-"	sub	%0, %0, %4\n"
+"1:	ldrex	%1, [%3]\n"
+"	sub	%0, %1, %4\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
 "	bvc	3f\n"
@@ -459,7 +457,6 @@ static inline void atomic64_add(u64 i, atomic64_t *v)
 
 #ifdef CONFIG_PAX_REFCOUNT
 "	bvc	3f\n"
-"	mov	%0, %1\n"
 "2:	bkpt	0xf103\n"
 "3:\n"
 #endif
@@ -497,19 +494,19 @@ static inline void atomic64_add_unchecked(u64 i, atomic64_unchecked_t *v)
 
 static inline u64 atomic64_add_return(u64 i, atomic64_t *v)
 {
-	u64 result;
-	unsigned long tmp;
+	u64 result, tmp;
 
 	smp_mb();
 
 	__asm__ __volatile__("@ atomic64_add_return\n"
-"1:	ldrexd	%0, %H0, [%3]\n"
-"	adds	%0, %0, %4\n"
-"	adcs	%H0, %H0, %H4\n"
+"1:	ldrexd	%1, %H1, [%3]\n"
+"	adds	%0, %1, %4\n"
+"	adcs	%H0, %H1, %H4\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
 "	bvc	3f\n"
 "	mov	%0, %1\n"
+"	mov	%H0, %H1\n"
 "2:	bkpt	0xf103\n"
 "3:\n"
 #endif
@@ -567,7 +564,6 @@ static inline void atomic64_sub(u64 i, atomic64_t *v)
 
 #ifdef CONFIG_PAX_REFCOUNT
 "	bvc	3f\n"
-"	mov	%0, %1\n"
 "2:	bkpt	0xf103\n"
 "3:\n"
 #endif
@@ -605,19 +601,19 @@ static inline void atomic64_sub_unchecked(u64 i, atomic64_unchecked_t *v)
 
 static inline u64 atomic64_sub_return(u64 i, atomic64_t *v)
 {
-	u64 result;
-	unsigned long tmp;
+	u64 result, tmp;
 
 	smp_mb();
 
 	__asm__ __volatile__("@ atomic64_sub_return\n"
-"1:	ldrexd	%0, %H0, [%3]\n"
-"	subs	%0, %0, %4\n"
-"	sbc	%H0, %H0, %H4\n"
+"1:	ldrexd	%1, %H1, [%3]\n"
+"	subs	%0, %1, %4\n"
+"	sbc	%H0, %H1, %H4\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
 "	bvc	3f\n"
 "	mov	%0, %1\n"
+"	mov	%H0, %H1\n"
 "2:	bkpt	0xf103\n"
 "3:\n"
 #endif
@@ -711,19 +707,19 @@ static inline u64 atomic64_xchg(atomic64_t *ptr, u64 new)
 
 static inline u64 atomic64_dec_if_positive(atomic64_t *v)
 {
-	u64 result;
-	unsigned long tmp;
+	u64 result, tmp;
 
 	smp_mb();
 
 	__asm__ __volatile__("@ atomic64_dec_if_positive\n"
-"1:	ldrexd	%0, %H0, [%3]\n"
-"	subs	%0, %0, #1\n"
-"	sbc	%H0, %H0, #0\n"
+"1:	ldrexd	%1, %H1, [%3]\n"
+"	subs	%0, %1, #1\n"
+"	sbc	%H0, %H1, #0\n"
 
 #ifdef CONFIG_PAX_REFCOUNT
 "	bvc	3f\n"
 "	mov	%0, %1\n"
+"	mov	%H0, %H1\n"
 "2:	bkpt	0xf103\n"
 "3:\n"
 #endif
@@ -767,7 +763,6 @@ static inline int atomic64_add_unless(atomic64_t *v, u64 a, u64 u)
 
 #ifdef CONFIG_PAX_REFCOUNT
 "	bvc	3f\n"
-"	mov	%0, %1\n"
 "2:	bkpt	0xf103\n"
 "3:\n"
 #endif
