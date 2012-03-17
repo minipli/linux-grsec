@@ -12,15 +12,15 @@
 #include <asm/page.h>
 
 unsigned long __must_check __copy_to_user_ll
-		(void __user *to, const void *from, unsigned long n);
+		(void __user *to, const void *from, unsigned long n) __size_overflow(3);
 unsigned long __must_check __copy_from_user_ll
-		(void *to, const void __user *from, unsigned long n);
+		(void *to, const void __user *from, unsigned long n) __size_overflow(3);
 unsigned long __must_check __copy_from_user_ll_nozero
-		(void *to, const void __user *from, unsigned long n);
+		(void *to, const void __user *from, unsigned long n) __size_overflow(3);
 unsigned long __must_check __copy_from_user_ll_nocache
-		(void *to, const void __user *from, unsigned long n);
+		(void *to, const void __user *from, unsigned long n) __size_overflow(3);
 unsigned long __must_check __copy_from_user_ll_nocache_nozero
-		(void *to, const void __user *from, unsigned long n);
+		(void *to, const void __user *from, unsigned long n) __size_overflow(3);
 
 /**
  * __copy_to_user_inatomic: - Copy a block of data into user space, with less checking.
@@ -41,6 +41,8 @@ unsigned long __must_check __copy_from_user_ll_nocache_nozero
  * anything, so this is accurate.
  */
 
+static __always_inline unsigned long __must_check
+__copy_to_user_inatomic(void __user *to, const void *from, unsigned long n) __size_overflow(3);
 static __always_inline unsigned long __must_check
 __copy_to_user_inatomic(void __user *to, const void *from, unsigned long n)
 {
@@ -85,6 +87,8 @@ __copy_to_user_inatomic(void __user *to, const void *from, unsigned long n)
  * On success, this will be zero.
  */
 static __always_inline unsigned long __must_check
+__copy_to_user(void __user *to, const void *from, unsigned long n) __size_overflow(3);
+static __always_inline unsigned long __must_check
 __copy_to_user(void __user *to, const void *from, unsigned long n)
 {
 	might_fault();
@@ -92,6 +96,8 @@ __copy_to_user(void __user *to, const void *from, unsigned long n)
 	return __copy_to_user_inatomic(to, from, n);
 }
 
+static __always_inline unsigned long
+__copy_from_user_inatomic(void *to, const void __user *from, unsigned long n) __size_overflow(3);
 static __always_inline unsigned long
 __copy_from_user_inatomic(void *to, const void __user *from, unsigned long n)
 {
@@ -144,6 +150,8 @@ __copy_from_user_inatomic(void *to, const void __user *from, unsigned long n)
  * for explanation of why this is needed.
  */
 static __always_inline unsigned long
+__copy_from_user(void *to, const void __user *from, unsigned long n) __size_overflow(3);
+static __always_inline unsigned long
 __copy_from_user(void *to, const void __user *from, unsigned long n)
 {
 	might_fault();
@@ -172,6 +180,8 @@ __copy_from_user(void *to, const void __user *from, unsigned long n)
 }
 
 static __always_inline unsigned long __copy_from_user_nocache(void *to,
+				const void __user *from, unsigned long n) __size_overflow(3);
+static __always_inline unsigned long __copy_from_user_nocache(void *to,
 				const void __user *from, unsigned long n)
 {
 	might_fault();
@@ -199,6 +209,9 @@ static __always_inline unsigned long __copy_from_user_nocache(void *to,
 
 static __always_inline unsigned long
 __copy_from_user_inatomic_nocache(void *to, const void __user *from,
+				  unsigned long n) __size_overflow(3);
+static __always_inline unsigned long
+__copy_from_user_inatomic_nocache(void *to, const void __user *from,
 				  unsigned long n)
 {
 	if ((long)n < 0)
@@ -220,6 +233,8 @@ __copy_from_user_inatomic_nocache(void *to, const void __user *from,
  * Returns number of bytes that could not be copied.
  * On success, this will be zero.
  */
+static __always_inline unsigned long __must_check
+copy_to_user(void __user *to, const void *from, unsigned long n) __size_overflow(3);
 static __always_inline unsigned long __must_check
 copy_to_user(void __user *to, const void *from, unsigned long n)
 {
@@ -245,6 +260,8 @@ copy_to_user(void __user *to, const void *from, unsigned long n)
  * data to the requested size using zero bytes.
  */
 static __always_inline unsigned long __must_check
+copy_from_user(void *to, const void __user *from, unsigned long n) __size_overflow(3);
+static __always_inline unsigned long __must_check
 copy_from_user(void *to, const void __user *from, unsigned long n)
 {
 	if (access_ok(VERIFY_READ, from, n))
@@ -258,9 +275,9 @@ copy_from_user(void *to, const void __user *from, unsigned long n)
 }
 
 long __must_check strncpy_from_user(char *dst, const char __user *src,
-				    long count);
+				    unsigned long count) __size_overflow(3);
 long __must_check __strncpy_from_user(char *dst,
-				      const char __user *src, long count);
+				      const char __user *src, unsigned long count) __size_overflow(3);
 
 /**
  * strlen_user: - Get the size of a string in user space.
@@ -278,8 +295,8 @@ long __must_check __strncpy_from_user(char *dst,
  */
 #define strlen_user(str) strnlen_user(str, LONG_MAX)
 
-long strnlen_user(const char __user *str, long n);
-unsigned long __must_check clear_user(void __user *mem, unsigned long len);
-unsigned long __must_check __clear_user(void __user *mem, unsigned long len);
+long strnlen_user(const char __user *str, unsigned long n);
+unsigned long __must_check clear_user(void __user *mem, unsigned long len) __size_overflow(2);
+unsigned long __must_check __clear_user(void __user *mem, unsigned long len) __size_overflow(2);
 
 #endif /* _ASM_X86_UACCESS_32_H */
