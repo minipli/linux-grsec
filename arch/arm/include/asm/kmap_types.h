@@ -19,6 +19,7 @@ enum km_type {
 	KM_SOFTIRQ0,
 	KM_SOFTIRQ1,
 	KM_L2_CACHE,
+	KM_CLEARPAGE,
 	KM_TYPE_NR
 };
 

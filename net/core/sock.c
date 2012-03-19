@@ -864,11 +864,15 @@ int sock_getsockopt(struct socket *sock, int level, int optname,
 		break;
 
 	case SO_PEERCRED:
+	{
+		struct ucred peercred;
 		if (len > sizeof(sk->sk_peercred))
 			len = sizeof(sk->sk_peercred);
-		if (copy_to_user(optval, &sk->sk_peercred, len))
+		peercred = sk->sk_peercred;
+		if (copy_to_user(optval, &peercred, len))
 			return -EFAULT;
 		goto lenout;
+	}
 
 	case SO_PEERNAME:
 	{
@@ -1892,7 +1896,7 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	 */
 	smp_wmb();
 	atomic_set(&sk->sk_refcnt, 1);
-	atomic_set(&sk->sk_drops, 0);
+	atomic_set_unchecked(&sk->sk_drops, 0);
 }
 EXPORT_SYMBOL(sock_init_data);
 

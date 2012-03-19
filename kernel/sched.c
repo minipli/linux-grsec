@@ -5043,7 +5043,7 @@ out:
  * In CONFIG_NO_HZ case, the idle load balance owner will do the
  * rebalancing for all the cpus for whom scheduler ticks are stopped.
  */
-static void run_rebalance_domains(struct softirq_action *h)
+static void run_rebalance_domains(void)
 {
 	int this_cpu = smp_processor_id();
 	struct rq *this_rq = cpu_rq(this_cpu);
@@ -5770,7 +5770,7 @@ EXPORT_SYMBOL(schedule);
  * Look out! "owner" is an entirely speculative pointer
  * access and not reliable.
  */
-int mutex_spin_on_owner(struct mutex *lock, struct thread_info *owner)
+int mutex_spin_on_owner(struct mutex *lock, struct task_struct *owner)
 {
 	unsigned int cpu;
 	struct rq *rq;
@@ -5784,10 +5784,10 @@ int mutex_spin_on_owner(struct mutex *lock, struct thread_info *owner)
 	 * DEBUG_PAGEALLOC could have unmapped it if
 	 * the mutex owner just released it and exited.
 	 */
-	if (probe_kernel_address(&owner->cpu, cpu))
+	if (probe_kernel_address(&task_thread_info(owner)->cpu, cpu))
 		return 0;
 #else
-	cpu = owner->cpu;
+	cpu = task_thread_info(owner)->cpu;
 #endif
 
 	/*
@@ -5816,7 +5816,7 @@ int mutex_spin_on_owner(struct mutex *lock, struct thread_info *owner)
 		/*
 		 * Is that owner really running on that cpu?
 		 */
-		if (task_thread_info(rq->curr) != owner || need_resched())
+		if (rq->curr != owner || need_resched())
 			return 0;
 
 		cpu_relax();
@@ -8774,7 +8774,7 @@ static void init_sched_groups_power(int cpu, struct sched_domain *sd)
 	long power;
 	int weight;
 
-	WARN_ON(!sd || !sd->groups);
+	BUG_ON(!sd || !sd->groups);
 
 	if (cpu != group_first_cpu(sd->groups))
 		return;
