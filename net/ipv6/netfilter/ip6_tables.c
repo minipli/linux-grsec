@@ -1173,6 +1173,7 @@ static int get_info(struct net *net, void __user *user, int *len, int compat)
 			private = &tmp;
 		}
 #endif
+		memset(&info, 0, sizeof(info));
 		info.valid_hooks = t->valid_hooks;
 		memcpy(info.hook_entry, private->hook_entry,
 		       sizeof(info.hook_entry));
@@ -1237,6 +1238,10 @@ get_entries(struct net *net, struct ip6t_get_entries __user *uptr, int *len)
 	return ret;
 }
 
+static int
+__do_replace(struct net *net, const char *name, unsigned int valid_hooks,
+	     struct xt_table_info *newinfo, unsigned int num_counters,
+	     void __user *counters_ptr) __size_overflow(5);
 static int
 __do_replace(struct net *net, const char *name, unsigned int valid_hooks,
 	     struct xt_table_info *newinfo, unsigned int num_counters,
@@ -1371,6 +1376,9 @@ add_counter_to_entry(struct ip6t_entry *e,
 	return 0;
 }
 
+static int
+do_add_counters(struct net *net, void __user *user, unsigned int len,
+		int compat) __size_overflow(3);
 static int
 do_add_counters(struct net *net, void __user *user, unsigned int len,
 		int compat)

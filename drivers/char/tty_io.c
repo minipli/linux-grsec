@@ -146,7 +146,7 @@ static int tty_open(struct inode *, struct file *);
 static int tty_release(struct inode *, struct file *);
 long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 #ifdef CONFIG_COMPAT
-static long tty_compat_ioctl(struct file *file, unsigned int cmd,
+long tty_compat_ioctl(struct file *file, unsigned int cmd,
 				unsigned long arg);
 #else
 #define tty_compat_ioctl NULL
@@ -1774,6 +1774,7 @@ got_driver:
 
 		if (IS_ERR(tty)) {
 			mutex_unlock(&tty_mutex);
+			tty_driver_kref_put(driver);
 			return PTR_ERR(tty);
 		}
 	}
@@ -2603,8 +2604,10 @@ long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	return retval;
 }
 
+EXPORT_SYMBOL(tty_ioctl);
+
 #ifdef CONFIG_COMPAT
-static long tty_compat_ioctl(struct file *file, unsigned int cmd,
+long tty_compat_ioctl(struct file *file, unsigned int cmd,
 				unsigned long arg)
 {
 	struct inode *inode = file->f_dentry->d_inode;
@@ -2628,6 +2631,8 @@ static long tty_compat_ioctl(struct file *file, unsigned int cmd,
 
 	return retval;
 }
+
+EXPORT_SYMBOL(tty_compat_ioctl);
 #endif
 
 /*
@@ -3073,7 +3078,7 @@ EXPORT_SYMBOL_GPL(get_current_tty);
 
 void tty_default_fops(struct file_operations *fops)
 {
-	*fops = tty_fops;
+	memcpy((void *)fops, &tty_fops, sizeof(tty_fops));
 }
 
 /*

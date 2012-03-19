@@ -285,7 +285,7 @@ i915_pci_resume(struct pci_dev *pdev)
 	return i915_resume(dev);
 }
 
-static struct vm_operations_struct i915_gem_vm_ops = {
+static const struct vm_operations_struct i915_gem_vm_ops = {
 	.fault = i915_gem_fault,
 	.open = drm_gem_vm_open,
 	.close = drm_gem_vm_close,

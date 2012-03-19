@@ -833,7 +833,7 @@ done:
 	return rc;
 }
 
-static struct file_operations audio_amrnb_fops = {
+static const struct file_operations audio_amrnb_fops = {
 	.owner = THIS_MODULE,
 	.open = audamrnb_open,
 	.release = audamrnb_release,

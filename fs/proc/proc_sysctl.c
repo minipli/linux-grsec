@@ -7,11 +7,13 @@
 #include <linux/security.h>
 #include "internal.h"
 
+extern __u32 gr_handle_sysctl(const struct ctl_table *table, const int op);
+
 static const struct dentry_operations proc_sys_dentry_operations;
 static const struct file_operations proc_sys_file_operations;
-static const struct inode_operations proc_sys_inode_operations;
+const struct inode_operations proc_sys_inode_operations;
 static const struct file_operations proc_sys_dir_file_operations;
-static const struct inode_operations proc_sys_dir_operations;
+const struct inode_operations proc_sys_dir_operations;
 
 static struct inode *proc_sys_make_inode(struct super_block *sb,
 		struct ctl_table_header *head, struct ctl_table *table)
@@ -109,6 +111,9 @@ static struct dentry *proc_sys_lookup(struct inode *dir, struct dentry *dentry,
 	if (!p)
 		goto out;
 
+	if (gr_handle_sysctl(p, MAY_EXEC))
+		goto out;
+
 	err = ERR_PTR(-ENOMEM);
 	inode = proc_sys_make_inode(dir->i_sb, h ? h : head, p);
 	if (h)
@@ -119,6 +124,9 @@ static struct dentry *proc_sys_lookup(struct inode *dir, struct dentry *dentry,
 
 	err = NULL;
 	dentry->d_op = &proc_sys_dentry_operations;
+
+	gr_handle_proc_create(dentry, inode);
+
 	d_add(dentry, inode);
 
 out:
@@ -200,6 +208,9 @@ static int proc_sys_fill_cache(struct file *filp, void *dirent,
 				return -ENOMEM;
 			} else {
 				child->d_op = &proc_sys_dentry_operations;
+
+				gr_handle_proc_create(child, inode);
+
 				d_add(child, inode);
 			}
 		} else {
@@ -226,6 +237,9 @@ static int scan(struct ctl_table_header *head, ctl_table *table,
 			continue;
 
 		if (*pos < file->f_pos)
+			continue;
+
+		if (gr_handle_sysctl(table, 0))
 			continue;
 
 		res = proc_sys_fill_cache(file, dirent, filldir, head, table);
@@ -344,6 +358,9 @@ static int proc_sys_getattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 	if (IS_ERR(head))
 		return PTR_ERR(head);
 
+	if (table && gr_handle_sysctl(table, MAY_EXEC))
+		return -ENOENT;
+
 	generic_fillattr(inode, stat);
 	if (table)
 		stat->mode = (stat->mode & S_IFMT) | table->mode;
@@ -358,17 +375,18 @@ static const struct file_operations proc_sys_file_operations = {
 };
 
 static const struct file_operations proc_sys_dir_file_operations = {
+	.read		= generic_read_dir,
 	.readdir	= proc_sys_readdir,
 	.llseek		= generic_file_llseek,
 };
 
-static const struct inode_operations proc_sys_inode_operations = {
+const struct inode_operations proc_sys_inode_operations = {
 	.permission	= proc_sys_permission,
 	.setattr	= proc_sys_setattr,
 	.getattr	= proc_sys_getattr,
 };
 
-static const struct inode_operations proc_sys_dir_operations = {
+const struct inode_operations proc_sys_dir_operations = {
 	.lookup		= proc_sys_lookup,
 	.permission	= proc_sys_permission,
 	.setattr	= proc_sys_setattr,

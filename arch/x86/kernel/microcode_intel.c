@@ -441,15 +441,16 @@ static enum ucode_state request_microcode_fw(int cpu, struct device *device)
 	return ret;
 }
 
+static int get_ucode_user(void *to, const void *from, size_t n) __size_overflow(3);
 static int get_ucode_user(void *to, const void *from, size_t n)
 {
-	return copy_from_user(to, from, n);
+	return copy_from_user(to, (const void __force_user *)from, n);
 }
 
 static enum ucode_state
 request_microcode_user(int cpu, const void __user *buf, size_t size)
 {
-	return generic_load_microcode(cpu, (void *)buf, size, &get_ucode_user);
+	return generic_load_microcode(cpu, (__force_kernel void *)buf, size, &get_ucode_user);
 }
 
 static void microcode_fini_cpu(int cpu)
@@ -460,7 +461,7 @@ static void microcode_fini_cpu(int cpu)
 	uci->mc = NULL;
 }
 
-static struct microcode_ops microcode_intel_ops = {
+static const struct microcode_ops microcode_intel_ops = {
 	.request_microcode_user		  = request_microcode_user,
 	.request_microcode_fw             = request_microcode_fw,
 	.collect_cpu_info                 = collect_cpu_info,
@@ -468,7 +469,7 @@ static struct microcode_ops microcode_intel_ops = {
 	.microcode_fini_cpu               = microcode_fini_cpu,
 };
 
-struct microcode_ops * __init init_intel_microcode(void)
+const struct microcode_ops * __init init_intel_microcode(void)
 {
 	return &microcode_intel_ops;
 }

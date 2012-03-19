@@ -110,6 +110,8 @@ static ssize_t atomic_counters_read(struct file *file, char __user *buf,
 	struct infinipath_counters counters;
 	struct ipath_devdata *dd;
 
+	pax_track_stack();
+
 	dd = file->f_path.dentry->d_inode->i_private;
 	dd->ipath_f_read_counters(dd, &counters);
 
@@ -121,6 +123,8 @@ static const struct file_operations atomic_counters_ops = {
 	.read = atomic_counters_read,
 };
 
+static ssize_t flash_read(struct file *file, char __user *buf,
+			  size_t count, loff_t *ppos) __size_overflow(3);
 static ssize_t flash_read(struct file *file, char __user *buf,
 			  size_t count, loff_t *ppos)
 {

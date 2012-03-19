@@ -89,6 +89,7 @@ static ssize_t ulong_read_file(struct file *file, char __user *buf, size_t count
 }
 
 
+static ssize_t ulong_write_file(struct file *file, char const __user *buf, size_t count, loff_t *offset) __size_overflow(3);
 static ssize_t ulong_write_file(struct file *file, char const __user *buf, size_t count, loff_t *offset)
 {
 	unsigned long *value = file->private_data;
@@ -187,7 +188,7 @@ static const struct file_operations atomic_ro_fops = {
 
 
 int oprofilefs_create_ro_atomic(struct super_block *sb, struct dentry *root,
-	char const *name, atomic_t *val)
+	char const *name, atomic_unchecked_t *val)
 {
 	struct dentry *d = __oprofilefs_create_file(sb, root, name,
 						     &atomic_ro_fops, 0444);

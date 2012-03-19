@@ -2240,6 +2240,7 @@ static int rdmsr_interception(struct vcpu_svm *svm, struct kvm_run *kvm_run)
 	return 1;
 }
 
+static int svm_set_msr(struct kvm_vcpu *vcpu, unsigned ecx, u64 data) __size_overflow(3);
 static int svm_set_msr(struct kvm_vcpu *vcpu, unsigned ecx, u64 data)
 {
 	struct vcpu_svm *svm = to_svm(vcpu);
@@ -2486,7 +2487,11 @@ static void reload_tss(struct kvm_vcpu *vcpu)
 	int cpu = raw_smp_processor_id();
 
 	struct svm_cpu_data *svm_data = per_cpu(svm_data, cpu);
+
+	pax_open_kernel();
 	svm_data->tss_desc->type = 9; /* available 32/64-bit TSS */
+	pax_close_kernel();
+
 	load_TR_desc();
 }
 
@@ -2947,7 +2952,7 @@ static bool svm_gb_page_enable(void)
 	return true;
 }
 
-static struct kvm_x86_ops svm_x86_ops = {
+static const struct kvm_x86_ops svm_x86_ops = {
 	.cpu_has_kvm_support = has_svm,
 	.disabled_by_bios = is_disabled,
 	.hardware_setup = svm_hardware_setup,

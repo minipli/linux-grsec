@@ -275,6 +275,10 @@ static long do_sys_truncate(const char __user *pathname, loff_t length)
 	error = locks_verify_truncate(inode, NULL, length);
 	if (!error)
 		error = security_path_truncate(&path, length, 0);
+
+	if (!error && !gr_acl_handle_truncate(path.dentry, path.mnt))
+		error = -EACCES;
+
 	if (!error) {
 		vfs_dq_init(inode);
 		error = do_truncate(path.dentry, length, 0, NULL);
@@ -511,6 +515,9 @@ SYSCALL_DEFINE3(faccessat, int, dfd, const char __user *, filename, int, mode)
 	if (__mnt_is_readonly(path.mnt))
 		res = -EROFS;
 
+	if (!res && !gr_acl_handle_access(path.dentry, path.mnt, mode))
+		res = -EACCES;
+
 out_path_release:
 	path_put(&path);
 out:
@@ -536,6 +543,8 @@ SYSCALL_DEFINE1(chdir, const char __user *, filename)
 	error = inode_permission(path.dentry->d_inode, MAY_EXEC | MAY_ACCESS);
 	if (error)
 		goto dput_and_out;
+
+	gr_log_chdir(path.dentry, path.mnt);
 
 	set_fs_pwd(current->fs, &path);
 
@@ -563,6 +572,13 @@ SYSCALL_DEFINE1(fchdir, unsigned int, fd)
 		goto out_putf;
 
 	error = inode_permission(inode, MAY_EXEC | MAY_ACCESS);
+
+	if (!error && !gr_chroot_fchdir(file->f_path.dentry, file->f_path.mnt))
+		error = -EPERM;
+
+	if (!error)
+		gr_log_chdir(file->f_path.dentry, file->f_path.mnt);
+
 	if (!error)
 		set_fs_pwd(current->fs, &file->f_path);
 out_putf:
@@ -588,7 +604,13 @@ SYSCALL_DEFINE1(chroot, const char __user *, filename)
 	if (!capable(CAP_SYS_CHROOT))
 		goto dput_and_out;
 
+	if (gr_handle_chroot_chroot(path.dentry, path.mnt))
+		goto dput_and_out;
+
 	set_fs_root(current->fs, &path);
+
+	gr_handle_chroot_chdir(&path);
+
 	error = 0;
 dput_and_out:
 	path_put(&path);
@@ -596,66 +618,57 @@ out:
 	return error;
 }
 
-SYSCALL_DEFINE2(fchmod, unsigned int, fd, mode_t, mode)
+static int chmod_common(struct path *path, umode_t mode)
 {
-	struct inode * inode;
-	struct dentry * dentry;
-	struct file * file;
-	int err = -EBADF;
+	struct inode *inode = path->dentry->d_inode;
 	struct iattr newattrs;
+	int error;
 
-	file = fget(fd);
-	if (!file)
-		goto out;
-
-	dentry = file->f_path.dentry;
-	inode = dentry->d_inode;
-
-	audit_inode(NULL, dentry);
-
-	err = mnt_want_write_file(file);
-	if (err)
-		goto out_putf;
+	error = mnt_want_write(path->mnt);
+	if (error)
+		return error;
 	mutex_lock(&inode->i_mutex);
-	if (mode == (mode_t) -1)
-		mode = inode->i_mode;
+	if (!gr_acl_handle_chmod(path->dentry, path->mnt, &mode)) {
+		error = -EACCES;
+		goto out_unlock;
+	}
+	if (gr_handle_chroot_chmod(path->dentry, path->mnt, mode)) {
+		error = -EPERM;
+		goto out_unlock;
+	}
 	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
 	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
-	err = notify_change(dentry, &newattrs);
+	error = notify_change(path->dentry, &newattrs);
+out_unlock:
 	mutex_unlock(&inode->i_mutex);
-	mnt_drop_write(file->f_path.mnt);
-out_putf:
-	fput(file);
-out:
+	mnt_drop_write(path->mnt);
+	return error;
+}
+
+SYSCALL_DEFINE2(fchmod, unsigned int, fd, mode_t, mode)
+{
+	struct file * file;
+	int err = -EBADF;
+
+	file = fget(fd);
+	if (file) {
+		audit_inode(NULL, file->f_path.dentry);
+		err = chmod_common(&file->f_path, mode);
+		fput(file);
+	}
 	return err;
 }
 
 SYSCALL_DEFINE3(fchmodat, int, dfd, const char __user *, filename, mode_t, mode)
 {
 	struct path path;
-	struct inode *inode;
 	int error;
-	struct iattr newattrs;
 
 	error = user_path_at(dfd, filename, LOOKUP_FOLLOW, &path);
-	if (error)
-		goto out;
-	inode = path.dentry->d_inode;
-
-	error = mnt_want_write(path.mnt);
-	if (error)
-		goto dput_and_out;
-	mutex_lock(&inode->i_mutex);
-	if (mode == (mode_t) -1)
-		mode = inode->i_mode;
-	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
-	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
-	error = notify_change(path.dentry, &newattrs);
-	mutex_unlock(&inode->i_mutex);
-	mnt_drop_write(path.mnt);
-dput_and_out:
-	path_put(&path);
-out:
+	if (!error) {
+		error = chmod_common(&path, mode);
+		path_put(&path);
+	}
 	return error;
 }
 
@@ -664,11 +677,14 @@ SYSCALL_DEFINE2(chmod, const char __user *, filename, mode_t, mode)
 	return sys_fchmodat(AT_FDCWD, filename, mode);
 }
 
-static int chown_common(struct dentry * dentry, uid_t user, gid_t group)
+static int chown_common(struct dentry * dentry, uid_t user, gid_t group, struct vfsmount *mnt)
 {
 	struct inode *inode = dentry->d_inode;
 	int error;
 	struct iattr newattrs;
+
+	if (!gr_acl_handle_chown(dentry, mnt))
+		return -EACCES;
 
 	newattrs.ia_valid =  ATTR_CTIME;
 	if (user != (uid_t) -1) {
@@ -700,7 +716,7 @@ SYSCALL_DEFINE3(chown, const char __user *, filename, uid_t, user, gid_t, group)
 	error = mnt_want_write(path.mnt);
 	if (error)
 		goto out_release;
-	error = chown_common(path.dentry, user, group);
+	error = chown_common(path.dentry, user, group, path.mnt);
 	mnt_drop_write(path.mnt);
 out_release:
 	path_put(&path);
@@ -725,7 +741,7 @@ SYSCALL_DEFINE5(fchownat, int, dfd, const char __user *, filename, uid_t, user,
 	error = mnt_want_write(path.mnt);
 	if (error)
 		goto out_release;
-	error = chown_common(path.dentry, user, group);
+	error = chown_common(path.dentry, user, group, path.mnt);
 	mnt_drop_write(path.mnt);
 out_release:
 	path_put(&path);
@@ -744,7 +760,7 @@ SYSCALL_DEFINE3(lchown, const char __user *, filename, uid_t, user, gid_t, group
 	error = mnt_want_write(path.mnt);
 	if (error)
 		goto out_release;
-	error = chown_common(path.dentry, user, group);
+	error = chown_common(path.dentry, user, group, path.mnt);
 	mnt_drop_write(path.mnt);
 out_release:
 	path_put(&path);
@@ -767,7 +783,7 @@ SYSCALL_DEFINE3(fchown, unsigned int, fd, uid_t, user, gid_t, group)
 		goto out_fput;
 	dentry = file->f_path.dentry;
 	audit_inode(NULL, dentry);
-	error = chown_common(dentry, user, group);
+	error = chown_common(dentry, user, group, file->f_path.mnt);
 	mnt_drop_write(file->f_path.mnt);
 out_fput:
 	fput(file);
@@ -1036,7 +1052,7 @@ long do_sys_open(int dfd, const char __user *filename, int flags, int mode)
 	if (!IS_ERR(tmp)) {
 		fd = get_unused_fd_flags(flags);
 		if (fd >= 0) {
-			struct file *f = do_filp_open(dfd, tmp, flags, mode, 0);
+			struct file *f  = do_filp_open(dfd, tmp, flags, mode, 0);
 			if (IS_ERR(f)) {
 				put_unused_fd(fd);
 				fd = PTR_ERR(f);

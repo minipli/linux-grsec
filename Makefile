@@ -221,8 +221,9 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 
 HOSTCC       = gcc
 HOSTCXX      = g++
-HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer
-HOSTCXXFLAGS = -O2
+HOSTCFLAGS   = -Wall -W -Wmissing-prototypes -Wstrict-prototypes -Wno-unused-parameter -Wno-missing-field-initializers -O2 -fomit-frame-pointer -fno-delete-null-pointer-checks
+HOSTCFLAGS  += $(call cc-option, -Wno-empty-body)
+HOSTCXXFLAGS = -O2 -Wall -W -fno-delete-null-pointer-checks
 
 # Decide whether to build built-in, modular, or both.
 # Normally, just do built-in.
@@ -376,8 +377,8 @@ export RCS_TAR_IGNORE := --exclude SCCS --exclude BitKeeper --exclude .svn --exc
 # Rules shared between *config targets and build targets
 
 # Basic helpers built in scripts/
-PHONY += scripts_basic
-scripts_basic:
+PHONY += scripts_basic gcc-plugins
+scripts_basic: gcc-plugins
 	$(Q)$(MAKE) $(build)=scripts/basic
 
 # To avoid any implicit rule to kick in, define an empty command.
@@ -403,7 +404,7 @@ endif
 # of make so .config is not included in this case either (for *config).
 
 no-dot-config-targets := clean mrproper distclean \
-			 cscope TAGS tags help %docs check% \
+			 cscope gtags TAGS tags help %docs check% \
 			 include/linux/version.h headers_% \
 			 kernelrelease kernelversion
 
@@ -524,6 +525,53 @@ ifdef CONFIG_CC_OPTIMIZE_FOR_SIZE
 KBUILD_CFLAGS	+= -Os
 else
 KBUILD_CFLAGS	+= -O2
+endif
+
+ifndef DISABLE_PAX_PLUGINS
+ifeq ($(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-plugin.sh "$(HOSTCC)" "$(CC)"), y)
+ifndef DISABLE_PAX_CONSTIFY_PLUGIN
+CONSTIFY_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/constify_plugin.so -DCONSTIFY_PLUGIN
+endif
+ifdef CONFIG_PAX_MEMORY_STACKLEAK
+STACKLEAK_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/stackleak_plugin.so -DSTACKLEAK_PLUGIN
+STACKLEAK_PLUGIN_CFLAGS += -fplugin-arg-stackleak_plugin-track-lowest-sp=100
+endif
+ifdef CONFIG_KALLOCSTAT_PLUGIN
+KALLOCSTAT_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/kallocstat_plugin.so
+endif
+ifdef CONFIG_PAX_KERNEXEC_PLUGIN
+KERNEXEC_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/kernexec_plugin.so
+KERNEXEC_PLUGIN_CFLAGS += -fplugin-arg-kernexec_plugin-method=$(CONFIG_PAX_KERNEXEC_PLUGIN_METHOD) -DKERNEXEC_PLUGIN
+KERNEXEC_PLUGIN_AFLAGS := -DKERNEXEC_PLUGIN
+endif
+ifdef CONFIG_CHECKER_PLUGIN
+ifeq ($(call cc-ifversion, -ge, 0406, y), y)
+CHECKER_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/checker_plugin.so -DCHECKER_PLUGIN
+endif
+endif
+COLORIZE_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/colorize_plugin.so
+ifdef CONFIG_PAX_SIZE_OVERFLOW
+SIZE_OVERFLOW_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/size_overflow_plugin.so -DSIZE_OVERFLOW_PLUGIN
+endif
+GCC_PLUGINS_CFLAGS := $(CONSTIFY_PLUGIN_CFLAGS) $(STACKLEAK_PLUGIN_CFLAGS) $(KALLOCSTAT_PLUGIN_CFLAGS)
+GCC_PLUGINS_CFLAGS += $(KERNEXEC_PLUGIN_CFLAGS) $(CHECKER_PLUGIN_CFLAGS) $(COLORIZE_PLUGIN_CFLAGS) $(SIZE_OVERFLOW_PLUGIN_CFLAGS)
+GCC_PLUGINS_AFLAGS := $(KERNEXEC_PLUGIN_AFLAGS)
+export CONSTIFY_PLUGIN STACKLEAK_PLUGIN KERNEXEC_PLUGIN CHECKER_PLUGIN SIZE_OVERFLOW_PLUGIN
+ifeq ($(KBUILD_EXTMOD),)
+gcc-plugins:
+	$(Q)$(MAKE) $(build)=tools/gcc
+else
+gcc-plugins: ;
+endif
+else
+gcc-plugins:
+ifeq ($(call cc-ifversion, -ge, 0405, y), y)
+	$(error Your gcc installation does not support plugins.  If the necessary headers for plugin support are missing, they should be installed.  On Debian, apt-get install gcc-<ver>-plugin-dev.  If you choose to ignore this error and lessen the improvements provided by this patch, re-run make with the DISABLE_PAX_PLUGINS=y argument.))
+else
+	$(Q)echo "warning, your gcc version does not support plugins, you should upgrade it to gcc 4.5 at least"
+endif
+	$(Q)echo "PAX_MEMORY_STACKLEAK and constification will be less secure"
+endif
 endif
 
 include $(srctree)/arch/$(SRCARCH)/Makefile
@@ -647,7 +695,7 @@ export mod_strip_cmd
 
 
 ifeq ($(KBUILD_EXTMOD),)
-core-y		+= kernel/ mm/ fs/ ipc/ security/ crypto/ block/
+core-y		+= kernel/ mm/ fs/ ipc/ security/ crypto/ block/ grsecurity/
 
 vmlinux-dirs	:= $(patsubst %/,%,$(filter %/, $(init-y) $(init-m) \
 		     $(core-y) $(core-m) $(drivers-y) $(drivers-m) \
@@ -868,6 +916,8 @@ vmlinux.o: $(modpost-init) $(vmlinux-main) FORCE
 
 # The actual objects are generated when descending, 
 # make sure no implicit rule kicks in
+$(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+$(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
 $(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): $(vmlinux-dirs) ;
 
 # Handle descending into subdirectories listed in $(vmlinux-dirs)
@@ -877,7 +927,7 @@ $(sort $(vmlinux-init) $(vmlinux-main)) $(vmlinux-lds): $(vmlinux-dirs) ;
 # Error messages still appears in the original language
 
 PHONY += $(vmlinux-dirs)
-$(vmlinux-dirs): prepare scripts
+$(vmlinux-dirs): gcc-plugins prepare scripts
 	$(Q)$(MAKE) $(build)=$@
 
 # Build the kernel release string
@@ -986,6 +1036,7 @@ prepare0: archprepare FORCE
 	$(Q)$(MAKE) $(build)=. missing-syscalls
 
 # All the preparing..
+prepare: KBUILD_CFLAGS := $(filter-out $(GCC_PLUGINS_CFLAGS),$(KBUILD_CFLAGS))
 prepare: prepare0
 
 # The asm symlink changes when $(ARCH) changes.
@@ -1127,6 +1178,8 @@ all: modules
 #	using awk while concatenating to the final file.
 
 PHONY += modules
+modules: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+modules: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
 modules: $(vmlinux-dirs) $(if $(KBUILD_BUILTIN),vmlinux)
 	$(Q)$(AWK) '!x[$$0]++' $(vmlinux-dirs:%=$(objtree)/%/modules.order) > $(objtree)/modules.order
 	@$(kecho) '  Building modules, stage 2.';
@@ -1136,7 +1189,7 @@ modules: $(vmlinux-dirs) $(if $(KBUILD_BUILTIN),vmlinux)
 
 # Target to prepare building external modules
 PHONY += modules_prepare
-modules_prepare: prepare scripts
+modules_prepare: gcc-plugins prepare scripts
 
 # Target to install modules
 PHONY += modules_install
@@ -1201,7 +1254,7 @@ MRPROPER_FILES += .config .config.old include/asm .version .old_version \
                   include/linux/autoconf.h include/linux/version.h      \
                   include/linux/utsrelease.h                            \
                   include/linux/bounds.h include/asm*/asm-offsets.h     \
-		  Module.symvers Module.markers tags TAGS cscope*
+		  Module.symvers Module.markers tags TAGS cscope* GPATH GTAGS GRTAGS GSYMS
 
 # clean - Delete most, but leave enough to build external modules
 #
@@ -1245,7 +1298,7 @@ distclean: mrproper
 	@find $(srctree) $(RCS_FIND_IGNORE) \
 		\( -name '*.orig' -o -name '*.rej' -o -name '*~' \
 		-o -name '*.bak' -o -name '#*#' -o -name '.*.orig' \
-		-o -name '.*.rej' -o -size 0 \
+		-o -name '.*.rej' -o -name '*.so' -o -size 0 \
 		-o -name '*%' -o -name '.*.cmd' -o -name 'core' \) \
 		-type f -print | xargs rm -f
 
@@ -1292,6 +1345,7 @@ help:
 	@echo  '  modules_prepare - Set up for building external modules'
 	@echo  '  tags/TAGS	  - Generate tags file for editors'
 	@echo  '  cscope	  - Generate cscope index'
+	@echo  '  gtags           - Generate GNU GLOBAL index'
 	@echo  '  kernelrelease	  - Output the release version string'
 	@echo  '  kernelversion	  - Output the version stored in Makefile'
 	@echo  '  headers_install - Install sanitised kernel headers to INSTALL_HDR_PATH'; \
@@ -1393,6 +1447,8 @@ PHONY += $(module-dirs) modules
 $(module-dirs): crmodverdir $(objtree)/Module.symvers
 	$(Q)$(MAKE) $(build)=$(patsubst _module_%,%,$@)
 
+modules: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+modules: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
 modules: $(module-dirs)
 	@$(kecho) '  Building modules, stage 2.';
 	$(Q)$(MAKE) -f $(srctree)/scripts/Makefile.modpost
@@ -1448,7 +1504,7 @@ endif # KBUILD_EXTMOD
 quiet_cmd_tags = GEN     $@
       cmd_tags = $(CONFIG_SHELL) $(srctree)/scripts/tags.sh $@
 
-tags TAGS cscope: FORCE
+tags TAGS cscope gtags: FORCE
 	$(call cmd,tags)
 
 # Scripts to check various things for consistency
@@ -1513,17 +1569,21 @@ else
         target-dir = $(if $(KBUILD_EXTMOD),$(dir $<),$(dir $@))
 endif
 
-%.s: %.c prepare scripts FORCE
+%.s: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+%.s: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
+%.s: %.c gcc-plugins prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
 %.i: %.c prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
-%.o: %.c prepare scripts FORCE
+%.o: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+%.o: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
+%.o: %.c gcc-plugins prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
 %.lst: %.c prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
-%.s: %.S prepare scripts FORCE
+%.s: %.S gcc-plugins prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
-%.o: %.S prepare scripts FORCE
+%.o: %.S gcc-plugins prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
 %.symtypes: %.c prepare scripts FORCE
 	$(Q)$(MAKE) $(build)=$(build-dir) $(target-dir)$(notdir $@)
@@ -1533,11 +1593,15 @@ endif
 	$(cmd_crmodverdir)
 	$(Q)$(MAKE) KBUILD_MODULES=$(if $(CONFIG_MODULES),1) \
 	$(build)=$(build-dir)
-%/: prepare scripts FORCE
+%/: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+%/: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
+%/: gcc-plugins prepare scripts FORCE
 	$(cmd_crmodverdir)
 	$(Q)$(MAKE) KBUILD_MODULES=$(if $(CONFIG_MODULES),1) \
 	$(build)=$(build-dir)
-%.ko: prepare scripts FORCE
+%.ko: KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
+%.ko: KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
+%.ko: gcc-plugins prepare scripts FORCE
 	$(cmd_crmodverdir)
 	$(Q)$(MAKE) KBUILD_MODULES=$(if $(CONFIG_MODULES),1)   \
 	$(build)=$(build-dir) $(@:.ko=.o)

@@ -14,6 +14,7 @@
 #ifndef _LINUX_SKBUFF_H
 #define _LINUX_SKBUFF_H
 
+#include <linux/const.h>
 #include <linux/kernel.h>
 #include <linux/kmemcheck.h>
 #include <linux/compiler.h>
@@ -544,7 +545,7 @@ static inline union skb_shared_tx *skb_tx(struct sk_buff *skb)
  */
 static inline int skb_queue_empty(const struct sk_buff_head *list)
 {
-	return list->next == (struct sk_buff *)list;
+	return list->next == (const struct sk_buff *)list;
 }
 
 /**
@@ -557,7 +558,7 @@ static inline int skb_queue_empty(const struct sk_buff_head *list)
 static inline bool skb_queue_is_last(const struct sk_buff_head *list,
 				     const struct sk_buff *skb)
 {
-	return (skb->next == (struct sk_buff *) list);
+	return (skb->next == (const struct sk_buff *) list);
 }
 
 /**
@@ -570,7 +571,7 @@ static inline bool skb_queue_is_last(const struct sk_buff_head *list,
 static inline bool skb_queue_is_first(const struct sk_buff_head *list,
 				      const struct sk_buff *skb)
 {
-	return (skb->prev == (struct sk_buff *) list);
+	return (skb->prev == (const struct sk_buff *) list);
 }
 
 /**
@@ -1367,7 +1368,7 @@ static inline int skb_network_offset(const struct sk_buff *skb)
  * headroom, you should not reduce this.
  */
 #ifndef NET_SKB_PAD
-#define NET_SKB_PAD	32
+#define NET_SKB_PAD	(_AC(32,UL))
 #endif
 
 extern int ___pskb_trim(struct sk_buff *skb, unsigned int len);
@@ -1487,6 +1488,22 @@ static inline struct sk_buff *netdev_alloc_skb(struct net_device *dev,
 		unsigned int length)
 {
 	return __netdev_alloc_skb(dev, length, GFP_ATOMIC);
+}
+
+static inline struct sk_buff *__netdev_alloc_skb_ip_align(struct net_device *dev,
+		unsigned int length, gfp_t gfp)
+{
+	struct sk_buff *skb = __netdev_alloc_skb(dev, length + NET_IP_ALIGN, gfp);
+
+	if (NET_IP_ALIGN && skb)
+		skb_reserve(skb, NET_IP_ALIGN);
+	return skb;
+}
+
+static inline struct sk_buff *netdev_alloc_skb_ip_align(struct net_device *dev,
+		unsigned int length)
+{
+	return __netdev_alloc_skb_ip_align(dev, length, GFP_ATOMIC);
 }
 
 extern struct page *__netdev_alloc_page(struct net_device *dev, gfp_t gfp_mask);
