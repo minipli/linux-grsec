@@ -491,7 +491,7 @@ compat_sys_io_setup(unsigned nr_reqs, u32 __user *ctx32p)
 
 	set_fs(KERNEL_DS);
 	/* The __user pointer cast is valid because of the set_fs() */
-	ret = sys_io_setup(nr_reqs, (aio_context_t __user *) &ctx64);
+	ret = sys_io_setup(nr_reqs, (aio_context_t __force_user *) &ctx64);
 	set_fs(oldfs);
 	/* truncating is ok because it's a user address */
 	if (!ret)
@@ -549,7 +549,7 @@ ssize_t compat_rw_copy_check_uvector(int type,
 		goto out;
 
 	ret = -EINVAL;
-	if (nr_segs > UIO_MAXIOV || nr_segs < 0)
+	if (nr_segs > UIO_MAXIOV)
 		goto out;
 	if (nr_segs > fast_segs) {
 		ret = -ENOMEM;
@@ -1063,7 +1063,7 @@ asmlinkage long compat_sys_getdents64(unsigned int fd,
 		error = buf.error;
 	lastdirent = buf.previous;
 	if (lastdirent) {
-		typeof(lastdirent->d_off) d_off = file->f_pos;
+		typeof(((struct linux_dirent64 *)0)->d_off) d_off = file->f_pos;
 		if (__put_user_unaligned(d_off, &lastdirent->d_off))
 			error = -EFAULT;
 		else
