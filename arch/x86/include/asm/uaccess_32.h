@@ -11,15 +11,15 @@
 #include <asm/page.h>
 
 unsigned long __must_check __copy_to_user_ll
-		(void __user *to, const void *from, unsigned long n);
+		(void __user *to, const void *from, unsigned long n) __size_overflow(3);
 unsigned long __must_check __copy_from_user_ll
-		(void *to, const void __user *from, unsigned long n);
+		(void *to, const void __user *from, unsigned long n) __size_overflow(3);
 unsigned long __must_check __copy_from_user_ll_nozero
-		(void *to, const void __user *from, unsigned long n);
+		(void *to, const void __user *from, unsigned long n) __size_overflow(3);
 unsigned long __must_check __copy_from_user_ll_nocache
-		(void *to, const void __user *from, unsigned long n);
+		(void *to, const void __user *from, unsigned long n) __size_overflow(3);
 unsigned long __must_check __copy_from_user_ll_nocache_nozero
-		(void *to, const void __user *from, unsigned long n);
+		(void *to, const void __user *from, unsigned long n) __size_overflow(3);
 
 /**
  * __copy_to_user_inatomic: - Copy a block of data into user space, with less checking.
@@ -41,8 +41,13 @@ unsigned long __must_check __copy_from_user_ll_nocache_nozero
  */
 
 static __always_inline unsigned long __must_check
+__copy_to_user_inatomic(void __user *to, const void *from, unsigned long n) __size_overflow(3);
+static __always_inline unsigned long __must_check
 __copy_to_user_inatomic(void __user *to, const void *from, unsigned long n)
 {
+	if ((long)n < 0)
+		return n;
+
 	if (__builtin_constant_p(n)) {
 		unsigned long ret;
 
@@ -61,6 +66,8 @@ __copy_to_user_inatomic(void __user *to, const void *from, unsigned long n)
 			return ret;
 		}
 	}
+	if (!__builtin_constant_p(n))
+		check_object_size(from, n, true);
 	return __copy_to_user_ll(to, from, n);
 }
 
@@ -79,15 +86,23 @@ __copy_to_user_inatomic(void __user *to, const void *from, unsigned long n)
  * On success, this will be zero.
  */
 static __always_inline unsigned long __must_check
+__copy_to_user(void __user *to, const void *from, unsigned long n) __size_overflow(3);
+static __always_inline unsigned long __must_check
 __copy_to_user(void __user *to, const void *from, unsigned long n)
 {
 	might_fault();
+
 	return __copy_to_user_inatomic(to, from, n);
 }
 
 static __always_inline unsigned long
+__copy_from_user_inatomic(void *to, const void __user *from, unsigned long n) __size_overflow(3);
+static __always_inline unsigned long
 __copy_from_user_inatomic(void *to, const void __user *from, unsigned long n)
 {
+	if ((long)n < 0)
+		return n;
+
 	/* Avoid zeroing the tail if the copy fails..
 	 * If 'n' is constant and 1, 2, or 4, we do still zero on a failure,
 	 * but as the zeroing behaviour is only significant when n is not
@@ -134,9 +149,15 @@ __copy_from_user_inatomic(void *to, const void __user *from, unsigned long n)
  * for explanation of why this is needed.
  */
 static __always_inline unsigned long
+__copy_from_user(void *to, const void __user *from, unsigned long n) __size_overflow(3);
+static __always_inline unsigned long
 __copy_from_user(void *to, const void __user *from, unsigned long n)
 {
 	might_fault();
+
+	if ((long)n < 0)
+		return n;
+
 	if (__builtin_constant_p(n)) {
 		unsigned long ret;
 
@@ -152,13 +173,21 @@ __copy_from_user(void *to, const void __user *from, unsigned long n)
 			return ret;
 		}
 	}
+	if (!__builtin_constant_p(n))
+		check_object_size(to, n, false);
 	return __copy_from_user_ll(to, from, n);
 }
 
 static __always_inline unsigned long __copy_from_user_nocache(void *to,
+				const void __user *from, unsigned long n) __size_overflow(3);
+static __always_inline unsigned long __copy_from_user_nocache(void *to,
 				const void __user *from, unsigned long n)
 {
 	might_fault();
+
+	if ((long)n < 0)
+		return n;
+
 	if (__builtin_constant_p(n)) {
 		unsigned long ret;
 
@@ -179,17 +208,24 @@ static __always_inline unsigned long __copy_from_user_nocache(void *to,
 
 static __always_inline unsigned long
 __copy_from_user_inatomic_nocache(void *to, const void __user *from,
+				  unsigned long n) __size_overflow(3);
+static __always_inline unsigned long
+__copy_from_user_inatomic_nocache(void *to, const void __user *from,
 				  unsigned long n)
 {
-       return __copy_from_user_ll_nocache_nozero(to, from, n);
+	if ((long)n < 0)
+		return n;
+
+	return __copy_from_user_ll_nocache_nozero(to, from, n);
 }
 
-unsigned long __must_check copy_to_user(void __user *to,
-					const void *from, unsigned long n);
-unsigned long __must_check _copy_from_user(void *to,
-					  const void __user *from,
-					  unsigned long n);
-
+extern void copy_to_user_overflow(void)
+#ifdef CONFIG_DEBUG_STRICT_USER_COPY_CHECKS
+	__compiletime_error("copy_to_user() buffer size is not provably correct")
+#else
+	__compiletime_warning("copy_to_user() buffer size is not provably correct")
+#endif
+;
 
 extern void copy_from_user_overflow(void)
 #ifdef CONFIG_DEBUG_STRICT_USER_COPY_CHECKS
@@ -199,24 +235,72 @@ extern void copy_from_user_overflow(void)
 #endif
 ;
 
-static inline unsigned long __must_check copy_from_user(void *to,
-					  const void __user *from,
-					  unsigned long n)
+/**
+ * copy_to_user: - Copy a block of data into user space.
+ * @to:   Destination address, in user space.
+ * @from: Source address, in kernel space.
+ * @n:    Number of bytes to copy.
+ *
+ * Context: User context only.  This function may sleep.
+ *
+ * Copy data from kernel space to user space.
+ *
+ * Returns number of bytes that could not be copied.
+ * On success, this will be zero.
+ */
+static inline unsigned long __must_check
+copy_to_user(void __user *to, const void *from, unsigned long n) __size_overflow(3);
+static inline unsigned long __must_check
+copy_to_user(void __user *to, const void *from, unsigned long n)
+{
+	int sz = __compiletime_object_size(from);
+
+	if (unlikely(sz != -1 && sz < n))
+		copy_to_user_overflow();
+	else if (access_ok(VERIFY_WRITE, to, n))
+		n = __copy_to_user(to, from, n);
+	return n;
+}
+
+/**
+ * copy_from_user: - Copy a block of data from user space.
+ * @to:   Destination address, in kernel space.
+ * @from: Source address, in user space.
+ * @n:    Number of bytes to copy.
+ *
+ * Context: User context only.  This function may sleep.
+ *
+ * Copy data from user space to kernel space.
+ *
+ * Returns number of bytes that could not be copied.
+ * On success, this will be zero.
+ *
+ * If some data could not be copied, this function will pad the copied
+ * data to the requested size using zero bytes.
+ */
+static inline unsigned long __must_check
+copy_from_user(void *to, const void __user *from, unsigned long n) __size_overflow(3);
+static inline unsigned long __must_check
+copy_from_user(void *to, const void __user *from, unsigned long n)
 {
 	int sz = __compiletime_object_size(to);
 
-	if (likely(sz == -1 || sz >= n))
-		n = _copy_from_user(to, from, n);
-	else
+	if (unlikely(sz != -1 && sz < n))
 		copy_from_user_overflow();
-
+	else if (access_ok(VERIFY_READ, from, n))
+		n = __copy_from_user(to, from, n);
+	else if ((long)n > 0) {
+		if (!__builtin_constant_p(n))
+			check_object_size(to, n, false);
+		memset(to, 0, n);
+	}
 	return n;
 }
 
 long __must_check strncpy_from_user(char *dst, const char __user *src,
-				    long count);
+				    unsigned long count) __size_overflow(3);
 long __must_check __strncpy_from_user(char *dst,
-				      const char __user *src, long count);
+				      const char __user *src, unsigned long count) __size_overflow(3);
 
 /**
  * strlen_user: - Get the size of a string in user space.
@@ -234,8 +318,8 @@ long __must_check __strncpy_from_user(char *dst,
  */
 #define strlen_user(str) strnlen_user(str, LONG_MAX)
 
-long strnlen_user(const char __user *str, long n);
-unsigned long __must_check clear_user(void __user *mem, unsigned long len);
-unsigned long __must_check __clear_user(void __user *mem, unsigned long len);
+long strnlen_user(const char __user *str, unsigned long n);
+unsigned long __must_check clear_user(void __user *mem, unsigned long len) __size_overflow(2);
+unsigned long __must_check __clear_user(void __user *mem, unsigned long len) __size_overflow(2);
 
 #endif /* _ASM_X86_UACCESS_32_H */

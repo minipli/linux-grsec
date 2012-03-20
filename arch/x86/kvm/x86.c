@@ -907,6 +907,7 @@ static int do_set_msr(struct kvm_vcpu *vcpu, unsigned index, u64 *data)
 	return kvm_set_msr(vcpu, index, *data);
 }
 
+static void kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock) __size_overflow(2);
 static void kvm_write_wall_clock(struct kvm *kvm, gpa_t wall_clock)
 {
 	int version;
@@ -1345,8 +1346,8 @@ static int xen_hvm_config(struct kvm_vcpu *vcpu, u64 data)
 {
 	struct kvm *kvm = vcpu->kvm;
 	int lm = is_long_mode(vcpu);
-	u8 *blob_addr = lm ? (u8 *)(long)kvm->arch.xen_hvm_config.blob_addr_64
-		: (u8 *)(long)kvm->arch.xen_hvm_config.blob_addr_32;
+	u8 __user *blob_addr = lm ? (u8 __user *)(long)kvm->arch.xen_hvm_config.blob_addr_64
+		: (u8 __user *)(long)kvm->arch.xen_hvm_config.blob_addr_32;
 	u8 blob_size = lm ? kvm->arch.xen_hvm_config.blob_size_64
 		: kvm->arch.xen_hvm_config.blob_size_32;
 	u32 page_num = data & ~PAGE_MASK;
@@ -2165,6 +2166,8 @@ long kvm_arch_dev_ioctl(struct file *filp,
 		if (n < msr_list.nmsrs)
 			goto out;
 		r = -EFAULT;
+		if (num_msrs_to_save > ARRAY_SIZE(msrs_to_save))
+			goto out;
 		if (copy_to_user(user_msr_list->indices, &msrs_to_save,
 				 num_msrs_to_save * sizeof(u32)))
 			goto out;
@@ -2340,15 +2343,20 @@ static int kvm_vcpu_ioctl_set_cpuid2(struct kvm_vcpu *vcpu,
 				     struct kvm_cpuid2 *cpuid,
 				     struct kvm_cpuid_entry2 __user *entries)
 {
-	int r;
+	int r, i;
 
 	r = -E2BIG;
 	if (cpuid->nent > KVM_MAX_CPUID_ENTRIES)
 		goto out;
 	r = -EFAULT;
-	if (copy_from_user(&vcpu->arch.cpuid_entries, entries,
-			   cpuid->nent * sizeof(struct kvm_cpuid_entry2)))
+	if (!access_ok(VERIFY_READ, entries, cpuid->nent * sizeof(struct kvm_cpuid_entry2)))
 		goto out;
+	for (i = 0; i < cpuid->nent; ++i) {
+		struct kvm_cpuid_entry2 cpuid_entry;
+		if (__copy_from_user(&cpuid_entry, entries + i, sizeof(cpuid_entry)))
+			goto out;
+		vcpu->arch.cpuid_entries[i] = cpuid_entry;
+	}
 	vcpu->arch.cpuid_nent = cpuid->nent;
 	kvm_apic_set_version(vcpu);
 	kvm_x86_ops->cpuid_update(vcpu);
@@ -2363,15 +2371,19 @@ static int kvm_vcpu_ioctl_get_cpuid2(struct kvm_vcpu *vcpu,
 				     struct kvm_cpuid2 *cpuid,
 				     struct kvm_cpuid_entry2 __user *entries)
 {
-	int r;
+	int r, i;
 
 	r = -E2BIG;
 	if (cpuid->nent < vcpu->arch.cpuid_nent)
 		goto out;
 	r = -EFAULT;
-	if (copy_to_user(entries, &vcpu->arch.cpuid_entries,
-			 vcpu->arch.cpuid_nent * sizeof(struct kvm_cpuid_entry2)))
+	if (!access_ok(VERIFY_WRITE, entries, vcpu->arch.cpuid_nent * sizeof(struct kvm_cpuid_entry2)))
 		goto out;
+	for (i = 0; i < vcpu->arch.cpuid_nent; ++i) {
+		struct kvm_cpuid_entry2 cpuid_entry = vcpu->arch.cpuid_entries[i];
+		if (__copy_to_user(entries + i, &cpuid_entry, sizeof(cpuid_entry)))
+			goto out;
+	}
 	return 0;
 
 out:
@@ -2746,7 +2758,7 @@ static int kvm_vcpu_ioctl_set_lapic(struct kvm_vcpu *vcpu,
 static int kvm_vcpu_ioctl_interrupt(struct kvm_vcpu *vcpu,
 				    struct kvm_interrupt *irq)
 {
-	if (irq->irq < 0 || irq->irq >= 256)
+	if (irq->irq >= 256)
 		return -EINVAL;
 	if (irqchip_in_kernel(vcpu->kvm))
 		return -ENXIO;
@@ -3949,6 +3961,9 @@ gpa_t kvm_mmu_gva_to_gpa_system(struct kvm_vcpu *vcpu, gva_t gva,
 
 static int kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
 				      struct kvm_vcpu *vcpu, u32 access,
+				      struct x86_exception *exception) __size_overflow(1,3);
+static int kvm_read_guest_virt_helper(gva_t addr, void *val, unsigned int bytes,
+				      struct kvm_vcpu *vcpu, u32 access,
 				      struct x86_exception *exception)
 {
 	void *data = val;
@@ -3980,6 +3995,9 @@ out:
 /* used for instruction fetching */
 static int kvm_fetch_guest_virt(struct x86_emulate_ctxt *ctxt,
 				gva_t addr, void *val, unsigned int bytes,
+				struct x86_exception *exception) __size_overflow(2,4);
+static int kvm_fetch_guest_virt(struct x86_emulate_ctxt *ctxt,
+				gva_t addr, void *val, unsigned int bytes,
 				struct x86_exception *exception)
 {
 	struct kvm_vcpu *vcpu = emul_to_vcpu(ctxt);
@@ -4002,6 +4020,9 @@ int kvm_read_guest_virt(struct x86_emulate_ctxt *ctxt,
 }
 EXPORT_SYMBOL_GPL(kvm_read_guest_virt);
 
+static int kvm_read_guest_virt_system(struct x86_emulate_ctxt *ctxt,
+				      gva_t addr, void *val, unsigned int bytes,
+				      struct x86_exception *exception) __size_overflow(2,4);
 static int kvm_read_guest_virt_system(struct x86_emulate_ctxt *ctxt,
 				      gva_t addr, void *val, unsigned int bytes,
 				      struct x86_exception *exception)
@@ -4117,11 +4138,15 @@ static int read_prepare(struct kvm_vcpu *vcpu, void *val, int bytes)
 }
 
 static int read_emulate(struct kvm_vcpu *vcpu, gpa_t gpa,
+			void *val, int bytes) __size_overflow(2);
+static int read_emulate(struct kvm_vcpu *vcpu, gpa_t gpa,
 			void *val, int bytes)
 {
 	return !kvm_read_guest(vcpu->kvm, gpa, val, bytes);
 }
 
+static int write_emulate(struct kvm_vcpu *vcpu, gpa_t gpa,
+			 void *val, int bytes) __size_overflow(2);
 static int write_emulate(struct kvm_vcpu *vcpu, gpa_t gpa,
 			 void *val, int bytes)
 {
@@ -4268,6 +4293,12 @@ int emulator_write_emulated(struct x86_emulate_ctxt *ctxt,
 	(cmpxchg64((u64 *)(ptr), *(u64 *)(old), *(u64 *)(new)) == *(u64 *)(old))
 #endif
 
+static int emulator_cmpxchg_emulated(struct x86_emulate_ctxt *ctxt,
+				     unsigned long addr,
+				     const void *old,
+				     const void *new,
+				     unsigned int bytes,
+				     struct x86_exception *exception) __size_overflow(5);
 static int emulator_cmpxchg_emulated(struct x86_emulate_ctxt *ctxt,
 				     unsigned long addr,
 				     const void *old,
@@ -5162,7 +5193,7 @@ static void kvm_set_mmio_spte_mask(void)
 	kvm_mmu_set_mmio_spte_mask(mask);
 }
 
-int kvm_arch_init(void *opaque)
+int kvm_arch_init(const void *opaque)
 {
 	int r;
 	struct kvm_x86_ops *ops = (struct kvm_x86_ops *)opaque;
