@@ -64,7 +64,7 @@ struct iio_buffer_access_funcs {
 
 	int (*is_enabled)(struct iio_buffer *buffer);
 	int (*enable)(struct iio_buffer *buffer);
-};
+} __no_const;
 
 /**
  * struct iio_buffer_setup_ops - buffer setup related callbacks
