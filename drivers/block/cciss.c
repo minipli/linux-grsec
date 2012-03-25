@@ -1198,6 +1198,8 @@ static int cciss_ioctl32_passthru(struct block_device *bdev, fmode_t mode,
 	int err;
 	u32 cp;
 
+	memset(&arg64, 0, sizeof(arg64));
+
 	err = 0;
 	err |=
 	    copy_from_user(&arg64.LUN_info, &arg32->LUN_info,
@@ -3007,7 +3009,7 @@ static void start_io(ctlr_info_t *h)
 	while (!list_empty(&h->reqQ)) {
 		c = list_entry(h->reqQ.next, CommandList_struct, list);
 		/* can't do anything if fifo is full */
-		if ((h->access.fifo_full(h))) {
+		if ((h->access->fifo_full(h))) {
 			dev_warn(&h->pdev->dev, "fifo full\n");
 			break;
 		}
@@ -3017,7 +3019,7 @@ static void start_io(ctlr_info_t *h)
 		h->Qdepth--;
 
 		/* Tell the controller execute command */
-		h->access.submit_command(h, c);
+		h->access->submit_command(h, c);
 
 		/* Put job onto the completed Q */
 		addQ(&h->cmpQ, c);
@@ -3443,17 +3445,17 @@ startio:
 
 static inline unsigned long get_next_completion(ctlr_info_t *h)
 {
-	return h->access.command_completed(h);
+	return h->access->command_completed(h);
 }
 
 static inline int interrupt_pending(ctlr_info_t *h)
 {
-	return h->access.intr_pending(h);
+	return h->access->intr_pending(h);
 }
 
 static inline long interrupt_not_for_us(ctlr_info_t *h)
 {
-	return ((h->access.intr_pending(h) == 0) ||
+	return ((h->access->intr_pending(h) == 0) ||
 		(h->interrupts_enabled == 0));
 }
 
@@ -3486,7 +3488,7 @@ static inline u32 next_command(ctlr_info_t *h)
 	u32 a;
 
 	if (unlikely(!(h->transMethod & CFGTBL_Trans_Performant)))
-		return h->access.command_completed(h);
+		return h->access->command_completed(h);
 
 	if ((*(h->reply_pool_head) & 1) == (h->reply_pool_wraparound)) {
 		a = *(h->reply_pool_head); /* Next cmd in ring buffer */
@@ -4044,7 +4046,7 @@ static void __devinit cciss_put_controller_into_performant_mode(ctlr_info_t *h)
 		trans_support & CFGTBL_Trans_use_short_tags);
 
 	/* Change the access methods to the performant access methods */
-	h->access = SA5_performant_access;
+	h->access = &SA5_performant_access;
 	h->transMethod = CFGTBL_Trans_Performant;
 
 	return;
@@ -4316,7 +4318,7 @@ static int __devinit cciss_pci_init(ctlr_info_t *h)
 	if (prod_index < 0)
 		return -ENODEV;
 	h->product_name = products[prod_index].product_name;
-	h->access = *(products[prod_index].access);
+	h->access = products[prod_index].access;
 
 	if (cciss_board_disabled(h)) {
 		dev_warn(&h->pdev->dev, "controller appears to be disabled\n");
@@ -5041,7 +5043,7 @@ reinit_after_soft_reset:
 	}
 
 	/* make sure the board interrupts are off */
-	h->access.set_intr_mask(h, CCISS_INTR_OFF);
+	h->access->set_intr_mask(h, CCISS_INTR_OFF);
 	rc = cciss_request_irq(h, do_cciss_msix_intr, do_cciss_intx);
 	if (rc)
 		goto clean2;
@@ -5093,7 +5095,7 @@ reinit_after_soft_reset:
 		 * fake ones to scoop up any residual completions.
 		 */
 		spin_lock_irqsave(&h->lock, flags);
-		h->access.set_intr_mask(h, CCISS_INTR_OFF);
+		h->access->set_intr_mask(h, CCISS_INTR_OFF);
 		spin_unlock_irqrestore(&h->lock, flags);
 		free_irq(h->intr[h->intr_mode], h);
 		rc = cciss_request_irq(h, cciss_msix_discard_completions,
@@ -5113,9 +5115,9 @@ reinit_after_soft_reset:
 		dev_info(&h->pdev->dev, "Board READY.\n");
 		dev_info(&h->pdev->dev,
 			"Waiting for stale completions to drain.\n");
-		h->access.set_intr_mask(h, CCISS_INTR_ON);
+		h->access->set_intr_mask(h, CCISS_INTR_ON);
 		msleep(10000);
-		h->access.set_intr_mask(h, CCISS_INTR_OFF);
+		h->access->set_intr_mask(h, CCISS_INTR_OFF);
 
 		rc = controller_reset_failed(h->cfgtable);
 		if (rc)
@@ -5138,7 +5140,7 @@ reinit_after_soft_reset:
 	cciss_scsi_setup(h);
 
 	/* Turn the interrupts on so we can service requests */
-	h->access.set_intr_mask(h, CCISS_INTR_ON);
+	h->access->set_intr_mask(h, CCISS_INTR_ON);
 
 	/* Get the firmware version */
 	inq_buff = kzalloc(sizeof(InquiryData_struct), GFP_KERNEL);
@@ -5211,7 +5213,7 @@ static void cciss_shutdown(struct pci_dev *pdev)
 	kfree(flush_buf);
 	if (return_code != IO_OK)
 		dev_warn(&h->pdev->dev, "Error flushing cache\n");
-	h->access.set_intr_mask(h, CCISS_INTR_OFF);
+	h->access->set_intr_mask(h, CCISS_INTR_OFF);
 	free_irq(h->intr[h->intr_mode], h);
 }
 
