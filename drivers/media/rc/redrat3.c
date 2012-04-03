@@ -905,7 +905,7 @@ static int redrat3_set_tx_carrier(struct rc_dev *dev, u32 carrier)
 	return carrier;
 }
 
-static int redrat3_transmit_ir(struct rc_dev *rcdev, int *txbuf, u32 n)
+static int redrat3_transmit_ir(struct rc_dev *rcdev, unsigned *txbuf, u32 n)
 {
 	struct redrat3_dev *rr3 = rcdev->priv;
 	struct device *dev = rr3->dev;
