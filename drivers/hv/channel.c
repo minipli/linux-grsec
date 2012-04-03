@@ -400,8 +400,8 @@ int vmbus_establish_gpadl(struct vmbus_channel *channel, void *kbuffer,
 	int ret = 0;
 	int t;
 
-	next_gpadl_handle = atomic_read(&vmbus_connection.next_gpadl_handle);
-	atomic_inc(&vmbus_connection.next_gpadl_handle);
+	next_gpadl_handle = atomic_read_unchecked(&vmbus_connection.next_gpadl_handle);
+	atomic_inc_unchecked(&vmbus_connection.next_gpadl_handle);
 
 	ret = create_gpadl_header(kbuffer, size, &msginfo, &msgcount);
 	if (ret)
