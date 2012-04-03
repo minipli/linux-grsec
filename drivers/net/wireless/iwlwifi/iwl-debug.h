@@ -86,8 +86,8 @@ do {									\
 } while (0)
 
 #else
-#define IWL_DEBUG(m, level, fmt, args...)
-#define IWL_DEBUG_LIMIT(m, level, fmt, args...)
+#define IWL_DEBUG(m, level, fmt, args...) do {} while (0)
+#define IWL_DEBUG_LIMIT(m, level, fmt, args...) do {} while (0)
 #define iwl_print_hex_dump(m, level, p, len)
 #define IWL_DEBUG_QUIET_RFKILL(p, fmt, args...)	\
 do {							\

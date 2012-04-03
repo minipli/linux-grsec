@@ -487,8 +487,8 @@ relookup:
 	if (p) {
 		p->daddr = *daddr;
 		atomic_set(&p->refcnt, 1);
-		atomic_set(&p->rid, 0);
-		atomic_set(&p->ip_id_count,
+		atomic_set_unchecked(&p->rid, 0);
+		atomic_set_unchecked(&p->ip_id_count,
 				(daddr->family == AF_INET) ?
 					secure_ip_id(daddr->addr.a4) :
 					secure_ipv6_id(daddr->addr.a6));

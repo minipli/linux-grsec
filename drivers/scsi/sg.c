@@ -1077,7 +1077,7 @@ sg_ioctl(struct file *filp, unsigned int cmd_in, unsigned long arg)
 				       sdp->disk->disk_name,
 				       MKDEV(SCSI_GENERIC_MAJOR, sdp->index),
 				       NULL,
-				       (char *)arg);
+				       (char __user *)arg);
 	case BLKTRACESTART:
 		return blk_trace_startstop(sdp->device->request_queue, 1);
 	case BLKTRACESTOP:
@@ -2312,7 +2312,7 @@ struct sg_proc_leaf {
 	const struct file_operations * fops;
 };
 
-static struct sg_proc_leaf sg_proc_leaf_arr[] = {
+static const struct sg_proc_leaf sg_proc_leaf_arr[] = {
 	{"allow_dio", &adio_fops},
 	{"debug", &debug_fops},
 	{"def_reserved_size", &dressz_fops},
@@ -2332,7 +2332,7 @@ sg_proc_init(void)
 	if (!sg_proc_sgp)
 		return 1;
 	for (k = 0; k < num_leaves; ++k) {
-		struct sg_proc_leaf *leaf = &sg_proc_leaf_arr[k];
+		const struct sg_proc_leaf *leaf = &sg_proc_leaf_arr[k];
 		umode_t mask = leaf->fops->write ? S_IRUGO | S_IWUSR : S_IRUGO;
 		proc_create(leaf->name, mask, sg_proc_sgp, leaf->fops);
 	}
