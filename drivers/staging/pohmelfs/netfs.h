@@ -571,14 +571,14 @@ struct pohmelfs_config;
 struct pohmelfs_sb {
 	struct rb_root		mcache_root;
 	struct mutex		mcache_lock;
-	atomic_long_t		mcache_gen;
+	atomic_long_unchecked_t	mcache_gen;
 	unsigned long		mcache_timeout;
 
 	unsigned int		idx;
 
 	unsigned int		trans_retries;
 
-	atomic_t		trans_gen;
+	atomic_unchecked_t	trans_gen;
 
 	unsigned int		crypto_attached_size;
 	unsigned int		crypto_align_size;
