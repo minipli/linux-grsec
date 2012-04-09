@@ -2671,6 +2671,11 @@ int may_expand_vm(struct mm_struct *mm, unsigned long npages)
 
 	lim = current->signal->rlim[RLIMIT_AS].rlim_cur >> PAGE_SHIFT;
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (mm->pax_flags & MF_PAX_RANDMMAP)
+		cur -= mm->brk_gap;
+#endif
+
 	if (cur + npages > lim)
 		return 0;
 	return 1;
