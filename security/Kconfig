@@ -617,6 +617,7 @@ config PAX_CONSTIFY_PLUGIN
 
 config PAX_SIZE_OVERFLOW
 	bool "Prevent various integer overflows in function size parameters"
+	depends on X86
 	help
 	  By saying Y here the kernel recomputes expressions of function
 	  arguments marked by a size_overflow attribute with double integer
