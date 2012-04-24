@@ -19,6 +19,7 @@
 #include <linux/io.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/moduleloader.h>
 #include <video/edid.h>
 #include <video/uvesafb.h>
 #ifdef CONFIG_X86
@@ -121,7 +122,7 @@ static int uvesafb_helper_start(void)
 		NULL,
 	};
 
-	return call_usermodehelper(v86d_path, argv, envp, 1);
+	return call_usermodehelper(v86d_path, argv, envp, UMH_WAIT_PROC);
 }
 
 /*
@@ -569,10 +570,32 @@ static int __devinit uvesafb_vbe_getpmi(struct uvesafb_ktask *task,
 	if ((task->t.regs.eax & 0xffff) != 0x4f || task->t.regs.es < 0xc000) {
 		par->pmi_setpal = par->ypan = 0;
 	} else {
+
+#ifdef CONFIG_PAX_KERNEXEC
+#ifdef CONFIG_MODULES
+		par->pmi_code = module_alloc_exec((u16)task->t.regs.ecx);
+#endif
+		if (!par->pmi_code) {
+			par->pmi_setpal = par->ypan = 0;
+			return 0;
+		}
+#endif
+
 		par->pmi_base = (u16 *)phys_to_virt(((u32)task->t.regs.es << 4)
 						+ task->t.regs.edi);
+
+#if defined(CONFIG_MODULES) && defined(CONFIG_PAX_KERNEXEC)
+		pax_open_kernel();
+		memcpy(par->pmi_code, par->pmi_base, (u16)task->t.regs.ecx);
+		pax_close_kernel();
+
+		par->pmi_start = ktva_ktla(par->pmi_code + par->pmi_base[1]);
+		par->pmi_pal = ktva_ktla(par->pmi_code + par->pmi_base[2]);
+#else
 		par->pmi_start = (u8 *)par->pmi_base + par->pmi_base[1];
 		par->pmi_pal = (u8 *)par->pmi_base + par->pmi_base[2];
+#endif
+
 		printk(KERN_INFO "uvesafb: protected mode interface info at "
 				 "%04x:%04x\n",
 				 (u16)task->t.regs.es, (u16)task->t.regs.edi);
@@ -1828,6 +1851,11 @@ out:
 	if (par->vbe_modes)
 		kfree(par->vbe_modes);
 
+#if defined(CONFIG_MODULES) && defined(CONFIG_PAX_KERNEXEC)
+	if (par->pmi_code)
+		module_free_exec(NULL, par->pmi_code);
+#endif
+
 	framebuffer_release(info);
 	return err;
 }
@@ -1854,6 +1882,12 @@ static int uvesafb_remove(struct platform_device *dev)
 				kfree(par->vbe_state_orig);
 			if (par->vbe_state_saved)
 				kfree(par->vbe_state_saved);
+
+#if defined(CONFIG_MODULES) && defined(CONFIG_PAX_KERNEXEC)
+			if (par->pmi_code)
+				module_free_exec(NULL, par->pmi_code);
+#endif
+
 		}
 
 		framebuffer_release(info);
