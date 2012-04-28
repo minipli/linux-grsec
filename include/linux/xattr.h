@@ -57,6 +57,11 @@
 #define XATTR_POSIX_ACL_DEFAULT  "posix_acl_default"
 #define XATTR_NAME_POSIX_ACL_DEFAULT XATTR_SYSTEM_PREFIX XATTR_POSIX_ACL_DEFAULT
 
+/* User namespace */
+#define XATTR_PAX_PREFIX XATTR_USER_PREFIX "pax."
+#define XATTR_PAX_FLAGS_SUFFIX "flags"
+#define XATTR_NAME_PAX_FLAGS XATTR_PAX_PREFIX XATTR_PAX_FLAGS_SUFFIX
+
 #ifdef  __KERNEL__
 
 #include <linux/types.h>
