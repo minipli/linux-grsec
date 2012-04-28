@@ -222,7 +222,7 @@ static int ieee80211_do_open(struct net_device *dev, bool coming_up)
 		break;
 	}
 
-	if (local->open_count == 0) {
+	if (local_read(&local->open_count) == 0) {
 		res = drv_start(local);
 		if (res)
 			goto err_del_bss;
@@ -246,7 +246,7 @@ static int ieee80211_do_open(struct net_device *dev, bool coming_up)
 		memcpy(dev->perm_addr, dev->dev_addr, ETH_ALEN);
 
 		if (!is_valid_ether_addr(dev->dev_addr)) {
-			if (!local->open_count)
+			if (!local_read(&local->open_count))
 				drv_stop(local);
 			return -EADDRNOTAVAIL;
 		}
@@ -347,7 +347,7 @@ static int ieee80211_do_open(struct net_device *dev, bool coming_up)
 	mutex_unlock(&local->mtx);
 
 	if (coming_up)
-		local->open_count++;
+		local_inc(&local->open_count);
 
 	if (hw_reconf_flags)
 		ieee80211_hw_config(local, hw_reconf_flags);
@@ -360,7 +360,7 @@ static int ieee80211_do_open(struct net_device *dev, bool coming_up)
  err_del_interface:
 	drv_remove_interface(local, sdata);
  err_stop:
-	if (!local->open_count)
+	if (!local_read(&local->open_count))
 		drv_stop(local);
  err_del_bss:
 	sdata->bss = NULL;
@@ -489,7 +489,7 @@ static void ieee80211_do_stop(struct ieee80211_sub_if_data *sdata,
 	}
 
 	if (going_down)
-		local->open_count--;
+		local_dec(&local->open_count);
 
 	switch (sdata->vif.type) {
 	case NL80211_IFTYPE_AP_VLAN:
@@ -548,7 +548,7 @@ static void ieee80211_do_stop(struct ieee80211_sub_if_data *sdata,
 
 	ieee80211_recalc_ps(local, -1);
 
-	if (local->open_count == 0) {
+	if (local_read(&local->open_count) == 0) {
 		if (local->ops->napi_poll)
 			napi_disable(&local->napi);
 		ieee80211_clear_tx_pending(local);
