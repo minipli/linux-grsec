@@ -21,19 +21,17 @@
 #include <asm/cpu.h>
 #include <asm/stackprotector.h>
 
-DEFINE_PER_CPU(int, cpu_number);
+#ifdef CONFIG_SMP
+DEFINE_PER_CPU(unsigned int, cpu_number);
 EXPORT_PER_CPU_SYMBOL(cpu_number);
-
-#ifdef CONFIG_X86_64
-#define BOOT_PERCPU_OFFSET ((unsigned long)__per_cpu_load)
-#else
-#define BOOT_PERCPU_OFFSET 0
 #endif
+
+#define BOOT_PERCPU_OFFSET ((unsigned long)__per_cpu_load)
 
 DEFINE_PER_CPU(unsigned long, this_cpu_off) = BOOT_PERCPU_OFFSET;
 EXPORT_PER_CPU_SYMBOL(this_cpu_off);
 
-unsigned long __per_cpu_offset[NR_CPUS] __read_mostly = {
+unsigned long __per_cpu_offset[NR_CPUS] __read_only = {
 	[0 ... NR_CPUS-1] = BOOT_PERCPU_OFFSET,
 };
 EXPORT_SYMBOL(__per_cpu_offset);
@@ -96,6 +94,8 @@ static bool __init pcpu_need_numa(void)
  * Pointer to the allocated area on success, NULL on failure.
  */
 static void * __init pcpu_alloc_bootmem(unsigned int cpu, unsigned long size,
+					unsigned long align) __size_overflow(2);
+static void * __init pcpu_alloc_bootmem(unsigned int cpu, unsigned long size,
 					unsigned long align)
 {
 	const unsigned long goal = __pa(MAX_DMA_ADDRESS);
@@ -124,6 +124,8 @@ static void * __init pcpu_alloc_bootmem(unsigned int cpu, unsigned long size,
 /*
  * Helpers for first chunk memory allocation
  */
+static void * __init pcpu_fc_alloc(unsigned int cpu, size_t size, size_t align) __size_overflow(2);
+
 static void * __init pcpu_fc_alloc(unsigned int cpu, size_t size, size_t align)
 {
 	return pcpu_alloc_bootmem(cpu, size, align);
@@ -155,10 +157,10 @@ static inline void setup_percpu_segment(int cpu)
 {
 #ifdef CONFIG_X86_32
 	struct desc_struct gdt;
+	unsigned long base = per_cpu_offset(cpu);
 
-	pack_descriptor(&gdt, per_cpu_offset(cpu), 0xFFFFF,
-			0x2 | DESCTYPE_S, 0x8);
-	gdt.s = 1;
+	pack_descriptor(&gdt, base, (VMALLOC_END - base - 1) >> PAGE_SHIFT,
+			0x83 | DESCTYPE_S, 0xC);
 	write_gdt_entry(get_cpu_gdt_table(cpu),
 			GDT_ENTRY_PERCPU, &gdt, DESCTYPE_S);
 #endif
@@ -207,6 +209,11 @@ void __init setup_per_cpu_areas(void)
 	/* alrighty, percpu areas up and running */
 	delta = (unsigned long)pcpu_base_addr - (unsigned long)__per_cpu_start;
 	for_each_possible_cpu(cpu) {
+#ifdef CONFIG_CC_STACKPROTECTOR
+#ifdef CONFIG_X86_32
+		unsigned long canary = per_cpu(stack_canary.canary, cpu);
+#endif
+#endif
 		per_cpu_offset(cpu) = delta + pcpu_unit_offsets[cpu];
 		per_cpu(this_cpu_off, cpu) = per_cpu_offset(cpu);
 		per_cpu(cpu_number, cpu) = cpu;
@@ -246,6 +253,12 @@ void __init setup_per_cpu_areas(void)
 		 * So set them all (boot cpu and all APs).
 		 */
 		set_cpu_numa_node(cpu, early_cpu_to_node(cpu));
+#endif
+#ifdef CONFIG_CC_STACKPROTECTOR
+#ifdef CONFIG_X86_32
+		if (!cpu)
+			per_cpu(stack_canary.canary, cpu) = canary;
+#endif
 #endif
 		/*
 		 * Up to this point, the boot CPU has been using .init.data
