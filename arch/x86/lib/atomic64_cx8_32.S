@@ -35,9 +35,19 @@ ENTRY(atomic64_read_cx8)
 	CFI_STARTPROC
 
 	read64 %ecx
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(atomic64_read_cx8)
+
+ENTRY(atomic64_read_unchecked_cx8)
+	CFI_STARTPROC
+
+	read64 %ecx
+	pax_force_retaddr
+	ret
+	CFI_ENDPROC
+ENDPROC(atomic64_read_unchecked_cx8)
 
 ENTRY(atomic64_set_cx8)
 	CFI_STARTPROC
@@ -48,9 +58,24 @@ ENTRY(atomic64_set_cx8)
 	cmpxchg8b (%esi)
 	jne 1b
 
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(atomic64_set_cx8)
+
+ENTRY(atomic64_set_unchecked_cx8)
+	CFI_STARTPROC
+
+1:
+/* we don't need LOCK_PREFIX since aligned 64-bit writes
+ * are atomic on 586 and newer */
+	cmpxchg8b (%esi)
+	jne 1b
+
+	pax_force_retaddr
+	ret
+	CFI_ENDPROC
+ENDPROC(atomic64_set_unchecked_cx8)
 
 ENTRY(atomic64_xchg_cx8)
 	CFI_STARTPROC
@@ -62,12 +87,13 @@ ENTRY(atomic64_xchg_cx8)
 	cmpxchg8b (%esi)
 	jne 1b
 
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(atomic64_xchg_cx8)
 
-.macro addsub_return func ins insc
-ENTRY(atomic64_\func\()_return_cx8)
+.macro addsub_return func ins insc unchecked=""
+ENTRY(atomic64_\func\()_return\unchecked\()_cx8)
 	CFI_STARTPROC
 	SAVE ebp
 	SAVE ebx
@@ -84,27 +110,44 @@ ENTRY(atomic64_\func\()_return_cx8)
 	movl %edx, %ecx
 	\ins\()l %esi, %ebx
 	\insc\()l %edi, %ecx
+
+.ifb \unchecked
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+2:
+	_ASM_EXTABLE(2b, 3f)
+#endif
+.endif
+
 	LOCK_PREFIX
 	cmpxchg8b (%ebp)
 	jne 1b
-
-10:
 	movl %ebx, %eax
 	movl %ecx, %edx
+
+.ifb \unchecked
+#ifdef CONFIG_PAX_REFCOUNT
+3:
+#endif
+.endif
+
 	RESTORE edi
 	RESTORE esi
 	RESTORE ebx
 	RESTORE ebp
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
-ENDPROC(atomic64_\func\()_return_cx8)
+ENDPROC(atomic64_\func\()_return\unchecked\()_cx8)
 .endm
 
 addsub_return add add adc
 addsub_return sub sub sbb
+addsub_return add add adc _unchecked
+addsub_return sub sub sbb _unchecked
 
-.macro incdec_return func ins insc
-ENTRY(atomic64_\func\()_return_cx8)
+.macro incdec_return func ins insc unchecked
+ENTRY(atomic64_\func\()_return\unchecked\()_cx8)
 	CFI_STARTPROC
 	SAVE ebx
 
@@ -114,21 +157,39 @@ ENTRY(atomic64_\func\()_return_cx8)
 	movl %edx, %ecx
 	\ins\()l $1, %ebx
 	\insc\()l $0, %ecx
+
+.ifb \unchecked
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+2:
+	_ASM_EXTABLE(2b, 3f)
+#endif
+.endif
+
 	LOCK_PREFIX
 	cmpxchg8b (%esi)
 	jne 1b
 
-10:
 	movl %ebx, %eax
 	movl %ecx, %edx
+
+.ifb \unchecked
+#ifdef CONFIG_PAX_REFCOUNT
+3:
+#endif
+.endif
+
 	RESTORE ebx
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
-ENDPROC(atomic64_\func\()_return_cx8)
+ENDPROC(atomic64_\func\()_return\unchecked\()_cx8)
 .endm
 
 incdec_return inc add adc
 incdec_return dec sub sbb
+incdec_return inc add adc _unchecked
+incdec_return dec sub sbb _unchecked
 
 ENTRY(atomic64_dec_if_positive_cx8)
 	CFI_STARTPROC
@@ -140,6 +201,13 @@ ENTRY(atomic64_dec_if_positive_cx8)
 	movl %edx, %ecx
 	subl $1, %ebx
 	sbb $0, %ecx
+
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+1234:
+	_ASM_EXTABLE(1234b, 2f)
+#endif
+
 	js 2f
 	LOCK_PREFIX
 	cmpxchg8b (%esi)
@@ -149,6 +217,7 @@ ENTRY(atomic64_dec_if_positive_cx8)
 	movl %ebx, %eax
 	movl %ecx, %edx
 	RESTORE ebx
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(atomic64_dec_if_positive_cx8)
@@ -174,6 +243,13 @@ ENTRY(atomic64_add_unless_cx8)
 	movl %edx, %ecx
 	addl %esi, %ebx
 	adcl %edi, %ecx
+
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+1234:
+	_ASM_EXTABLE(1234b, 3f)
+#endif
+
 	LOCK_PREFIX
 	cmpxchg8b (%ebp)
 	jne 1b
@@ -184,6 +260,7 @@ ENTRY(atomic64_add_unless_cx8)
 	CFI_ADJUST_CFA_OFFSET -8
 	RESTORE ebx
 	RESTORE ebp
+	pax_force_retaddr
 	ret
 4:
 	cmpl %edx, 4(%esp)
@@ -206,6 +283,13 @@ ENTRY(atomic64_inc_not_zero_cx8)
 	movl %edx, %ecx
 	addl $1, %ebx
 	adcl $0, %ecx
+
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+1234:
+	_ASM_EXTABLE(1234b, 3f)
+#endif
+
 	LOCK_PREFIX
 	cmpxchg8b (%esi)
 	jne 1b
@@ -213,6 +297,7 @@ ENTRY(atomic64_inc_not_zero_cx8)
 	movl $1, %eax
 3:
 	RESTORE ebx
+	pax_force_retaddr
 	ret
 4:
 	testl %edx, %edx
