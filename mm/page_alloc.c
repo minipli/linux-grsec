@@ -335,7 +335,7 @@ out:
  * This usage means that zero-order pages may not be compound.
  */
 
-static void free_compound_page(struct page *page)
+void free_compound_page(struct page *page)
 {
 	__free_pages_ok(page, compound_order(page));
 }
@@ -692,6 +692,10 @@ static bool free_pages_prepare(struct page *page, unsigned int order)
 	int i;
 	int bad = 0;
 
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	unsigned long index = 1UL << order;
+#endif
+
 	trace_mm_page_free(page, order);
 	kmemcheck_free_shadow(page, order);
 
@@ -707,6 +711,12 @@ static bool free_pages_prepare(struct page *page, unsigned int order)
 		debug_check_no_obj_freed(page_address(page),
 					   PAGE_SIZE << order);
 	}
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	for (; index; --index)
+		sanitize_highpage(page + index - 1);
+#endif
+
 	arch_free_page(page, order);
 	kernel_map_pages(page, 1 << order, 0);
 
@@ -830,8 +840,10 @@ static int prep_new_page(struct page *page, int order, gfp_t gfp_flags)
 	arch_alloc_page(page, order);
 	kernel_map_pages(page, 1 << order, 1);
 
+#ifndef CONFIG_PAX_MEMORY_SANITIZE
 	if (gfp_flags & __GFP_ZERO)
 		prep_zero_page(page, order, gfp_flags);
+#endif
 
 	if (order && (gfp_flags & __GFP_COMP))
 		prep_compound_page(page, order);

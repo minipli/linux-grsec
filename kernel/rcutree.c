@@ -363,9 +363,9 @@ static void rcu_idle_enter_common(struct rcu_dynticks *rdtp, long long oldval)
 	rcu_prepare_for_idle(smp_processor_id());
 	/* CPUs seeing atomic_inc() must see prior RCU read-side crit sects */
 	smp_mb__before_atomic_inc();  /* See above. */
-	atomic_inc(&rdtp->dynticks);
+	atomic_inc_unchecked(&rdtp->dynticks);
 	smp_mb__after_atomic_inc();  /* Force ordering with next sojourn. */
-	WARN_ON_ONCE(atomic_read(&rdtp->dynticks) & 0x1);
+	WARN_ON_ONCE(atomic_read_unchecked(&rdtp->dynticks) & 0x1);
 }
 
 /**
@@ -438,10 +438,10 @@ void rcu_irq_exit(void)
 static void rcu_idle_exit_common(struct rcu_dynticks *rdtp, long long oldval)
 {
 	smp_mb__before_atomic_inc();  /* Force ordering w/previous sojourn. */
-	atomic_inc(&rdtp->dynticks);
+	atomic_inc_unchecked(&rdtp->dynticks);
 	/* CPUs seeing atomic_inc() must see later RCU read-side crit sects */
 	smp_mb__after_atomic_inc();  /* See above. */
-	WARN_ON_ONCE(!(atomic_read(&rdtp->dynticks) & 0x1));
+	WARN_ON_ONCE(!(atomic_read_unchecked(&rdtp->dynticks) & 0x1));
 	rcu_cleanup_after_idle(smp_processor_id());
 	trace_rcu_dyntick("End", oldval, rdtp->dynticks_nesting);
 	if (!is_idle_task(current)) {
@@ -531,14 +531,14 @@ void rcu_nmi_enter(void)
 	struct rcu_dynticks *rdtp = &__get_cpu_var(rcu_dynticks);
 
 	if (rdtp->dynticks_nmi_nesting == 0 &&
-	    (atomic_read(&rdtp->dynticks) & 0x1))
+	    (atomic_read_unchecked(&rdtp->dynticks) & 0x1))
 		return;
 	rdtp->dynticks_nmi_nesting++;
 	smp_mb__before_atomic_inc();  /* Force delay from prior write. */
-	atomic_inc(&rdtp->dynticks);
+	atomic_inc_unchecked(&rdtp->dynticks);
 	/* CPUs seeing atomic_inc() must see later RCU read-side crit sects */
 	smp_mb__after_atomic_inc();  /* See above. */
-	WARN_ON_ONCE(!(atomic_read(&rdtp->dynticks) & 0x1));
+	WARN_ON_ONCE(!(atomic_read_unchecked(&rdtp->dynticks) & 0x1));
 }
 
 /**
@@ -557,9 +557,9 @@ void rcu_nmi_exit(void)
 		return;
 	/* CPUs seeing atomic_inc() must see prior RCU read-side crit sects */
 	smp_mb__before_atomic_inc();  /* See above. */
-	atomic_inc(&rdtp->dynticks);
+	atomic_inc_unchecked(&rdtp->dynticks);
 	smp_mb__after_atomic_inc();  /* Force delay to next write. */
-	WARN_ON_ONCE(atomic_read(&rdtp->dynticks) & 0x1);
+	WARN_ON_ONCE(atomic_read_unchecked(&rdtp->dynticks) & 0x1);
 }
 
 #ifdef CONFIG_PROVE_RCU
@@ -575,7 +575,7 @@ int rcu_is_cpu_idle(void)
 	int ret;
 
 	preempt_disable();
-	ret = (atomic_read(&__get_cpu_var(rcu_dynticks).dynticks) & 0x1) == 0;
+	ret = (atomic_read_unchecked(&__get_cpu_var(rcu_dynticks).dynticks) & 0x1) == 0;
 	preempt_enable();
 	return ret;
 }
@@ -604,7 +604,7 @@ int rcu_is_cpu_rrupt_from_idle(void)
  */
 static int dyntick_save_progress_counter(struct rcu_data *rdp)
 {
-	rdp->dynticks_snap = atomic_add_return(0, &rdp->dynticks->dynticks);
+	rdp->dynticks_snap = atomic_add_return_unchecked(0, &rdp->dynticks->dynticks);
 	return (rdp->dynticks_snap & 0x1) == 0;
 }
 
@@ -619,7 +619,7 @@ static int rcu_implicit_dynticks_qs(struct rcu_data *rdp)
 	unsigned int curr;
 	unsigned int snap;
 
-	curr = (unsigned int)atomic_add_return(0, &rdp->dynticks->dynticks);
+	curr = (unsigned int)atomic_add_return_unchecked(0, &rdp->dynticks->dynticks);
 	snap = (unsigned int)rdp->dynticks_snap;
 
 	/*
@@ -1667,7 +1667,7 @@ __rcu_process_callbacks(struct rcu_state *rsp, struct rcu_data *rdp)
 /*
  * Do RCU core processing for the current CPU.
  */
-static void rcu_process_callbacks(struct softirq_action *unused)
+static void rcu_process_callbacks(void)
 {
 	trace_rcu_utilization("Start RCU core");
 	__rcu_process_callbacks(&rcu_sched_state,
@@ -2030,7 +2030,7 @@ rcu_boot_init_percpu_data(int cpu, struct rcu_state *rsp)
 	rdp->qlen = 0;
 	rdp->dynticks = &per_cpu(rcu_dynticks, cpu);
 	WARN_ON_ONCE(rdp->dynticks->dynticks_nesting != DYNTICK_TASK_NESTING);
-	WARN_ON_ONCE(atomic_read(&rdp->dynticks->dynticks) != 1);
+	WARN_ON_ONCE(atomic_read_unchecked(&rdp->dynticks->dynticks) != 1);
 	rdp->cpu = cpu;
 	rdp->rsp = rsp;
 	raw_spin_unlock_irqrestore(&rnp->lock, flags);
@@ -2058,8 +2058,8 @@ rcu_init_percpu_data(int cpu, struct rcu_state *rsp, int preemptible)
 	rdp->n_force_qs_snap = rsp->n_force_qs;
 	rdp->blimit = blimit;
 	rdp->dynticks->dynticks_nesting = DYNTICK_TASK_NESTING;
-	atomic_set(&rdp->dynticks->dynticks,
-		   (atomic_read(&rdp->dynticks->dynticks) & ~0x1) + 1);
+	atomic_set_unchecked(&rdp->dynticks->dynticks,
+		   (atomic_read_unchecked(&rdp->dynticks->dynticks) & ~0x1) + 1);
 	rcu_prepare_for_idle_init(cpu);
 	raw_spin_unlock(&rnp->lock);		/* irqs remain disabled. */
 
