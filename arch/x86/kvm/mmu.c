@@ -3555,7 +3555,7 @@ void kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 
 	pgprintk("%s: gpa %llx bytes %d\n", __func__, gpa, bytes);
 
-	invlpg_counter = atomic_read(&vcpu->kvm->arch.invlpg_counter);
+	invlpg_counter = atomic_read_unchecked(&vcpu->kvm->arch.invlpg_counter);
 
 	/*
 	 * Assume that the pte write on a page table of the same type
@@ -3587,7 +3587,7 @@ void kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 	}
 
 	spin_lock(&vcpu->kvm->mmu_lock);
-	if (atomic_read(&vcpu->kvm->arch.invlpg_counter) != invlpg_counter)
+	if (atomic_read_unchecked(&vcpu->kvm->arch.invlpg_counter) != invlpg_counter)
 		gentry = 0;
 	kvm_mmu_free_some_pages(vcpu);
 	++vcpu->kvm->stat.mmu_pte_write;
@@ -3983,6 +3983,8 @@ static void *pv_mmu_read_buffer(struct kvm_pv_mmu_op_buffer *buffer,
 	return ret;
 }
 
+static int kvm_pv_mmu_write(struct kvm_vcpu *vcpu,
+			     gpa_t addr, gpa_t value) __size_overflow(2);
 static int kvm_pv_mmu_write(struct kvm_vcpu *vcpu,
 			     gpa_t addr, gpa_t value)
 {

@@ -20,8 +20,12 @@ extern void cmpxchg8b_emu(void);
 EXPORT_SYMBOL(cmpxchg8b_emu);
 #endif
 
+EXPORT_SYMBOL_GPL(cpu_gdt_table);
+
 /* Networking helper routines. */
 EXPORT_SYMBOL(csum_partial_copy_generic);
+EXPORT_SYMBOL(csum_partial_copy_generic_to_user);
+EXPORT_SYMBOL(csum_partial_copy_generic_from_user);
 
 EXPORT_SYMBOL(__get_user_1);
 EXPORT_SYMBOL(__get_user_2);
@@ -36,3 +40,7 @@ EXPORT_SYMBOL(strstr);
 
 EXPORT_SYMBOL(csum_partial);
 EXPORT_SYMBOL(empty_zero_page);
+
+#ifdef CONFIG_PAX_KERNEXEC
+EXPORT_SYMBOL(__LOAD_PHYSICAL_ADDR);
+#endif
