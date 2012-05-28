@@ -161,7 +161,7 @@ static unsigned int strhash(const char *str, unsigned int sz)
 /*
  * Lookup a value in the configuration string.
  */
-static int is_defined_config(const char *name, int len, unsigned int hash)
+static int is_defined_config(const char *name, unsigned int len, unsigned int hash)
 {
 	struct item *aux;
 
@@ -211,10 +211,10 @@ static void clear_config(void)
 /*
  * Record the use of a CONFIG_* word.
  */
-static void use_config(const char *m, int slen)
+static void use_config(const char *m, unsigned int slen)
 {
 	unsigned int hash = strhash(m, slen);
-	int c, i;
+	unsigned int c, i;
 
 	if (is_defined_config(m, slen, hash))
 	    return;
@@ -235,9 +235,9 @@ static void use_config(const char *m, int slen)
 
 static void parse_config_file(const char *map, size_t len)
 {
-	const int *end = (const int *) (map + len);
+	const unsigned int *end = (const unsigned int *) (map + len);
 	/* start at +1, so that p can never be < map */
-	const int *m   = (const int *) map + 1;
+	const unsigned int *m   = (const unsigned int *) map + 1;
 	const char *p, *q;
 
 	for (; m < end; m++) {
@@ -406,7 +406,7 @@ static void print_deps(void)
 static void traps(void)
 {
 	static char test[] __attribute__((aligned(sizeof(int)))) = "CONF";
-	int *p = (int *)test;
+	unsigned int *p = (unsigned int *)test;
 
 	if (*p != INT_CONF) {
 		fprintf(stderr, "fixdep: sizeof(int) != 4 or wrong endianess? %#x\n",
