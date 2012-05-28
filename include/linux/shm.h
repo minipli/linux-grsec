@@ -98,6 +98,10 @@ struct shmid_kernel /* private to the kernel */
 
 	/* The task created the shm object.  NULL if the task is dead. */
 	struct task_struct	*shm_creator;
+#ifdef CONFIG_GRKERNSEC
+	time_t			shm_createtime;
+	pid_t			shm_lapid;
+#endif
 };
 
 /* shm_mode upper byte flags */
