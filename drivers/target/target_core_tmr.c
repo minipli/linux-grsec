@@ -327,7 +327,7 @@ static void core_tmr_drain_task_list(
 			cmd->se_tfo->get_task_tag(cmd), cmd->pr_res_key,
 			cmd->t_task_list_num,
 			atomic_read(&cmd->t_task_cdbs_left),
-			atomic_read(&cmd->t_task_cdbs_sent),
+			atomic_read_unchecked(&cmd->t_task_cdbs_sent),
 			(cmd->transport_state & CMD_T_ACTIVE) != 0,
 			(cmd->transport_state & CMD_T_STOP) != 0,
 			(cmd->transport_state & CMD_T_SENT) != 0);

@@ -32,6 +32,10 @@
 #include <linux/perf_event.h>
 #include <linux/magic.h>
 #include <linux/ratelimit.h>
+#include <linux/slab.h>
+#include <linux/pagemap.h>
+#include <linux/compiler.h>
+#include <linux/unistd.h>
 
 #include <asm/firmware.h>
 #include <asm/page.h>
@@ -65,6 +69,33 @@ static inline int notify_page_fault(struct pt_regs *regs)
 static inline int notify_page_fault(struct pt_regs *regs)
 {
 	return 0;
+}
+#endif
+
+#ifdef CONFIG_PAX_PAGEEXEC
+/*
+ * PaX: decide what to do with offenders (regs->nip = fault address)
+ *
+ * returns 1 when task should be killed
+ */
+static int pax_handle_fetch_fault(struct pt_regs *regs)
+{
+	return 1;
+}
+
+void pax_report_insns(struct pt_regs *regs, void *pc, void *sp)
+{
+	unsigned long i;
+
+	printk(KERN_ERR "PAX: bytes at PC: ");
+	for (i = 0; i < 5; i++) {
+		unsigned int c;
+		if (get_user(c, (unsigned int __user *)pc+i))
+			printk(KERN_CONT "???????? ");
+		else
+			printk(KERN_CONT "%08x ", c);
+	}
+	printk("\n");
 }
 #endif
 
@@ -215,7 +246,7 @@ int __kprobes do_page_fault(struct pt_regs *regs, unsigned long address,
 	 * indicate errors in DSISR but can validly be set in SRR1.
 	 */
 	if (trap == 0x400)
-		error_code &= 0x48200000;
+		error_code &= 0x58200000;
 	else
 		is_write = error_code & DSISR_ISSTORE;
 #else
@@ -366,7 +397,7 @@ good_area:
          * "undefined".  Of those that can be set, this is the only
          * one which seems bad.
          */
-	if (error_code & 0x10000000)
+	if (error_code & DSISR_GUARDED)
                 /* Guarded storage error. */
 		goto bad_area;
 #endif /* CONFIG_8xx */
@@ -381,7 +412,7 @@ good_area:
 		 * processors use the same I/D cache coherency mechanism
 		 * as embedded.
 		 */
-		if (error_code & DSISR_PROTFAULT)
+		if (error_code & (DSISR_PROTFAULT | DSISR_GUARDED))
 			goto bad_area;
 #endif /* CONFIG_PPC_STD_MMU */
 
@@ -463,6 +494,23 @@ bad_area:
 bad_area_nosemaphore:
 	/* User mode accesses cause a SIGSEGV */
 	if (user_mode(regs)) {
+
+#ifdef CONFIG_PAX_PAGEEXEC
+		if (mm->pax_flags & MF_PAX_PAGEEXEC) {
+#ifdef CONFIG_PPC_STD_MMU
+			if (is_exec && (error_code & (DSISR_PROTFAULT | DSISR_GUARDED))) {
+#else
+			if (is_exec && regs->nip == address) {
+#endif
+				switch (pax_handle_fetch_fault(regs)) {
+				}
+
+				pax_report_fault(regs, (void *)regs->nip, (void *)regs->gpr[PT_R1]);
+				do_group_exit(SIGKILL);
+			}
+		}
+#endif
+
 		_exception(SIGSEGV, regs, code, address);
 		return 0;
 	}

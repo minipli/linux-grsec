@@ -83,7 +83,9 @@ static struct io_apic_ops io_apic_ops = {
 
 void __init set_io_apic_ops(const struct io_apic_ops *ops)
 {
-	io_apic_ops = *ops;
+	pax_open_kernel();
+	memcpy((void*)&io_apic_ops, ops, sizeof io_apic_ops);
+	pax_close_kernel();
 }
 
 /*
@@ -1135,7 +1137,7 @@ int IO_APIC_get_PCI_irq_vector(int bus, int slot, int pin,
 }
 EXPORT_SYMBOL(IO_APIC_get_PCI_irq_vector);
 
-void lock_vector_lock(void)
+void lock_vector_lock(void) __acquires(vector_lock)
 {
 	/* Used to the online set of cpus does not change
 	 * during assign_irq_vector.
@@ -1143,7 +1145,7 @@ void lock_vector_lock(void)
 	raw_spin_lock(&vector_lock);
 }
 
-void unlock_vector_lock(void)
+void unlock_vector_lock(void) __releases(vector_lock)
 {
 	raw_spin_unlock(&vector_lock);
 }
@@ -2549,7 +2551,7 @@ static void ack_apic_edge(struct irq_data *data)
 	ack_APIC_irq();
 }
 
-atomic_t irq_mis_count;
+atomic_unchecked_t irq_mis_count;
 
 #ifdef CONFIG_GENERIC_PENDING_IRQ
 static inline bool ioapic_irqd_mask(struct irq_data *data, struct irq_cfg *cfg)
@@ -2667,7 +2669,7 @@ static void ack_apic_level(struct irq_data *data)
 	 * at the cpu.
 	 */
 	if (!(v & (1 << (i & 0x1f)))) {
-		atomic_inc(&irq_mis_count);
+		atomic_inc_unchecked(&irq_mis_count);
 
 		eoi_ioapic_irq(irq, cfg);
 	}
