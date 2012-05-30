@@ -20,6 +20,7 @@
 #include <linux/ima.h>
 #include <linux/evm.h>
 #include <linux/fsnotify.h>
+#include <linux/mm.h>
 #include <net/flow.h>
 
 #define MAX_LSM_EVM_XATTR	2
