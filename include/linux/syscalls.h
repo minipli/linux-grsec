@@ -233,7 +233,7 @@ extern struct trace_event_functions exit_syscall_print_funcs;
 #define SYSCALL_DEFINE(name) static inline long SYSC_##name
 
 #define __SYSCALL_DEFINEx(x, name, ...)					\
-	asmlinkage long sys##name(__SC_DECL##x(__VA_ARGS__));		\
+	asmlinkage __used long sys##name(__SC_DECL##x(__VA_ARGS__));	\
 	static inline long SYSC##name(__SC_DECL##x(__VA_ARGS__));	\
 	asmlinkage long SyS##name(__SC_LONG##x(__VA_ARGS__))		\
 	{								\
@@ -247,7 +247,7 @@ extern struct trace_event_functions exit_syscall_print_funcs;
 
 #define SYSCALL_DEFINE(name) asmlinkage long sys_##name
 #define __SYSCALL_DEFINEx(x, name, ...)					\
-	asmlinkage long sys##name(__SC_DECL##x(__VA_ARGS__))
+	asmlinkage __used long sys##name(__SC_DECL##x(__VA_ARGS__))
 
 #endif /* CONFIG_HAVE_SYSCALL_WRAPPERS */
 

@@ -21,9 +21,18 @@ vobjs-$(VDSOX32-y) += $(vobjx32s-compat)
 vobj64s := $(filter-out $(vobjx32s-compat),$(vobjs-y))
 
 # files to link into kernel
-obj-$(VDSO64-y)			+= vma.o vdso.o
+obj-$(VDSO64-y)			+= vma.o
+obj-$(VDSO32-y)			+= vdso32-setup.o
+
+ifdef CONFIG_CC_LTO
+lib-$(VDSO64-y)			+= vdso.o
+lib-$(VDSOX32-y)		+= vdsox32.o
+lib-$(VDSO32-y)			+= vdso32.o
+else
+obj-$(VDSO64-y)			+= vdso.o
 obj-$(VDSOX32-y)		+= vdsox32.o
-obj-$(VDSO32-y)			+= vdso32.o vdso32-setup.o
+obj-$(VDSO32-y)			+= vdso32.o
+endif
 
 vobjs := $(foreach F,$(vobj64s),$(obj)/$F)
 
@@ -54,6 +63,10 @@ CFL := $(PROFILING) -mcmodel=small -fPIC -O2 -fasynchronous-unwind-tables -m64 \
        $(filter -g%,$(KBUILD_CFLAGS)) $(call cc-option, -fno-stack-protector) \
        -fno-omit-frame-pointer -foptimize-sibling-calls
 
+ifdef CONFIG_CC_LTO
+CFL += -ffat-lto-objects
+endif
+
 $(vobjs): KBUILD_CFLAGS += $(CFL)
 
 #
@@ -65,7 +78,11 @@ CFLAGS_REMOVE_vgetcpu.o = -pg
 CFLAGS_REMOVE_vvar.o = -pg
 
 targets += vdso-syms.lds
+ifdef CONFIG_CC_LTO
+lib-$(VDSO64-y)			+= vdso-syms.lds
+else
 obj-$(VDSO64-y)			+= vdso-syms.lds
+endif
 
 #
 # Match symbols in the DSO that look like VDSO*; produce a file of constants.
@@ -91,7 +108,11 @@ $(obj)/%-syms.lds: $(obj)/%.so.dbg FORCE
 #
 
 targets += vdsox32-syms.lds
+ifdef CONFIG_CC_LTO
+lib-$(VDSOX32-y)		+= vdsox32-syms.lds
+else
 obj-$(VDSOX32-y)		+= vdsox32-syms.lds
+endif
 
 CPPFLAGS_vdsox32.lds = $(CPPFLAGS_vdso.lds)
 VDSO_LDFLAGS_vdsox32.lds = -Wl,-m,elf32_x86_64 \
@@ -119,7 +140,11 @@ $(obj)/vdsox32.so.dbg: $(src)/vdsox32.lds $(vobjx32s) FORCE
 #
 # Build multiple 32-bit vDSO images to choose from at boot time.
 #
+ifdef CONFIG_CC_LTO
+lib-$(VDSO32-y)			+= vdso32-syms.lds
+else
 obj-$(VDSO32-y)			+= vdso32-syms.lds
+endif
 vdso32.so-$(VDSO32-y)		+= int80
 vdso32.so-$(CONFIG_COMPAT)	+= syscall
 vdso32.so-$(VDSO32-y)		+= sysenter

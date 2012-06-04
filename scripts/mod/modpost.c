@@ -597,6 +597,10 @@ static void handle_modversions(struct module *mod, struct elf_info *info,
 
 	switch (sym->st_shndx) {
 	case SHN_COMMON:
+#ifdef CONFIG_CC_LTO
+		if (!strcmp(symname, "__gnu_lto_v1") || !strcmp(symname, "__gnu_lto_slim"))
+			break;
+#endif
 		warn("\"%s\" [%s] is COMMON symbol\n", symname, mod->name);
 		break;
 	case SHN_ABS:
@@ -824,6 +828,7 @@ static const char *section_white_list[] =
 	".note*",
 	".got*",
 	".toc*",
+	".gnu.lto_*",
 	NULL
 };
 

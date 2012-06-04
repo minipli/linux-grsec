@@ -6,6 +6,12 @@ extra-y                := head_$(BITS).o head$(BITS).o head.o init_task.o vmlinu
 
 CPPFLAGS_vmlinux.lds += -U$(UTS_MACHINE)
 
+ifdef CONFIG_CC_LTO
+lib-y := entry_$(BITS).o relocate_kernel_$(BITS).o trampoline_$(BITS).o
+lib-$(CONFIG_X86_32) += reboot_32.o
+lib-$(CONFIG_X86_64) += vsyscall_emu_64.o
+endif
+
 ifdef CONFIG_FUNCTION_TRACER
 # Do not profile debug and lowlevel utilities
 CFLAGS_REMOVE_tsc.o = -pg
@@ -17,7 +23,10 @@ CFLAGS_REMOVE_ftrace.o = -pg
 CFLAGS_REMOVE_early_printk.o = -pg
 endif
 
-obj-y			:= process_$(BITS).o signal.o entry_$(BITS).o
+obj-y			:= process_$(BITS).o signal.o
+ifndef CONFIG_CC_LTO
+obj-y			+= entry_$(BITS).o
+endif
 obj-y			+= traps.o irq.o irq_$(BITS).o dumpstack_$(BITS).o
 obj-y			+= time.o ioport.o ldt.o dumpstack.o nmi.o
 obj-y			+= setup.o x86_init.o i8259.o irqinit.o jump_label.o
@@ -27,7 +36,9 @@ obj-$(CONFIG_X86_32)	+= sys_i386_32.o i386_ksyms_32.o
 obj-$(CONFIG_X86_64)	+= sys_x86_64.o x8664_ksyms_64.o
 obj-y			+= syscall_$(BITS).o
 obj-$(CONFIG_X86_64)	+= vsyscall_64.o
+ifndef CONFIG_CC_LTO
 obj-$(CONFIG_X86_64)	+= vsyscall_emu_64.o
+endif
 obj-y			+= bootflag.o e820.o
 obj-y			+= pci-dma.o quirks.o topology.o kdebugfs.o
 obj-y			+= alternative.o i8253.o pci-nommu.o hw_breakpoint.o
@@ -35,7 +46,10 @@ obj-y			+= tsc.o io_delay.o rtc.o
 obj-y			+= pci-iommu_table.o
 obj-y			+= resource.o
 
-obj-y				+= trampoline.o trampoline_$(BITS).o
+obj-y				+= trampoline.o
+ifndef CONFIG_CC_LTO
+obj-y				+= trampoline_$(BITS).o
+endif
 obj-y				+= process.o
 obj-y				+= i387.o xsave.o
 obj-y				+= ptrace.o
@@ -48,7 +62,9 @@ obj-$(CONFIG_STACKTRACE)	+= stacktrace.o
 obj-y				+= cpu/
 obj-y				+= acpi/
 obj-y				+= reboot.o
+ifndef CONFIG_CC_LTO
 obj-$(CONFIG_X86_32)		+= reboot_32.o
+endif
 obj-$(CONFIG_MCA)		+= mca_32.o
 obj-$(CONFIG_X86_MSR)		+= msr.o
 obj-$(CONFIG_X86_CPUID)		+= cpuid.o
@@ -66,7 +82,10 @@ obj-$(CONFIG_DYNAMIC_FTRACE)	+= ftrace.o
 obj-$(CONFIG_FUNCTION_GRAPH_TRACER) += ftrace.o
 obj-$(CONFIG_FTRACE_SYSCALLS)	+= ftrace.o
 obj-$(CONFIG_KEXEC)		+= machine_kexec_$(BITS).o
-obj-$(CONFIG_KEXEC)		+= relocate_kernel_$(BITS).o crash.o
+ifndef CONFIG_CC_LTO
+obj-$(CONFIG_KEXEC)		+= relocate_kernel_$(BITS).o
+endif
+obj-$(CONFIG_KEXEC)		+= crash.o
 obj-$(CONFIG_CRASH_DUMP)	+= crash_dump_$(BITS).o
 obj-$(CONFIG_KPROBES)		+= kprobes.o
 obj-$(CONFIG_OPTPROBES)		+= kprobes-opt.o

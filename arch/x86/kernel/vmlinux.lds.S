@@ -434,7 +434,7 @@ INIT_PER_CPU(irq_stack_union);
 
 #endif /* CONFIG_X86_32 */
 
-#ifdef CONFIG_KEXEC
+#if defined(CONFIG_KEXEC) && !defined(CONFIG_CC_LTO)
 #include <asm/kexec.h>
 
 . = ASSERT(kexec_control_code_size <= KEXEC_CONTROL_CODE_MAX_SIZE,

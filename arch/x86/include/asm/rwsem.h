@@ -57,6 +57,11 @@
 #define RWSEM_ACTIVE_READ_BIAS		RWSEM_ACTIVE_BIAS
 #define RWSEM_ACTIVE_WRITE_BIAS		(RWSEM_WAITING_BIAS + RWSEM_ACTIVE_BIAS)
 
+void call_rwsem_down_read_failed(struct rw_semaphore *sem);
+void call_rwsem_down_write_failed(struct rw_semaphore *sem);
+void call_rwsem_wake(struct rw_semaphore *sem);
+void call_rwsem_downgrade_wake(struct rw_semaphore *sem);
+
 /*
  * lock for reading
  */
@@ -74,11 +79,12 @@ static inline void __down_read(struct rw_semaphore *sem)
 
 		     /* adds 0x00000001 */
 		     "  jns        1f\n"
-		     "  call call_rwsem_down_read_failed\n"
+		     "  call %c2\n"
 		     "1:\n\t"
 		     "# ending down_read\n\t"
 		     : "+m" (sem->count)
-		     : "a" (sem)
+		     : "a" (sem),
+		       "i" (call_rwsem_down_read_failed)
 		     : "memory", "cc");
 }
 
@@ -132,11 +138,12 @@ static inline void __down_write_nested(struct rw_semaphore *sem, int subclass)
 		     "  test      %1,%1\n\t"
 		     /* was the count 0 before? */
 		     "  jz        1f\n"
-		     "  call call_rwsem_down_write_failed\n"
+		     "  call %c4\n"
 		     "1:\n"
 		     "# ending down_write"
 		     : "+m" (sem->count), "=d" (tmp)
-		     : "a" (sem), "1" (RWSEM_ACTIVE_WRITE_BIAS)
+		     : "a" (sem), "1" (RWSEM_ACTIVE_WRITE_BIAS),
+		       "i" (call_rwsem_down_write_failed)
 		     : "memory", "cc");
 }
 
@@ -175,11 +182,12 @@ static inline void __up_read(struct rw_semaphore *sem)
 
 		     /* subtracts 1, returns the old value */
 		     "  jns        1f\n\t"
-		     "  call call_rwsem_wake\n" /* expects old value in %edx */
+		     "  call %c4\n" /* expects old value in %edx */
 		     "1:\n"
 		     "# ending __up_read\n"
 		     : "+m" (sem->count), "=d" (tmp)
-		     : "a" (sem), "1" (-RWSEM_ACTIVE_READ_BIAS)
+		     : "a" (sem), "1" (-RWSEM_ACTIVE_READ_BIAS),
+		       "i" (call_rwsem_wake)
 		     : "memory", "cc");
 }
 
@@ -201,11 +209,12 @@ static inline void __up_write(struct rw_semaphore *sem)
 
 		     /* subtracts 0xffff0001, returns the old value */
 		     "  jns        1f\n\t"
-		     "  call call_rwsem_wake\n" /* expects old value in %edx */
+		     "  call %c4\n" /* expects old value in %edx */
 		     "1:\n\t"
 		     "# ending __up_write\n"
 		     : "+m" (sem->count), "=d" (tmp)
-		     : "a" (sem), "1" (-RWSEM_ACTIVE_WRITE_BIAS)
+		     : "a" (sem), "1" (-RWSEM_ACTIVE_WRITE_BIAS),
+		       "i" (call_rwsem_wake)
 		     : "memory", "cc");
 }
 
@@ -229,11 +238,12 @@ static inline void __downgrade_write(struct rw_semaphore *sem)
 		      *     0xZZZZZZZZ00000001 -> 0xYYYYYYYY00000001 (x86_64)
 		      */
 		     "  jns       1f\n\t"
-		     "  call call_rwsem_downgrade_wake\n"
+		     "  call %c3\n"
 		     "1:\n\t"
 		     "# ending __downgrade_write\n"
 		     : "+m" (sem->count)
-		     : "a" (sem), "er" (-RWSEM_WAITING_BIAS)
+		     : "a" (sem), "er" (-RWSEM_WAITING_BIAS),
+		       "i" (call_rwsem_downgrade_wake)
 		     : "memory", "cc");
 }
 

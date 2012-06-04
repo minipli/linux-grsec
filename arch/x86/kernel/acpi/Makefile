@@ -1,7 +1,13 @@
 subdir-				:= realmode
 
 obj-$(CONFIG_ACPI)		+= boot.o
-obj-$(CONFIG_ACPI_SLEEP)	+= sleep.o wakeup_rm.o wakeup_$(BITS).o
+obj-$(CONFIG_ACPI_SLEEP)	+= sleep.o
+
+ifdef CONFIG_CC_LTO
+lib-$(CONFIG_ACPI_SLEEP)	:= wakeup_rm.o wakeup_$(BITS).o
+else
+obj-$(CONFIG_ACPI_SLEEP)	+= wakeup_rm.o wakeup_$(BITS).o
+endif
 
 ifneq ($(CONFIG_ACPI_PROCESSOR),)
 obj-y				+= cstate.o

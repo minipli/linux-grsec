@@ -2,6 +2,15 @@
 #define _ASM_X86_VDSO_H
 
 #if defined CONFIG_X86_32 || defined CONFIG_COMPAT
+#ifdef CONFIG_CC_LTO
+#define VDSO32_PRELINK			0
+#define VDSO32_SYSENTER_RETURN		0x0430
+#define VDSO32_rt_sigreturn		0x0410
+#define VDSO32_sigreturn		0x0400
+#define VDSO32_vsyscall			0x0420
+#define VDSO32_vsyscall_eh_frame_size	0x040
+#define VDSO32_SYMBOL(base, name)	((void __user *)(VDSO32_##name - VDSO32_PRELINK + (unsigned long)(base)))
+#else
 extern const char VDSO32_PRELINK[];
 
 /*
@@ -13,6 +22,7 @@ extern const char VDSO32_PRELINK[];
 	extern const char VDSO32_##name[];				\
 	(void __user *)(VDSO32_##name - VDSO32_PRELINK + (unsigned long)(base)); \
 })
+#endif
 #endif
 
 /*

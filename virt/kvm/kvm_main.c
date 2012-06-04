@@ -2340,7 +2340,7 @@ static int kvm_cpu_hotplug(struct notifier_block *notifier, unsigned long val,
 }
 
 
-asmlinkage void kvm_spurious_fault(void)
+asmlinkage __used void kvm_spurious_fault(void)
 {
 	/* Fault while not rebooting.  We want the trace. */
 	BUG();

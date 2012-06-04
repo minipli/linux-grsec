@@ -3629,10 +3629,11 @@ static void vmx_disable_intercept_for_msr(u32 msr, bool longmode_only)
  * Note that host-state that does change is set elsewhere. E.g., host-state
  * that is set differently for each CPU is set in vmx_vcpu_load(), not here.
  */
+extern void kvm_vmx_return(void);
 static void vmx_set_constant_host_state(void)
 {
 	u32 low32, high32;
-	unsigned long tmpl;
+	unsigned long tmpl = (unsigned long)&kvm_vmx_return;
 	struct desc_ptr dt;
 
 	vmcs_writel(HOST_CR0, read_cr0() | X86_CR0_TS);  /* 22.2.3 */
@@ -3648,7 +3649,6 @@ static void vmx_set_constant_host_state(void)
 	native_store_idt(&dt);
 	vmcs_writel(HOST_IDTR_BASE, dt.address);   /* 22.2.4 */
 
-	asm("mov $.Lkvm_vmx_return, %0" : "=r"(tmpl));
 	vmcs_writel(HOST_RIP, ktla_ktva(tmpl)); /* 22.2.5 */
 
 	rdmsr(MSR_IA32_SYSENTER_CS, low32, high32);
@@ -6184,9 +6184,10 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		/* Enter guest mode */
 		"jne .Llaunched \n\t"
 		__ex(ASM_VMX_VMLAUNCH) "\n\t"
-		"jmp .Lkvm_vmx_return \n\t"
+		"jmp kvm_vmx_return \n\t"
 		".Llaunched: " __ex(ASM_VMX_VMRESUME) "\n\t"
-		".Lkvm_vmx_return: "
+		".global kvm_vmx_return\n\t"
+		"kvm_vmx_return: "
 
 #if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
 		"ljmp %[cs],$.Lkvm_vmx_return2\n\t"

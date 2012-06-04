@@ -30,10 +30,11 @@ do {								\
 								\
 	asm volatile(LOCK_PREFIX "   decl (%%eax)\n"		\
 		     "   jns 1f	\n"				\
-		     "   call " #fail_fn "\n"			\
+		     "   call %c2\n"				\
 		     "1:\n"					\
 		     : "=a" (dummy)				\
-		     : "a" (count)				\
+		     : "a" (count),				\
+		       "i" (fail_fn)				\
 		     : "memory", "ecx", "edx");			\
 } while (0)
 
@@ -79,10 +80,11 @@ do {								\
 								\
 	asm volatile(LOCK_PREFIX "   incl (%%eax)\n"		\
 		     "   jg	1f\n"				\
-		     "   call " #fail_fn "\n"			\
+		     "   call %c2\n"				\
 		     "1:\n"					\
 		     : "=a" (dummy)				\
-		     : "a" (count)				\
+		     : "a" (count),				\
+		       "i" (fail_fn)				\
 		     : "memory", "ecx", "edx");			\
 } while (0)
 

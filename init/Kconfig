@@ -947,6 +947,23 @@ config CC_OPTIMIZE_FOR_SIZE
 
 	  If unsure, say Y.
 
+config CC_LTO
+	bool "Enable Link-Time Optimization"
+	help
+	  Enabling this option will pass "-flto" to gcc resulting in a smaller
+	  and perhaps somewhat faster kernel at the expense of increased build
+	  time memory and CPU consumption.  It is also necessary for some of
+	  the gcc plugins.
+
+	  This requires at least gcc 4.7.
+
+	  If unsure, say N.
+
+config OBJLIB
+	string
+	default "lib" if CC_LTO
+	default "obj"
+
 config SYSCTL
 	bool
 

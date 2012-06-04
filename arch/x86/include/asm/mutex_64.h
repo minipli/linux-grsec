@@ -25,10 +25,11 @@ do {								\
 								\
 	asm volatile(LOCK_PREFIX "   decl (%%rdi)\n"		\
 		     "   jns 1f		\n"			\
-		     "   call " #fail_fn "\n"			\
+		     "   call %c2\n"				\
 		     "1:"					\
 		     : "=D" (dummy)				\
-		     : "D" (v)					\
+		     : "D" (v),					\
+		       "i" (fail_fn)				\
 		     : "rax", "rsi", "rdx", "rcx",		\
 		       "r8", "r9", "r10", "r11", "memory");	\
 } while (0)
@@ -68,10 +69,11 @@ do {								\
 								\
 	asm volatile(LOCK_PREFIX "   incl (%%rdi)\n"		\
 		     "   jg 1f\n"				\
-		     "   call " #fail_fn "\n"			\
+		     "   call %c2\n"				\
 		     "1:"					\
 		     : "=D" (dummy)				\
-		     : "D" (v)					\
+		     : "D" (v),					\
+		       "i" (fail_fn)				\
 		     : "rax", "rsi", "rdx", "rcx",		\
 		       "r8", "r9", "r10", "r11", "memory");	\
 } while (0)

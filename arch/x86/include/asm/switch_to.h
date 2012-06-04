@@ -46,7 +46,7 @@ do {									\
 		     "movl $1f,%[prev_ip]\n\t"	/* save    EIP   */	\
 		     "pushl %[next_ip]\n\t"	/* restore EIP   */	\
 		     __switch_canary					\
-		     "jmp __switch_to\n"	/* regparm call  */	\
+		     "jmp %c[__switch_to]\n"	/* regparm call  */	\
 		     "1:\t"						\
 		     "popl %%ebp\n\t"		/* restore EBP   */	\
 		     "popfl\n"			/* restore flags */	\
@@ -67,6 +67,7 @@ do {									\
 		       [next_ip]  "m" (next->thread.ip),		\
 		       							\
 		       /* regparm parameters for __switch_to(): */	\
+		       [__switch_to] "i" (__switch_to),			\
 		       [prev]     "a" (prev),				\
 		       [next]     "d" (next)				\
 									\
@@ -105,7 +106,7 @@ do {									\
 	asm volatile(SAVE_CONTEXT					  \
 	     "movq %%rsp,%P[threadrsp](%[prev])\n\t" /* save RSP */	  \
 	     "movq %P[threadrsp](%[next]),%%rsp\n\t" /* restore RSP */	  \
-	     "call __switch_to\n\t"					  \
+	     "call %c[__switch_to]\n\t"					  \
 	     "movq "__percpu_arg([current_task])",%%rsi\n\t"		  \
 	     __switch_canary						  \
 	     "movq "__percpu_arg([thread_info])",%%r8\n\t"		  \
@@ -116,6 +117,7 @@ do {									\
 	     : "=a" (last)					  	  \
 	       __switch_canary_oparam					  \
 	     : [next] "S" (next), [prev] "D" (prev),			  \
+	       [__switch_to] "i" (__switch_to),				  \
 	       [threadrsp] "i" (offsetof(struct task_struct, thread.sp)), \
 	       [ti_flags] "i" (offsetof(struct thread_info, flags)),	  \
 	       [_tif_fork] "i" (_TIF_FORK),			  	  \

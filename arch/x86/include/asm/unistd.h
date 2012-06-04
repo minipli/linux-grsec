@@ -58,7 +58,11 @@
  * What we want is __attribute__((weak,alias("sys_ni_syscall"))),
  * but it doesn't work on all toolchains, so we just do it by hand
  */
+#ifdef CONFIG_CC_LTO
+# define cond_syscall(x) void x(void) __attribute__((weak,alias("sys_ni_syscall")))
+#else
 # define cond_syscall(x) asm(".weak\t" #x "\n\t.set\t" #x ",sys_ni_syscall")
+#endif
 
 #else
 # ifdef __i386__

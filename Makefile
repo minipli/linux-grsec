@@ -358,9 +358,9 @@ CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 
 # Use LINUXINCLUDE when you must reference the include/ directory.
 # Needed to be compatible with the O= option
-LINUXINCLUDE    := -isystem arch/$(hdr-arch)/include \
-                   -isystem arch/$(hdr-arch)/include/generated -isystem include \
-                   -isystem include/generated \
+LINUXINCLUDE    := -I$(srctree)/arch/$(hdr-arch)/include \
+                   -Iarch/$(hdr-arch)/include/generated -Iinclude \
+                   $(if $(KBUILD_SRC), -I$(srctree)/include) \
                    -include $(srctree)/include/linux/kconfig.h
 
 KBUILD_CPPFLAGS := -D__KERNEL__
@@ -443,7 +443,7 @@ asm-generic:
 
 no-dot-config-targets := clean mrproper distclean \
 			 cscope gtags TAGS tags help %docs check% coccicheck \
-			 include/generated/linux/version.h headers_% archheaders archscripts \
+			 include/linux/version.h headers_% archheaders archscripts \
 			 kernelversion %src-pkg
 
 config-targets := 0
@@ -486,11 +486,11 @@ include $(srctree)/arch/$(SRCARCH)/Makefile
 export KBUILD_DEFCONFIG KBUILD_KCONFIG
 
 config: scripts_basic outputmakefile FORCE
-	$(Q)mkdir -p include/generated/linux include/config
+	$(Q)mkdir -p include/linux include/config
 	$(Q)$(MAKE) $(build)=scripts/kconfig $@
 
 %config: scripts_basic outputmakefile FORCE
-	$(Q)mkdir -p include/generated/linux include/config
+	$(Q)mkdir -p include/linux include/config
 	$(Q)$(MAKE) $(build)=scripts/kconfig $@
 
 else
@@ -590,8 +590,12 @@ COLORIZE_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/colorize_plugin.so
 ifdef CONFIG_PAX_SIZE_OVERFLOW
 SIZE_OVERFLOW_PLUGIN := -fplugin=$(objtree)/tools/gcc/size_overflow_plugin.so -DSIZE_OVERFLOW_PLUGIN
 endif
+ifdef CONFIG_CC_LTO
+LTO_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/lto_plugin.so -flto=jobserver -fno-fat-lto-objects
+endif
 GCC_PLUGINS_CFLAGS := $(CONSTIFY_PLUGIN_CFLAGS) $(STACKLEAK_PLUGIN_CFLAGS) $(KALLOCSTAT_PLUGIN_CFLAGS)
 GCC_PLUGINS_CFLAGS += $(KERNEXEC_PLUGIN_CFLAGS) $(CHECKER_PLUGIN_CFLAGS) $(COLORIZE_PLUGIN_CFLAGS) $(SIZE_OVERFLOW_PLUGIN)
+GCC_PLUGINS_CFLAGS += $(LTO_PLUGIN_CFLAGS)
 GCC_PLUGINS_AFLAGS := $(KERNEXEC_PLUGIN_AFLAGS)
 export CONSTIFY_PLUGIN STACKLEAK_PLUGIN KERNEXEC_PLUGIN CHECKER_PLUGIN SIZE_OVERFLOW_PLUGIN
 ifeq ($(KBUILD_EXTMOD),)
@@ -770,7 +774,11 @@ core-y		:= $(patsubst %/, %/built-in.o, $(core-y))
 drivers-y	:= $(patsubst %/, %/built-in.o, $(drivers-y))
 net-y		:= $(patsubst %/, %/built-in.o, $(net-y))
 libs-y1		:= $(patsubst %/, %/lib.a, $(libs-y))
+ifdef CONFIG_CC_LTO
+libs-y2		:= lib/built-in.o arch/$(SRCARCH)/lib/built-in.o
+else
 libs-y2		:= $(patsubst %/, %/built-in.o, $(libs-y))
+endif
 libs-y		:= $(libs-y1) $(libs-y2)
 
 # Build vmlinux
@@ -808,11 +816,20 @@ export KBUILD_VMLINUX_OBJS := $(vmlinux-all)
 
 # Rule to link vmlinux - also used during CONFIG_KALLSYMS
 # May be overridden by arch/$(ARCH)/Makefile
+ifdef CONFIG_CC_LTO
+quiet_cmd_vmlinux__ ?= LTO     $@
+      cmd_vmlinux__ ?= $(CC) $(patsubst %,-Wl$(comma)%,$(LDFLAGS) $(LDFLAGS_vmlinux)) -o $@ \
+      -nostdlib -O2 -ffreestanding -fwhole-program -fuse-linker-plugin -flto-partition=balanced \
+      $(KBUILD_CFLAGS) $(GCC_PLUGINS_CFLAGS) -fno-unit-at-a-time -Wl,-T,$(vmlinux-lds) \
+      -Wl,--start-group $(vmlinux-init) $(filter-out lib/lib.a, $(vmlinux-main)) -Wl,--end-group lib/lib.a \
+      $(filter-out $(vmlinux-lds) $(vmlinux-init) $(vmlinux-main) vmlinux.o FORCE ,$^)
+else
 quiet_cmd_vmlinux__ ?= LD      $@
       cmd_vmlinux__ ?= $(LD) $(LDFLAGS) $(LDFLAGS_vmlinux) -o $@ \
       -T $(vmlinux-lds) $(vmlinux-init)                          \
       --start-group $(vmlinux-main) --end-group                  \
       $(filter-out $(vmlinux-lds) $(vmlinux-init) $(vmlinux-main) vmlinux.o FORCE ,$^)
+endif
 
 # Generate new vmlinux version
 quiet_cmd_vmlinux_version = GEN     .version
@@ -839,7 +856,7 @@ define rule_vmlinux__
 	:
 	$(if $(CONFIG_KALLSYMS),,+$(call cmd,vmlinux_version))
 
-	$(call cmd,vmlinux__)
+	+$(call cmd,vmlinux__)
 	$(Q)echo 'cmd_$@ := $(cmd_vmlinux__)' > $(@D)/.$(@F).cmd
 
 	$(Q)$(if $($(quiet)cmd_sysmap),                                      \
@@ -1018,14 +1035,12 @@ ifneq ($(KBUILD_SRC),)
 		echo "  in the '$(srctree)' directory.";\
 		/bin/false; \
 	fi;
-	$(Q)for dir in $(srctree)/include/* ; do ln -fsn $$dir include/`basename $$dir` ; done
-	$(Q)ln -fsn $(srctree)/arch/$(SRCARCH)/include/asm arch/$(SRCARCH)/include;
 endif
 
 # prepare2 creates a makefile if using a separate output directory
 prepare2: prepare3 outputmakefile asm-generic
 
-prepare1: prepare2 include/generated/linux/version.h include/generated/utsrelease.h \
+prepare1: prepare2 include/linux/version.h include/generated/utsrelease.h \
                    include/config/auto.conf
 	$(cmd_crmodverdir)
 
@@ -1059,7 +1074,7 @@ define filechk_version.h
 	echo '#define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))';)
 endef
 
-include/generated/linux/version.h: $(srctree)/Makefile FORCE
+include/linux/version.h: $(srctree)/Makefile FORCE
 	$(call filechk,version.h)
 
 include/generated/utsrelease.h: include/config/kernel.release FORCE
@@ -1104,7 +1119,7 @@ PHONY += archscripts
 archscripts:
 
 PHONY += __headers
-__headers: include/generated/linux/version.h scripts_basic asm-generic archheaders archscripts FORCE
+__headers: include/linux/version.h scripts_basic asm-generic archheaders archscripts FORCE
 	$(Q)$(MAKE) $(build)=scripts build_unifdef
 
 PHONY += headers_install_all
@@ -1219,7 +1234,7 @@ CLEAN_FILES +=	vmlinux System.map \
 MRPROPER_DIRS  += include/config usr/include include/generated          \
                   arch/*/include/generated
 MRPROPER_FILES += .config .config.old .version .old_version             \
-                  include/generated/linux/version.h                               \
+                  include/linux/version.h                               \
 		  Module.symvers tags TAGS cscope* GPATH GTAGS GRTAGS GSYMS
 
 # clean - Delete most, but leave enough to build external modules

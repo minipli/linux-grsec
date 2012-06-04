@@ -2,7 +2,12 @@
 # Makefile for the ia32 kernel emulation subsystem.
 #
 
-obj-$(CONFIG_IA32_EMULATION) := ia32entry.o sys_ia32.o ia32_signal.o
+obj-$(CONFIG_IA32_EMULATION) := sys_ia32.o ia32_signal.o
+ifdef CONFIG_CC_LTO
+lib-$(CONFIG_IA32_EMULATION) := ia32entry.o
+else
+obj-$(CONFIG_IA32_EMULATION) += ia32entry.o
+endif
 obj-$(CONFIG_IA32_EMULATION) += nosyscall.o syscall_ia32.o
 
 sysv-$(CONFIG_SYSVIPC) := ipc32.o

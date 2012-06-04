@@ -254,7 +254,7 @@ static DEFINE_PER_CPU(unsigned long, cpu_loops_per_jiffy) = { 0 };
  * Architectures should override this function if a faster calibration
  * method is available.
  */
-unsigned long __attribute__((weak)) __cpuinit calibrate_delay_is_known(void)
+unsigned long __weak __cpuinit calibrate_delay_is_known(void)
 {
 	return 0;
 }

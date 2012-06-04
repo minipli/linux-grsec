@@ -311,7 +311,7 @@ int is_valid_bugaddr(unsigned long ip)
 }
 
 #ifdef CONFIG_PAX_MEMORY_STACKLEAK
-void pax_check_alloca(unsigned long size)
+__used void pax_check_alloca(unsigned long size)
 {
 	unsigned long sp = (unsigned long)&sp, stack_start, stack_end;
 	unsigned cpu, used;

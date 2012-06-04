@@ -1908,11 +1908,15 @@ static int simplify_symbols(struct module *mod, const struct load_info *info)
 
 		switch (sym[i].st_shndx) {
 		case SHN_COMMON:
+#ifdef CONFIG_CC_LTO
+			if (!strcmp(name, "__gnu_lto_v1") || !strcmp(name, "__gnu_lto_slim"))
+				break;
+#endif
 			/* We compiled with -fno-common.  These are not
 			   supposed to happen.  */
 			pr_debug("Common symbol: %s\n", name);
-			printk("%s: please compile with -fno-common\n",
-			       mod->name);
+			printk("%s: please compile with -fno-common [%s]\n",
+			       mod->name), name;
 			ret = -ENOEXEC;
 			break;
 

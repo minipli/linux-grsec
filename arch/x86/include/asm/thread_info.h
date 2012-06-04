@@ -195,7 +195,11 @@ static __always_inline struct thread_info *current_thread_info(void)
 #ifndef __ASSEMBLY__
 
 /* how to get the current stack pointer from C */
+#ifdef CONFIG_CC_LTO
+#define current_stack_pointer ({ unsigned long esp; asm("mov %%esp, %0" : "=r"(esp)); esp; })
+#else
 register unsigned long current_stack_pointer asm("esp") __used;
+#endif
 
 #endif
 
@@ -209,7 +213,11 @@ register unsigned long current_stack_pointer asm("esp") __used;
 DECLARE_PER_CPU(unsigned long, kernel_stack);
 
 /* how to get the current stack pointer from C */
+#ifdef CONFIG_CC_LTO
+#define current_stack_pointer ({ unsigned long rsp; asm("mov %%rsp, %0" : "=r"(rsp)); rsp; })
+#else
 register unsigned long current_stack_pointer asm("rsp") __used;
+#endif
 #endif
 
 #endif /* !X86_32 */

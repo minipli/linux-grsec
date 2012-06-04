@@ -454,7 +454,7 @@ static inline void __ftrace_enabled_restore(int enabled)
 }
 
 #ifndef HAVE_ARCH_CALLER_ADDR
-# ifdef CONFIG_FRAME_POINTER
+# if defined(CONFIG_FRAME_POINTER) && !defined(CONFIG_CC_LTO)
 #  define CALLER_ADDR0 ((unsigned long)__builtin_return_address(0))
 #  define CALLER_ADDR1 ((unsigned long)__builtin_return_address(1))
 #  define CALLER_ADDR2 ((unsigned long)__builtin_return_address(2))

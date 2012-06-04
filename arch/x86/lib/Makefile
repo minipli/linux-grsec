@@ -24,7 +24,13 @@ lib-$(CONFIG_SMP) += rwlock.o
 lib-$(CONFIG_RWSEM_XCHGADD_ALGORITHM) += rwsem.o
 lib-$(CONFIG_INSTRUCTION_DECODER) += insn.o inat.o
 
-obj-y += msr.o msr-reg.o msr-reg-export.o
+obj-y += msr.o msr-reg-export.o
+
+ifdef CONFIG_CC_LTO
+lib-y += msr-reg.o
+else
+obj-y += msr-reg.o
+endif
 
 ifeq ($(CONFIG_X86_32),y)
         obj-y += atomic64_32.o

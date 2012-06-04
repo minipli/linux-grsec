@@ -615,6 +615,8 @@ static int __kprobes kprobe_handler(struct pt_regs *regs)
 	return 0;
 }
 
+static __used __kprobes void *trampoline_handler(struct pt_regs *regs);
+
 /*
  * When a retprobed function returns, this code saves registers and
  * calls trampoline_handler() runs, which calls the kretprobe's handler.
@@ -626,32 +628,32 @@ static void __used __kprobes kretprobe_trampoline_holder(void)
 			"kretprobe_trampoline: \n"
 #ifdef CONFIG_X86_64
 			/* We don't bother saving the ss register */
-			"	pushq %rsp\n"
+			"	pushq %%rsp\n"
 			"	pushfq\n"
 			SAVE_REGS_STRING
-			"	movq %rsp, %rdi\n"
-			"	call trampoline_handler\n"
+			"	movq %%rsp, %%rdi\n"
+			"	call %c0\n"
 			/* Replace saved sp with true return address. */
-			"	movq %rax, 152(%rsp)\n"
+			"	movq %%rax, 152(%%rsp)\n"
 			RESTORE_REGS_STRING
 			"	popfq\n"
 #ifdef KERNEXEC_PLUGIN
-			"	btsq $63,(%rsp)\n"
+			"	btsq $63,(%%rsp)\n"
 #endif
 #else
 			"	pushf\n"
 			SAVE_REGS_STRING
-			"	movl %esp, %eax\n"
-			"	call trampoline_handler\n"
+			"	movl %%esp, %%eax\n"
+			"	call %c0\n"
 			/* Move flags to cs */
-			"	movl 56(%esp), %edx\n"
-			"	movl %edx, 52(%esp)\n"
+			"	movl 56(%%esp), %%edx\n"
+			"	movl %%edx, 52(%%esp)\n"
 			/* Replace saved flags with true return address. */
-			"	movl %eax, 56(%esp)\n"
+			"	movl %%eax, 56(%%esp)\n"
 			RESTORE_REGS_STRING
 			"	popf\n"
 #endif
-			"	ret\n");
+			"	ret\n" :: "i"(trampoline_handler));
 }
 
 /*

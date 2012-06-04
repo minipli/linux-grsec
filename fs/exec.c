@@ -1993,7 +1993,7 @@ int object_is_on_stack(const void *obj, unsigned long len)
 	const void * const stack = task_stack_page(current);
 	const void * const stackend = stack + THREAD_SIZE;
 
-#if defined(CONFIG_FRAME_POINTER) && defined(CONFIG_X86)
+#if defined(CONFIG_FRAME_POINTER) && defined(CONFIG_X86) && !defined(CONFIG_CC_LTO)
 	const void *frame = NULL;
 	const void *oldframe;
 #endif
@@ -2007,7 +2007,7 @@ int object_is_on_stack(const void *obj, unsigned long len)
 	if (obj < stack || stackend < obj + len)
 		return -1;
 
-#if defined(CONFIG_FRAME_POINTER) && defined(CONFIG_X86)
+#if defined(CONFIG_FRAME_POINTER) && defined(CONFIG_X86) && !defined(CONFIG_CC_LTO)
 	oldframe = __builtin_frame_address(1);
 	if (oldframe)
 		frame = __builtin_frame_address(2);
@@ -2044,7 +2044,7 @@ __noreturn void pax_report_usercopy(const void *ptr, unsigned long len, bool to,
 #endif
 
 #ifdef CONFIG_PAX_MEMORY_STACKLEAK
-void pax_track_stack(void)
+__used void pax_track_stack(void)
 {
 	unsigned long sp = (unsigned long)&sp;
 	if (sp < current_thread_info()->lowest_stack &&

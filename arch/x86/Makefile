@@ -154,6 +154,11 @@ head-y += arch/x86/kernel/init_task.o
 
 libs-y  += arch/x86/lib/
 
+ifdef CONFIG_CC_LTO
+libs-y  += arch/x86/kernel/ arch/x86/crypto/ arch/x86/net/ arch/x86/power/
+libs-y  += arch/x86/ia32/ arch/x86/kernel/acpi/ arch/x86/platform/efi/ arch/x86/vdso/
+endif
+
 # See arch/x86/Kbuild for content of core part of the kernel
 core-y += arch/x86/
 
