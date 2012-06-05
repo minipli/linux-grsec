@@ -235,6 +235,10 @@ static inline unsigned long __must_check
 copy_to_user(void __user *to, const void *from, unsigned long n)
 {
 	might_fault();
+
+	if ((long)n < 0)
+		return n;
+
 	if (access_ok(VERIFY_WRITE, to, n))
 		n = __copy_to_user(to, from, n);
 	return n;
@@ -260,6 +264,9 @@ copy_to_user(void __user *to, const void *from, unsigned long n)
 static inline unsigned long __must_check
 __copy_from_user(void *to, const void __user *from, unsigned long n)
 {
+	if ((long)n < 0)
+		return n;
+
 	if (__builtin_constant_p(n) && (n <= 256))
 		return uaccess.copy_from_user_small(n, from, to);
 	else
@@ -294,6 +301,10 @@ copy_from_user(void *to, const void __user *from, unsigned long n)
 	unsigned int sz = __compiletime_object_size(to);
 
 	might_fault();
+
+	if ((long)n < 0)
+		return n;
+
 	if (unlikely(sz != -1 && sz < n)) {
 		copy_from_user_overflow();
 		return n;

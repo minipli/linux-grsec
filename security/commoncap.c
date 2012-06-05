@@ -29,6 +29,7 @@
 #include <linux/securebits.h>
 #include <linux/user_namespace.h>
 #include <linux/personality.h>
+#include <net/sock.h>
 
 /*
  * If a non-root user executes a setuid-root binary in
@@ -574,6 +575,9 @@ skip:
 int cap_bprm_secureexec(struct linux_binprm *bprm)
 {
 	const struct cred *cred = current_cred();
+
+	if (gr_acl_enable_at_secure())
+		return 1;
 
 	if (cred->uid != 0) {
 		if (bprm->cap_effective)
