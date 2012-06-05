@@ -139,9 +139,9 @@ int oprofilefs_create_ulong(struct super_block * sb, struct dentry * root,
 int oprofilefs_create_ro_ulong(struct super_block * sb, struct dentry * root,
 	char const * name, ulong * val);
  
-/** Create a file for read-only access to an atomic_t. */
+/** Create a file for read-only access to an atomic_unchecked_t. */
 int oprofilefs_create_ro_atomic(struct super_block * sb, struct dentry * root,
-	char const * name, atomic_t * val);
+	char const * name, atomic_unchecked_t * val);
  
 /** create a directory */
 struct dentry * oprofilefs_mkdir(struct super_block * sb, struct dentry * root,
@@ -163,7 +163,7 @@ ssize_t oprofilefs_ulong_to_user(unsigned long val, char __user * buf, size_t co
  * Read an ASCII string for a number from a userspace buffer and fill *val on success.
  * Returns 0 on success, < 0 on error.
  */
-int oprofilefs_ulong_from_user(unsigned long * val, char const __user * buf, size_t count);
+int oprofilefs_ulong_from_user(unsigned long * val, char const __user * buf, size_t count) __size_overflow(3);
 
 /** lock for read/write safety */
 extern raw_spinlock_t oprofilefs_lock;
