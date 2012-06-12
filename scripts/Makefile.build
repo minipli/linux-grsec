@@ -62,7 +62,7 @@ endif
 ifdef KBUILD_ENABLE_EXTRA_GCC_CHECKS
 warning-  := $(empty)
 
-warning-1 := -Wextra -Wunused -Wno-unused-parameter
+warning-1 := -Wextra -Wunused -Wno-unused-parameter -Wno-missing-field-initializers
 warning-1 += -Wmissing-declarations
 warning-1 += -Wmissing-format-attribute
 warning-1 += -Wmissing-prototypes
@@ -111,7 +111,7 @@ endif
 endif
 
 # Do not include host rules unless needed
-ifneq ($(hostprogs-y)$(hostprogs-m),)
+ifneq ($(hostprogs-y)$(hostprogs-m)$(hostlibs-y)$(hostlibs-m),)
 include scripts/Makefile.host
 endif
 
