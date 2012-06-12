@@ -432,7 +432,7 @@ static int init_pmd(struct dm_pool_metadata *pmd,
 
 	pmd->info.tm = tm;
 	pmd->info.levels = 2;
-	pmd->info.value_type.context = pmd->data_sm;
+	pmd->info.value_type.context = (dm_space_map_no_const *)pmd->data_sm;
 	pmd->info.value_type.size = sizeof(__le64);
 	pmd->info.value_type.inc = data_block_inc;
 	pmd->info.value_type.dec = data_block_dec;
@@ -451,7 +451,7 @@ static int init_pmd(struct dm_pool_metadata *pmd,
 
 	pmd->bl_info.tm = tm;
 	pmd->bl_info.levels = 1;
-	pmd->bl_info.value_type.context = pmd->data_sm;
+	pmd->bl_info.value_type.context = (dm_space_map_no_const *)pmd->data_sm;
 	pmd->bl_info.value_type.size = sizeof(__le64);
 	pmd->bl_info.value_type.inc = data_block_inc;
 	pmd->bl_info.value_type.dec = data_block_dec;
