@@ -29,6 +29,7 @@
 #include <linux/tty_driver.h>
 #include <linux/tty_flip.h>
 #include <linux/uaccess.h>
+#include <asm/local.h>
 
 #include "tty.h"
 #include "network.h"
@@ -51,7 +52,7 @@ struct ipw_tty {
 	int tty_type;
 	struct ipw_network *network;
 	struct tty_struct *linux_tty;
-	int open_count;
+	local_t open_count;
 	unsigned int control_lines;
 	struct mutex ipw_tty_mutex;
 	int tx_bytes_queued;
@@ -117,10 +118,10 @@ static int ipw_open(struct tty_struct *linux_tty, struct file *filp)
 		mutex_unlock(&tty->ipw_tty_mutex);
 		return -ENODEV;
 	}
-	if (tty->open_count == 0)
+	if (local_read(&tty->open_count) == 0)
 		tty->tx_bytes_queued = 0;
 
-	tty->open_count++;
+	local_inc(&tty->open_count);
 
 	tty->linux_tty = linux_tty;
 	linux_tty->driver_data = tty;
@@ -136,9 +137,7 @@ static int ipw_open(struct tty_struct *linux_tty, struct file *filp)
 
 static void do_ipw_close(struct ipw_tty *tty)
 {
-	tty->open_count--;
-
-	if (tty->open_count == 0) {
+	if (local_dec_return(&tty->open_count) == 0) {
 		struct tty_struct *linux_tty = tty->linux_tty;
 
 		if (linux_tty != NULL) {
@@ -159,7 +158,7 @@ static void ipw_hangup(struct tty_struct *linux_tty)
 		return;
 
 	mutex_lock(&tty->ipw_tty_mutex);
-	if (tty->open_count == 0) {
+	if (local_read(&tty->open_count) == 0) {
 		mutex_unlock(&tty->ipw_tty_mutex);
 		return;
 	}
@@ -188,7 +187,7 @@ void ipwireless_tty_received(struct ipw_tty *tty, unsigned char *data,
 		return;
 	}
 
-	if (!tty->open_count) {
+	if (!local_read(&tty->open_count)) {
 		mutex_unlock(&tty->ipw_tty_mutex);
 		return;
 	}
@@ -230,7 +229,7 @@ static int ipw_write(struct tty_struct *linux_tty,
 		return -ENODEV;
 
 	mutex_lock(&tty->ipw_tty_mutex);
-	if (!tty->open_count) {
+	if (!local_read(&tty->open_count)) {
 		mutex_unlock(&tty->ipw_tty_mutex);
 		return -EINVAL;
 	}
@@ -270,7 +269,7 @@ static int ipw_write_room(struct tty_struct *linux_tty)
 	if (!tty)
 		return -ENODEV;
 
-	if (!tty->open_count)
+	if (!local_read(&tty->open_count))
 		return -EINVAL;
 
 	room = IPWIRELESS_TX_QUEUE_SIZE - tty->tx_bytes_queued;
@@ -312,7 +311,7 @@ static int ipw_chars_in_buffer(struct tty_struct *linux_tty)
 	if (!tty)
 		return 0;
 
-	if (!tty->open_count)
+	if (!local_read(&tty->open_count))
 		return 0;
 
 	return tty->tx_bytes_queued;
@@ -393,7 +392,7 @@ static int ipw_tiocmget(struct tty_struct *linux_tty)
 	if (!tty)
 		return -ENODEV;
 
-	if (!tty->open_count)
+	if (!local_read(&tty->open_count))
 		return -EINVAL;
 
 	return get_control_lines(tty);
@@ -409,7 +408,7 @@ ipw_tiocmset(struct tty_struct *linux_tty,
 	if (!tty)
 		return -ENODEV;
 
-	if (!tty->open_count)
+	if (!local_read(&tty->open_count))
 		return -EINVAL;
 
 	return set_control_lines(tty, set, clear);
@@ -423,7 +422,7 @@ static int ipw_ioctl(struct tty_struct *linux_tty,
 	if (!tty)
 		return -ENODEV;
 
-	if (!tty->open_count)
+	if (!local_read(&tty->open_count))
 		return -EINVAL;
 
 	/* FIXME: Exactly how is the tty object locked here .. */
@@ -572,7 +571,7 @@ void ipwireless_tty_free(struct ipw_tty *tty)
 				   against a parallel ioctl etc */
 				mutex_lock(&ttyj->ipw_tty_mutex);
 			}
-			while (ttyj->open_count)
+			while (local_read(&ttyj->open_count))
 				do_ipw_close(ttyj);
 			ipwireless_disassociate_network_ttys(network,
 							     ttyj->channel_idx);
