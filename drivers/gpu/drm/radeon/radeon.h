@@ -250,7 +250,7 @@ struct radeon_fence_driver {
 	uint32_t			scratch_reg;
 	uint64_t			gpu_addr;
 	volatile uint32_t		*cpu_addr;
-	atomic_t			seq;
+	atomic_unchecked_t		seq;
 	uint32_t			last_seq;
 	unsigned long			last_jiffies;
 	unsigned long			last_timeout;
@@ -752,7 +752,7 @@ struct r600_blit_cp_primitives {
 			     int x2, int y2);
 	void (*draw_auto)(struct radeon_device *rdev);
 	void (*set_default_state)(struct radeon_device *rdev);
-};
+} __no_const;
 
 struct r600_blit {
 	struct mutex		mutex;
@@ -1201,7 +1201,7 @@ struct radeon_asic {
 	void (*pre_page_flip)(struct radeon_device *rdev, int crtc);
 	u32 (*page_flip)(struct radeon_device *rdev, int crtc, u64 crtc_base);
 	void (*post_page_flip)(struct radeon_device *rdev, int crtc);
-};
+} __no_const;
 
 /*
  * Asic structures
