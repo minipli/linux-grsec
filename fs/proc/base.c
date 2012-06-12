@@ -109,6 +109,14 @@ struct pid_entry {
 	union proc_op op;
 };
 
+struct getdents_callback {
+	struct linux_dirent __user * current_dir;
+	struct linux_dirent __user * previous;
+	struct file * file;
+	int count;
+	int error;
+};
+
 #define NOD(NAME, MODE, IOP, FOP, OP) {			\
 	.name = (NAME),					\
 	.len  = sizeof(NAME) - 1,			\
@@ -213,6 +221,9 @@ static int proc_pid_cmdline(struct task_struct *task, char * buffer)
 	if (!mm->arg_end)
 		goto out_mm;	/* Shh! No looking before we're done */
 
+	if (gr_acl_handle_procpidmem(task))
+		goto out_mm;
+
  	len = mm->arg_end - mm->arg_start;
  
 	if (len > PAGE_SIZE)
@@ -240,12 +251,28 @@ out:
 	return res;
 }
 
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+#define PAX_RAND_FLAGS(_mm) (_mm != NULL && _mm != current->mm && \
+			     (_mm->pax_flags & MF_PAX_RANDMMAP || \
+			      _mm->pax_flags & MF_PAX_SEGMEXEC))
+#endif
+
 static int proc_pid_auxv(struct task_struct *task, char *buffer)
 {
 	struct mm_struct *mm = mm_for_maps(task);
 	int res = PTR_ERR(mm);
 	if (mm && !IS_ERR(mm)) {
 		unsigned int nwords = 0;
+
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+		/* allow if we're currently ptracing this task */
+		if (PAX_RAND_FLAGS(mm) &&
+		    (!(task->ptrace & PT_PTRACED) || (task->parent != current))) {
+			mmput(mm);
+			return 0;
+		}
+#endif
+
 		do {
 			nwords += 2;
 		} while (mm->saved_auxv[nwords - 2] != 0); /* AT_NULL */
@@ -259,7 +286,7 @@ static int proc_pid_auxv(struct task_struct *task, char *buffer)
 }
 
 
-#ifdef CONFIG_KALLSYMS
+#if defined(CONFIG_KALLSYMS) && !defined(CONFIG_GRKERNSEC_HIDESYM)
 /*
  * Provides a wchan file via kallsyms in a proper one-value-per-file format.
  * Returns the resolved symbol.  If that fails, simply return the address.
@@ -298,7 +325,7 @@ static void unlock_trace(struct task_struct *task)
 	mutex_unlock(&task->signal->cred_guard_mutex);
 }
 
-#ifdef CONFIG_STACKTRACE
+#if defined(CONFIG_STACKTRACE) && !defined(CONFIG_GRKERNSEC_HIDESYM)
 
 #define MAX_STACK_TRACE_DEPTH	64
 
@@ -489,7 +516,7 @@ static int proc_pid_limits(struct task_struct *task, char *buffer)
 	return count;
 }
 
-#ifdef CONFIG_HAVE_ARCH_TRACEHOOK
+#if defined(CONFIG_HAVE_ARCH_TRACEHOOK) && !defined(CONFIG_GRKERNSEC_PROC_MEMMAP)
 static int proc_pid_syscall(struct task_struct *task, char *buffer)
 {
 	long nr;
@@ -518,7 +545,7 @@ static int proc_pid_syscall(struct task_struct *task, char *buffer)
 /************************************************************************/
 
 /* permission checks */
-static int proc_fd_access_allowed(struct inode *inode)
+static int proc_fd_access_allowed(struct inode *inode, unsigned int log)
 {
 	struct task_struct *task;
 	int allowed = 0;
@@ -528,7 +555,10 @@ static int proc_fd_access_allowed(struct inode *inode)
 	 */
 	task = get_proc_task(inode);
 	if (task) {
-		allowed = ptrace_may_access(task, PTRACE_MODE_READ);
+		if (log)
+			allowed = ptrace_may_access(task, PTRACE_MODE_READ);
+		else
+			allowed = ptrace_may_access(task, PTRACE_MODE_READ | PTRACE_MODE_NOAUDIT);
 		put_task_struct(task);
 	}
 	return allowed;
@@ -566,10 +596,35 @@ static bool has_pid_permissions(struct pid_namespace *pid,
 				 struct task_struct *task,
 				 int hide_pid_min)
 {
+	if (gr_pid_is_chrooted(task) || gr_check_hidden_task(task))
+		return false;
+
+#if defined(CONFIG_GRKERNSEC_PROC_USER) || defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+	rcu_read_lock();
+	{
+		const struct cred *tmpcred = current_cred();
+		const struct cred *cred = __task_cred(task);
+
+		if (!tmpcred->uid || (tmpcred->uid == cred->uid)
+#ifdef CONFIG_GRKERNSEC_PROC_USERGROUP
+			|| in_group_p(CONFIG_GRKERNSEC_PROC_GID)
+#endif
+		) {
+			rcu_read_unlock();
+			return true;
+		}
+	}
+	rcu_read_unlock();
+
+	if (!pid->hide_pid)
+		return false;
+#endif
+
 	if (pid->hide_pid < hide_pid_min)
 		return true;
 	if (in_group_p(pid->pid_gid))
 		return true;
+
 	return ptrace_may_access(task, PTRACE_MODE_READ);
 }
 
@@ -587,7 +642,11 @@ static int proc_pid_permission(struct inode *inode, int mask)
 	put_task_struct(task);
 
 	if (!has_perms) {
+#if defined(CONFIG_GRKERNSEC_PROC_USER) || defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+		{
+#else
 		if (pid->hide_pid == 2) {
+#endif
 			/*
 			 * Let's make getdents(), stat(), and open()
 			 * consistent with each other.  If a process
@@ -702,6 +761,10 @@ static int mem_open(struct inode* inode, struct file* file)
 	file->f_mode |= FMODE_UNSIGNED_OFFSET;
 	file->private_data = mm;
 
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	file->f_version = current->exec_id;
+#endif
+
 	return 0;
 }
 
@@ -712,6 +775,17 @@ static ssize_t mem_rw(struct file *file, char __user *buf,
 	unsigned long addr = *ppos;
 	ssize_t copied;
 	char *page;
+
+#ifdef CONFIG_GRKERNSEC
+	if (write)
+		return -EPERM;
+#endif
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	if (file->f_version != current->exec_id) {
+		gr_log_badprocpid("mem");
+		return 0;
+	}
+#endif
 
 	if (!mm)
 		return 0;
@@ -812,6 +886,9 @@ static ssize_t environ_read(struct file *file, char __user *buf,
 
 	if (!task)
 		goto out_no_task;
+
+	if (gr_acl_handle_procpidmem(task))
+		goto out;
 
 	ret = -ENOMEM;
 	page = (char *)__get_free_page(GFP_TEMPORARY);
@@ -1433,7 +1510,7 @@ static void *proc_pid_follow_link(struct dentry *dentry, struct nameidata *nd)
 	path_put(&nd->path);
 
 	/* Are we allowed to snoop on the tasks file descriptors? */
-	if (!proc_fd_access_allowed(inode))
+	if (!proc_fd_access_allowed(inode, 0))
 		goto out;
 
 	error = PROC_I(inode)->op.proc_get_link(dentry, &nd->path);
@@ -1472,8 +1549,18 @@ static int proc_pid_readlink(struct dentry * dentry, char __user * buffer, int b
 	struct path path;
 
 	/* Are we allowed to snoop on the tasks file descriptors? */
-	if (!proc_fd_access_allowed(inode))
-		goto out;
+	/* logging this is needed for learning on chromium to work properly,
+	   but we don't want to flood the logs from 'ps' which does a readlink
+	   on /proc/fd/2 of tasks in the listing, nor do we want 'ps' to learn
+	   CAP_SYS_PTRACE as it's not necessary for its basic functionality
+	 */
+	if (dentry->d_name.name[0] == '2' && dentry->d_name.name[1] == '\0') {
+		if (!proc_fd_access_allowed(inode,0))
+			goto out;
+	} else {
+		if (!proc_fd_access_allowed(inode,1))
+			goto out;
+	}
 
 	error = PROC_I(inode)->op.proc_get_link(dentry, &path);
 	if (error)
@@ -1538,7 +1625,11 @@ struct inode *proc_pid_make_inode(struct super_block * sb, struct task_struct *t
 		rcu_read_lock();
 		cred = __task_cred(task);
 		inode->i_uid = cred->euid;
+#ifdef CONFIG_GRKERNSEC_PROC_USERGROUP
+		inode->i_gid = CONFIG_GRKERNSEC_PROC_GID;
+#else
 		inode->i_gid = cred->egid;
+#endif
 		rcu_read_unlock();
 	}
 	security_task_to_inode(task, inode);
@@ -1574,10 +1665,19 @@ int pid_getattr(struct vfsmount *mnt, struct dentry *dentry, struct kstat *stat)
 			return -ENOENT;
 		}
 		if ((inode->i_mode == (S_IFDIR|S_IRUGO|S_IXUGO)) ||
+#ifdef CONFIG_GRKERNSEC_PROC_USER
+		    (inode->i_mode == (S_IFDIR|S_IRUSR|S_IXUSR)) ||
+#elif defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+		    (inode->i_mode == (S_IFDIR|S_IRUSR|S_IRGRP|S_IXUSR|S_IXGRP)) ||
+#endif
 		    task_dumpable(task)) {
 			cred = __task_cred(task);
 			stat->uid = cred->euid;
+#ifdef CONFIG_GRKERNSEC_PROC_USERGROUP
+			stat->gid = CONFIG_GRKERNSEC_PROC_GID;
+#else
 			stat->gid = cred->egid;
+#endif
 		}
 	}
 	rcu_read_unlock();
@@ -1615,11 +1715,20 @@ int pid_revalidate(struct dentry *dentry, struct nameidata *nd)
 
 	if (task) {
 		if ((inode->i_mode == (S_IFDIR|S_IRUGO|S_IXUGO)) ||
+#ifdef CONFIG_GRKERNSEC_PROC_USER
+		    (inode->i_mode == (S_IFDIR|S_IRUSR|S_IXUSR)) ||
+#elif defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+		    (inode->i_mode == (S_IFDIR|S_IRUSR|S_IRGRP|S_IXUSR|S_IXGRP)) ||
+#endif
 		    task_dumpable(task)) {
 			rcu_read_lock();
 			cred = __task_cred(task);
 			inode->i_uid = cred->euid;
+#ifdef CONFIG_GRKERNSEC_PROC_USERGROUP
+			inode->i_gid = CONFIG_GRKERNSEC_PROC_GID;
+#else
 			inode->i_gid = cred->egid;
+#endif
 			rcu_read_unlock();
 		} else {
 			inode->i_uid = 0;
@@ -1737,7 +1846,8 @@ static int proc_fd_info(struct inode *inode, struct path *path, char *info)
 	int fd = proc_fd(inode);
 
 	if (task) {
-		files = get_files_struct(task);
+		if (!gr_acl_handle_procpidmem(task))
+			files = get_files_struct(task);
 		put_task_struct(task);
 	}
 	if (files) {
@@ -2335,11 +2445,21 @@ static const struct file_operations proc_map_files_operations = {
  */
 static int proc_fd_permission(struct inode *inode, int mask)
 {
+	struct task_struct *task;
 	int rv = generic_permission(inode, mask);
-	if (rv == 0)
-		return 0;
+
 	if (task_pid(current) == proc_pid(inode))
 		rv = 0;
+
+	task = get_proc_task(inode);
+	if (task == NULL)
+		return rv;
+
+	if (gr_acl_handle_procpidmem(task))
+		rv = -EACCES;
+
+	put_task_struct(task);
+
 	return rv;
 }
 
@@ -2449,6 +2569,9 @@ static struct dentry *proc_pident_lookup(struct inode *dir,
 	if (!task)
 		goto out_no_task;
 
+	if (gr_pid_is_chrooted(task) || gr_check_hidden_task(task))
+		goto out;
+
 	/*
 	 * Yes, it does not scale. And it should not. Don't add
 	 * new entries into /proc/<tgid>/ without very good reasons.
@@ -2492,6 +2615,9 @@ static int proc_pident_readdir(struct file *filp,
 	ret = -ENOENT;
 	if (!task)
 		goto out_no_task;
+
+	if (gr_pid_is_chrooted(task) || gr_check_hidden_task(task))
+		goto out;
 
 	ret = 0;
 	i = filp->f_pos;
@@ -2763,7 +2889,7 @@ static void *proc_self_follow_link(struct dentry *dentry, struct nameidata *nd)
 static void proc_self_put_link(struct dentry *dentry, struct nameidata *nd,
 				void *cookie)
 {
-	char *s = nd_get_link(nd);
+	const char *s = nd_get_link(nd);
 	if (!IS_ERR(s))
 		__putname(s);
 }
@@ -2964,7 +3090,7 @@ static const struct pid_entry tgid_base_stuff[] = {
 	REG("autogroup",  S_IRUGO|S_IWUSR, proc_pid_sched_autogroup_operations),
 #endif
 	REG("comm",      S_IRUGO|S_IWUSR, proc_pid_set_comm_operations),
-#ifdef CONFIG_HAVE_ARCH_TRACEHOOK
+#if defined(CONFIG_HAVE_ARCH_TRACEHOOK) && !defined(CONFIG_GRKERNSEC_PROC_MEMMAP)
 	INF("syscall",    S_IRUGO, proc_pid_syscall),
 #endif
 	INF("cmdline",    S_IRUGO, proc_pid_cmdline),
@@ -2989,10 +3115,10 @@ static const struct pid_entry tgid_base_stuff[] = {
 #ifdef CONFIG_SECURITY
 	DIR("attr",       S_IRUGO|S_IXUGO, proc_attr_dir_inode_operations, proc_attr_dir_operations),
 #endif
-#ifdef CONFIG_KALLSYMS
+#if defined(CONFIG_KALLSYMS) && !defined(CONFIG_GRKERNSEC_HIDESYM)
 	INF("wchan",      S_IRUGO, proc_pid_wchan),
 #endif
-#ifdef CONFIG_STACKTRACE
+#if defined(CONFIG_STACKTRACE) && !defined(CONFIG_GRKERNSEC_HIDESYM)
 	ONE("stack",      S_IRUGO, proc_pid_stack),
 #endif
 #ifdef CONFIG_SCHEDSTATS
@@ -3025,6 +3151,9 @@ static const struct pid_entry tgid_base_stuff[] = {
 #endif
 #ifdef CONFIG_HARDWALL
 	INF("hardwall",   S_IRUGO, proc_pid_hardwall),
+#endif
+#ifdef CONFIG_GRKERNSEC_PROC_IPADDR
+	INF("ipaddr",	  S_IRUSR, proc_pid_ipaddr),
 #endif
 };
 
@@ -3152,7 +3281,14 @@ static struct dentry *proc_pid_instantiate(struct inode *dir,
 	if (!inode)
 		goto out;
 
+#ifdef CONFIG_GRKERNSEC_PROC_USER
+	inode->i_mode = S_IFDIR|S_IRUSR|S_IXUSR;
+#elif defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+	inode->i_gid = CONFIG_GRKERNSEC_PROC_GID;
+	inode->i_mode = S_IFDIR|S_IRUSR|S_IRGRP|S_IXUSR|S_IXGRP;
+#else
 	inode->i_mode = S_IFDIR|S_IRUGO|S_IXUGO;
+#endif
 	inode->i_op = &proc_tgid_base_inode_operations;
 	inode->i_fop = &proc_tgid_base_operations;
 	inode->i_flags|=S_IMMUTABLE;
@@ -3194,7 +3330,11 @@ struct dentry *proc_pid_lookup(struct inode *dir, struct dentry * dentry, struct
 	if (!task)
 		goto out;
 
+	if (gr_pid_is_chrooted(task) || gr_check_hidden_task(task))
+		goto out_put_task;
+
 	result = proc_pid_instantiate(dir, dentry, task, NULL);
+out_put_task:
 	put_task_struct(task);
 out:
 	return result;
@@ -3257,6 +3397,8 @@ static int proc_pid_fill_cache(struct file *filp, void *dirent, filldir_t filldi
 static int fake_filldir(void *buf, const char *name, int namelen,
 			loff_t offset, u64 ino, unsigned d_type)
 {
+	struct getdents_callback * __buf = (struct getdents_callback *) buf;
+	__buf->error = -EINVAL;
 	return 0;
 }
 
@@ -3323,7 +3465,7 @@ static const struct pid_entry tid_base_stuff[] = {
 	REG("sched",     S_IRUGO|S_IWUSR, proc_pid_sched_operations),
 #endif
 	REG("comm",      S_IRUGO|S_IWUSR, proc_pid_set_comm_operations),
-#ifdef CONFIG_HAVE_ARCH_TRACEHOOK
+#if defined(CONFIG_HAVE_ARCH_TRACEHOOK) && !defined(CONFIG_GRKERNSEC_PROC_MEMMAP)
 	INF("syscall",   S_IRUGO, proc_pid_syscall),
 #endif
 	INF("cmdline",   S_IRUGO, proc_pid_cmdline),
@@ -3347,10 +3489,10 @@ static const struct pid_entry tid_base_stuff[] = {
 #ifdef CONFIG_SECURITY
 	DIR("attr",      S_IRUGO|S_IXUGO, proc_attr_dir_inode_operations, proc_attr_dir_operations),
 #endif
-#ifdef CONFIG_KALLSYMS
+#if defined(CONFIG_KALLSYMS) && !defined(CONFIG_GRKERNSEC_HIDESYM)
 	INF("wchan",     S_IRUGO, proc_pid_wchan),
 #endif
-#ifdef CONFIG_STACKTRACE
+#if defined(CONFIG_STACKTRACE) && !defined(CONFIG_GRKERNSEC_HIDESYM)
 	ONE("stack",      S_IRUGO, proc_pid_stack),
 #endif
 #ifdef CONFIG_SCHEDSTATS
