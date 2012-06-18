@@ -1181,7 +1181,7 @@ static char *read_link(struct dentry *dentry)
 	return link;
 }
 
-static void free_link(char *link)
+static void free_link(const char *link)
 {
 	if (!IS_ERR(link))
 		free_page((unsigned long) link);

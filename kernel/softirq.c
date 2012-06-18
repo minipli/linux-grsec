@@ -56,7 +56,7 @@ static struct softirq_action softirq_vec[NR_SOFTIRQS] __cacheline_aligned_in_smp
 
 DEFINE_PER_CPU(struct task_struct *, ksoftirqd);
 
-char *softirq_to_name[NR_SOFTIRQS] = {
+const char * const softirq_to_name[NR_SOFTIRQS] = {
 	"HI", "TIMER", "NET_TX", "NET_RX", "BLOCK", "BLOCK_IOPOLL",
 	"TASKLET", "SCHED", "HRTIMER", "RCU"
 };
@@ -235,7 +235,7 @@ restart:
 			kstat_incr_softirqs_this_cpu(vec_nr);
 
 			trace_softirq_entry(vec_nr);
-			h->action(h);
+			h->action();
 			trace_softirq_exit(vec_nr);
 			if (unlikely(prev_count != preempt_count())) {
 				printk(KERN_ERR "huh, entered softirq %u %s %p"
@@ -381,9 +381,11 @@ void __raise_softirq_irqoff(unsigned int nr)
 	or_softirq_pending(1UL << nr);
 }
 
-void open_softirq(int nr, void (*action)(struct softirq_action *))
+void open_softirq(int nr, void (*action)(void))
 {
-	softirq_vec[nr].action = action;
+	pax_open_kernel();
+	*(void **)&softirq_vec[nr].action = action;
+	pax_close_kernel();
 }
 
 /*
@@ -437,7 +439,7 @@ void __tasklet_hi_schedule_first(struct tasklet_struct *t)
 
 EXPORT_SYMBOL(__tasklet_hi_schedule_first);
 
-static void tasklet_action(struct softirq_action *a)
+static void tasklet_action(void)
 {
 	struct tasklet_struct *list;
 
@@ -472,7 +474,7 @@ static void tasklet_action(struct softirq_action *a)
 	}
 }
 
-static void tasklet_hi_action(struct softirq_action *a)
+static void tasklet_hi_action(void)
 {
 	struct tasklet_struct *list;
 

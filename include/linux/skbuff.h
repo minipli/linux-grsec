@@ -666,7 +666,7 @@ static inline struct skb_shared_hwtstamps *skb_hwtstamps(struct sk_buff *skb)
  */
 static inline int skb_queue_empty(const struct sk_buff_head *list)
 {
-	return list->next == (struct sk_buff *)list;
+	return list->next == (const struct sk_buff *)list;
 }
 
 /**
@@ -679,7 +679,7 @@ static inline int skb_queue_empty(const struct sk_buff_head *list)
 static inline bool skb_queue_is_last(const struct sk_buff_head *list,
 				     const struct sk_buff *skb)
 {
-	return skb->next == (struct sk_buff *)list;
+	return skb->next == (const struct sk_buff *)list;
 }
 
 /**
@@ -692,7 +692,7 @@ static inline bool skb_queue_is_last(const struct sk_buff_head *list,
 static inline bool skb_queue_is_first(const struct sk_buff_head *list,
 				      const struct sk_buff *skb)
 {
-	return skb->prev == (struct sk_buff *)list;
+	return skb->prev == (const struct sk_buff *)list;
 }
 
 /**
@@ -1587,7 +1587,7 @@ static inline int pskb_network_may_pull(struct sk_buff *skb, unsigned int len)
  * NET_IP_ALIGN(2) + ethernet_header(14) + IP_header(20/40) + ports(8)
  */
 #ifndef NET_SKB_PAD
-#define NET_SKB_PAD	max(32, L1_CACHE_BYTES)
+#define NET_SKB_PAD	max(_AC(32,UL), L1_CACHE_BYTES)
 #endif
 
 extern int ___pskb_trim(struct sk_buff *skb, unsigned int len);
