@@ -522,7 +522,7 @@ static int rx_aal0(struct atm_vcc *vcc)
 		DPRINTK(DEV_LABEL "(itf %d): trashing empty cell\n",
 		    vcc->dev->number);
 		length = 0;
-		atomic_inc(&vcc->stats->rx_err);
+		atomic_inc_unchecked(&vcc->stats->rx_err);
 	}
 	else {
 		length = ATM_CELL_SIZE-1; /* no HEC */
@@ -577,7 +577,7 @@ static int rx_aal5(struct atm_vcc *vcc)
 			    size);
 		}
 		eff = length = 0;
-		atomic_inc(&vcc->stats->rx_err);
+		atomic_inc_unchecked(&vcc->stats->rx_err);
 	}
 	else {
 		size = (descr & MID_RED_COUNT)*(ATM_CELL_PAYLOAD >> 2);
@@ -594,7 +594,7 @@ static int rx_aal5(struct atm_vcc *vcc)
 			    "(VCI=%d,length=%ld,size=%ld (descr 0x%lx))\n",
 			    vcc->dev->number,vcc->vci,length,size << 2,descr);
 			length = eff = 0;
-			atomic_inc(&vcc->stats->rx_err);
+			atomic_inc_unchecked(&vcc->stats->rx_err);
 		}
 	}
 	skb = eff ? atm_alloc_charge(vcc,eff << 2,GFP_ATOMIC) : NULL;
@@ -767,7 +767,7 @@ rx_dequeued++;
 			vcc->push(vcc,skb);
 			pushed++;
 		}
-		atomic_inc(&vcc->stats->rx);
+		atomic_inc_unchecked(&vcc->stats->rx);
 	}
 	wake_up(&eni_dev->rx_wait);
 }
@@ -1227,7 +1227,7 @@ static void dequeue_tx(struct atm_dev *dev)
 		    PCI_DMA_TODEVICE);
 		if (vcc->pop) vcc->pop(vcc,skb);
 		else dev_kfree_skb_irq(skb);
-		atomic_inc(&vcc->stats->tx);
+		atomic_inc_unchecked(&vcc->stats->tx);
 		wake_up(&eni_dev->tx_wait);
 dma_complete++;
 	}
@@ -1567,7 +1567,7 @@ tx_complete++;
 /*--------------------------------- entries ---------------------------------*/
 
 
-static const char *media_name[] __devinitdata = {
+static const char *media_name[] __devinitconst = {
     "MMF", "SMF", "MMF", "03?", /*  0- 3 */
     "UTP", "05?", "06?", "07?", /*  4- 7 */
     "TAXI","09?", "10?", "11?", /*  8-11 */

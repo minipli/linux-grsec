@@ -371,7 +371,7 @@ static __always_inline __pure bool __static_cpu_has(u16 bit)
 			     ".section .discard,\"aw\",@progbits\n"
 			     " .byte 0xff + (4f-3f) - (2b-1b)\n" /* size check */
 			     ".previous\n"
-			     ".section .altinstr_replacement,\"ax\"\n"
+			     ".section .altinstr_replacement,\"a\"\n"
 			     "3: movb $1,%0\n"
 			     "4:\n"
 			     ".previous\n"
