@@ -205,7 +205,7 @@ static s32 e1000_init_mac_params_80003es2lan(struct e1000_adapter *adapter)
 {
 	struct e1000_hw *hw = &adapter->hw;
 	struct e1000_mac_info *mac = &hw->mac;
-	struct e1000_mac_operations *func = &mac->ops;
+	e1000_mac_operations_no_const *func = &mac->ops;
 
 	/* Set media type */
 	switch (adapter->pdev->device) {

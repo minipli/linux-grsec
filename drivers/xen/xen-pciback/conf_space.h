@@ -44,15 +44,15 @@ struct config_field {
 		struct {
 			conf_dword_write write;
 			conf_dword_read read;
-		} dw;
+		} __no_const dw;
 		struct {
 			conf_word_write write;
 			conf_word_read read;
-		} w;
+		} __no_const w;
 		struct {
 			conf_byte_write write;
 			conf_byte_read read;
-		} b;
+		} __no_const b;
 	} u;
 	struct list_head list;
 };
