@@ -1,0 +1,180 @@
+diff -u linux-3.4.3-pax/Documentation/dontdiff linux-3.4.3-pax/Documentation/dontdiff
+--- linux-3.4.3-pax/Documentation/dontdiff	2012-06-12 16:29:20.082180171 +0200
++++ linux-3.4.3-pax/Documentation/dontdiff	2012-06-19 21:48:41.226328739 +0200
+@@ -237,6 +237,7 @@
+ setup
+ setup.bin
+ setup.elf
++size_overflow_hash.h
+ sImage
+ slabinfo
+ sm_tbl*
+diff -u linux-3.4.3-pax/tools/gcc/Makefile linux-3.4.3-pax/tools/gcc/Makefile
+--- linux-3.4.3-pax/tools/gcc/Makefile	2012-06-14 22:52:08.094185555 +0200
++++ linux-3.4.3-pax/tools/gcc/Makefile	2012-06-19 21:46:06.074324118 +0200
+@@ -31,0 +32,10 @@
++
++$(obj)/size_overflow_plugin.o: $(objtree)/$(obj)/size_overflow_hash.h
++
++quiet_cmd_build_size_overflow_hash = GENHASH  $@
++      cmd_build_size_overflow_hash = \
++	$(srctree)/$(src)/generate_size_overflow_hash.sh -d $< -o $@
++$(objtree)/$(obj)/size_overflow_hash.h: $(src)/size_overflow_hash.data FORCE
++	$(call if_changed,build_size_overflow_hash)
++
++targets += size_overflow_hash.h
+diff -u linux-3.4.3-pax/tools/gcc/size_overflow_plugin.c linux-3.4.3-pax/tools/gcc/size_overflow_plugin.c
+--- linux-3.4.3-pax/tools/gcc/size_overflow_plugin.c	2012-06-18 14:20:11.245491896 +0200
++++ linux-3.4.3-pax/tools/gcc/size_overflow_plugin.c	2012-06-19 11:44:14.285262321 +0200
+@@ -35,7 +35,7 @@
+ struct size_overflow_hash {
+ 		struct size_overflow_hash *next;
+ 		const char *name;
+-		unsigned short param;
++		unsigned int param;
+ };
+ 
+ #include "size_overflow_hash.h"
+@@ -64,7 +64,7 @@
+ static unsigned int handle_function(void);
+ 
+ static struct plugin_info size_overflow_plugin_info = {
+-	.version	= "20120617beta",
++	.version	= "20120618beta",
+ 	.help		= "no-size-overflow\tturn off size overflow checking\n",
+ };
+ 
+@@ -201,13 +201,12 @@
+ 	enum tree_code code = TREE_CODE(type);
+ 	size_t len = 0;
+ 
+-	// skip builtins __builtin_constant_p
+-	if (DECL_BUILT_IN(fndecl))
+-		return 0;
+-
+ 	gcc_assert(code == FUNCTION_TYPE);
+ 
+ 	arg = TYPE_ARG_TYPES(type);
++	// skip builtins __builtin_constant_p
++	if (!arg && DECL_BUILT_IN(fndecl))
++		return 0;
+ 	gcc_assert(arg != NULL_TREE);
+ 
+ 	if (TREE_CODE_CLASS(code) == tcc_type)
+@@ -790,7 +789,7 @@
+ 	}
+ }
+ 
+-static tree change_assign_rhs(struct pointer_set_t *visited, bool *potentionally_overflowed, gimple stmt, tree orig_rhs, tree new_rhs)
++static tree change_assign_rhs(gimple stmt, tree orig_rhs, tree new_rhs)
+ {
+ 	gimple assign;
+ 	gimple_stmt_iterator gsi = gsi_for_stmt(stmt);
+@@ -814,7 +813,7 @@
+ 	if (var_rhs == NULL_TREE)
+ 		return create_assign(visited, potentionally_overflowed, def_stmt, var, AFTER_STMT);
+ 
+-	new_rhs = change_assign_rhs(visited, potentionally_overflowed, def_stmt, orig_rhs, var_rhs);
++	new_rhs = change_assign_rhs(def_stmt, orig_rhs, var_rhs);
+ 	gimple_assign_set_rhs(def_stmt, new_rhs);
+ 	update_stmt(def_stmt);
+ 
+only in patch2:
+unchanged:
+--- linux-3.4.3/tools/gcc/generate_size_overflow_hash.sh	1970-01-01 01:00:00.000000000 +0100
++++ linux-3.4.3-pax/tools/gcc/generate_size_overflow_hash.sh	2012-06-19 20:48:51.566222712 +0200
+@@ -0,0 +1,94 @@
++#!/bin/bash
++
++# This script generates the hash table (size_overflow_hash.h) for the size_overflow gcc plugin (size_overflow_plugin.c).
++
++header1="size_overflow_hash.h"
++database="size_overflow_hash.data"
++n=65536
++
++usage() {
++cat <<EOF
++usage: $0 options
++OPTIONS:
++        -h|--help               help
++	-o			header file
++	-d			database file
++	-n			hash array size
++EOF
++    return 0
++}
++
++while true
++do
++    case "$1" in
++    -h|--help)	usage && exit 0;;
++    -n)		n=$2; shift 2;;
++    -o)		header1="$2"; shift 2;;
++    -d)		database="$2"; shift 2;;
++    --)		shift 1; break ;;
++     *)		break ;;
++    esac
++done
++
++create_defines() {
++	for i in `seq 1 10`
++	do
++		echo -e "#define PARAM"$i" (1U << "$i")" >> "$header1"
++	done
++	echo >> "$header1"
++}
++
++create_structs () {
++	rm -f "$header1"
++
++	create_defines
++
++	cat "$database" | while read data
++	do
++		data_array=($data)
++		struct_hash_name="${data_array[0]}"
++		funcn="${data_array[1]}"
++		params="${data_array[2]}"
++		next="${data_array[5]}"
++
++		echo "struct size_overflow_hash $struct_hash_name = {" >> "$header1"
++
++		echo -e "\t.next\t= $next,\n\t.name\t= \"$funcn\"," >> "$header1"
++		echo -en "\t.param\t= " >> "$header1"
++		line=
++		for param_num in ${params//-/ };
++		do
++			line="${line}PARAM"$param_num"|"
++		done
++
++		echo -e "${line%?},\n};\n" >> "$header1"
++	done
++}
++
++create_headers () {
++	echo "struct size_overflow_hash *size_overflow_hash[$n] = {" >> "$header1"
++}
++
++create_array_elements () {
++	index=0
++	grep -v "nohasharray" $database | sort -n -k 4 | while read data
++	do
++		data_array=($data)
++		i="${data_array[3]}"
++		hash="${data_array[4]}"
++		while [[ $index -lt $i ]]
++		do
++			echo -e "\t["$index"]\t= NULL," >> "$header1"
++			index=$(($index + 1))
++		done
++		index=$(($index + 1))
++		echo -e "\t["$i"]\t= &"$hash"," >> "$header1"
++	done
++	echo '};' >> $header1
++}
++
++create_structs
++create_headers
++create_array_elements
++
++exit 0
