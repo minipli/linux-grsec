@@ -34,7 +34,7 @@ $(obj)/size_overflow_plugin.o: $(objtree)/$(obj)/size_overflow_hash.h
 
 quiet_cmd_build_size_overflow_hash = GENHASH  $@
       cmd_build_size_overflow_hash = \
-	$(srctree)/$(src)/generate_size_overflow_hash.sh -d $< -o $@
+	$(CONFIG_SHELL) $(srctree)/$(src)/generate_size_overflow_hash.sh -d $< -o $@
 $(objtree)/$(obj)/size_overflow_hash.h: $(src)/size_overflow_hash.data FORCE
 	$(call if_changed,build_size_overflow_hash)
 
