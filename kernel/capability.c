@@ -202,6 +202,9 @@ SYSCALL_DEFINE2(capget, cap_user_header_t, header, cap_user_data_t, dataptr)
 		 * before modification is attempted and the application
 		 * fails.
 		 */
+		if (tocopy > ARRAY_SIZE(kdata))
+			return -EFAULT;
+
 		if (copy_to_user(dataptr, kdata, tocopy
 				 * sizeof(struct __user_cap_data_struct))) {
 			return -EFAULT;
@@ -374,13 +377,34 @@ bool ns_capable(struct user_namespace *ns, int cap)
 		BUG();
 	}
 
-	if (security_capable(ns, current_cred(), cap) == 0) {
+	if (security_capable(ns, current_cred(), cap) == 0 && gr_is_capable(cap)) {
 		current->flags |= PF_SUPERPRIV;
 		return true;
 	}
 	return false;
 }
 EXPORT_SYMBOL(ns_capable);
+
+bool ns_capable_nolog(struct user_namespace *ns, int cap)
+{
+	if (unlikely(!cap_valid(cap))) {
+		printk(KERN_CRIT "capable() called with invalid cap=%u\n", cap);
+		BUG();
+	}
+
+	if (security_capable(ns, current_cred(), cap) == 0 && gr_is_capable_nolog(cap)) {
+		current->flags |= PF_SUPERPRIV;
+		return true;
+	}
+	return false;
+}
+EXPORT_SYMBOL(ns_capable_nolog);
+
+bool capable_nolog(int cap)
+{
+	return ns_capable_nolog(&init_user_ns, cap);
+}
+EXPORT_SYMBOL(capable_nolog);
 
 /**
  * task_ns_capable - Determine whether current task has a superior
@@ -395,6 +419,12 @@ bool task_ns_capable(struct task_struct *t, int cap)
 	return ns_capable(task_cred_xxx(t, user)->user_ns, cap);
 }
 EXPORT_SYMBOL(task_ns_capable);
+
+bool task_ns_capable_nolog(struct task_struct *t, int cap)
+{
+	return ns_capable_nolog(task_cred_xxx(t, user)->user_ns, cap);
+}
+EXPORT_SYMBOL(task_ns_capable_nolog);
 
 /**
  * nsown_capable - Check superior capability to one's own user_ns
