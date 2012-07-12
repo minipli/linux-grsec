@@ -69,12 +69,17 @@ void srandom32(u32 seed);
 
 u32 prandom32(struct rnd_state *);
 
+static inline unsigned long pax_get_random_long(void)
+{
+	return random32() + (sizeof(long) > 4 ? (unsigned long)random32() << 32 : 0);
+}
+
 /*
  * Handle minimum values for seeds
  */
 static inline u32 __seed(u32 x, u32 m)
 {
-	return (x < m) ? x + m : x;
+	return (x <= m) ? x + m + 1 : x;
 }
 
 /**
