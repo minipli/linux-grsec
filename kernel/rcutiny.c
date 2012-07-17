@@ -46,7 +46,7 @@
 struct rcu_ctrlblk;
 static void invoke_rcu_callbacks(void);
 static void __rcu_process_callbacks(struct rcu_ctrlblk *rcp);
-static void rcu_process_callbacks(struct softirq_action *unused);
+static void rcu_process_callbacks(void);
 static void __call_rcu(struct rcu_head *head,
 		       void (*func)(struct rcu_head *rcu),
 		       struct rcu_ctrlblk *rcp);
@@ -307,7 +307,7 @@ static void __rcu_process_callbacks(struct rcu_ctrlblk *rcp)
 				      rcu_is_callbacks_kthread()));
 }
 
-static void rcu_process_callbacks(struct softirq_action *unused)
+static void rcu_process_callbacks(void)
 {
 	__rcu_process_callbacks(&rcu_sched_ctrlblk);
 	__rcu_process_callbacks(&rcu_bh_ctrlblk);

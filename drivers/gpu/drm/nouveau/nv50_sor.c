@@ -304,7 +304,7 @@ nv50_sor_dpms(struct drm_encoder *encoder, int mode)
 	}
 
 	if (nv_encoder->dcb->type == OUTPUT_DP) {
-		struct dp_train_func func = {
+		static struct dp_train_func func = {
 			.link_set = nv50_sor_dp_link_set,
 			.train_set = nv50_sor_dp_train_set,
 			.train_adj = nv50_sor_dp_train_adj
