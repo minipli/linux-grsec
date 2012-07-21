@@ -1635,7 +1635,7 @@ void __init kmem_cache_init(void)
 #endif
 
 #ifdef CONFIG_PAX_USERCOPY
-		sizes->cs_dmacachep = kmem_cache_create(
+		sizes->cs_usercopycachep = kmem_cache_create(
 					names->name_usercopy,
 					sizes->cs_size,
 					ARCH_KMALLOC_MINALIGN,
