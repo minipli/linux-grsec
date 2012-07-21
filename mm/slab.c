@@ -563,10 +563,11 @@ EXPORT_SYMBOL(malloc_sizes);
 struct cache_names {
 	char *name;
 	char *name_dma;
+	char *name_usercopy;
 };
 
 static struct cache_names __initdata cache_names[] = {
-#define CACHE(x) { .name = "size-" #x, .name_dma = "size-" #x "(DMA)" },
+#define CACHE(x) { .name = "size-" #x, .name_dma = "size-" #x "(DMA)", .name_usercopy = "size-" #x "(USERCOPY)" },
 #include <linux/kmalloc_sizes.h>
 	{NULL}
 #undef CACHE
@@ -756,6 +757,12 @@ static inline struct kmem_cache *__find_general_cachep(size_t size,
 	if (unlikely(gfpflags & GFP_DMA))
 		return csizep->cs_dmacachep;
 #endif
+
+#ifdef CONFIG_PAX_USERCOPY
+	if (unlikely(gfpflags & GFP_USERCOPY))
+		return csizep->cs_usercopycachep;
+#endif
+
 	return csizep->cs_cachep;
 }
 
@@ -1626,6 +1633,16 @@ void __init kmem_cache_init(void)
 						SLAB_PANIC,
 					NULL);
 #endif
+
+#ifdef CONFIG_PAX_USERCOPY
+		sizes->cs_dmacachep = kmem_cache_create(
+					names->name_usercopy,
+					sizes->cs_size,
+					ARCH_KMALLOC_MINALIGN,
+					ARCH_KMALLOC_FLAGS|SLAB_PANIC|SLAB_USERCOPY,
+					NULL);
+#endif
+
 		sizes++;
 		names++;
 	}
