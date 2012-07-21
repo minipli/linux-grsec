@@ -55,6 +55,13 @@
 #include <linux/pipe_fs_i.h>
 #include <linux/oom.h>
 #include <linux/compat.h>
+#include <linux/random.h>
+#include <linux/seq_file.h>
+
+#ifdef CONFIG_PAX_REFCOUNT
+#include <linux/kallsyms.h>
+#include <linux/kdebug.h>
+#endif
 
 #include <asm/uaccess.h>
 #include <asm/mmu_context.h>
@@ -66,6 +73,18 @@
 
 #include <trace/events/sched.h>
 
+#ifdef CONFIG_PAX_HAVE_ACL_FLAGS
+void __weak pax_set_initial_flags(struct linux_binprm *bprm)
+{
+	WARN_ONCE(1, "PAX: PAX_HAVE_ACL_FLAGS was enabled without providing the pax_set_initial_flags callback, this is probably not what you wanted.\n");
+}
+#endif
+
+#ifdef CONFIG_PAX_HOOK_ACL_FLAGS
+void (*pax_set_initial_flags_func)(struct linux_binprm *bprm);
+EXPORT_SYMBOL(pax_set_initial_flags_func);
+#endif
+
 int core_uses_pid;
 char core_pattern[CORENAME_MAX_SIZE] = "core";
 unsigned int core_pipe_limit;
@@ -75,7 +94,7 @@ struct core_name {
 	char *corename;
 	int used, size;
 };
-static atomic_t call_count = ATOMIC_INIT(1);
+static atomic_unchecked_t call_count = ATOMIC_INIT(1);
 
 /* The maximal length of core_pattern is also specified in sysctl.c */
 
@@ -191,18 +210,10 @@ static struct page *get_arg_page(struct linux_binprm *bprm, unsigned long pos,
 		int write)
 {
 	struct page *page;
-	int ret;
 
-#ifdef CONFIG_STACK_GROWSUP
-	if (write) {
-		ret = expand_downwards(bprm->vma, pos);
-		if (ret < 0)
-			return NULL;
-	}
-#endif
-	ret = get_user_pages(current, bprm->mm, pos,
-			1, write, 1, &page, NULL);
-	if (ret <= 0)
+	if (0 > expand_downwards(bprm->vma, pos))
+		return NULL;
+	if (0 >= get_user_pages(current, bprm->mm, pos, 1, write, 1, &page, NULL))
 		return NULL;
 
 	if (write) {
@@ -277,6 +288,11 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	vma->vm_end = STACK_TOP_MAX;
 	vma->vm_start = vma->vm_end - PAGE_SIZE;
 	vma->vm_flags = VM_STACK_FLAGS | VM_STACK_INCOMPLETE_SETUP;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	vma->vm_flags &= ~(VM_EXEC | VM_MAYEXEC);
+#endif
+
 	vma->vm_page_prot = vm_get_page_prot(vma->vm_flags);
 	INIT_LIST_HEAD(&vma->anon_vma_chain);
 
@@ -291,6 +307,12 @@ static int __bprm_mm_init(struct linux_binprm *bprm)
 	mm->stack_vm = mm->total_vm = 1;
 	up_write(&mm->mmap_sem);
 	bprm->p = vma->vm_end - sizeof(void *);
+
+#ifdef CONFIG_PAX_RANDUSTACK
+	if (randomize_va_space)
+		bprm->p ^= (pax_get_random_long() & ~15) & ~PAGE_MASK;
+#endif
+
 	return 0;
 err:
 	up_write(&mm->mmap_sem);
@@ -420,14 +442,14 @@ static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
 		compat_uptr_t compat;
 
 		if (get_user(compat, argv.ptr.compat + nr))
-			return ERR_PTR(-EFAULT);
+			return (const char __force_user *)ERR_PTR(-EFAULT);
 
 		return compat_ptr(compat);
 	}
 #endif
 
 	if (get_user(native, argv.ptr.native + nr))
-		return ERR_PTR(-EFAULT);
+		return (const char __force_user *)ERR_PTR(-EFAULT);
 
 	return native;
 }
@@ -446,7 +468,7 @@ static int count(struct user_arg_ptr argv, int max)
 			if (!p)
 				break;
 
-			if (IS_ERR(p))
+			if (IS_ERR((const char __force_kernel *)p))
 				return -EFAULT;
 
 			if (i++ >= max)
@@ -480,7 +502,7 @@ static int copy_strings(int argc, struct user_arg_ptr argv,
 
 		ret = -EFAULT;
 		str = get_user_arg_ptr(argv, argc);
-		if (IS_ERR(str))
+		if (IS_ERR((const char __force_kernel *)str))
 			goto out;
 
 		len = strnlen_user(str, MAX_ARG_STRLEN);
@@ -562,7 +584,7 @@ int copy_strings_kernel(int argc, const char *const *__argv,
 	int r;
 	mm_segment_t oldfs = get_fs();
 	struct user_arg_ptr argv = {
-		.ptr.native = (const char __user *const  __user *)__argv,
+		.ptr.native = (const char __force_user *const  __force_user *)__argv,
 	};
 
 	set_fs(KERNEL_DS);
@@ -597,7 +619,8 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 	unsigned long new_end = old_end - shift;
 	struct mmu_gather tlb;
 
-	BUG_ON(new_start > new_end);
+	if (new_start >= new_end || new_start < mmap_min_addr)
+		return -ENOMEM;
 
 	/*
 	 * ensure there are no vmas between where we want to go
@@ -605,6 +628,10 @@ static int shift_arg_pages(struct vm_area_struct *vma, unsigned long shift)
 	 */
 	if (vma != find_vma(mm, new_start))
 		return -EFAULT;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	BUG_ON(pax_find_mirror_vma(vma));
+#endif
 
 	/*
 	 * cover the whole range: [new_start, old_end)
@@ -686,10 +713,6 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	stack_top = arch_align_stack(stack_top);
 	stack_top = PAGE_ALIGN(stack_top);
 
-	if (unlikely(stack_top < mmap_min_addr) ||
-	    unlikely(vma->vm_end - vma->vm_start >= stack_top - mmap_min_addr))
-		return -ENOMEM;
-
 	stack_shift = vma->vm_end - stack_top;
 
 	bprm->p -= stack_shift;
@@ -701,7 +724,27 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	bprm->exec -= stack_shift;
 
 	down_write(&mm->mmap_sem);
+
+	/* Move stack pages down in memory. */
+	if (stack_shift) {
+		ret = shift_arg_pages(vma, stack_shift);
+		if (ret)
+			goto out_unlock;
+	}
+
 	vm_flags = VM_STACK_FLAGS;
+
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+	if (mm->pax_flags & (MF_PAX_PAGEEXEC | MF_PAX_SEGMEXEC)) {
+		vm_flags &= ~VM_EXEC;
+
+#ifdef CONFIG_PAX_MPROTECT
+		if (mm->pax_flags & MF_PAX_MPROTECT)
+			vm_flags &= ~VM_MAYEXEC;
+#endif
+
+	}
+#endif
 
 	/*
 	 * Adjust stack execute permissions; explicitly enable for
@@ -720,13 +763,6 @@ int setup_arg_pages(struct linux_binprm *bprm,
 	if (ret)
 		goto out_unlock;
 	BUG_ON(prev != vma);
-
-	/* Move stack pages down in memory. */
-	if (stack_shift) {
-		ret = shift_arg_pages(vma, stack_shift);
-		if (ret)
-			goto out_unlock;
-	}
 
 	/* mprotect_fixup is overkill to remove the temporary stack flags */
 	vma->vm_flags &= ~VM_STACK_INCOMPLETE_SETUP;
@@ -808,7 +844,7 @@ int kernel_read(struct file *file, loff_t offset,
 	old_fs = get_fs();
 	set_fs(get_ds());
 	/* The cast to a user pointer is valid due to the set_fs() */
-	result = vfs_read(file, (void __user *)addr, count, &pos);
+	result = vfs_read(file, (void __force_user *)addr, count, &pos);
 	set_fs(old_fs);
 	return result;
 }
@@ -1254,7 +1290,7 @@ static int check_unsafe_exec(struct linux_binprm *bprm)
 	}
 	rcu_read_unlock();
 
-	if (p->fs->users > n_fs) {
+	if (atomic_read(&p->fs->users) > n_fs) {
 		bprm->unsafe |= LSM_UNSAFE_SHARE;
 	} else {
 		res = -EAGAIN;
@@ -1627,7 +1663,7 @@ static int expand_corename(struct core_name *cn)
 {
 	char *old_corename = cn->corename;
 
-	cn->size = CORENAME_MAX_SIZE * atomic_inc_return(&call_count);
+	cn->size = CORENAME_MAX_SIZE * atomic_inc_return_unchecked(&call_count);
 	cn->corename = krealloc(old_corename, cn->size, GFP_KERNEL);
 
 	if (!cn->corename) {
@@ -1724,7 +1760,7 @@ static int format_corename(struct core_name *cn, long signr)
 	int pid_in_pattern = 0;
 	int err = 0;
 
-	cn->size = CORENAME_MAX_SIZE * atomic_read(&call_count);
+	cn->size = CORENAME_MAX_SIZE * atomic_read_unchecked(&call_count);
 	cn->corename = kmalloc(cn->size, GFP_KERNEL);
 	cn->used = 0;
 
@@ -1820,6 +1856,216 @@ static int format_corename(struct core_name *cn, long signr)
 out:
 	return ispipe;
 }
+
+int pax_check_flags(unsigned long *flags)
+{
+	int retval = 0;
+
+#if !defined(CONFIG_X86_32) || !defined(CONFIG_PAX_SEGMEXEC)
+	if (*flags & MF_PAX_SEGMEXEC)
+	{
+		*flags &= ~MF_PAX_SEGMEXEC;
+		retval = -EINVAL;
+	}
+#endif
+
+	if ((*flags & MF_PAX_PAGEEXEC)
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	    &&  (*flags & MF_PAX_SEGMEXEC)
+#endif
+
+	   )
+	{
+		*flags &= ~MF_PAX_PAGEEXEC;
+		retval = -EINVAL;
+	}
+
+	if ((*flags & MF_PAX_MPROTECT)
+
+#ifdef CONFIG_PAX_MPROTECT
+	    && !(*flags & (MF_PAX_PAGEEXEC | MF_PAX_SEGMEXEC))
+#endif
+
+	   )
+	{
+		*flags &= ~MF_PAX_MPROTECT;
+		retval = -EINVAL;
+	}
+
+	if ((*flags & MF_PAX_EMUTRAMP)
+
+#ifdef CONFIG_PAX_EMUTRAMP
+	    && !(*flags & (MF_PAX_PAGEEXEC | MF_PAX_SEGMEXEC))
+#endif
+
+	   )
+	{
+		*flags &= ~MF_PAX_EMUTRAMP;
+		retval = -EINVAL;
+	}
+
+	return retval;
+}
+
+EXPORT_SYMBOL(pax_check_flags);
+
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
+{
+	struct task_struct *tsk = current;
+	struct mm_struct *mm = current->mm;
+	char *buffer_exec = (char *)__get_free_page(GFP_KERNEL);
+	char *buffer_fault = (char *)__get_free_page(GFP_KERNEL);
+	char *path_exec = NULL;
+	char *path_fault = NULL;
+	unsigned long start = 0UL, end = 0UL, offset = 0UL;
+
+	if (buffer_exec && buffer_fault) {
+		struct vm_area_struct *vma, *vma_exec = NULL, *vma_fault = NULL;
+
+		down_read(&mm->mmap_sem);
+		vma = mm->mmap;
+		while (vma && (!vma_exec || !vma_fault)) {
+			if ((vma->vm_flags & VM_EXECUTABLE) && vma->vm_file)
+				vma_exec = vma;
+			if (vma->vm_start <= (unsigned long)pc && (unsigned long)pc < vma->vm_end)
+				vma_fault = vma;
+			vma = vma->vm_next;
+		}
+		if (vma_exec) {
+			path_exec = d_path(&vma_exec->vm_file->f_path, buffer_exec, PAGE_SIZE);
+			if (IS_ERR(path_exec))
+				path_exec = "<path too long>";
+			else {
+				path_exec = mangle_path(buffer_exec, path_exec, "\t\n\\");
+				if (path_exec) {
+					*path_exec = 0;
+					path_exec = buffer_exec;
+				} else
+					path_exec = "<path too long>";
+			}
+		}
+		if (vma_fault) {
+			start = vma_fault->vm_start;
+			end = vma_fault->vm_end;
+			offset = vma_fault->vm_pgoff << PAGE_SHIFT;
+			if (vma_fault->vm_file) {
+				path_fault = d_path(&vma_fault->vm_file->f_path, buffer_fault, PAGE_SIZE);
+				if (IS_ERR(path_fault))
+					path_fault = "<path too long>";
+				else {
+					path_fault = mangle_path(buffer_fault, path_fault, "\t\n\\");
+					if (path_fault) {
+						*path_fault = 0;
+						path_fault = buffer_fault;
+					} else
+						path_fault = "<path too long>";
+				}
+			} else
+				path_fault = "<anonymous mapping>";
+		}
+		up_read(&mm->mmap_sem);
+	}
+	printk(KERN_ERR "PAX: execution attempt in: %s, %08lx-%08lx %08lx\n", path_fault, start, end, offset);
+	printk(KERN_ERR "PAX: terminating task: %s(%s):%d, uid/euid: %u/%u, "
+			"PC: %p, SP: %p\n", path_exec, tsk->comm, task_pid_nr(tsk),
+			task_uid(tsk), task_euid(tsk), pc, sp);
+	free_page((unsigned long)buffer_exec);
+	free_page((unsigned long)buffer_fault);
+	pax_report_insns(regs, pc, sp);
+	do_coredump(SIGKILL, SIGKILL, regs);
+}
+#endif
+
+#ifdef CONFIG_PAX_REFCOUNT
+void pax_report_refcount_overflow(struct pt_regs *regs)
+{
+	printk(KERN_ERR "PAX: refcount overflow detected in: %s:%d, uid/euid: %u/%u\n",
+			 current->comm, task_pid_nr(current), current_uid(), current_euid());
+	print_symbol(KERN_ERR "PAX: refcount overflow occured at: %s\n", instruction_pointer(regs));
+	show_regs(regs);
+	force_sig_info(SIGKILL, SEND_SIG_FORCED, current);
+}
+#endif
+
+#ifdef CONFIG_PAX_USERCOPY
+/* 0: not at all, 1: fully, 2: fully inside frame, -1: partially (implies an error) */
+int object_is_on_stack(const void *obj, unsigned long len)
+{
+	const void * const stack = task_stack_page(current);
+	const void * const stackend = stack + THREAD_SIZE;
+
+#if defined(CONFIG_FRAME_POINTER) && defined(CONFIG_X86)
+	const void *frame = NULL;
+	const void *oldframe;
+#endif
+
+	if (obj + len < obj)
+		return -1;
+
+	if (obj + len <= stack || stackend <= obj)
+		return 0;
+
+	if (obj < stack || stackend < obj + len)
+		return -1;
+
+#if defined(CONFIG_FRAME_POINTER) && defined(CONFIG_X86)
+	oldframe = __builtin_frame_address(1);
+	if (oldframe)
+		frame = __builtin_frame_address(2);
+	/*
+	  low ----------------------------------------------> high
+	  [saved bp][saved ip][args][local vars][saved bp][saved ip]
+			      ^----------------^
+			  allow copies only within here
+	*/
+	while (stack <= frame && frame < stackend) {
+		/* if obj + len extends past the last frame, this
+		   check won't pass and the next frame will be 0,
+		   causing us to bail out and correctly report
+		   the copy as invalid
+		*/
+		if (obj + len <= frame)
+			return obj >= oldframe + 2 * sizeof(void *) ? 2 : -1;
+		oldframe = frame;
+		frame = *(const void * const *)frame;
+	}
+	return -1;
+#else
+	return 1;
+#endif
+}
+
+__noreturn void pax_report_usercopy(const void *ptr, unsigned long len, bool to, const char *type)
+{
+	printk(KERN_ERR "PAX: kernel memory %s attempt detected %s %p (%s) (%lu bytes)\n",
+		to ? "leak" : "overwrite", to ? "from" : "to", ptr, type ? : "unknown", len);
+	dump_stack();
+	do_group_exit(SIGKILL);
+}
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+void pax_track_stack(void)
+{
+	unsigned long sp = (unsigned long)&sp;
+	if (sp < current_thread_info()->lowest_stack &&
+	    sp > (unsigned long)task_stack_page(current))
+		current_thread_info()->lowest_stack = sp;
+}
+EXPORT_SYMBOL(pax_track_stack);
+#endif
+
+#ifdef CONFIG_PAX_SIZE_OVERFLOW
+void report_size_overflow(const char *file, unsigned int line, const char *func)
+{
+	printk(KERN_ERR "PAX: size overflow detected in function %s %s:%u\n", func, file, line);
+	dump_stack();
+	do_group_exit(SIGKILL);
+}
+EXPORT_SYMBOL(report_size_overflow);
+#endif
 
 static int zap_process(struct task_struct *start, int exit_code)
 {
@@ -2018,17 +2264,17 @@ static void wait_for_dump_helpers(struct file *file)
 	pipe = file->f_path.dentry->d_inode->i_pipe;
 
 	pipe_lock(pipe);
-	pipe->readers++;
-	pipe->writers--;
+	atomic_inc(&pipe->readers);
+	atomic_dec(&pipe->writers);
 
-	while ((pipe->readers > 1) && (!signal_pending(current))) {
+	while ((atomic_read(&pipe->readers) > 1) && (!signal_pending(current))) {
 		wake_up_interruptible_sync(&pipe->wait);
 		kill_fasync(&pipe->fasync_readers, SIGIO, POLL_IN);
 		pipe_wait(pipe);
 	}
 
-	pipe->readers--;
-	pipe->writers++;
+	atomic_dec(&pipe->readers);
+	atomic_inc(&pipe->writers);
 	pipe_unlock(pipe);
 
 }
@@ -2089,7 +2335,7 @@ void do_coredump(long signr, int exit_code, struct pt_regs *regs)
 	int retval = 0;
 	int flag = 0;
 	int ispipe;
-	static atomic_t core_dump_count = ATOMIC_INIT(0);
+	static atomic_unchecked_t core_dump_count = ATOMIC_INIT(0);
 	struct coredump_params cprm = {
 		.signr = signr,
 		.regs = regs,
@@ -2171,7 +2417,7 @@ void do_coredump(long signr, int exit_code, struct pt_regs *regs)
 		}
 		cprm.limit = RLIM_INFINITY;
 
-		dump_count = atomic_inc_return(&core_dump_count);
+		dump_count = atomic_inc_return_unchecked(&core_dump_count);
 		if (core_pipe_limit && (core_pipe_limit < dump_count)) {
 			printk(KERN_WARNING "Pid %d(%s) over core_pipe_limit\n",
 			       task_tgid_vnr(current), current->comm);
@@ -2241,7 +2487,7 @@ close_fail:
 		filp_close(cprm.file, NULL);
 fail_dropcount:
 	if (ispipe)
-		atomic_dec(&core_dump_count);
+		atomic_dec_unchecked(&core_dump_count);
 fail_unlock:
 	kfree(cn.corename);
 fail_corename:
@@ -2260,7 +2506,7 @@ fail:
  */
 int dump_write(struct file *file, const void *addr, int nr)
 {
-	return access_ok(VERIFY_READ, addr, nr) && file->f_op->write(file, addr, nr, &file->f_pos) == nr;
+	return access_ok(VERIFY_READ, addr, nr) && file->f_op->write(file, (const char __force_user *)addr, nr, &file->f_pos) == nr;
 }
 EXPORT_SYMBOL(dump_write);
 

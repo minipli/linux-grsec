@@ -726,6 +726,17 @@ void add_disk_randomness(struct gendisk *disk)
 }
 #endif
 
+#ifdef CONFIG_PAX_LATENT_ENTROPY
+u64 latent_entropy;
+
+__init void transfer_latent_entropy(void)
+{
+	mix_pool_bytes(&input_pool, &latent_entropy, sizeof(latent_entropy));
+	mix_pool_bytes(&nonblocking_pool, &latent_entropy, sizeof(latent_entropy));
+//	printk(KERN_INFO "PAX: transferring latent entropy: %16llx\n", latent_entropy);
+}
+#endif
+
 /*********************************************************************
  *
  * Entropy extraction routines
@@ -913,7 +924,7 @@ static ssize_t extract_entropy_user(struct entropy_store *r, void __user *buf,
 
 		extract_buf(r, tmp);
 		i = min_t(int, nbytes, EXTRACT_SIZE);
-		if (copy_to_user(buf, tmp, i)) {
+		if (i > sizeof(tmp) || copy_to_user(buf, tmp, i)) {
 			ret = -EFAULT;
 			break;
 		}
@@ -1238,7 +1249,7 @@ EXPORT_SYMBOL(generate_random_uuid);
 #include <linux/sysctl.h>
 
 static int min_read_thresh = 8, min_write_thresh;
-static int max_read_thresh = INPUT_POOL_WORDS * 32;
+static int max_read_thresh = OUTPUT_POOL_WORDS * 32;
 static int max_write_thresh = INPUT_POOL_WORDS * 32;
 static char sysctl_bootid[16];
 

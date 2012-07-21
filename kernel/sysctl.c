@@ -210,6 +210,20 @@ extern struct ctl_table epoll_table[];
 int sysctl_legacy_va_layout;
 #endif
 
+#ifdef CONFIG_PAX_SOFTMODE
+static ctl_table pax_table[] = {
+	{
+		.procname	= "softmode",
+		.data		= &pax_softmode,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0600,
+		.proc_handler	= &proc_dointvec,
+	},
+
+	{ }
+};
+#endif
+
 /* The default sysctl tables: */
 
 static struct ctl_table sysctl_base_table[] = {
@@ -256,6 +270,15 @@ static int max_extfrag_threshold = 1000;
 #endif
 
 static struct ctl_table kern_table[] = {
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 	{
 		.procname	= "sched_child_runs_first",
 		.data		= &sysctl_sched_child_runs_first,
@@ -1215,6 +1238,13 @@ static struct ctl_table vm_table[] = {
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= &zero,
 	},
+	{
+		.procname	= "heap_stack_gap",
+		.data		= &sysctl_heap_stack_gap,
+		.maxlen		= sizeof(sysctl_heap_stack_gap),
+		.mode		= 0644,
+		.proc_handler	= proc_doulongvec_minmax,
+	},
 #else
 	{
 		.procname	= "nr_trim_pages",
@@ -1750,6 +1780,8 @@ static int proc_put_long(void __user **buf, size_t *size, unsigned long val,
 	len = strlen(tmp);
 	if (len > *size)
 		len = *size;
+	if (len > sizeof(tmp))
+		len = sizeof(tmp);
 	if (copy_to_user(*buf, tmp, len))
 		return -EFAULT;
 	*size -= len;
@@ -2066,8 +2098,11 @@ static int __do_proc_doulongvec_minmax(void *data, struct ctl_table *table, int 
 			*i = val;
 		} else {
 			val = convdiv * (*i) / convmul;
-			if (!first)
+			if (!first) {
 				err = proc_put_char(&buffer, &left, '\t');
+				if (err)
+					break;
+			}
 			err = proc_put_long(&buffer, &left, val, false);
 			if (err)
 				break;

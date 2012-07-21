@@ -275,7 +275,7 @@ struct smi_info {
 	unsigned char slave_addr;
 
 	/* Counters and things for the proc filesystem. */
-	atomic_t stats[SI_NUM_STATS];
+	atomic_unchecked_t stats[SI_NUM_STATS];
 
 	struct task_struct *thread;
 
@@ -284,9 +284,9 @@ struct smi_info {
 };
 
 #define smi_inc_stat(smi, stat) \
-	atomic_inc(&(smi)->stats[SI_STAT_ ## stat])
+	atomic_inc_unchecked(&(smi)->stats[SI_STAT_ ## stat])
 #define smi_get_stat(smi, stat) \
-	((unsigned int) atomic_read(&(smi)->stats[SI_STAT_ ## stat]))
+	((unsigned int) atomic_read_unchecked(&(smi)->stats[SI_STAT_ ## stat]))
 
 #define SI_MAX_PARMS 4
 
@@ -3209,7 +3209,7 @@ static int try_smi_init(struct smi_info *new_smi)
 	atomic_set(&new_smi->req_events, 0);
 	new_smi->run_to_completion = 0;
 	for (i = 0; i < SI_NUM_STATS; i++)
-		atomic_set(&new_smi->stats[i], 0);
+		atomic_set_unchecked(&new_smi->stats[i], 0);
 
 	new_smi->interrupt_disabled = 1;
 	atomic_set(&new_smi->stop_operation, 0);
