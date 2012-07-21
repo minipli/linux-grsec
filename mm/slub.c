@@ -2791,6 +2791,10 @@ out:
 }
 #endif
 
+#ifdef CONFIG_PAX_USERCOPY
+static struct kmem_cache kmalloc_caches_usercopy[SLUB_PAGE_SHIFT];
+#endif
+
 /*
  * Conversion table for small slabs sizes / 8 to the index in the
  * kmalloc array. This is necessary for slabs < 192 since we have non power
@@ -2846,6 +2850,13 @@ static struct kmem_cache *get_slab(size_t size, gfp_t flags)
 		return dma_kmalloc_cache(index, flags);
 
 #endif
+
+#ifdef CONFIG_PAX_USERCOPY
+	if (flags & SLAB_USERCOPY)
+		return &kmalloc_caches_usercopy[index];
+
+#endif
+
 	return &kmalloc_caches[index];
 }
 
@@ -3308,6 +3319,20 @@ void __init kmem_cache_init(void)
 				nr_cpu_ids * sizeof(struct kmem_cache_cpu *);
 #else
 	kmem_size = sizeof(struct kmem_cache);
+#endif
+
+#ifdef CONFIG_PAX_USERCOPY
+	for (i = 0; i < SLUB_PAGE_SHIFT; i++) {
+		struct kmem_cache *s = &kmalloc_caches[i];
+
+		if (s->size) {
+			char *name = kasprintf(GFP_NOWAIT, "kmalloc-usercopy-%d", s->objsize);
+
+			BUG_ON(!name);
+			create_kmalloc_cache(&kmalloc_caches_usercopy[i], name,
+				s->objsize, GFP_NOWAIT, SLAB_USERCOPY);
+		}
+	}
 #endif
 
 	printk(KERN_INFO
