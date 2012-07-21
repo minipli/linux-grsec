@@ -277,10 +277,10 @@ EXPORT_SYMBOL_GPL(md_trim_bio);
  *  start build, activate spare
  */
 static DECLARE_WAIT_QUEUE_HEAD(md_event_waiters);
-static atomic_t md_event_count;
+static atomic_unchecked_t md_event_count;
 void md_new_event(struct mddev *mddev)
 {
-	atomic_inc(&md_event_count);
+	atomic_inc_unchecked(&md_event_count);
 	wake_up(&md_event_waiters);
 }
 EXPORT_SYMBOL_GPL(md_new_event);
@@ -290,7 +290,7 @@ EXPORT_SYMBOL_GPL(md_new_event);
  */
 static void md_new_event_inintr(struct mddev *mddev)
 {
-	atomic_inc(&md_event_count);
+	atomic_inc_unchecked(&md_event_count);
 	wake_up(&md_event_waiters);
 }
 
@@ -1526,7 +1526,7 @@ static int super_1_load(struct md_rdev *rdev, struct md_rdev *refdev, int minor_
 
 	rdev->preferred_minor = 0xffff;
 	rdev->data_offset = le64_to_cpu(sb->data_offset);
-	atomic_set(&rdev->corrected_errors, le32_to_cpu(sb->cnt_corrected_read));
+	atomic_set_unchecked(&rdev->corrected_errors, le32_to_cpu(sb->cnt_corrected_read));
 
 	rdev->sb_size = le32_to_cpu(sb->max_dev) * 2 + 256;
 	bmask = queue_logical_block_size(rdev->bdev->bd_disk->queue)-1;
@@ -1745,7 +1745,7 @@ static void super_1_sync(struct mddev *mddev, struct md_rdev *rdev)
 	else
 		sb->resync_offset = cpu_to_le64(0);
 
-	sb->cnt_corrected_read = cpu_to_le32(atomic_read(&rdev->corrected_errors));
+	sb->cnt_corrected_read = cpu_to_le32(atomic_read_unchecked(&rdev->corrected_errors));
 
 	sb->raid_disks = cpu_to_le32(mddev->raid_disks);
 	sb->size = cpu_to_le64(mddev->dev_sectors);
@@ -2691,7 +2691,7 @@ __ATTR(state, S_IRUGO|S_IWUSR, state_show, state_store);
 static ssize_t
 errors_show(struct md_rdev *rdev, char *page)
 {
-	return sprintf(page, "%d\n", atomic_read(&rdev->corrected_errors));
+	return sprintf(page, "%d\n", atomic_read_unchecked(&rdev->corrected_errors));
 }
 
 static ssize_t
@@ -2700,7 +2700,7 @@ errors_store(struct md_rdev *rdev, const char *buf, size_t len)
 	char *e;
 	unsigned long n = simple_strtoul(buf, &e, 10);
 	if (*buf && (*e == 0 || *e == '\n')) {
-		atomic_set(&rdev->corrected_errors, n);
+		atomic_set_unchecked(&rdev->corrected_errors, n);
 		return len;
 	}
 	return -EINVAL;
@@ -3086,8 +3086,8 @@ int md_rdev_init(struct md_rdev *rdev)
 	rdev->sb_loaded = 0;
 	rdev->bb_page = NULL;
 	atomic_set(&rdev->nr_pending, 0);
-	atomic_set(&rdev->read_errors, 0);
-	atomic_set(&rdev->corrected_errors, 0);
+	atomic_set_unchecked(&rdev->read_errors, 0);
+	atomic_set_unchecked(&rdev->corrected_errors, 0);
 
 	INIT_LIST_HEAD(&rdev->same_set);
 	init_waitqueue_head(&rdev->blocked_wait);
@@ -3744,8 +3744,8 @@ array_state_show(struct mddev *mddev, char *page)
 	return sprintf(page, "%s\n", array_states[st]);
 }
 
-static int do_md_stop(struct mddev * mddev, int ro, int is_open);
-static int md_set_readonly(struct mddev * mddev, int is_open);
+static int do_md_stop(struct mddev * mddev, int ro, struct block_device *bdev);
+static int md_set_readonly(struct mddev * mddev, struct block_device *bdev);
 static int do_md_run(struct mddev * mddev);
 static int restart_array(struct mddev *mddev);
 
@@ -3761,14 +3761,14 @@ array_state_store(struct mddev *mddev, const char *buf, size_t len)
 		/* stopping an active array */
 		if (atomic_read(&mddev->openers) > 0)
 			return -EBUSY;
-		err = do_md_stop(mddev, 0, 0);
+		err = do_md_stop(mddev, 0, NULL);
 		break;
 	case inactive:
 		/* stopping an active array */
 		if (mddev->pers) {
 			if (atomic_read(&mddev->openers) > 0)
 				return -EBUSY;
-			err = do_md_stop(mddev, 2, 0);
+			err = do_md_stop(mddev, 2, NULL);
 		} else
 			err = 0; /* already inactive */
 		break;
@@ -3776,7 +3776,7 @@ array_state_store(struct mddev *mddev, const char *buf, size_t len)
 		break; /* not supported yet */
 	case readonly:
 		if (mddev->pers)
-			err = md_set_readonly(mddev, 0);
+			err = md_set_readonly(mddev, NULL);
 		else {
 			mddev->ro = 1;
 			set_disk_ro(mddev->gendisk, 1);
@@ -3786,7 +3786,7 @@ array_state_store(struct mddev *mddev, const char *buf, size_t len)
 	case read_auto:
 		if (mddev->pers) {
 			if (mddev->ro == 0)
-				err = md_set_readonly(mddev, 0);
+				err = md_set_readonly(mddev, NULL);
 			else if (mddev->ro == 1)
 				err = restart_array(mddev);
 			if (err == 0) {
@@ -5124,15 +5124,17 @@ void md_stop(struct mddev *mddev)
 }
 EXPORT_SYMBOL_GPL(md_stop);
 
-static int md_set_readonly(struct mddev *mddev, int is_open)
+static int md_set_readonly(struct mddev *mddev, struct block_device *bdev)
 {
 	int err = 0;
 	mutex_lock(&mddev->open_mutex);
-	if (atomic_read(&mddev->openers) > is_open) {
+	if (atomic_read(&mddev->openers) > !!bdev) {
 		printk("md: %s still in use.\n",mdname(mddev));
 		err = -EBUSY;
 		goto out;
 	}
+	if (bdev)
+		sync_blockdev(bdev);
 	if (mddev->pers) {
 		__md_stop_writes(mddev);
 
@@ -5154,18 +5156,26 @@ out:
  *   0 - completely stop and dis-assemble array
  *   2 - stop but do not disassemble array
  */
-static int do_md_stop(struct mddev * mddev, int mode, int is_open)
+static int do_md_stop(struct mddev * mddev, int mode,
+		      struct block_device *bdev)
 {
 	struct gendisk *disk = mddev->gendisk;
 	struct md_rdev *rdev;
 
 	mutex_lock(&mddev->open_mutex);
-	if (atomic_read(&mddev->openers) > is_open ||
+	if (atomic_read(&mddev->openers) > !!bdev ||
 	    mddev->sysfs_active) {
 		printk("md: %s still in use.\n",mdname(mddev));
 		mutex_unlock(&mddev->open_mutex);
 		return -EBUSY;
 	}
+	if (bdev)
+		/* It is possible IO was issued on some other
+		 * open file which was closed before we took ->open_mutex.
+		 * As that was not the last close __blkdev_put will not
+		 * have called sync_blockdev, so we must.
+		 */
+		sync_blockdev(bdev);
 
 	if (mddev->pers) {
 		if (mddev->ro)
@@ -5239,7 +5249,7 @@ static void autorun_array(struct mddev *mddev)
 	err = do_md_run(mddev);
 	if (err) {
 		printk(KERN_WARNING "md: do_md_run() returned %d\n", err);
-		do_md_stop(mddev, 0, 0);
+		do_md_stop(mddev, 0, NULL);
 	}
 }
 
@@ -6237,11 +6247,11 @@ static int md_ioctl(struct block_device *bdev, fmode_t mode,
 			goto done_unlock;
 
 		case STOP_ARRAY:
-			err = do_md_stop(mddev, 0, 1);
+			err = do_md_stop(mddev, 0, bdev);
 			goto done_unlock;
 
 		case STOP_ARRAY_RO:
-			err = md_set_readonly(mddev, 1);
+			err = md_set_readonly(mddev, bdev);
 			goto done_unlock;
 
 		case BLKROSET:
@@ -6738,7 +6748,7 @@ static int md_seq_show(struct seq_file *seq, void *v)
 
 		spin_unlock(&pers_lock);
 		seq_printf(seq, "\n");
-		seq->poll_event = atomic_read(&md_event_count);
+		seq->poll_event = atomic_read_unchecked(&md_event_count);
 		return 0;
 	}
 	if (v == (void*)2) {
@@ -6841,7 +6851,7 @@ static int md_seq_open(struct inode *inode, struct file *file)
 		return error;
 
 	seq = file->private_data;
-	seq->poll_event = atomic_read(&md_event_count);
+	seq->poll_event = atomic_read_unchecked(&md_event_count);
 	return error;
 }
 
@@ -6855,7 +6865,7 @@ static unsigned int mdstat_poll(struct file *filp, poll_table *wait)
 	/* always allow read */
 	mask = POLLIN | POLLRDNORM;
 
-	if (seq->poll_event != atomic_read(&md_event_count))
+	if (seq->poll_event != atomic_read_unchecked(&md_event_count))
 		mask |= POLLERR | POLLPRI;
 	return mask;
 }
@@ -6899,7 +6909,7 @@ static int is_mddev_idle(struct mddev *mddev, int init)
 		struct gendisk *disk = rdev->bdev->bd_contains->bd_disk;
 		curr_events = (int)part_stat_read(&disk->part0, sectors[0]) +
 			      (int)part_stat_read(&disk->part0, sectors[1]) -
-			      atomic_read(&disk->sync_io);
+			      atomic_read_unchecked(&disk->sync_io);
 		/* sync IO will cause sync_io to increase before the disk_stats
 		 * as sync_io is counted when a request starts, and
 		 * disk_stats is counted when it completes.
