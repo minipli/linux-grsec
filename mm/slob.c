@@ -560,16 +560,7 @@ EXPORT_SYMBOL(kfree);
 
 bool is_usercopy_object(const void *ptr)
 {
-	struct slob_page *sp;
-
-	if (ZERO_OR_NULL_PTR(ptr))
-		return false;
-
-	if (!virt_addr_valid(ptr))
-		return false;
-
-	sp = slob_page(ptr);
-	return PageSlab((struct page *)sp);
+	return false;
 }
 
 #ifdef CONFIG_PAX_USERCOPY

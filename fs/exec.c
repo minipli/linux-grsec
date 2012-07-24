@@ -1991,7 +1991,7 @@ void pax_report_refcount_overflow(struct pt_regs *regs)
 
 #ifdef CONFIG_PAX_USERCOPY
 /* 0: not at all, 1: fully, 2: fully inside frame, -1: partially (implies an error) */
-static int check_stack_object(const void *obj, unsigned long len)
+static noinline int check_stack_object(const void *obj, unsigned long len)
 {
 	const void * const stack = task_stack_page(current);
 	const void * const stackend = stack + THREAD_SIZE;
@@ -2050,19 +2050,16 @@ void check_object_size(const void *ptr, unsigned long n, bool to)
 {
 
 #ifdef CONFIG_PAX_USERCOPY
-	const char *type = "<process stack>";
+	const char *type;
 
 	if (!n)
 		return;
 
-	switch (check_stack_object(ptr, n)) {
-	case 1:
-	case 2:
-		return;
-	case 0:
-		type = check_heap_object(ptr, n, to);
-		if (!type)
+	type = check_heap_object(ptr, n, to);
+	if (!type) {
+		if (check_stack_object(ptr, n) != -1)
 			return;
+		type = "<process stack>";
 	}
 
 	pax_report_usercopy(ptr, n, to, type);
