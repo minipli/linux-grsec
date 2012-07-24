@@ -1991,7 +1991,7 @@ void pax_report_refcount_overflow(struct pt_regs *regs)
 
 #ifdef CONFIG_PAX_USERCOPY
 /* 0: not at all, 1: fully, 2: fully inside frame, -1: partially (implies an error) */
-int object_is_on_stack(const void *obj, unsigned long len)
+static int check_stack_object(const void *obj, unsigned long len)
 {
 	const void * const stack = task_stack_page(current);
 	const void * const stackend = stack + THREAD_SIZE;
@@ -2037,7 +2037,7 @@ int object_is_on_stack(const void *obj, unsigned long len)
 #endif
 }
 
-__noreturn void pax_report_usercopy(const void *ptr, unsigned long len, bool to, const char *type)
+static __noreturn void pax_report_usercopy(const void *ptr, unsigned long len, bool to, const char *type)
 {
 	printk(KERN_ERR "PAX: kernel memory %s attempt detected %s %p (%s) (%lu bytes)\n",
 		to ? "leak" : "overwrite", to ? "from" : "to", ptr, type ? : "unknown", len);
@@ -2045,6 +2045,31 @@ __noreturn void pax_report_usercopy(const void *ptr, unsigned long len, bool to,
 	do_group_exit(SIGKILL);
 }
 #endif
+
+void check_object_size(const void *ptr, unsigned long n, bool to)
+{
+
+#ifdef CONFIG_PAX_USERCOPY
+	const char *type = "<process stack>";
+
+	if (!n)
+		return;
+
+	switch (check_stack_object(ptr, n)) {
+	case 1:
+	case 2:
+		return;
+	case 0:
+		type = check_heap_object(ptr, n, to);
+		if (!type)
+			return;
+	}
+
+	pax_report_usercopy(ptr, n, to, type);
+#endif
+
+}
+EXPORT_SYMBOL(check_object_size);
 
 #ifdef CONFIG_PAX_MEMORY_STACKLEAK
 void pax_track_stack(void)
