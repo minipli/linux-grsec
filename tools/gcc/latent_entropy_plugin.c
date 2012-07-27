@@ -16,7 +16,7 @@
  * - more instrumentation control via attribute parameters
  *
  * BUGS:
- * - none known
+ * - LTO needs -flto-partition=none for now
  */
 #include "gcc-plugin.h"
 #include "config.h"
@@ -44,7 +44,7 @@ int plugin_is_GPL_compatible;
 static tree latent_entropy_decl;
 
 static struct plugin_info latent_entropy_plugin_info = {
-	.version	= "201207261850",
+	.version	= "201207271820",
 	.help		= NULL
 };
 
@@ -196,6 +196,23 @@ static unsigned int execute_latent_entropy(void)
 	gimple_stmt_iterator gsi;
 	tree local_entropy;
 
+	if (!latent_entropy_decl) {
+		struct varpool_node *node;
+
+		for (node = varpool_nodes; node; node = node->next) {
+			tree var = node->decl;
+			if (strcmp(IDENTIFIER_POINTER(DECL_NAME(var)), "latent_entropy"))
+				continue;
+			latent_entropy_decl = var;
+//			debug_tree(var);
+			break;
+		}
+		if (!latent_entropy_decl) {
+//			debug_tree(current_function_decl);
+			return 0;
+		}
+	}
+
 //fprintf(stderr, "latent_entropy: %s\n", IDENTIFIER_POINTER(DECL_NAME(current_function_decl)));
 
 	// 1. create local entropy variable
@@ -229,24 +246,29 @@ static unsigned int execute_latent_entropy(void)
 
 static void start_unit_callback(void *gcc_data, void *user_data)
 {
-	// extern u64 latent_entropy
-	latent_entropy_decl = build_decl(UNKNOWN_LOCATION, VAR_DECL, get_identifier("latent_entropy"), unsigned_intDI_type_node);
-
-	TREE_STATIC(latent_entropy_decl) = 1;
-	TREE_PUBLIC(latent_entropy_decl) = 1;
-	DECL_EXTERNAL(latent_entropy_decl) = 1;
-	DECL_ARTIFICIAL(latent_entropy_decl) = 1;
-	DECL_INITIAL(latent_entropy_decl) = NULL;
-//	DECL_ASSEMBLER_NAME(latent_entropy_decl);
-//	varpool_finalize_decl(latent_entropy_decl);
-//	varpool_mark_needed_node(latent_entropy_decl);
-
 #if BUILDING_GCC_VERSION >= 4007
 	seed = get_random_seed(false);
 #else
 	sscanf(get_random_seed(false), "%" HOST_WIDE_INT_PRINT "x", &seed);
 	seed *= seed;
 #endif
+
+	if (in_lto_p)
+		return;
+
+	// extern u64 latent_entropy
+	latent_entropy_decl = build_decl(UNKNOWN_LOCATION, VAR_DECL, get_identifier("latent_entropy"), unsigned_intDI_type_node);
+
+	TREE_STATIC(latent_entropy_decl) = 1;
+	TREE_PUBLIC(latent_entropy_decl) = 1;
+	TREE_USED(latent_entropy_decl) = 1;
+	TREE_THIS_VOLATILE(latent_entropy_decl) = 1;
+	DECL_EXTERNAL(latent_entropy_decl) = 1;
+	DECL_ARTIFICIAL(latent_entropy_decl) = 0;
+	DECL_INITIAL(latent_entropy_decl) = NULL;
+//	DECL_ASSEMBLER_NAME(latent_entropy_decl);
+//	varpool_finalize_decl(latent_entropy_decl);
+//	varpool_mark_needed_node(latent_entropy_decl);
 }
 
 int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version *version)
