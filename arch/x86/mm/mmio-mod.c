@@ -194,7 +194,7 @@ static void pre(struct kmmio_probe *p, struct pt_regs *regs,
 		break;
 	default:
 		{
-			unsigned char *ip = (unsigned char *)instptr;
+			unsigned char *ip = (unsigned char *)ktla_ktva(instptr);
 			my_trace->opcode = MMIO_UNKNOWN_OP;
 			my_trace->width = 0;
 			my_trace->value = (*ip) << 16 | *(ip + 1) << 8 |
@@ -234,7 +234,7 @@ static void post(struct kmmio_probe *p, unsigned long condition,
 static void ioremap_trace_core(resource_size_t offset, unsigned long size,
 							void __iomem *addr)
 {
-	static atomic_t next_id;
+	static atomic_unchecked_t next_id;
 	struct remap_trace *trace = kmalloc(sizeof(*trace), GFP_KERNEL);
 	/* These are page-unaligned. */
 	struct mmiotrace_map map = {
@@ -258,7 +258,7 @@ static void ioremap_trace_core(resource_size_t offset, unsigned long size,
 			.private = trace
 		},
 		.phys = offset,
-		.id = atomic_inc_return(&next_id)
+		.id = atomic_inc_return_unchecked(&next_id)
 	};
 	map.map_id = trace->id;
 
