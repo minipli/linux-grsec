@@ -53,7 +53,7 @@ struct vm_area_struct;
 #define __GFP_THISNODE	((__force gfp_t)0x40000u)/* No fallback, no policies */
 #define __GFP_RECLAIMABLE ((__force gfp_t)0x80000u) /* Page is reclaimable */
 
-#ifdef CONFIG_PAX_USERCOPY
+#ifdef CONFIG_PAX_USERCOPY_SLABS
 #define __GFP_USERCOPY	((__force gfp_t)0x1000000u)
 #else
 #define __GFP_USERCOPY	((__force gfp_t)0)

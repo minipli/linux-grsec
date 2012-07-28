@@ -105,7 +105,7 @@ struct cache_sizes {
 	struct kmem_cache	*cs_dmacachep;
 #endif
 
-#ifdef CONFIG_PAX_USERCOPY
+#ifdef CONFIG_PAX_USERCOPY_SLABS
 	struct kmem_cache	*cs_usercopycachep;
 #endif
 
@@ -156,7 +156,7 @@ found:
 		else
 #endif
 
-#ifdef CONFIG_PAX_USERCOPY
+#ifdef CONFIG_PAX_USERCOPY_SLABS
 		if (flags & GFP_USERCOPY)
 			cachep = malloc_sizes[i].cs_usercopycachep;
 		else
@@ -218,7 +218,7 @@ found:
 		else
 #endif
 
-#ifdef CONFIG_PAX_USERCOPY
+#ifdef CONFIG_PAX_USERCOPY_SLABS
 		if (flags & GFP_USERCOPY)
 			cachep = malloc_sizes[i].cs_usercopycachep;
 		else
