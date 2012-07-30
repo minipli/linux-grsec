@@ -1355,7 +1355,7 @@ struct se_device *transport_add_device_to_core_hba(
 	spin_lock_init(&dev->se_port_lock);
 	spin_lock_init(&dev->se_tmr_lock);
 	spin_lock_init(&dev->qf_cmd_lock);
-	atomic_set(&dev->dev_ordered_id, 0);
+	atomic_set_unchecked(&dev->dev_ordered_id, 0);
 
 	se_dev_set_default_attribs(dev, dev_limits);
 
@@ -1542,7 +1542,7 @@ static int transport_check_alloc_task_attr(struct se_cmd *cmd)
 	 * Used to determine when ORDERED commands should go from
 	 * Dormant to Active status.
 	 */
-	cmd->se_ordered_id = atomic_inc_return(&cmd->se_dev->dev_ordered_id);
+	cmd->se_ordered_id = atomic_inc_return_unchecked(&cmd->se_dev->dev_ordered_id);
 	smp_mb__after_atomic_inc();
 	pr_debug("Allocated se_ordered_id: %u for Task Attr: 0x%02x on %s\n",
 			cmd->se_ordered_id, cmd->sam_task_attr,
@@ -1956,7 +1956,7 @@ void transport_generic_request_failure(struct se_cmd *cmd)
 		" CMD_T_ACTIVE: %d CMD_T_STOP: %d CMD_T_SENT: %d\n",
 		cmd->t_task_list_num,
 		atomic_read(&cmd->t_task_cdbs_left),
-		atomic_read(&cmd->t_task_cdbs_sent),
+		atomic_read_unchecked(&cmd->t_task_cdbs_sent),
 		atomic_read(&cmd->t_task_cdbs_ex_left),
 		(cmd->transport_state & CMD_T_ACTIVE) != 0,
 		(cmd->transport_state & CMD_T_STOP) != 0,
@@ -2216,9 +2216,9 @@ check_depth:
 	cmd = task->task_se_cmd;
 	spin_lock_irqsave(&cmd->t_state_lock, flags);
 	task->task_flags |= (TF_ACTIVE | TF_SENT);
-	atomic_inc(&cmd->t_task_cdbs_sent);
+	atomic_inc_unchecked(&cmd->t_task_cdbs_sent);
 
-	if (atomic_read(&cmd->t_task_cdbs_sent) ==
+	if (atomic_read_unchecked(&cmd->t_task_cdbs_sent) ==
 	    cmd->t_task_list_num)
 		cmd->transport_state |= CMD_T_SENT;
 

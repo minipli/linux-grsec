@@ -173,7 +173,7 @@ static void *tpm_bios_measurements_start(struct seq_file *m, loff_t *pos)
 	event = addr;
 
 	if ((event->event_type == 0 && event->event_size == 0) ||
-	    ((addr + sizeof(struct tcpa_event) + event->event_size) >= limit))
+	    (event->event_size >= limit - addr - sizeof(struct tcpa_event)))
 		return NULL;
 
 	return addr;
@@ -198,7 +198,7 @@ static void *tpm_bios_measurements_next(struct seq_file *m, void *v,
 		return NULL;
 
 	if ((event->event_type == 0 && event->event_size == 0) ||
-	    ((v + sizeof(struct tcpa_event) + event->event_size) >= limit))
+	    (event->event_size >= limit - v - sizeof(struct tcpa_event)))
 		return NULL;
 
 	(*pos)++;
@@ -291,7 +291,8 @@ static int tpm_binary_bios_measurements_show(struct seq_file *m, void *v)
 	int i;
 
 	for (i = 0; i < sizeof(struct tcpa_event) + event->event_size; i++)
-		seq_putc(m, data[i]);
+		if (!seq_putc(m, data[i]))
+			return -EFAULT;
 
 	return 0;
 }
@@ -410,8 +411,13 @@ static int read_log(struct tpm_bios_log *log)
 	log->bios_event_log_end = log->bios_event_log + len;
 
 	virt = acpi_os_map_memory(start, len);
+	if (!virt) {
+		kfree(log->bios_event_log);
+		log->bios_event_log = NULL;
+		return -EFAULT;
+	}
 
-	memcpy(log->bios_event_log, virt, len);
+	memcpy(log->bios_event_log, (const char __force_kernel *)virt, len);
 
 	acpi_os_unmap_memory(virt, len);
 	return 0;
