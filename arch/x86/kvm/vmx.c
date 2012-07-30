@@ -1313,7 +1313,11 @@ static void reload_tss(void)
 	struct desc_struct *descs;
 
 	descs = (void *)gdt->address;
+
+	pax_open_kernel();
 	descs[GDT_ENTRY_TSS].type = 9; /* available TSS */
+	pax_close_kernel();
+
 	load_TR_desc();
 }
 
@@ -1475,8 +1479,8 @@ static void __vmx_load_host_state(struct vcpu_vmx *vmx)
 	 * The sysexit path does not restore ds/es, so we must set them to
 	 * a reasonable value ourselves.
 	 */
-	loadsegment(ds, __USER_DS);
-	loadsegment(es, __USER_DS);
+	loadsegment(ds, __KERNEL_DS);
+	loadsegment(es, __KERNEL_DS);
 #endif
 	reload_tss();
 #ifdef CONFIG_X86_64
@@ -2653,8 +2657,11 @@ static __init int hardware_setup(void)
 	if (!cpu_has_vmx_flexpriority())
 		flexpriority_enabled = 0;
 
-	if (!cpu_has_vmx_tpr_shadow())
-		kvm_x86_ops->update_cr8_intercept = NULL;
+	if (!cpu_has_vmx_tpr_shadow()) {
+		pax_open_kernel();
+		*(void **)&kvm_x86_ops->update_cr8_intercept = NULL;
+		pax_close_kernel();
+	}
 
 	if (enable_ept && !cpu_has_vmx_ept_2m_page())
 		kvm_disable_largepages();
@@ -3680,7 +3687,7 @@ static void vmx_set_constant_host_state(void)
 	vmcs_writel(HOST_IDTR_BASE, dt.address);   /* 22.2.4 */
 
 	asm("mov $.Lkvm_vmx_return, %0" : "=r"(tmpl));
-	vmcs_writel(HOST_RIP, tmpl); /* 22.2.5 */
+	vmcs_writel(HOST_RIP, ktla_ktva(tmpl)); /* 22.2.5 */
 
 	rdmsr(MSR_IA32_SYSENTER_CS, low32, high32);
 	vmcs_write32(HOST_IA32_SYSENTER_CS, low32);
@@ -6218,6 +6225,12 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		"jmp .Lkvm_vmx_return \n\t"
 		".Llaunched: " __ex(ASM_VMX_VMRESUME) "\n\t"
 		".Lkvm_vmx_return: "
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		"ljmp %[cs],$.Lkvm_vmx_return2\n\t"
+		".Lkvm_vmx_return2: "
+#endif
+
 		/* Save guest registers, load host registers, keep flags */
 		"mov %0, %c[wordsize](%%"R"sp) \n\t"
 		"pop %0 \n\t"
@@ -6266,6 +6279,11 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 #endif
 		[cr2]"i"(offsetof(struct vcpu_vmx, vcpu.arch.cr2)),
 		[wordsize]"i"(sizeof(ulong))
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		,[cs]"i"(__KERNEL_CS)
+#endif
+
 	      : "cc", "memory"
 		, R"ax", R"bx", R"di", R"si"
 #ifdef CONFIG_X86_64
@@ -6293,6 +6311,16 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 				vmcs_read32(VM_EXIT_INSTRUCTION_LEN);
 		}
 	}
+
+	asm("mov %0, %%ds; mov %0, %%es; mov %0, %%ss" : : "r"(__KERNEL_DS));
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	loadsegment(fs, __KERNEL_PERCPU);
+#endif
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	__set_fs(current_thread_info()->addr_limit);
+#endif
 
 	vmx->loaded_vmcs->launched = 1;
 
