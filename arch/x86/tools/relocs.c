@@ -482,7 +482,7 @@ static void read_relocs(FILE *fp, int use_real_mode)
 		}
 		base = 0;
 
-#if defined(CONFIG_PAX_KERNEXEC) && defined(CONFIG_X86_32)
+#ifdef CONFIG_X86_32
 		for (j = 0; !use_real_mode && j < ehdr.e_phnum; j++) {
 			if (phdr[j].p_type != PT_LOAD )
 				continue;
@@ -643,7 +643,7 @@ static void walk_relocs(void (*visit)(Elf32_Rel *rel, Elf32_Sym *sym),
 
 #if defined(CONFIG_PAX_KERNEXEC) && defined(CONFIG_X86_32)
 				/* Don't relocate actual code, they are relocated implicitly by the base address of KERNEL_CS */
-				if (!strcmp(sec_name(sym->st_shndx), ".module.text") && !strcmp(sym_name(sym_strtab, sym), "_etext"))
+				if (!strcmp(sec_name(sym->st_shndx), ".text.end") && !strcmp(sym_name(sym_strtab, sym), "_etext"))
 					continue;
 				if (!strcmp(sec_name(sym->st_shndx), ".init.text"))
 					continue;
