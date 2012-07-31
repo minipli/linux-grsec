@@ -780,7 +780,7 @@ void pax_randomize_kstack(struct pt_regs *regs)
 	load_sp0(init_tss + smp_processor_id(), thread);
 
 #ifdef CONFIG_X86_64
-	percpu_write(kernel_stack, thread->sp0);
+	this_cpu_write(kernel_stack, thread->sp0);
 #endif
 }
 #endif
