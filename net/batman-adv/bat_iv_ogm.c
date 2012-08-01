@@ -63,7 +63,7 @@ static int bat_iv_ogm_iface_enable(struct hard_iface *hard_iface)
 
 	/* randomize initial seqno to avoid collision */
 	get_random_bytes(&random_seqno, sizeof(random_seqno));
-	atomic_set(&hard_iface->seqno, random_seqno);
+	atomic_set_unchecked(&hard_iface->seqno, random_seqno);
 
 	hard_iface->packet_len = BATMAN_OGM_HLEN;
 	hard_iface->packet_buff = kmalloc(hard_iface->packet_len, GFP_ATOMIC);

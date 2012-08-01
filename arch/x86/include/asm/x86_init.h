@@ -193,7 +193,7 @@ struct x86_io_apic_ops {
 	unsigned int	(*read)  (unsigned int apic, unsigned int reg);
 	void		(*write) (unsigned int apic, unsigned int reg, unsigned int value);
 	void		(*modify)(unsigned int apic, unsigned int reg, unsigned int value);
-};
+} __no_const;
 
 extern struct x86_init_ops x86_init;
 extern struct x86_cpuinit_ops x86_cpuinit;
