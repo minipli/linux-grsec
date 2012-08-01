@@ -73,36 +73,6 @@ static __init void *alloc_low_page(void)
 }
 
 /*
- * Creates a middle page table and puts a pointer to it in the
- * given global directory entry. This only returns the gd entry
- * in non-PAE compilation mode, since the middle layer is folded.
- */
-static pmd_t * __init one_md_table_init(pgd_t *pgd)
-{
-	pud_t *pud;
-	pmd_t *pmd_table;
-
-#ifdef CONFIG_X86_PAE
-	if (!(pgd_val(*pgd) & _PAGE_PRESENT)) {
-		if (after_bootmem)
-			pmd_table = (pmd_t *)alloc_bootmem_pages(PAGE_SIZE);
-		else
-			pmd_table = (pmd_t *)alloc_low_page();
-		paravirt_alloc_pmd(&init_mm, __pa(pmd_table) >> PAGE_SHIFT);
-		set_pgd(pgd, __pgd(__pa(pmd_table) | _PAGE_PRESENT));
-		pud = pud_offset(pgd, 0);
-		BUG_ON(pmd_table != pmd_offset(pud, 0));
-
-		return pmd_table;
-	}
-#endif
-	pud = pud_offset(pgd, 0);
-	pmd_table = pmd_offset(pud, 0);
-
-	return pmd_table;
-}
-
-/*
  * Create a page table and place a pointer to it in a middle page
  * directory entry:
  */
@@ -122,11 +92,26 @@ static pte_t * __init one_page_table_init(pmd_t *pmd)
 			page_table = (pte_t *)alloc_low_page();
 
 		paravirt_alloc_pte(&init_mm, __pa(page_table) >> PAGE_SHIFT);
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+		set_pmd(pmd, __pmd(__pa(page_table) | _KERNPG_TABLE));
+#else
 		set_pmd(pmd, __pmd(__pa(page_table) | _PAGE_TABLE));
+#endif
 		BUG_ON(page_table != pte_offset_kernel(pmd, 0));
 	}
 
 	return pte_offset_kernel(pmd, 0);
+}
+
+static pmd_t * __init one_md_table_init(pgd_t *pgd)
+{
+	pud_t *pud;
+	pmd_t *pmd_table;
+
+	pud = pud_offset(pgd, 0);
+	pmd_table = pmd_offset(pud, 0);
+
+	return pmd_table;
 }
 
 pmd_t * __init populate_extra_pmd(unsigned long vaddr)
@@ -202,6 +187,7 @@ page_table_range_init(unsigned long start, unsigned long end, pgd_t *pgd_base)
 	int pgd_idx, pmd_idx;
 	unsigned long vaddr;
 	pgd_t *pgd;
+	pud_t *pud;
 	pmd_t *pmd;
 	pte_t *pte = NULL;
 
@@ -211,8 +197,13 @@ page_table_range_init(unsigned long start, unsigned long end, pgd_t *pgd_base)
 	pgd = pgd_base + pgd_idx;
 
 	for ( ; (pgd_idx < PTRS_PER_PGD) && (vaddr != end); pgd++, pgd_idx++) {
-		pmd = one_md_table_init(pgd);
-		pmd = pmd + pmd_index(vaddr);
+		pud = pud_offset(pgd, vaddr);
+		pmd = pmd_offset(pud, vaddr);
+
+#ifdef CONFIG_X86_PAE
+		paravirt_alloc_pmd(&init_mm, __pa(pmd) >> PAGE_SHIFT);
+#endif
+
 		for (; (pmd_idx < PTRS_PER_PMD) && (vaddr != end);
 							pmd++, pmd_idx++) {
 			pte = page_table_kmap_check(one_page_table_init(pmd),
@@ -224,11 +215,20 @@ page_table_range_init(unsigned long start, unsigned long end, pgd_t *pgd_base)
 	}
 }
 
-static inline int is_kernel_text(unsigned long addr)
+static inline int is_kernel_text(unsigned long start, unsigned long end)
 {
-	if (addr >= (unsigned long)_text && addr <= (unsigned long)__init_end)
-		return 1;
-	return 0;
+	if ((start > ktla_ktva((unsigned long)_etext) ||
+	     end <= ktla_ktva((unsigned long)_stext)) &&
+	    (start > ktla_ktva((unsigned long)_einittext) ||
+	     end <= ktla_ktva((unsigned long)_sinittext)) &&
+
+#ifdef CONFIG_ACPI_SLEEP
+	    (start > (unsigned long)__va(acpi_wakeup_address) + 0x4000 || end <= (unsigned long)__va(acpi_wakeup_address)) &&
+#endif
+
+	    (start > (unsigned long)__va(0xfffff) || end <= (unsigned long)__va(0xc0000)))
+		return 0;
+	return 1;
 }
 
 /*
@@ -245,9 +245,10 @@ kernel_physical_mapping_init(unsigned long start,
 	unsigned long last_map_addr = end;
 	unsigned long start_pfn, end_pfn;
 	pgd_t *pgd_base = swapper_pg_dir;
-	int pgd_idx, pmd_idx, pte_ofs;
+	unsigned int pgd_idx, pmd_idx, pte_ofs;
 	unsigned long pfn;
 	pgd_t *pgd;
+	pud_t *pud;
 	pmd_t *pmd;
 	pte_t *pte;
 	unsigned pages_2m, pages_4k;
@@ -280,8 +281,13 @@ repeat:
 	pfn = start_pfn;
 	pgd_idx = pgd_index((pfn<<PAGE_SHIFT) + PAGE_OFFSET);
 	pgd = pgd_base + pgd_idx;
-	for (; pgd_idx < PTRS_PER_PGD; pgd++, pgd_idx++) {
-		pmd = one_md_table_init(pgd);
+	for (; pgd_idx < PTRS_PER_PGD && pfn < max_low_pfn; pgd++, pgd_idx++) {
+		pud = pud_offset(pgd, 0);
+		pmd = pmd_offset(pud, 0);
+
+#ifdef CONFIG_X86_PAE
+		paravirt_alloc_pmd(&init_mm, __pa(pmd) >> PAGE_SHIFT);
+#endif
 
 		if (pfn >= end_pfn)
 			continue;
@@ -293,14 +299,13 @@ repeat:
 #endif
 		for (; pmd_idx < PTRS_PER_PMD && pfn < end_pfn;
 		     pmd++, pmd_idx++) {
-			unsigned int addr = pfn * PAGE_SIZE + PAGE_OFFSET;
+			unsigned long address = pfn * PAGE_SIZE + PAGE_OFFSET;
 
 			/*
 			 * Map with big pages if possible, otherwise
 			 * create normal page tables:
 			 */
 			if (use_pse) {
-				unsigned int addr2;
 				pgprot_t prot = PAGE_KERNEL_LARGE;
 				/*
 				 * first pass will use the same initial
@@ -310,11 +315,7 @@ repeat:
 					__pgprot(PTE_IDENT_ATTR |
 						 _PAGE_PSE);
 
-				addr2 = (pfn + PTRS_PER_PTE-1) * PAGE_SIZE +
-					PAGE_OFFSET + PAGE_SIZE-1;
-
-				if (is_kernel_text(addr) ||
-				    is_kernel_text(addr2))
+				if (is_kernel_text(address, address + PMD_SIZE))
 					prot = PAGE_KERNEL_LARGE_EXEC;
 
 				pages_2m++;
@@ -331,7 +332,7 @@ repeat:
 			pte_ofs = pte_index((pfn<<PAGE_SHIFT) + PAGE_OFFSET);
 			pte += pte_ofs;
 			for (; pte_ofs < PTRS_PER_PTE && pfn < end_pfn;
-			     pte++, pfn++, pte_ofs++, addr += PAGE_SIZE) {
+			     pte++, pfn++, pte_ofs++, address += PAGE_SIZE) {
 				pgprot_t prot = PAGE_KERNEL;
 				/*
 				 * first pass will use the same initial
@@ -339,7 +340,7 @@ repeat:
 				 */
 				pgprot_t init_prot = __pgprot(PTE_IDENT_ATTR);
 
-				if (is_kernel_text(addr))
+				if (is_kernel_text(address, address + PAGE_SIZE))
 					prot = PAGE_KERNEL_EXEC;
 
 				pages_4k++;
@@ -465,7 +466,7 @@ void __init native_pagetable_setup_start(pgd_t *base)
 
 		pud = pud_offset(pgd, va);
 		pmd = pmd_offset(pud, va);
-		if (!pmd_present(*pmd))
+		if (!pmd_present(*pmd) || pmd_huge(*pmd))
 			break;
 
 		pte = pte_offset_kernel(pmd, va);
@@ -517,12 +518,10 @@ void __init early_ioremap_page_table_range_init(void)
 
 static void __init pagetable_init(void)
 {
-	pgd_t *pgd_base = swapper_pg_dir;
-
-	permanent_kmaps_init(pgd_base);
+	permanent_kmaps_init(swapper_pg_dir);
 }
 
-pteval_t __supported_pte_mask __read_mostly = ~(_PAGE_NX | _PAGE_GLOBAL | _PAGE_IOMAP);
+pteval_t __supported_pte_mask __read_only = ~(_PAGE_NX | _PAGE_GLOBAL | _PAGE_IOMAP);
 EXPORT_SYMBOL_GPL(__supported_pte_mask);
 
 /* user-defined highmem size */
@@ -734,6 +733,12 @@ void __init mem_init(void)
 
 	pci_iommu_alloc();
 
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	clone_pgd_range(get_cpu_pgd(0) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+#endif
+
 #ifdef CONFIG_FLATMEM
 	BUG_ON(!mem_map);
 #endif
@@ -760,7 +765,7 @@ void __init mem_init(void)
 			reservedpages++;
 
 	codesize =  (unsigned long) &_etext - (unsigned long) &_text;
-	datasize =  (unsigned long) &_edata - (unsigned long) &_etext;
+	datasize =  (unsigned long) &_edata - (unsigned long) &_sdata;
 	initsize =  (unsigned long) &__init_end - (unsigned long) &__init_begin;
 
 	printk(KERN_INFO "Memory: %luk/%luk available (%dk kernel code, "
@@ -801,10 +806,10 @@ void __init mem_init(void)
 		((unsigned long)&__init_end -
 		 (unsigned long)&__init_begin) >> 10,
 
-		(unsigned long)&_etext, (unsigned long)&_edata,
-		((unsigned long)&_edata - (unsigned long)&_etext) >> 10,
+		(unsigned long)&_sdata, (unsigned long)&_edata,
+		((unsigned long)&_edata - (unsigned long)&_sdata) >> 10,
 
-		(unsigned long)&_text, (unsigned long)&_etext,
+		ktla_ktva((unsigned long)&_text), ktla_ktva((unsigned long)&_etext),
 		((unsigned long)&_etext - (unsigned long)&_text) >> 10);
 
 	/*
@@ -882,6 +887,7 @@ void set_kernel_text_rw(void)
 	if (!kernel_set_to_readonly)
 		return;
 
+	start = ktla_ktva(start);
 	pr_debug("Set kernel text: %lx - %lx for read write\n",
 		 start, start+size);
 
@@ -896,6 +902,7 @@ void set_kernel_text_ro(void)
 	if (!kernel_set_to_readonly)
 		return;
 
+	start = ktla_ktva(start);
 	pr_debug("Set kernel text: %lx - %lx for read only\n",
 		 start, start+size);
 
@@ -924,6 +931,7 @@ void mark_rodata_ro(void)
 	unsigned long start = PFN_ALIGN(_text);
 	unsigned long size = PFN_ALIGN(_etext) - start;
 
+	start = ktla_ktva(start);
 	set_pages_ro(virt_to_page(start), size >> PAGE_SHIFT);
 	printk(KERN_INFO "Write protecting the kernel text: %luk\n",
 		size >> 10);

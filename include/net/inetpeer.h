@@ -51,8 +51,8 @@ struct inet_peer {
 	 */
 	union {
 		struct {
-			atomic_t			rid;		/* Frag reception counter */
-			atomic_t			ip_id_count;	/* IP ID for the next packet */
+			atomic_unchecked_t		rid;		/* Frag reception counter */
+			atomic_unchecked_t		ip_id_count;	/* IP ID for the next packet */
 			__u32				tcp_ts;
 			__u32				tcp_ts_stamp;
 		};
@@ -118,11 +118,11 @@ static inline int inet_getid(struct inet_peer *p, int more)
 	more++;
 	inet_peer_refcheck(p);
 	do {
-		old = atomic_read(&p->ip_id_count);
+		old = atomic_read_unchecked(&p->ip_id_count);
 		new = old + more;
 		if (!new)
 			new = 1;
-	} while (atomic_cmpxchg(&p->ip_id_count, old, new) != old);
+	} while (atomic_cmpxchg_unchecked(&p->ip_id_count, old, new) != old);
 	return new;
 }
 
