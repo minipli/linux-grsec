@@ -2920,7 +2920,9 @@ int __weak module_finalize(const Elf_Ehdr *hdr,
 static int post_relocation(struct module *mod, const struct load_info *info)
 {
 	/* Sort exception table now relocations are done. */
+	pax_open_kernel();
 	sort_extable(mod->extable, mod->extable + mod->num_exentries);
+	pax_close_kernel();
 
 	/* Copy relocated percpu area over. */
 	percpu_modcopy(mod, (void *)info->sechdrs[info->index.pcpu].sh_addr,
