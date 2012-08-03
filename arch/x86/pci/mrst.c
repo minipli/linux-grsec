@@ -234,7 +234,9 @@ int __init pci_mrst_init(void)
 	printk(KERN_INFO "Moorestown platform detected, using MRST PCI ops\n");
 	pci_mmcfg_late_init();
 	pcibios_enable_irq = mrst_pci_irq_enable;
-	pci_root_ops = pci_mrst_ops;
+	pax_open_kernel();
+	memcpy((void *)&pci_root_ops, &pci_mrst_ops, sizeof(pci_mrst_ops));
+	pax_close_kernel();
 	/* Continue with standard init */
 	return 1;
 }
