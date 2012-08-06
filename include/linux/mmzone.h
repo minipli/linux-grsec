@@ -411,7 +411,7 @@ struct zone {
 	unsigned long		flags;		   /* zone flags, see below */
 
 	/* Zone statistics */
-	atomic_long_t		vm_stat[NR_VM_ZONE_STAT_ITEMS];
+	atomic_long_unchecked_t		vm_stat[NR_VM_ZONE_STAT_ITEMS];
 
 	/*
 	 * The target ratio of ACTIVE_ANON to INACTIVE_ANON pages on

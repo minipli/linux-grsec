@@ -95,8 +95,6 @@
 
 #define NUM_SEL_MNT_OPTS 5
 
-extern struct security_operations *security_ops;
-
 /* SECMARK reference count */
 static atomic_t selinux_secmark_refcount = ATOMIC_INIT(0);
 
@@ -2792,11 +2790,16 @@ static int selinux_inode_setxattr(struct dentry *dentry, const char *name,
 
 			/* We strip a nul only if it is at the end, otherwise the
 			 * context contains a nul and we should audit that */
-			str = value;
-			if (str[size - 1] == '\0')
-				audit_size = size - 1;
-			else
-				audit_size = size;
+			if (value) {
+				str = value;
+				if (str[size - 1] == '\0')
+					audit_size = size - 1;
+				else
+					audit_size = size;
+			} else {
+				str = "";
+				audit_size = 0;
+			}
 			ab = audit_log_start(current->audit_context, GFP_ATOMIC, AUDIT_SELINUX_ERR);
 			audit_log_format(ab, "op=setxattr invalid_context=");
 			audit_log_n_untrustedstring(ab, value, audit_size);
@@ -5506,7 +5509,7 @@ static int selinux_key_getsecurity(struct key *key, char **_buffer)
 
 #endif
 
-static struct security_operations selinux_ops = {
+static struct security_operations selinux_ops __read_only = {
 	.name =				"selinux",
 
 	.ptrace_access_check =		selinux_ptrace_access_check,

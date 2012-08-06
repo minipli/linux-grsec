@@ -735,7 +735,7 @@ struct drbd_request;
 struct drbd_epoch {
 	struct list_head list;
 	unsigned int barrier_nr;
-	atomic_t epoch_size; /* increased on every request added. */
+	atomic_unchecked_t epoch_size; /* increased on every request added. */
 	atomic_t active;     /* increased on every req. added, and dec on every finished. */
 	unsigned long flags;
 };
@@ -1110,7 +1110,7 @@ struct drbd_conf {
 	void *int_dig_in;
 	void *int_dig_vv;
 	wait_queue_head_t seq_wait;
-	atomic_t packet_seq;
+	atomic_unchecked_t packet_seq;
 	unsigned int peer_seq;
 	spinlock_t peer_seq_lock;
 	unsigned int minor;
@@ -1651,30 +1651,30 @@ static inline int drbd_setsockopt(struct socket *sock, int level, int optname,
 
 static inline void drbd_tcp_cork(struct socket *sock)
 {
-	int __user val = 1;
+	int val = 1;
 	(void) drbd_setsockopt(sock, SOL_TCP, TCP_CORK,
-			(char __user *)&val, sizeof(val));
+			(char __force_user *)&val, sizeof(val));
 }
 
 static inline void drbd_tcp_uncork(struct socket *sock)
 {
-	int __user val = 0;
+	int val = 0;
 	(void) drbd_setsockopt(sock, SOL_TCP, TCP_CORK,
-			(char __user *)&val, sizeof(val));
+			(char __force_user *)&val, sizeof(val));
 }
 
 static inline void drbd_tcp_nodelay(struct socket *sock)
 {
-	int __user val = 1;
+	int val = 1;
 	(void) drbd_setsockopt(sock, SOL_TCP, TCP_NODELAY,
-			(char __user *)&val, sizeof(val));
+			(char __force_user *)&val, sizeof(val));
 }
 
 static inline void drbd_tcp_quickack(struct socket *sock)
 {
-	int __user val = 2;
+	int val = 2;
 	(void) drbd_setsockopt(sock, SOL_TCP, TCP_QUICKACK,
-			(char __user *)&val, sizeof(val));
+			(char __force_user *)&val, sizeof(val));
 }
 
 void drbd_bump_write_ordering(struct drbd_conf *mdev, enum write_ordering_e wo);

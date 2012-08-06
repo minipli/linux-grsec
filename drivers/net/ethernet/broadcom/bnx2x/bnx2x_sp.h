@@ -487,7 +487,7 @@ struct bnx2x_rx_mode_obj {
 
 	int (*wait_comp)(struct bnx2x *bp,
 			 struct bnx2x_rx_mode_ramrod_params *p);
-};
+} __no_const;
 
 /********************** Set multicast group ***********************************/
 

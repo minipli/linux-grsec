@@ -78,5 +78,8 @@ KBUILD_CFLAGS	:= $(LINUXINCLUDE) -m32 -g -Os -D_SETUP -D__KERNEL__ -D_WAKEUP \
 			$(call cc-option, -fno-unit-at-a-time)) \
 		   $(call cc-option, -fno-stack-protector) \
 		   $(call cc-option, -mpreferred-stack-boundary=2)
+ifdef CONSTIFY_PLUGIN
+KBUILD_CFLAGS	+= $(CONSTIFY_PLUGIN) -fplugin-arg-constify_plugin-no-constify
+endif
 KBUILD_AFLAGS	:= $(KBUILD_CFLAGS) -D__ASSEMBLY__
 GCOV_PROFILE := n

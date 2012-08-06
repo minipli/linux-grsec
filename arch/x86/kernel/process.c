@@ -34,7 +34,8 @@
  * section. Since TSS's are completely CPU-local, we want them
  * on exact cacheline boundaries, to eliminate cacheline ping-pong.
  */
-DEFINE_PER_CPU_SHARED_ALIGNED(struct tss_struct, init_tss) = INIT_TSS;
+struct tss_struct init_tss[NR_CPUS] ____cacheline_internodealigned_in_smp = { [0 ... NR_CPUS-1] = INIT_TSS };
+EXPORT_SYMBOL(init_tss);
 
 #ifdef CONFIG_X86_64
 static DEFINE_PER_CPU(unsigned char, is_idle);
@@ -92,7 +93,7 @@ void arch_task_cache_init(void)
         task_xstate_cachep =
         	kmem_cache_create("task_xstate", xstate_size,
 				  __alignof__(union thread_xstate),
-				  SLAB_PANIC | SLAB_NOTRACK, NULL);
+				  SLAB_PANIC | SLAB_NOTRACK | SLAB_USERCOPY, NULL);
 }
 
 static inline void drop_fpu(struct task_struct *tsk)
@@ -115,7 +116,7 @@ void exit_thread(void)
 	unsigned long *bp = t->io_bitmap_ptr;
 
 	if (bp) {
-		struct tss_struct *tss = &per_cpu(init_tss, get_cpu());
+		struct tss_struct *tss = init_tss + get_cpu();
 
 		t->io_bitmap_ptr = NULL;
 		clear_thread_flag(TIF_IO_BITMAP);
@@ -147,7 +148,7 @@ void show_regs_common(void)
 
 	printk(KERN_CONT "\n");
 	printk(KERN_DEFAULT "Pid: %d, comm: %.20s %s %s %.*s",
-		current->pid, current->comm, print_tainted(),
+		task_pid_nr(current), current->comm, print_tainted(),
 		init_utsname()->release,
 		(int)strcspn(init_utsname()->version, " "),
 		init_utsname()->version);
@@ -161,6 +162,9 @@ void flush_thread(void)
 {
 	struct task_struct *tsk = current;
 
+#if defined(CONFIG_X86_32) && !defined(CONFIG_CC_STACKPROTECTOR) && !defined(CONFIG_PAX_MEMORY_UDEREF)
+	loadsegment(gs, 0);
+#endif
 	flush_ptrace_hw_breakpoint(tsk);
 	memset(tsk->thread.tls_array, 0, sizeof(tsk->thread.tls_array));
 	drop_fpu(tsk);
@@ -318,10 +322,10 @@ int kernel_thread(int (*fn)(void *), void *arg, unsigned long flags)
 	regs.di = (unsigned long) arg;
 
 #ifdef CONFIG_X86_32
-	regs.ds = __USER_DS;
-	regs.es = __USER_DS;
+	regs.ds = __KERNEL_DS;
+	regs.es = __KERNEL_DS;
 	regs.fs = __KERNEL_PERCPU;
-	regs.gs = __KERNEL_STACK_CANARY;
+	savesegment(gs, regs.gs);
 #else
 	regs.ss = __KERNEL_DS;
 #endif
@@ -407,7 +411,7 @@ static void __exit_idle(void)
 void exit_idle(void)
 {
 	/* idle loop has pid 0 */
-	if (current->pid)
+	if (task_pid_nr(current))
 		return;
 	__exit_idle();
 }
@@ -516,7 +520,7 @@ bool set_pm_idle_to_default(void)
 
 	return ret;
 }
-void stop_this_cpu(void *dummy)
+__noreturn void stop_this_cpu(void *dummy)
 {
 	local_irq_disable();
 	/*
@@ -746,16 +750,37 @@ static int __init idle_setup(char *str)
 }
 early_param("idle", idle_setup);
 
-unsigned long arch_align_stack(unsigned long sp)
+#ifdef CONFIG_PAX_RANDKSTACK
+void pax_randomize_kstack(struct pt_regs *regs)
 {
-	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
-		sp -= get_random_int() % 8192;
-	return sp & ~0xf;
-}
+	struct thread_struct *thread = &current->thread;
+	unsigned long time;
 
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long range_end = mm->brk + 0x02000000;
-	return randomize_range(mm->brk, range_end, 0) ? : mm->brk;
-}
+	if (!randomize_va_space)
+		return;
 
+	if (v8086_mode(regs))
+		return;
+
+	rdtscl(time);
+
+	/* P4 seems to return a 0 LSB, ignore it */
+#ifdef CONFIG_MPENTIUM4
+	time &= 0x3EUL;
+	time <<= 2;
+#elif defined(CONFIG_X86_64)
+	time &= 0xFUL;
+	time <<= 4;
+#else
+	time &= 0x1FUL;
+	time <<= 3;
+#endif
+
+	thread->sp0 ^= time;
+	load_sp0(init_tss + smp_processor_id(), thread);
+
+#ifdef CONFIG_X86_64
+	this_cpu_write(kernel_stack, thread->sp0);
+#endif
+}
+#endif

@@ -44,6 +44,7 @@ extern struct mm_struct *pgd_page_get_mm(struct page *page);
 
 #ifndef __PAGETABLE_PUD_FOLDED
 #define set_pgd(pgdp, pgd)		native_set_pgd(pgdp, pgd)
+#define set_pgd_batched(pgdp, pgd)	native_set_pgd_batched(pgdp, pgd)
 #define pgd_clear(pgd)			native_pgd_clear(pgd)
 #endif
 
@@ -81,12 +82,51 @@ extern struct mm_struct *pgd_page_get_mm(struct page *page);
 
 #define arch_end_context_switch(prev)	do {} while(0)
 
+#define pax_open_kernel()	native_pax_open_kernel()
+#define pax_close_kernel()	native_pax_close_kernel()
 #endif	/* CONFIG_PARAVIRT */
+
+#define  __HAVE_ARCH_PAX_OPEN_KERNEL
+#define  __HAVE_ARCH_PAX_CLOSE_KERNEL
+
+#ifdef CONFIG_PAX_KERNEXEC
+static inline unsigned long native_pax_open_kernel(void)
+{
+	unsigned long cr0;
+
+	preempt_disable();
+	barrier();
+	cr0 = read_cr0() ^ X86_CR0_WP;
+	BUG_ON(unlikely(cr0 & X86_CR0_WP));
+	write_cr0(cr0);
+	return cr0 ^ X86_CR0_WP;
+}
+
+static inline unsigned long native_pax_close_kernel(void)
+{
+	unsigned long cr0;
+
+	cr0 = read_cr0() ^ X86_CR0_WP;
+	BUG_ON(unlikely(!(cr0 & X86_CR0_WP)));
+	write_cr0(cr0);
+	barrier();
+	preempt_enable_no_resched();
+	return cr0 ^ X86_CR0_WP;
+}
+#else
+static inline unsigned long native_pax_open_kernel(void) { return 0; }
+static inline unsigned long native_pax_close_kernel(void) { return 0; }
+#endif
 
 /*
  * The following only work if pte_present() is true.
  * Undefined behaviour if not..
  */
+static inline int pte_user(pte_t pte)
+{
+	return pte_val(pte) & _PAGE_USER;
+}
+
 static inline int pte_dirty(pte_t pte)
 {
 	return pte_flags(pte) & _PAGE_DIRTY;
@@ -196,9 +236,29 @@ static inline pte_t pte_wrprotect(pte_t pte)
 	return pte_clear_flags(pte, _PAGE_RW);
 }
 
+static inline pte_t pte_mkread(pte_t pte)
+{
+	return __pte(pte_val(pte) | _PAGE_USER);
+}
+
 static inline pte_t pte_mkexec(pte_t pte)
 {
-	return pte_clear_flags(pte, _PAGE_NX);
+#ifdef CONFIG_X86_PAE
+	if (__supported_pte_mask & _PAGE_NX)
+		return pte_clear_flags(pte, _PAGE_NX);
+	else
+#endif
+		return pte_set_flags(pte, _PAGE_USER);
+}
+
+static inline pte_t pte_exprotect(pte_t pte)
+{
+#ifdef CONFIG_X86_PAE
+	if (__supported_pte_mask & _PAGE_NX)
+		return pte_set_flags(pte, _PAGE_NX);
+	else
+#endif
+		return pte_clear_flags(pte, _PAGE_USER);
 }
 
 static inline pte_t pte_mkdirty(pte_t pte)
@@ -390,6 +450,15 @@ pte_t *populate_extra_pte(unsigned long vaddr);
 #endif
 
 #ifndef __ASSEMBLY__
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+extern pgd_t cpu_pgd[NR_CPUS][PTRS_PER_PGD];
+static inline pgd_t *get_cpu_pgd(unsigned int cpu)
+{
+	return cpu_pgd[cpu];
+}
+#endif
+
 #include <linux/mm_types.h>
 
 static inline int pte_none(pte_t pte)
@@ -560,7 +629,7 @@ static inline pud_t *pud_offset(pgd_t *pgd, unsigned long address)
 
 static inline int pgd_bad(pgd_t pgd)
 {
-	return (pgd_flags(pgd) & ~_PAGE_USER) != _KERNPG_TABLE;
+	return (pgd_flags(pgd) & ~(_PAGE_USER | _PAGE_NX)) != _KERNPG_TABLE;
 }
 
 static inline int pgd_none(pgd_t pgd)
@@ -583,7 +652,12 @@ static inline int pgd_none(pgd_t pgd)
  * pgd_offset() returns a (pgd_t *)
  * pgd_index() is used get the offset into the pgd page's array of pgd_t's;
  */
-#define pgd_offset(mm, address) ((mm)->pgd + pgd_index((address)))
+#define pgd_offset(mm, address) ((mm)->pgd + pgd_index(address))
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+#define pgd_offset_cpu(cpu, address) (get_cpu_pgd(cpu) + pgd_index(address))
+#endif
+
 /*
  * a shortcut which implies the use of the kernel's pgd, instead
  * of a process's
@@ -593,6 +667,20 @@ static inline int pgd_none(pgd_t pgd)
 
 #define KERNEL_PGD_BOUNDARY	pgd_index(PAGE_OFFSET)
 #define KERNEL_PGD_PTRS		(PTRS_PER_PGD - KERNEL_PGD_BOUNDARY)
+
+#ifdef CONFIG_X86_32
+#define USER_PGD_PTRS		KERNEL_PGD_BOUNDARY
+#else
+#define TASK_SIZE_MAX_SHIFT CONFIG_TASK_SIZE_MAX_SHIFT
+#define USER_PGD_PTRS		(_AC(1,UL) << (TASK_SIZE_MAX_SHIFT - PGDIR_SHIFT))
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+#define PAX_USER_SHADOW_BASE	(_AC(1,UL) << TASK_SIZE_MAX_SHIFT)
+#else
+#define PAX_USER_SHADOW_BASE	(_AC(0,UL))
+#endif
+
+#endif
 
 #ifndef __ASSEMBLY__
 
@@ -758,11 +846,23 @@ static inline void pmdp_set_wrprotect(struct mm_struct *mm,
  * dst and src can be on the same page, but the range must not overlap,
  * and must not cross a page boundary.
  */
-static inline void clone_pgd_range(pgd_t *dst, pgd_t *src, int count)
+static inline void clone_pgd_range(pgd_t *dst, const pgd_t *src, int count)
 {
-       memcpy(dst, src, count * sizeof(pgd_t));
+	pax_open_kernel();
+	while (count--)
+		*dst++ = *src++;
+	pax_close_kernel();
 }
 
+#ifdef CONFIG_PAX_PER_CPU_PGD
+extern void __clone_user_pgds(pgd_t *dst, const pgd_t *src);
+#endif
+
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+extern void __shadow_user_pgds(pgd_t *dst, const pgd_t *src);
+#else
+static inline void __shadow_user_pgds(pgd_t *dst, const pgd_t *src) {}
+#endif
 
 #include <asm-generic/pgtable.h>
 #endif	/* __ASSEMBLY__ */
