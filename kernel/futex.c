@@ -54,6 +54,7 @@
 #include <linux/mount.h>
 #include <linux/pagemap.h>
 #include <linux/syscalls.h>
+#include <linux/ptrace.h>
 #include <linux/signal.h>
 #include <linux/export.h>
 #include <linux/magic.h>
@@ -238,6 +239,11 @@ get_futex_key(u32 __user *uaddr, int fshared, union futex_key *key, int rw)
 	struct mm_struct *mm = current->mm;
 	struct page *page, *page_head;
 	int err, ro = 0;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((mm->pax_flags & MF_PAX_SEGMEXEC) && address >= SEGMEXEC_TASK_SIZE)
+		return -EFAULT;
+#endif
 
 	/*
 	 * The futex address must be "naturally" aligned.
@@ -2231,11 +2237,11 @@ int handle_early_requeue_pi_wakeup(struct futex_hash_bucket *hb,
  * @uaddr2:	the pi futex we will take prior to returning to user-space
  *
  * The caller will wait on uaddr and will be requeued by futex_requeue() to
- * uaddr2 which must be PI aware.  Normal wakeup will wake on uaddr2 and
- * complete the acquisition of the rt_mutex prior to returning to userspace.
- * This ensures the rt_mutex maintains an owner when it has waiters; without
- * one, the pi logic wouldn't know which task to boost/deboost, if there was a
- * need to.
+ * uaddr2 which must be PI aware and unique from uaddr.  Normal wakeup will wake
+ * on uaddr2 and complete the acquisition of the rt_mutex prior to returning to
+ * userspace.  This ensures the rt_mutex maintains an owner when it has waiters;
+ * without one, the pi logic would not know which task to boost/deboost, if
+ * there was a need to.
  *
  * We call schedule in futex_wait_queue_me() when we enqueue and return there
  * via the following:
@@ -2271,6 +2277,9 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 	union futex_key key2 = FUTEX_KEY_INIT;
 	struct futex_q q = futex_q_init;
 	int res, ret;
+
+	if (uaddr == uaddr2)
+		return -EINVAL;
 
 	if (!bitset)
 		return -EINVAL;
@@ -2370,7 +2379,7 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, unsigned int flags,
 	 * fault, unlock the rt_mutex and return the fault to userspace.
 	 */
 	if (ret == -EFAULT) {
-		if (rt_mutex_owner(pi_mutex) == current)
+		if (pi_mutex && rt_mutex_owner(pi_mutex) == current)
 			rt_mutex_unlock(pi_mutex);
 	} else if (ret == -EINTR) {
 		/*
@@ -2721,6 +2730,7 @@ static int __init futex_init(void)
 {
 	u32 curval;
 	int i;
+	mm_segment_t oldfs;
 
 	/*
 	 * This will fail and we want it. Some arch implementations do
@@ -2732,8 +2742,11 @@ static int __init futex_init(void)
 	 * implementation, the non-functional ones will return
 	 * -ENOSYS.
 	 */
+	oldfs = get_fs();
+	set_fs(USER_DS);
 	if (cmpxchg_futex_value_locked(&curval, NULL, 0, 0) == -EFAULT)
 		futex_cmpxchg_enabled = 1;
+	set_fs(oldfs);
 
 	for (i = 0; i < ARRAY_SIZE(futex_queues); i++) {
 		plist_head_init(&futex_queues[i].chain);
