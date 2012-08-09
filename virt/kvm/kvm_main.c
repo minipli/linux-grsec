@@ -75,7 +75,7 @@ LIST_HEAD(vm_list);
 
 static cpumask_var_t cpus_hardware_enabled;
 static int kvm_usage_count = 0;
-static atomic_t hardware_enable_failed;
+static atomic_unchecked_t hardware_enable_failed;
 
 struct kmem_cache *kvm_vcpu_cache;
 EXPORT_SYMBOL_GPL(kvm_vcpu_cache);
@@ -2291,7 +2291,7 @@ static void hardware_enable_nolock(void *junk)
 
 	if (r) {
 		cpumask_clear_cpu(cpu, cpus_hardware_enabled);
-		atomic_inc(&hardware_enable_failed);
+		atomic_inc_unchecked(&hardware_enable_failed);
 		printk(KERN_INFO "kvm: enabling virtualization on "
 				 "CPU%d failed\n", cpu);
 	}
@@ -2345,10 +2345,10 @@ static int hardware_enable_all(void)
 
 	kvm_usage_count++;
 	if (kvm_usage_count == 1) {
-		atomic_set(&hardware_enable_failed, 0);
+		atomic_set_unchecked(&hardware_enable_failed, 0);
 		on_each_cpu(hardware_enable_nolock, NULL, 1);
 
-		if (atomic_read(&hardware_enable_failed)) {
+		if (atomic_read_unchecked(&hardware_enable_failed)) {
 			hardware_disable_all_nolock();
 			r = -EBUSY;
 		}
@@ -2709,7 +2709,7 @@ static void kvm_sched_out(struct preempt_notifier *pn,
 	kvm_arch_vcpu_put(vcpu);
 }
 
-int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
+int kvm_init(const void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 		  struct module *module)
 {
 	int r;
@@ -2772,7 +2772,7 @@ int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 	if (!vcpu_align)
 		vcpu_align = __alignof__(struct kvm_vcpu);
 	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", vcpu_size, vcpu_align,
-					   0, NULL);
+					   SLAB_USERCOPY, NULL);
 	if (!kvm_vcpu_cache) {
 		r = -ENOMEM;
 		goto out_free_3;
@@ -2782,9 +2782,11 @@ int kvm_init(void *opaque, unsigned vcpu_size, unsigned vcpu_align,
 	if (r)
 		goto out_free;
 
-	kvm_chardev_ops.owner = module;
-	kvm_vm_fops.owner = module;
-	kvm_vcpu_fops.owner = module;
+	pax_open_kernel();
+	*(void **)&kvm_chardev_ops.owner = module;
+	*(void **)&kvm_vm_fops.owner = module;
+	*(void **)&kvm_vcpu_fops.owner = module;
+	pax_close_kernel();
 
 	r = misc_register(&kvm_dev);
 	if (r) {

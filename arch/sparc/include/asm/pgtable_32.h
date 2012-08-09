@@ -50,6 +50,9 @@ extern unsigned long calc_highpages(void);
 #define PAGE_SHARED	SRMMU_PAGE_SHARED
 #define PAGE_COPY	SRMMU_PAGE_COPY
 #define PAGE_READONLY	SRMMU_PAGE_RDONLY
+#define PAGE_SHARED_NOEXEC	SRMMU_PAGE_SHARED_NOEXEC
+#define PAGE_COPY_NOEXEC	SRMMU_PAGE_COPY_NOEXEC
+#define PAGE_READONLY_NOEXEC	SRMMU_PAGE_RDONLY_NOEXEC
 #define PAGE_KERNEL	SRMMU_PAGE_KERNEL
 
 /* Top-level page directory */
@@ -61,18 +64,18 @@ extern unsigned long ptr_in_current_pgd;
 
 /*         xwr */
 #define __P000  PAGE_NONE
-#define __P001  PAGE_READONLY
-#define __P010  PAGE_COPY
-#define __P011  PAGE_COPY
+#define __P001  PAGE_READONLY_NOEXEC
+#define __P010  PAGE_COPY_NOEXEC
+#define __P011  PAGE_COPY_NOEXEC
 #define __P100  PAGE_READONLY
 #define __P101  PAGE_READONLY
 #define __P110  PAGE_COPY
 #define __P111  PAGE_COPY
 
 #define __S000	PAGE_NONE
-#define __S001	PAGE_READONLY
-#define __S010	PAGE_SHARED
-#define __S011	PAGE_SHARED
+#define __S001	PAGE_READONLY_NOEXEC
+#define __S010	PAGE_SHARE_NOEXEC
+#define __S011	PAGE_SHARE_NOEXEC
 #define __S100	PAGE_READONLY
 #define __S101	PAGE_READONLY
 #define __S110	PAGE_SHARED
