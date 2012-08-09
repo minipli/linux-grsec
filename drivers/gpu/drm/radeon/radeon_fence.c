@@ -70,7 +70,7 @@ int radeon_fence_emit(struct radeon_device *rdev, struct radeon_fence *fence)
 		write_unlock_irqrestore(&rdev->fence_lock, irq_flags);
 		return 0;
 	}
-	fence->seq = atomic_add_return(1, &rdev->fence_drv[fence->ring].seq);
+	fence->seq = atomic_add_return_unchecked(1, &rdev->fence_drv[fence->ring].seq);
 	if (!rdev->ring[fence->ring].ready)
 		/* FIXME: cp is not running assume everythings is done right
 		 * away
@@ -405,7 +405,7 @@ int radeon_fence_driver_start_ring(struct radeon_device *rdev, int ring)
 	}
 	rdev->fence_drv[ring].cpu_addr = &rdev->wb.wb[index/4];
 	rdev->fence_drv[ring].gpu_addr = rdev->wb.gpu_addr + index;
-	radeon_fence_write(rdev, atomic_read(&rdev->fence_drv[ring].seq), ring);
+	radeon_fence_write(rdev, atomic_read_unchecked(&rdev->fence_drv[ring].seq), ring);
 	rdev->fence_drv[ring].initialized = true;
 	DRM_INFO("fence driver on ring %d use gpu addr 0x%08Lx and cpu addr 0x%p\n",
 		 ring, rdev->fence_drv[ring].gpu_addr, rdev->fence_drv[ring].cpu_addr);
@@ -418,7 +418,7 @@ static void radeon_fence_driver_init_ring(struct radeon_device *rdev, int ring)
 	rdev->fence_drv[ring].scratch_reg = -1;
 	rdev->fence_drv[ring].cpu_addr = NULL;
 	rdev->fence_drv[ring].gpu_addr = 0;
-	atomic_set(&rdev->fence_drv[ring].seq, 0);
+	atomic_set_unchecked(&rdev->fence_drv[ring].seq, 0);
 	INIT_LIST_HEAD(&rdev->fence_drv[ring].created);
 	INIT_LIST_HEAD(&rdev->fence_drv[ring].emitted);
 	INIT_LIST_HEAD(&rdev->fence_drv[ring].signaled);
