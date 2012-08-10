@@ -8,6 +8,7 @@
 
 #include <linux/linkage.h>
 #include <asm/dwarf2.h>
+#include <asm/alternative-asm.h>
 
 #define FIX_ALIGNMENT 1
 
@@ -15,6 +16,7 @@
 #include <asm/asm-offsets.h>
 #include <asm/thread_info.h>
 #include <asm/asm.h>
+#include <asm/pgtable.h>
 
 	.macro ALIGN_DESTINATION
 #ifdef FIX_ALIGNMENT
@@ -48,6 +50,15 @@
  */
 ENTRY(__copy_user_nocache)
 	CFI_STARTPROC
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	mov $PAX_USER_SHADOW_BASE,%rcx
+	cmp %rcx,%rsi
+	jae 1f
+	add %rcx,%rsi
+1:
+#endif
+
 	cmpl $8,%edx
 	jb 20f		/* less then 8 bytes, go to byte copy loop */
 	ALIGN_DESTINATION
@@ -57,19 +68,19 @@ ENTRY(__copy_user_nocache)
 	jz 17f
 1:	movq (%rsi),%r8
 2:	movq 1*8(%rsi),%r9
-3:	movq 2*8(%rsi),%r10
+3:	movq 2*8(%rsi),%rax
 4:	movq 3*8(%rsi),%r11
 5:	movnti %r8,(%rdi)
 6:	movnti %r9,1*8(%rdi)
-7:	movnti %r10,2*8(%rdi)
+7:	movnti %rax,2*8(%rdi)
 8:	movnti %r11,3*8(%rdi)
 9:	movq 4*8(%rsi),%r8
 10:	movq 5*8(%rsi),%r9
-11:	movq 6*8(%rsi),%r10
+11:	movq 6*8(%rsi),%rax
 12:	movq 7*8(%rsi),%r11
 13:	movnti %r8,4*8(%rdi)
 14:	movnti %r9,5*8(%rdi)
-15:	movnti %r10,6*8(%rdi)
+15:	movnti %rax,6*8(%rdi)
 16:	movnti %r11,7*8(%rdi)
 	leaq 64(%rsi),%rsi
 	leaq 64(%rdi),%rdi
@@ -96,6 +107,7 @@ ENTRY(__copy_user_nocache)
 	jnz 21b
 23:	xorl %eax,%eax
 	sfence
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"

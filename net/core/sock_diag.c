@@ -16,20 +16,27 @@ static DEFINE_MUTEX(sock_diag_table_mutex);
 
 int sock_diag_check_cookie(void *sk, __u32 *cookie)
 {
+#ifndef CONFIG_GRKERNSEC_HIDESYM
 	if ((cookie[0] != INET_DIAG_NOCOOKIE ||
 	     cookie[1] != INET_DIAG_NOCOOKIE) &&
 	    ((u32)(unsigned long)sk != cookie[0] ||
 	     (u32)((((unsigned long)sk) >> 31) >> 1) != cookie[1]))
 		return -ESTALE;
 	else
+#endif
 		return 0;
 }
 EXPORT_SYMBOL_GPL(sock_diag_check_cookie);
 
 void sock_diag_save_cookie(void *sk, __u32 *cookie)
 {
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	cookie[0] = 0;
+	cookie[1] = 0;
+#else
 	cookie[0] = (u32)(unsigned long)sk;
 	cookie[1] = (u32)(((unsigned long)sk >> 31) >> 1);
+#endif
 }
 EXPORT_SYMBOL_GPL(sock_diag_save_cookie);
 
