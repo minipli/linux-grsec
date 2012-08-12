@@ -126,7 +126,7 @@ static void *mod_code_ip;		/* holds the IP to write to */
 static const void *mod_code_newcode;	/* holds the text to write to the IP */
 
 static unsigned nmi_wait_count;
-static atomic_t nmi_update_count = ATOMIC_INIT(0);
+static atomic_unchecked_t nmi_update_count = ATOMIC_INIT(0);
 
 int ftrace_arch_read_dyn_info(char *buf, int size)
 {
@@ -134,7 +134,7 @@ int ftrace_arch_read_dyn_info(char *buf, int size)
 
 	r = snprintf(buf, size, "%u %u",
 		     nmi_wait_count,
-		     atomic_read(&nmi_update_count));
+		     atomic_read_unchecked(&nmi_update_count));
 	return r;
 }
 
@@ -177,8 +177,10 @@ void ftrace_nmi_enter(void)
 
 	if (atomic_inc_return(&nmi_running) & MOD_CODE_WRITE_FLAG) {
 		smp_rmb();
+		pax_open_kernel();
 		ftrace_mod_code();
-		atomic_inc(&nmi_update_count);
+		pax_close_kernel();
+		atomic_inc_unchecked(&nmi_update_count);
 	}
 	/* Must have previous changes seen before executions */
 	smp_mb();
@@ -271,6 +273,8 @@ ftrace_modify_code(unsigned long ip, unsigned const char *old_code,
 {
 	unsigned char replaced[MCOUNT_INSN_SIZE];
 
+	ip = ktla_ktva(ip);
+
 	/*
 	 * Note: Due to modules and __init, code can
 	 *  disappear and change, we need to protect against faulting
@@ -327,7 +331,7 @@ int ftrace_update_ftrace_func(ftrace_func_t func)
 	unsigned char old[MCOUNT_INSN_SIZE], *new;
 	int ret;
 
-	memcpy(old, &ftrace_call, MCOUNT_INSN_SIZE);
+	memcpy(old, (void *)ktla_ktva((unsigned long)ftrace_call), MCOUNT_INSN_SIZE);
 	new = ftrace_call_replace(ip, (unsigned long)func);
 	ret = ftrace_modify_code(ip, old, new);
 
@@ -352,6 +356,8 @@ static int ftrace_mod_jmp(unsigned long ip,
 			  int old_offset, int new_offset)
 {
 	unsigned char code[MCOUNT_INSN_SIZE];
+
+	ip = ktla_ktva(ip);
 
 	if (probe_kernel_read(code, (void *)ip, MCOUNT_INSN_SIZE))
 		return -EFAULT;

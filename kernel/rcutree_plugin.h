@@ -842,7 +842,7 @@ void synchronize_rcu_expedited(void)
 
 	/* Clean up and exit. */
 	smp_mb(); /* ensure expedited GP seen before counter increment. */
-	ACCESS_ONCE(sync_rcu_preempt_exp_count)++;
+	ACCESS_ONCE_RW(sync_rcu_preempt_exp_count)++;
 unlock_mb_ret:
 	mutex_unlock(&sync_rcu_preempt_exp_mutex);
 mb_ret:
@@ -1815,8 +1815,8 @@ EXPORT_SYMBOL_GPL(synchronize_sched_expedited);
 
 #else /* #ifndef CONFIG_SMP */
 
-static atomic_t sync_sched_expedited_started = ATOMIC_INIT(0);
-static atomic_t sync_sched_expedited_done = ATOMIC_INIT(0);
+static atomic_unchecked_t sync_sched_expedited_started = ATOMIC_INIT(0);
+static atomic_unchecked_t sync_sched_expedited_done = ATOMIC_INIT(0);
 
 static int synchronize_sched_expedited_cpu_stop(void *data)
 {
@@ -1871,7 +1871,7 @@ void synchronize_sched_expedited(void)
 	int firstsnap, s, snap, trycount = 0;
 
 	/* Note that atomic_inc_return() implies full memory barrier. */
-	firstsnap = snap = atomic_inc_return(&sync_sched_expedited_started);
+	firstsnap = snap = atomic_inc_return_unchecked(&sync_sched_expedited_started);
 	get_online_cpus();
 
 	/*
@@ -1892,7 +1892,7 @@ void synchronize_sched_expedited(void)
 		}
 
 		/* Check to see if someone else did our work for us. */
-		s = atomic_read(&sync_sched_expedited_done);
+		s = atomic_read_unchecked(&sync_sched_expedited_done);
 		if (UINT_CMP_GE((unsigned)s, (unsigned)firstsnap)) {
 			smp_mb(); /* ensure test happens before caller kfree */
 			return;
@@ -1907,7 +1907,7 @@ void synchronize_sched_expedited(void)
 		 * grace period works for us.
 		 */
 		get_online_cpus();
-		snap = atomic_read(&sync_sched_expedited_started) - 1;
+		snap = atomic_read_unchecked(&sync_sched_expedited_started) - 1;
 		smp_mb(); /* ensure read is before try_stop_cpus(). */
 	}
 
@@ -1918,12 +1918,12 @@ void synchronize_sched_expedited(void)
 	 * than we did beat us to the punch.
 	 */
 	do {
-		s = atomic_read(&sync_sched_expedited_done);
+		s = atomic_read_unchecked(&sync_sched_expedited_done);
 		if (UINT_CMP_GE((unsigned)s, (unsigned)snap)) {
 			smp_mb(); /* ensure test happens before caller kfree */
 			break;
 		}
-	} while (atomic_cmpxchg(&sync_sched_expedited_done, s, snap) != s);
+	} while (atomic_cmpxchg_unchecked(&sync_sched_expedited_done, s, snap) != s);
 
 	put_online_cpus();
 }
@@ -1985,7 +1985,7 @@ int rcu_needs_cpu(int cpu)
 	for_each_online_cpu(thatcpu) {
 		if (thatcpu == cpu)
 			continue;
-		snap = atomic_add_return(0, &per_cpu(rcu_dynticks,
+		snap = atomic_add_return_unchecked(0, &per_cpu(rcu_dynticks,
 						     thatcpu).dynticks);
 		smp_mb(); /* Order sampling of snap with end of grace period. */
 		if ((snap & 0x1) != 0) {
