@@ -66,7 +66,7 @@ static void check_size_overflow(gimple stmt, tree size_overflow_type, tree cast_
 static tree get_size_overflow_type(gimple stmt, tree node);
 
 static struct plugin_info size_overflow_plugin_info = {
-	.version	= "20120809beta",
+	.version	= "20120811beta",
 	.help		= "no-size-overflow\tturn off size overflow checking\n",
 };
 
@@ -784,10 +784,8 @@ static tree handle_unary_rhs(struct pointer_set_t *visited, bool *potentionally_
 	change_rhs1(stmt, new_rhs1);
 	check_size_overflow(stmt, size_overflow_type, new_rhs1, rhs1, potentionally_overflowed, BEFORE_STMT);
 
-	rhs1 = gimple_assign_rhs1(stmt);
-	rhs1_type = TREE_TYPE(rhs1);
 	if (TYPE_UNSIGNED(rhs1_type) != TYPE_UNSIGNED(lhs_type))
-		return create_assign(visited, potentionally_overflowed, stmt, rhs1, AFTER_STMT);
+		return create_assign(visited, potentionally_overflowed, stmt, lhs, AFTER_STMT);
 
 	if (!check_mode_type(stmt))
 		return create_assign(visited, potentionally_overflowed, stmt, lhs, AFTER_STMT);
@@ -859,7 +857,7 @@ static tree create_string_param(tree string)
 	return build1(ADDR_EXPR, ptr_type_node, string);
 }
 
-static void insert_cond_result(basic_block bb_true, gimple stmt, tree arg)
+static void insert_cond_result(basic_block bb_true, gimple stmt, tree arg, bool min)
 {
 	gimple func_stmt, def_stmt;
 	tree current_func, loc_file, loc_line, ssa_name;
@@ -884,7 +882,10 @@ static void insert_cond_result(basic_block bb_true, gimple stmt, tree arg)
 	current_func = build_string(NAME_LEN(current_function_decl) + 1, NAME(current_function_decl));
 	current_func = create_string_param(current_func);
 
-	snprintf(ssa_name_buf, 100, "%s_%u\n", NAME(SSA_NAME_VAR(arg)), SSA_NAME_VERSION(arg));
+	if (min)
+		snprintf(ssa_name_buf, 100, "%s_%u (min)\n", NAME(SSA_NAME_VAR(arg)), SSA_NAME_VERSION(arg));
+	else
+		snprintf(ssa_name_buf, 100, "%s_%u (max)\n", NAME(SSA_NAME_VAR(arg)), SSA_NAME_VERSION(arg));
 	ssa_name = build_string(100, ssa_name_buf);
 	ssa_name = create_string_param(ssa_name);
 
@@ -901,7 +902,7 @@ static void __unused print_the_code_insertions(gimple stmt)
 	inform(loc, "Integer size_overflow check applied here.");
 }
 
-static void insert_check_size_overflow(gimple stmt, enum tree_code cond_code, tree arg, tree type_value, bool before)
+static void insert_check_size_overflow(gimple stmt, enum tree_code cond_code, tree arg, tree type_value, bool before, bool min)
 {
 	basic_block cond_bb, join_bb, bb_true;
 	edge e;
@@ -935,7 +936,7 @@ static void insert_check_size_overflow(gimple stmt, enum tree_code cond_code, tr
 	}
 
 	insert_cond(cond_bb, arg, cond_code, type_value);
-	insert_cond_result(bb_true, stmt, arg);
+	insert_cond_result(bb_true, stmt, arg, min);
 
 //	print_the_code_insertions(stmt);
 }
@@ -960,19 +961,20 @@ static void check_size_overflow(gimple stmt, tree size_overflow_type, tree cast_
 	gcc_assert(useless_type_conversion_p(cast_rhs_type, type_max_type));
 	gcc_assert(useless_type_conversion_p(type_max_type, type_min_type));
 
-	insert_check_size_overflow(stmt, GT_EXPR, cast_rhs, type_max, before);
-	insert_check_size_overflow(stmt, LT_EXPR, cast_rhs, type_min, before);
+	insert_check_size_overflow(stmt, GT_EXPR, cast_rhs, type_max, before, false);
+	insert_check_size_overflow(stmt, LT_EXPR, cast_rhs, type_min, before, true);
 }
 
-static tree get_handle_const_assign_size_overflow_type(gimple def_stmt, tree var, tree var_rhs)
+static tree get_handle_const_assign_size_overflow_type(gimple def_stmt, tree var_rhs)
 {
 	gimple var_rhs_def_stmt;
-	tree var_type = TREE_TYPE(var);
+	tree lhs = gimple_get_lhs(def_stmt);
+	tree lhs_type = TREE_TYPE(lhs);
 	tree rhs1_type = TREE_TYPE(gimple_assign_rhs1(def_stmt));
 	tree rhs2_type = TREE_TYPE(gimple_assign_rhs2(def_stmt));
 
 	if (var_rhs == NULL_TREE)
-		return get_size_overflow_type(def_stmt, var);
+		return get_size_overflow_type(def_stmt, lhs);
 
 	var_rhs_def_stmt = get_def_stmt(var_rhs);
 
@@ -985,12 +987,12 @@ static tree get_handle_const_assign_size_overflow_type(gimple def_stmt, tree var
 	if (gimple_assign_rhs_code(def_stmt) == RSHIFT_EXPR)
 		return get_size_overflow_type(var_rhs_def_stmt, var_rhs);
 
-	if (!useless_type_conversion_p(var_type, rhs1_type) || !useless_type_conversion_p(rhs1_type, rhs2_type)) {
+	if (!useless_type_conversion_p(lhs_type, rhs1_type) || !useless_type_conversion_p(rhs1_type, rhs2_type)) {
 		debug_gimple_stmt(def_stmt);
 		gcc_unreachable();
 	}
 
-	return get_size_overflow_type(def_stmt, var);
+	return get_size_overflow_type(def_stmt, lhs);
 }
 
 static tree handle_const_assign(struct pointer_set_t *visited, bool *potentionally_overflowed, gimple def_stmt, tree var_rhs, tree new_rhs1, tree new_rhs2)
@@ -1005,12 +1007,12 @@ static tree handle_const_assign(struct pointer_set_t *visited, bool *potentional
 		return create_assign(visited, potentionally_overflowed, def_stmt, lhs, AFTER_STMT);
 
 	if (new_rhs2 == NULL_TREE) {
-		size_overflow_type = get_handle_const_assign_size_overflow_type(def_stmt, lhs, new_rhs1);
+		size_overflow_type = get_handle_const_assign_size_overflow_type(def_stmt, new_rhs1);
 		new_rhs2 = cast_a_tree(size_overflow_type, rhs2);
 		orig_rhs = rhs1;
 		gimple_assign_set_rhs = &gimple_assign_set_rhs1;
 	} else {
-		size_overflow_type = get_handle_const_assign_size_overflow_type(def_stmt, lhs, new_rhs2);
+		size_overflow_type = get_handle_const_assign_size_overflow_type(def_stmt, new_rhs2);
 		new_rhs1 = cast_a_tree(size_overflow_type, rhs1);
 		orig_rhs = rhs2;
 		gimple_assign_set_rhs = &gimple_assign_set_rhs2;
