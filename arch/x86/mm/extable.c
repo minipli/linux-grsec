@@ -6,12 +6,25 @@
 static inline unsigned long
 ex_insn_addr(const struct exception_table_entry *x)
 {
-	return (unsigned long)&x->insn + x->insn;
+//printk(KERN_ERR "fixup %p insn:%x fixup:%x\n", x, x->insn, x->fixup);
+	unsigned long reloc = 0;
+
+#if defined(CONFIG_PAX_KERNEXEC) && defined(CONFIG_X86_32)
+	reloc = ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
+	return (unsigned long)&x->insn + x->insn + reloc;
 }
 static inline unsigned long
 ex_fixup_addr(const struct exception_table_entry *x)
 {
-	return (unsigned long)&x->fixup + x->fixup;
+	unsigned long reloc = 0;
+
+#if defined(CONFIG_PAX_KERNEXEC) && defined(CONFIG_X86_32)
+	reloc = ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
+	return (unsigned long)&x->fixup + x->fixup + reloc;
 }
 
 int fixup_exception(struct pt_regs *regs)
@@ -20,7 +33,7 @@ int fixup_exception(struct pt_regs *regs)
 	unsigned long new_ip;
 
 #ifdef CONFIG_PNPBIOS
-	if (unlikely(SEGMENT_IS_PNP_CODE(regs->cs))) {
+	if (unlikely(!v8086_mode(regs) && SEGMENT_IS_PNP_CODE(regs->cs))) {
 		extern u32 pnp_bios_fault_eip, pnp_bios_fault_esp;
 		extern u32 pnp_bios_is_utter_crap;
 		pnp_bios_is_utter_crap = 1;
@@ -34,6 +47,7 @@ int fixup_exception(struct pt_regs *regs)
 #endif
 
 	fixup = search_exception_tables(regs->ip);
+//printk(KERN_ERR "fixup %p %lx\n", fixup, regs->ip);
 	if (fixup) {
 		new_ip = ex_fixup_addr(fixup);
 
