@@ -527,8 +527,8 @@ static void _mix_pool_bytes(struct entropy_store *r, const void *in,
 		input_rotate += i ? 7 : 14;
 	}
 
-	ACCESS_ONCE(r->input_rotate) = input_rotate;
-	ACCESS_ONCE(r->add_ptr) = i;
+	ACCESS_ONCE_RW(r->input_rotate) = input_rotate;
+	ACCESS_ONCE_RW(r->add_ptr) = i;
 	smp_wmb();
 
 	if (out)
@@ -804,8 +804,8 @@ u64 latent_entropy;
 
 __init void transfer_latent_entropy(void)
 {
-	mix_pool_bytes(&input_pool, &latent_entropy, sizeof(latent_entropy));
-	mix_pool_bytes(&nonblocking_pool, &latent_entropy, sizeof(latent_entropy));
+	mix_pool_bytes(&input_pool, &latent_entropy, sizeof(latent_entropy), NULL);
+	mix_pool_bytes(&nonblocking_pool, &latent_entropy, sizeof(latent_entropy), NULL);
 //	printk(KERN_INFO "PAX: transferring latent entropy: %16llx\n", latent_entropy);
 }
 #endif
