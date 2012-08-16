@@ -327,6 +327,7 @@ struct e1000_mac_operations {
 	void (*release_swfw_sync)(struct e1000_hw *, u16);
 
 };
+typedef struct e1000_mac_operations __no_const e1000_mac_operations_no_const;
 
 struct e1000_phy_operations {
 	s32  (*acquire)(struct e1000_hw *);
@@ -343,6 +344,7 @@ struct e1000_phy_operations {
 	s32  (*set_d3_lplu_state)(struct e1000_hw *, bool);
 	s32  (*write_reg)(struct e1000_hw *, u32, u16);
 };
+typedef struct e1000_phy_operations __no_const e1000_phy_operations_no_const;
 
 struct e1000_nvm_operations {
 	s32  (*acquire)(struct e1000_hw *);
@@ -353,6 +355,7 @@ struct e1000_nvm_operations {
 	s32  (*validate)(struct e1000_hw *);
 	s32  (*valid_led_default)(struct e1000_hw *, u16 *);
 };
+typedef struct e1000_nvm_operations __no_const e1000_nvm_operations_no_const;
 
 struct e1000_info {
 	s32 (*get_invariants)(struct e1000_hw *);
@@ -364,7 +367,7 @@ struct e1000_info {
 extern const struct e1000_info e1000_82575_info;
 
 struct e1000_mac_info {
-	struct e1000_mac_operations ops;
+	e1000_mac_operations_no_const ops;
 
 	u8 addr[6];
 	u8 perm_addr[6];
@@ -402,7 +405,7 @@ struct e1000_mac_info {
 };
 
 struct e1000_phy_info {
-	struct e1000_phy_operations ops;
+	e1000_phy_operations_no_const ops;
 
 	enum e1000_phy_type type;
 
@@ -437,7 +440,7 @@ struct e1000_phy_info {
 };
 
 struct e1000_nvm_info {
-	struct e1000_nvm_operations ops;
+	e1000_nvm_operations_no_const ops;
 	enum e1000_nvm_type type;
 	enum e1000_nvm_override override;
 
@@ -482,6 +485,7 @@ struct e1000_mbx_operations {
 	s32 (*check_for_ack)(struct e1000_hw *, u16);
 	s32 (*check_for_rst)(struct e1000_hw *, u16);
 };
+typedef struct e1000_mbx_operations __no_const e1000_mbx_operations_no_const;
 
 struct e1000_mbx_stats {
 	u32 msgs_tx;
@@ -493,7 +497,7 @@ struct e1000_mbx_stats {
 };
 
 struct e1000_mbx_info {
-	struct e1000_mbx_operations ops;
+	e1000_mbx_operations_no_const ops;
 	struct e1000_mbx_stats stats;
 	u32 timeout;
 	u32 usec_delay;

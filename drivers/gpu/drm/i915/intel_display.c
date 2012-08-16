@@ -2000,7 +2000,7 @@ intel_finish_fb(struct drm_framebuffer *old_fb)
 
 	wait_event(dev_priv->pending_flip_queue,
 		   atomic_read(&dev_priv->mm.wedged) ||
-		   atomic_read(&obj->pending_flip) == 0);
+		   atomic_read_unchecked(&obj->pending_flip) == 0);
 
 	/* Big Hammer, we also need to ensure that any pending
 	 * MI_WAIT_FOR_EVENT inside a user batch buffer on the
@@ -5925,9 +5925,8 @@ static void do_intel_finish_page_flip(struct drm_device *dev,
 
 	obj = work->old_fb_obj;
 
-	atomic_clear_mask(1 << intel_crtc->plane,
-			  &obj->pending_flip.counter);
-	if (atomic_read(&obj->pending_flip) == 0)
+	atomic_clear_mask_unchecked(1 << intel_crtc->plane, &obj->pending_flip);
+	if (atomic_read_unchecked(&obj->pending_flip) == 0)
 		wake_up(&dev_priv->pending_flip_queue);
 
 	schedule_work(&work->work);
@@ -6264,7 +6263,7 @@ static int intel_crtc_page_flip(struct drm_crtc *crtc,
 	/* Block clients from rendering to the new back buffer until
 	 * the flip occurs and the object is no longer visible.
 	 */
-	atomic_add(1 << intel_crtc->plane, &work->old_fb_obj->pending_flip);
+	atomic_add_unchecked(1 << intel_crtc->plane, &work->old_fb_obj->pending_flip);
 
 	ret = dev_priv->display.queue_flip(dev, crtc, fb, obj);
 	if (ret)
@@ -6279,7 +6278,7 @@ static int intel_crtc_page_flip(struct drm_crtc *crtc,
 	return 0;
 
 cleanup_pending:
-	atomic_sub(1 << intel_crtc->plane, &work->old_fb_obj->pending_flip);
+	atomic_sub_unchecked(1 << intel_crtc->plane, &work->old_fb_obj->pending_flip);
 	drm_gem_object_unreference(&work->old_fb_obj->base);
 	drm_gem_object_unreference(&obj->base);
 	mutex_unlock(&dev->struct_mutex);

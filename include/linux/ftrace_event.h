@@ -97,7 +97,7 @@ struct trace_event_functions {
 	trace_print_func	raw;
 	trace_print_func	hex;
 	trace_print_func	binary;
-};
+} __no_const;
 
 struct trace_event {
 	struct hlist_node		node;
@@ -263,7 +263,7 @@ extern int trace_define_field(struct ftrace_event_call *call, const char *type,
 extern int trace_add_event_call(struct ftrace_event_call *call);
 extern void trace_remove_event_call(struct ftrace_event_call *call);
 
-#define is_signed_type(type)	(((type)(-1)) < 0)
+#define is_signed_type(type)	(((type)(-1)) < (type)1)
 
 int trace_set_clr_event(const char *system, const char *event, int set);
 

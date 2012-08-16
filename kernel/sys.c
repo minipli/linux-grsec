@@ -157,6 +157,12 @@ static int set_one_prio(struct task_struct *p, int niceval, int error)
 		error = -EACCES;
 		goto out;
 	}
+
+	if (gr_handle_chroot_setpriority(p, niceval)) {
+		error = -EACCES;
+		goto out;
+	}
+
 	no_nice = security_task_setnice(p, niceval);
 	if (no_nice) {
 		error = no_nice;
@@ -594,6 +600,9 @@ SYSCALL_DEFINE2(setregid, gid_t, rgid, gid_t, egid)
 			goto error;
 	}
 
+	if (gr_check_group_change(new->gid, new->egid, -1))
+		goto error;
+
 	if (rgid != (gid_t) -1 ||
 	    (egid != (gid_t) -1 && !gid_eq(kegid, old->gid)))
 		new->sgid = new->egid;
@@ -629,6 +638,10 @@ SYSCALL_DEFINE1(setgid, gid_t, gid)
 	old = current_cred();
 
 	retval = -EPERM;
+
+	if (gr_check_group_change(kgid, kgid, kgid))
+		goto error;
+
 	if (nsown_capable(CAP_SETGID))
 		new->gid = new->egid = new->sgid = new->fsgid = kgid;
 	else if (gid_eq(kgid, old->gid) || gid_eq(kgid, old->sgid))
@@ -646,7 +659,7 @@ error:
 /*
  * change the user struct in a credentials set to match the new UID
  */
-static int set_user(struct cred *new)
+int set_user(struct cred *new)
 {
 	struct user_struct *new_user;
 
@@ -726,6 +739,9 @@ SYSCALL_DEFINE2(setreuid, uid_t, ruid, uid_t, euid)
 			goto error;
 	}
 
+	if (gr_check_user_change(new->uid, new->euid, -1))
+		goto error;
+
 	if (!uid_eq(new->uid, old->uid)) {
 		retval = set_user(new);
 		if (retval < 0)
@@ -776,6 +792,12 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
 	old = current_cred();
 
 	retval = -EPERM;
+
+	if (gr_check_crash_uid(kuid))
+		goto error;
+	if (gr_check_user_change(kuid, kuid, kuid))
+		goto error;
+
 	if (nsown_capable(CAP_SETUID)) {
 		new->suid = new->uid = kuid;
 		if (!uid_eq(kuid, old->uid)) {
@@ -844,6 +866,9 @@ SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)
 		    !uid_eq(ksuid, old->euid) && !uid_eq(ksuid, old->suid))
 			goto error;
 	}
+
+	if (gr_check_user_change(kruid, keuid, -1))
+		goto error;
 
 	if (ruid != (uid_t) -1) {
 		new->uid = kruid;
@@ -927,6 +952,9 @@ SYSCALL_DEFINE3(setresgid, gid_t, rgid, gid_t, egid, gid_t, sgid)
 			goto error;
 	}
 
+	if (gr_check_group_change(krgid, kegid, -1))
+		goto error;
+
 	if (rgid != (gid_t) -1)
 		new->gid = krgid;
 	if (egid != (gid_t) -1)
@@ -980,6 +1008,9 @@ SYSCALL_DEFINE1(setfsuid, uid_t, uid)
 	if (!uid_valid(kuid))
 		return old_fsuid;
 
+	if (gr_check_user_change(-1, -1, kuid))
+		goto error;
+
 	new = prepare_creds();
 	if (!new)
 		return old_fsuid;
@@ -994,6 +1025,7 @@ SYSCALL_DEFINE1(setfsuid, uid_t, uid)
 		}
 	}
 
+error:
 	abort_creds(new);
 	return old_fsuid;
 
@@ -1026,12 +1058,16 @@ SYSCALL_DEFINE1(setfsgid, gid_t, gid)
 	if (gid_eq(kgid, old->gid)  || gid_eq(kgid, old->egid)  ||
 	    gid_eq(kgid, old->sgid) || gid_eq(kgid, old->fsgid) ||
 	    nsown_capable(CAP_SETGID)) {
+		if (gr_check_group_change(-1, -1, kgid))
+			goto error;
+
 		if (!gid_eq(kgid, old->fsgid)) {
 			new->fsgid = kgid;
 			goto change_okay;
 		}
 	}
 
+error:
 	abort_creds(new);
 	return old_fsgid;
 
@@ -1283,7 +1319,10 @@ static int override_release(char __user *release, int len)
 		}
 		v = ((LINUX_VERSION_CODE >> 8) & 0xff) + 40;
 		snprintf(buf, len, "2.6.%u%s", v, rest);
-		ret = copy_to_user(release, buf, len);
+		if (len > sizeof(buf))
+			ret = -EFAULT;
+		else
+			ret = copy_to_user(release, buf, len);
 	}
 	return ret;
 }
@@ -1337,19 +1376,19 @@ SYSCALL_DEFINE1(olduname, struct oldold_utsname __user *, name)
 		return -EFAULT;
 
 	down_read(&uts_sem);
-	error = __copy_to_user(&name->sysname, &utsname()->sysname,
+	error = __copy_to_user(name->sysname, &utsname()->sysname,
 			       __OLD_UTS_LEN);
 	error |= __put_user(0, name->sysname + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->nodename, &utsname()->nodename,
+	error |= __copy_to_user(name->nodename, &utsname()->nodename,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->nodename + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->release, &utsname()->release,
+	error |= __copy_to_user(name->release, &utsname()->release,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->release + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->version, &utsname()->version,
+	error |= __copy_to_user(name->version, &utsname()->version,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->version + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->machine, &utsname()->machine,
+	error |= __copy_to_user(name->machine, &utsname()->machine,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->machine + __OLD_UTS_LEN);
 	up_read(&uts_sem);
@@ -2024,7 +2063,7 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			error = get_dumpable(me->mm);
 			break;
 		case PR_SET_DUMPABLE:
-			if (arg2 < 0 || arg2 > 1) {
+			if (arg2 > 1) {
 				error = -EINVAL;
 				break;
 			}

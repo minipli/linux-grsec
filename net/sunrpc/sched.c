@@ -240,9 +240,9 @@ static int rpc_wait_bit_killable(void *word)
 #ifdef RPC_DEBUG
 static void rpc_task_set_debuginfo(struct rpc_task *task)
 {
-	static atomic_t rpc_pid;
+	static atomic_unchecked_t rpc_pid;
 
-	task->tk_pid = atomic_inc_return(&rpc_pid);
+	task->tk_pid = atomic_inc_return_unchecked(&rpc_pid);
 }
 #else
 static inline void rpc_task_set_debuginfo(struct rpc_task *task)

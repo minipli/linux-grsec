@@ -31,7 +31,7 @@
 #include <linux/export.h>
 #include <linux/swap.h>
 
-static struct vfsmount *shm_mnt;
+struct vfsmount *shm_mnt;
 
 #ifdef CONFIG_SHMEM
 /*
@@ -75,7 +75,7 @@ static struct vfsmount *shm_mnt;
 #define BOGO_DIRENT_SIZE 20
 
 /* Symlink up to this size is kmalloc'ed instead of using a swappable page */
-#define SHORT_SYMLINK_LEN 128
+#define SHORT_SYMLINK_LEN 64
 
 struct shmem_xattr {
 	struct list_head list;	/* anchored by shmem_inode_info->xattr_list */
@@ -2590,8 +2590,7 @@ int shmem_fill_super(struct super_block *sb, void *data, int silent)
 	int err = -ENOMEM;
 
 	/* Round up to L1_CACHE_BYTES to resist false sharing */
-	sbinfo = kzalloc(max((int)sizeof(struct shmem_sb_info),
-				L1_CACHE_BYTES), GFP_KERNEL);
+	sbinfo = kzalloc(max(sizeof(struct shmem_sb_info), L1_CACHE_BYTES), GFP_KERNEL);
 	if (!sbinfo)
 		return -ENOMEM;
 

@@ -231,11 +231,6 @@ static void __init xen_smp_prepare_boot_cpu(void)
 {
 	BUG_ON(smp_processor_id() != 0);
 	native_smp_prepare_boot_cpu();
-
-	/* We've switched to the "real" per-cpu gdt, so make sure the
-	   old memory can be recycled */
-	make_lowmem_page_readwrite(xen_initial_gdt);
-
 	xen_filter_cpu_maps();
 	xen_setup_vcpu_info_placement();
 }
@@ -302,12 +297,12 @@ cpu_initialize_context(unsigned int cpu, struct task_struct *idle)
 	gdt = get_cpu_gdt_table(cpu);
 
 	ctxt->flags = VGCF_IN_KERNEL;
-	ctxt->user_regs.ds = __USER_DS;
-	ctxt->user_regs.es = __USER_DS;
+	ctxt->user_regs.ds = __KERNEL_DS;
+	ctxt->user_regs.es = __KERNEL_DS;
 	ctxt->user_regs.ss = __KERNEL_DS;
 #ifdef CONFIG_X86_32
 	ctxt->user_regs.fs = __KERNEL_PERCPU;
-	ctxt->user_regs.gs = __KERNEL_STACK_CANARY;
+	savesegment(gs, ctxt->user_regs.gs);
 #else
 	ctxt->gs_base_kernel = per_cpu_offset(cpu);
 #endif
@@ -357,13 +352,12 @@ static int __cpuinit xen_cpu_up(unsigned int cpu, struct task_struct *idle)
 	int rc;
 
 	per_cpu(current_task, cpu) = idle;
+	per_cpu(current_tinfo, cpu) = &idle->tinfo;
 #ifdef CONFIG_X86_32
 	irq_ctx_init(cpu);
 #else
 	clear_tsk_thread_flag(idle, TIF_FORK);
-	per_cpu(kernel_stack, cpu) =
-		(unsigned long)task_stack_page(idle) -
-		KERNEL_STACK_OFFSET + THREAD_SIZE;
+	per_cpu(kernel_stack, cpu) = (unsigned long)task_stack_page(idle) - 16 + THREAD_SIZE;
 #endif
 	xen_setup_runstate_info(cpu);
 	xen_setup_timer(cpu);

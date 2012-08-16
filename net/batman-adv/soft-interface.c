@@ -214,7 +214,7 @@ static int interface_tx(struct sk_buff *skb, struct net_device *soft_iface)
 
 		/* set broadcast sequence number */
 		bcast_packet->seqno =
-			htonl(atomic_inc_return(&bat_priv->bcast_seqno));
+			htonl(atomic_inc_return_unchecked(&bat_priv->bcast_seqno));
 
 		add_bcast_packet_to_list(bat_priv, skb, 1);
 
@@ -390,7 +390,7 @@ struct net_device *softif_create(const char *name)
 	atomic_set(&bat_priv->batman_queue_left, BATMAN_QUEUE_LEN);
 
 	atomic_set(&bat_priv->mesh_state, MESH_INACTIVE);
-	atomic_set(&bat_priv->bcast_seqno, 1);
+	atomic_set_unchecked(&bat_priv->bcast_seqno, 1);
 	atomic_set(&bat_priv->ttvn, 0);
 	atomic_set(&bat_priv->tt_local_changes, 0);
 	atomic_set(&bat_priv->tt_ogm_append_cnt, 0);
