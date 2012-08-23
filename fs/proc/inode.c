@@ -18,11 +18,17 @@
 #include <linux/module.h>
 #include <linux/sysctl.h>
 #include <linux/slab.h>
+#include <linux/grsecurity.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
 #include "internal.h"
+
+#ifdef CONFIG_PROC_SYSCTL
+extern const struct inode_operations proc_sys_inode_operations;
+extern const struct inode_operations proc_sys_dir_operations;
+#endif
 
 static void proc_evict_inode(struct inode *inode)
 {
@@ -49,6 +55,13 @@ static void proc_evict_inode(struct inode *inode)
 	ns_ops = PROC_I(inode)->ns_ops;
 	if (ns_ops && ns_ops->put)
 		ns_ops->put(PROC_I(inode)->ns);
+
+#ifdef CONFIG_PROC_SYSCTL
+	if (inode->i_op == &proc_sys_inode_operations ||
+	    inode->i_op == &proc_sys_dir_operations)
+		gr_handle_delete(inode->i_ino, inode->i_sb->s_dev);
+#endif
+
 }
 
 static struct kmem_cache * proc_inode_cachep;
@@ -440,7 +453,11 @@ struct inode *proc_get_inode(struct super_block *sb, struct proc_dir_entry *de)
 		if (de->mode) {
 			inode->i_mode = de->mode;
 			inode->i_uid = de->uid;
+#ifdef CONFIG_GRKERNSEC_PROC_USERGROUP
+			inode->i_gid = CONFIG_GRKERNSEC_PROC_GID;
+#else
 			inode->i_gid = de->gid;
+#endif
 		}
 		if (de->size)
 			inode->i_size = de->size;
