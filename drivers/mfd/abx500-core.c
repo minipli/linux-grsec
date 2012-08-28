@@ -15,7 +15,7 @@ static LIST_HEAD(abx500_list);
 
 struct abx500_device_entry {
 	struct list_head list;
-	struct abx500_ops ops;
+	abx500_ops_no_const ops;
 	struct device *dev;
 };
 

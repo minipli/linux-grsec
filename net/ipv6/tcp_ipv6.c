@@ -94,6 +94,10 @@ static struct tcp_md5sig_key *tcp_v6_md5_do_lookup(struct sock *sk,
 }
 #endif
 
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+extern int grsec_enable_blackhole;
+#endif
+
 static void tcp_v6_hash(struct sock *sk)
 {
 	if (sk->sk_state != TCP_CLOSE) {
@@ -1544,6 +1548,9 @@ static int tcp_v6_do_rcv(struct sock *sk, struct sk_buff *skb)
 	return 0;
 
 reset:
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+	if (!grsec_enable_blackhole)
+#endif
 	tcp_v6_send_reset(sk, skb);
 discard:
 	if (opt_skb)
@@ -1625,12 +1632,20 @@ static int tcp_v6_rcv(struct sk_buff *skb)
 	TCP_SKB_CB(skb)->sacked = 0;
 
 	sk = __inet6_lookup_skb(&tcp_hashinfo, skb, th->source, th->dest);
-	if (!sk)
+	if (!sk) {
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+		ret = 1;
+#endif
 		goto no_tcp_socket;
+	}
 
 process:
-	if (sk->sk_state == TCP_TIME_WAIT)
+	if (sk->sk_state == TCP_TIME_WAIT) {
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+		ret = 2;
+#endif
 		goto do_time_wait;
+	}
 
 	if (hdr->hop_limit < inet6_sk(sk)->min_hopcount) {
 		NET_INC_STATS_BH(net, LINUX_MIB_TCPMINTTLDROP);
@@ -1679,6 +1694,10 @@ no_tcp_socket:
 bad_packet:
 		TCP_INC_STATS_BH(net, TCP_MIB_INERRS);
 	} else {
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+		if (!grsec_enable_blackhole || (ret == 1 &&
+		    (skb->dev->flags & IFF_LOOPBACK)))
+#endif
 		tcp_v6_send_reset(NULL, skb);
 	}
 
@@ -1885,7 +1904,13 @@ static void get_openreq6(struct seq_file *seq,
 		   uid,
 		   0,  /* non standard timer */
 		   0, /* open_requests have no inode */
-		   0, req);
+		   0,
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		   NULL
+#else
+		   req
+#endif
+		   );
 }
 
 static void get_tcp6_sock(struct seq_file *seq, struct sock *sp, int i)
@@ -1935,7 +1960,12 @@ static void get_tcp6_sock(struct seq_file *seq, struct sock *sp, int i)
 		   sock_i_uid(sp),
 		   icsk->icsk_probes_out,
 		   sock_i_ino(sp),
-		   atomic_read(&sp->sk_refcnt), sp,
+		   atomic_read(&sp->sk_refcnt),
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		   NULL,
+#else
+		   sp,
+#endif
 		   jiffies_to_clock_t(icsk->icsk_rto),
 		   jiffies_to_clock_t(icsk->icsk_ack.ato),
 		   (icsk->icsk_ack.quick << 1 ) | icsk->icsk_ack.pingpong,
@@ -1970,7 +2000,13 @@ static void get_timewait6_sock(struct seq_file *seq,
 		   dest->s6_addr32[2], dest->s6_addr32[3], destp,
 		   tw->tw_substate, 0, 0,
 		   3, jiffies_to_clock_t(ttd), 0, 0, 0, 0,
-		   atomic_read(&tw->tw_refcnt), tw);
+		   atomic_read(&tw->tw_refcnt),
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		   NULL
+#else
+		   tw
+#endif
+		   );
 }
 
 static int tcp6_seq_show(struct seq_file *seq, void *v)

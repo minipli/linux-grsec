@@ -753,7 +753,7 @@ static int doc_write(struct mtd_info *mtd, loff_t to, size_t len,
 
 		/* The ECC will not be calculated correctly if less than 512 is written */
 /* DBB-
-		if (len != 0x200 && eccbuf)
+		if (len != 0x200)
 			printk(KERN_WARNING
 			       "ECC needs a full sector write (adr: %lx size %lx)\n",
 			       (long) to, (long) len);

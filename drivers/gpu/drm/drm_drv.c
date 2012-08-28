@@ -318,7 +318,7 @@ module_exit(drm_core_exit);
 /**
  * Copy and IOCTL return string to user space
  */
-static int drm_copy_field(char *buf, size_t *buf_len, const char *value)
+static int drm_copy_field(char __user *buf, size_t *buf_len, const char *value)
 {
 	int len;
 
@@ -401,7 +401,7 @@ long drm_ioctl(struct file *filp,
 		return -ENODEV;
 
 	atomic_inc(&dev->ioctl_count);
-	atomic_inc(&dev->counts[_DRM_STAT_IOCTLS]);
+	atomic_inc_unchecked(&dev->counts[_DRM_STAT_IOCTLS]);
 	++file_priv->ioctl_count;
 
 	DRM_DEBUG("pid=%d, cmd=0x%02x, nr=0x%02x, dev 0x%lx, auth=%d\n",

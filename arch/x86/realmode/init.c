@@ -62,7 +62,13 @@ void __init setup_real_mode(void)
 		__va(real_mode_header->trampoline_header);
 
 #ifdef CONFIG_X86_32
-	trampoline_header->start = __pa(startup_32_smp);
+	trampoline_header->start = __pa(ktla_ktva(startup_32_smp));
+
+#ifdef CONFIG_PAX_KERNEXEC
+	trampoline_header->start -=  LOAD_PHYSICAL_ADDR;
+#endif
+
+	trampoline_header->boot_cs = __BOOT_CS;
 	trampoline_header->gdt_limit = __BOOT_DS + 7;
 	trampoline_header->gdt_base = __pa(boot_gdt);
 #else

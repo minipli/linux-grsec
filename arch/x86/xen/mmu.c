@@ -1738,6 +1738,9 @@ pgd_t * __init xen_setup_kernel_pagetable(pgd_t *pgd,
 	convert_pfn_mfn(init_level4_pgt);
 	convert_pfn_mfn(level3_ident_pgt);
 	convert_pfn_mfn(level3_kernel_pgt);
+	convert_pfn_mfn(level3_vmalloc_start_pgt);
+	convert_pfn_mfn(level3_vmalloc_end_pgt);
+	convert_pfn_mfn(level3_vmemmap_pgt);
 
 	l3 = m2v(pgd[pgd_index(__START_KERNEL_map)].pgd);
 	l2 = m2v(l3[pud_index(__START_KERNEL_map)].pud);
@@ -1756,7 +1759,11 @@ pgd_t * __init xen_setup_kernel_pagetable(pgd_t *pgd,
 	set_page_prot(init_level4_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_ident_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_kernel_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level3_vmalloc_start_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level3_vmalloc_end_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level3_vmemmap_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_user_vsyscall, PAGE_KERNEL_RO);
+	set_page_prot(level2_vmemmap_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level2_kernel_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level2_fixmap_pgt, PAGE_KERNEL_RO);
 
@@ -1940,6 +1947,7 @@ static void __init xen_post_allocator_init(void)
 	pv_mmu_ops.set_pud = xen_set_pud;
 #if PAGETABLE_LEVELS == 4
 	pv_mmu_ops.set_pgd = xen_set_pgd;
+	pv_mmu_ops.set_pgd_batched = xen_set_pgd;
 #endif
 
 	/* This will work as long as patching hasn't happened yet
@@ -2021,6 +2029,7 @@ static const struct pv_mmu_ops xen_mmu_ops __initconst = {
 	.pud_val = PV_CALLEE_SAVE(xen_pud_val),
 	.make_pud = PV_CALLEE_SAVE(xen_make_pud),
 	.set_pgd = xen_set_pgd_hyper,
+	.set_pgd_batched = xen_set_pgd_hyper,
 
 	.alloc_pud = xen_alloc_pmd_init,
 	.release_pud = xen_release_pmd_init,

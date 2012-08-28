@@ -173,6 +173,14 @@ static inline int arch_write_can_lock(arch_rwlock_t *lock)
 static inline void arch_read_lock(arch_rwlock_t *rw)
 {
 	asm volatile(LOCK_PREFIX READ_LOCK_SIZE(dec) " (%0)\n\t"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX READ_LOCK_SIZE(inc) " (%0)\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
 		     "jns 1f\n"
 		     "call __read_lock_failed\n\t"
 		     "1:\n"
@@ -182,6 +190,14 @@ static inline void arch_read_lock(arch_rwlock_t *rw)
 static inline void arch_write_lock(arch_rwlock_t *rw)
 {
 	asm volatile(LOCK_PREFIX WRITE_LOCK_SUB(%1) "(%0)\n\t"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX WRITE_LOCK_ADD(%1) "(%0)\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
 		     "jz 1f\n"
 		     "call __write_lock_failed\n\t"
 		     "1:\n"
@@ -211,13 +227,29 @@ static inline int arch_write_trylock(arch_rwlock_t *lock)
 
 static inline void arch_read_unlock(arch_rwlock_t *rw)
 {
-	asm volatile(LOCK_PREFIX READ_LOCK_SIZE(inc) " %0"
+	asm volatile(LOCK_PREFIX READ_LOCK_SIZE(inc) " %0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX READ_LOCK_SIZE(dec) " %0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
 		     :"+m" (rw->lock) : : "memory");
 }
 
 static inline void arch_write_unlock(arch_rwlock_t *rw)
 {
-	asm volatile(LOCK_PREFIX WRITE_LOCK_ADD(%1) "%0"
+	asm volatile(LOCK_PREFIX WRITE_LOCK_ADD(%1) "%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     LOCK_PREFIX WRITE_LOCK_SUB(%1) "%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
 		     : "+m" (rw->write) : "i" (RW_LOCK_BIAS) : "memory");
 }
 

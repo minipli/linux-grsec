@@ -7,11 +7,14 @@
 #include <linux/compiler.h>
 #include <linux/thread_info.h>
 #include <linux/string.h>
+#include <linux/sched.h>
 #include <asm/asm.h>
 #include <asm/page.h>
 
 #define VERIFY_READ 0
 #define VERIFY_WRITE 1
+
+extern void check_object_size(const void *ptr, unsigned long n, bool to);
 
 /*
  * The fs value determines whether argument validity checking should be
@@ -28,7 +31,12 @@
 
 #define get_ds()	(KERNEL_DS)
 #define get_fs()	(current_thread_info()->addr_limit)
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+void __set_fs(mm_segment_t x);
+void set_fs(mm_segment_t x);
+#else
 #define set_fs(x)	(current_thread_info()->addr_limit = (x))
+#endif
 
 #define segment_eq(a, b)	((a).seg == (b).seg)
 
@@ -76,8 +84,33 @@
  * checks that the pointer is in the user space range - after calling
  * this function, memory access functions may still return -EFAULT.
  */
-#define access_ok(type, addr, size) \
-	(likely(__range_not_ok(addr, size, user_addr_max()) == 0))
+#define __access_ok(type, addr, size) (likely(__range_not_ok(addr, size, user_addr_max()) == 0))
+#define access_ok(type, addr, size)					\
+({									\
+	long __size = size;						\
+	unsigned long __addr = (unsigned long)addr;			\
+	unsigned long __addr_ao = __addr & PAGE_MASK;			\
+	unsigned long __end_ao = __addr + __size - 1;			\
+	bool __ret_ao = __range_not_ok(__addr, __size, user_addr_max()) == 0;\
+	if (__ret_ao && unlikely((__end_ao ^ __addr_ao) & PAGE_MASK)) {	\
+		while(__addr_ao <= __end_ao) {				\
+			char __c_ao;					\
+			__addr_ao += PAGE_SIZE;				\
+			if (__size > PAGE_SIZE)				\
+				cond_resched();				\
+			if (__get_user(__c_ao, (char __user *)__addr))	\
+				break;					\
+			if (type != VERIFY_WRITE) {			\
+				__addr = __addr_ao;			\
+				continue;				\
+			}						\
+			if (__put_user(__c_ao, (char __user *)__addr))	\
+				break;					\
+			__addr = __addr_ao;				\
+		}							\
+	}								\
+	__ret_ao;							\
+})
 
 /*
  * The exception table consists of pairs of addresses relative to the
@@ -188,12 +221,20 @@ extern int __get_user_bad(void);
 	asm volatile("call __put_user_" #size : "=a" (__ret_pu)	\
 		     : "0" ((typeof(*(ptr)))(x)), "c" (ptr) : "ebx")
 
-
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+#define __copyuser_seg "gs;"
+#define __COPYUSER_SET_ES "pushl %%gs; popl %%es\n"
+#define __COPYUSER_RESTORE_ES "pushl %%ss; popl %%es\n"
+#else
+#define __copyuser_seg
+#define __COPYUSER_SET_ES
+#define __COPYUSER_RESTORE_ES
+#endif
 
 #ifdef CONFIG_X86_32
 #define __put_user_asm_u64(x, addr, err, errret)			\
-	asm volatile("1:	movl %%eax,0(%2)\n"			\
-		     "2:	movl %%edx,4(%2)\n"			\
+	asm volatile("1:	"__copyuser_seg"movl %%eax,0(%2)\n"	\
+		     "2:	"__copyuser_seg"movl %%edx,4(%2)\n"	\
 		     "3:\n"						\
 		     ".section .fixup,\"ax\"\n"				\
 		     "4:	movl %3,%0\n"				\
@@ -205,8 +246,8 @@ extern int __get_user_bad(void);
 		     : "A" (x), "r" (addr), "i" (errret), "0" (err))
 
 #define __put_user_asm_ex_u64(x, addr)					\
-	asm volatile("1:	movl %%eax,0(%1)\n"			\
-		     "2:	movl %%edx,4(%1)\n"			\
+	asm volatile("1:	"__copyuser_seg"movl %%eax,0(%1)\n"	\
+		     "2:	"__copyuser_seg"movl %%edx,4(%1)\n"	\
 		     "3:\n"						\
 		     _ASM_EXTABLE_EX(1b, 2b)				\
 		     _ASM_EXTABLE_EX(2b, 3b)				\
@@ -258,7 +299,7 @@ extern void __put_user_8(void);
 	__typeof__(*(ptr)) __pu_val;				\
 	__chk_user_ptr(ptr);					\
 	might_fault();						\
-	__pu_val = x;						\
+	__pu_val = (x);						\
 	switch (sizeof(*(ptr))) {				\
 	case 1:							\
 		__put_user_x(1, __pu_val, ptr, __ret_pu);	\
@@ -379,7 +420,7 @@ do {									\
 } while (0)
 
 #define __get_user_asm(x, addr, err, itype, rtype, ltype, errret)	\
-	asm volatile("1:	mov"itype" %2,%"rtype"1\n"		\
+	asm volatile("1:	"__copyuser_seg"mov"itype" %2,%"rtype"1\n"\
 		     "2:\n"						\
 		     ".section .fixup,\"ax\"\n"				\
 		     "3:	mov %3,%0\n"				\
@@ -387,7 +428,7 @@ do {									\
 		     "	jmp 2b\n"					\
 		     ".previous\n"					\
 		     _ASM_EXTABLE(1b, 3b)				\
-		     : "=r" (err), ltype(x)				\
+		     : "=r" (err), ltype (x)				\
 		     : "m" (__m(addr)), "i" (errret), "0" (err))
 
 #define __get_user_size_ex(x, ptr, size)				\
@@ -412,7 +453,7 @@ do {									\
 } while (0)
 
 #define __get_user_asm_ex(x, addr, itype, rtype, ltype)			\
-	asm volatile("1:	mov"itype" %1,%"rtype"0\n"		\
+	asm volatile("1:	"__copyuser_seg"mov"itype" %1,%"rtype"0\n"\
 		     "2:\n"						\
 		     _ASM_EXTABLE_EX(1b, 2b)				\
 		     : ltype(x) : "m" (__m(addr)))
@@ -429,13 +470,24 @@ do {									\
 	int __gu_err;							\
 	unsigned long __gu_val;						\
 	__get_user_size(__gu_val, (ptr), (size), __gu_err, -EFAULT);	\
-	(x) = (__force __typeof__(*(ptr)))__gu_val;			\
+	(x) = (__typeof__(*(ptr)))__gu_val;				\
 	__gu_err;							\
 })
 
 /* FIXME: this hack is definitely wrong -AK */
 struct __large_struct { unsigned long buf[100]; };
-#define __m(x) (*(struct __large_struct __user *)(x))
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+#define ____m(x)					\
+({							\
+	unsigned long ____x = (unsigned long)(x);	\
+	if (____x < PAX_USER_SHADOW_BASE)		\
+		____x += PAX_USER_SHADOW_BASE;		\
+	(void __user *)____x;				\
+})
+#else
+#define ____m(x) (x)
+#endif
+#define __m(x) (*(struct __large_struct __user *)____m(x))
 
 /*
  * Tell gcc we read from memory instead of writing: this is because
@@ -443,7 +495,7 @@ struct __large_struct { unsigned long buf[100]; };
  * aliasing issues.
  */
 #define __put_user_asm(x, addr, err, itype, rtype, ltype, errret)	\
-	asm volatile("1:	mov"itype" %"rtype"1,%2\n"		\
+	asm volatile("1:	"__copyuser_seg"mov"itype" %"rtype"1,%2\n"\
 		     "2:\n"						\
 		     ".section .fixup,\"ax\"\n"				\
 		     "3:	mov %3,%0\n"				\
@@ -451,10 +503,10 @@ struct __large_struct { unsigned long buf[100]; };
 		     ".previous\n"					\
 		     _ASM_EXTABLE(1b, 3b)				\
 		     : "=r"(err)					\
-		     : ltype(x), "m" (__m(addr)), "i" (errret), "0" (err))
+		     : ltype (x), "m" (__m(addr)), "i" (errret), "0" (err))
 
 #define __put_user_asm_ex(x, addr, itype, rtype, ltype)			\
-	asm volatile("1:	mov"itype" %"rtype"0,%1\n"		\
+	asm volatile("1:	"__copyuser_seg"mov"itype" %"rtype"0,%1\n"\
 		     "2:\n"						\
 		     _ASM_EXTABLE_EX(1b, 2b)				\
 		     : : ltype(x), "m" (__m(addr)))
@@ -493,8 +545,12 @@ struct __large_struct { unsigned long buf[100]; };
  * On error, the variable @x is set to zero.
  */
 
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+#define __get_user(x, ptr)	get_user((x), (ptr))
+#else
 #define __get_user(x, ptr)						\
 	__get_user_nocheck((x), (ptr), sizeof(*(ptr)))
+#endif
 
 /**
  * __put_user: - Write a simple value into user space, with less checking.
@@ -516,8 +572,12 @@ struct __large_struct { unsigned long buf[100]; };
  * Returns zero on success, or -EFAULT on error.
  */
 
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+#define __put_user(x, ptr)	put_user((x), (ptr))
+#else
 #define __put_user(x, ptr)						\
 	__put_user_nocheck((__typeof__(*(ptr)))(x), (ptr), sizeof(*(ptr)))
+#endif
 
 #define __get_user_unaligned __get_user
 #define __put_user_unaligned __put_user
@@ -535,7 +595,7 @@ struct __large_struct { unsigned long buf[100]; };
 #define get_user_ex(x, ptr)	do {					\
 	unsigned long __gue_val;					\
 	__get_user_size_ex((__gue_val), (ptr), (sizeof(*(ptr))));	\
-	(x) = (__force __typeof__(*(ptr)))__gue_val;			\
+	(x) = (__typeof__(*(ptr)))__gue_val;				\
 } while (0)
 
 #ifdef CONFIG_X86_WP_WORKS_OK

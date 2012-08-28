@@ -1165,6 +1165,7 @@ config LATENCYTOP
 	depends on DEBUG_KERNEL
 	depends on STACKTRACE_SUPPORT
 	depends on PROC_FS
+	depends on !GRKERNSEC_HIDESYM
 	select FRAME_POINTER if !MIPS && !PPC && !S390 && !MICROBLAZE && !ARM_UNWIND
 	select KALLSYMS
 	select KALLSYMS_ALL
