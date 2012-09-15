@@ -15,6 +15,7 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/file.h>
+#include <linux/security.h>
 #include <linux/fdtable.h>
 #include <linux/bitops.h>
 #include <linux/interrupt.h>
@@ -255,6 +256,7 @@ int expand_files(struct files_struct *files, int nr)
 	 * N.B. For clone tasks sharing a files structure, this test
 	 * will limit the total number of files that can be opened.
 	 */
+	gr_learn_resource(current, RLIMIT_NOFILE, nr, 0);
 	if (nr >= rlimit(RLIMIT_NOFILE))
 		return -EMFILE;
 

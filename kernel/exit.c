@@ -59,6 +59,10 @@
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 
+#ifdef CONFIG_GRKERNSEC
+extern rwlock_t grsec_exec_file_lock;
+#endif
+
 static void exit_mm(struct task_struct * tsk);
 
 static void __unhash_process(struct task_struct *p, bool group_dead)
@@ -182,6 +186,10 @@ void release_task(struct task_struct * p)
 	struct task_struct *leader;
 	int zap_leader;
 repeat:
+#ifdef CONFIG_NET
+	gr_del_task_from_ip_table(p);
+#endif
+
 	/* don't need to get the RCU readlock here - the process is dead and
 	 * can't be modifying its own credentials. But shut RCU-lockdep up */
 	rcu_read_lock();
@@ -394,7 +402,7 @@ int allow_signal(int sig)
 	 * know it'll be handled, so that they don't get converted to
 	 * SIGKILL or just silently dropped.
 	 */
-	current->sighand->action[(sig)-1].sa.sa_handler = (void __user *)2;
+	current->sighand->action[(sig)-1].sa.sa_handler = (__force void __user *)2;
 	recalc_sigpending();
 	spin_unlock_irq(&current->sighand->siglock);
 	return 0;
@@ -429,6 +437,17 @@ void daemonize(const char *name, ...)
 	va_start(args, name);
 	vsnprintf(current->comm, sizeof(current->comm), name, args);
 	va_end(args);
+
+#ifdef CONFIG_GRKERNSEC
+	write_lock(&grsec_exec_file_lock);
+	if (current->exec_file) {
+		fput(current->exec_file);
+		current->exec_file = NULL;
+	}
+	write_unlock(&grsec_exec_file_lock);
+#endif
+
+	gr_set_kernel_label(current);
 
 	/*
 	 * If we were started as result of loading a module, close all of the
@@ -907,6 +926,8 @@ void do_exit(long code)
 	struct task_struct *tsk = current;
 	int group_dead;
 
+	set_fs(USER_DS);
+
 	profile_task_exit(tsk);
 
 	WARN_ON(blk_needs_flush_plug(tsk));
@@ -923,7 +944,6 @@ void do_exit(long code)
 	 * mm_release()->clear_child_tid() from writing to a user-controlled
 	 * kernel address.
 	 */
-	set_fs(USER_DS);
 
 	ptrace_event(PTRACE_EVENT_EXIT, code);
 
@@ -984,6 +1004,9 @@ void do_exit(long code)
 
 	tsk->exit_code = code;
 	taskstats_exit(tsk, group_dead);
+
+	gr_acl_handle_psacct(tsk, code);
+	gr_acl_handle_exit();
 
 	exit_mm(tsk);
 
@@ -1101,7 +1124,7 @@ SYSCALL_DEFINE1(exit, int, error_code)
  * Take down every thread in the group.  This is called by fatal signals
  * as well as by sys_exit_group (below).
  */
-void
+__noreturn void
 do_group_exit(int exit_code)
 {
 	struct signal_struct *sig = current->signal;

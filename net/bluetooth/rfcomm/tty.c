@@ -314,7 +314,7 @@ static void rfcomm_dev_del(struct rfcomm_dev *dev)
 	BUG_ON(test_and_set_bit(RFCOMM_TTY_RELEASED, &dev->flags));
 
 	spin_lock_irqsave(&dev->port.lock, flags);
-	if (dev->port.count > 0) {
+	if (atomic_read(&dev->port.count) > 0) {
 		spin_unlock_irqrestore(&dev->port.lock, flags);
 		return;
 	}
@@ -461,7 +461,7 @@ static int rfcomm_get_dev_list(void __user *arg)
 
 	size = sizeof(*dl) + dev_num * sizeof(*di);
 
-	dl = kmalloc(size, GFP_KERNEL);
+	dl = kzalloc(size, GFP_KERNEL);
 	if (!dl)
 		return -ENOMEM;
 
@@ -669,10 +669,10 @@ static int rfcomm_tty_open(struct tty_struct *tty, struct file *filp)
 		return -ENODEV;
 
 	BT_DBG("dev %p dst %s channel %d opened %d", dev, batostr(&dev->dst),
-				dev->channel, dev->port.count);
+				dev->channel, atomic_read(&dev->port.count));
 
 	spin_lock_irqsave(&dev->port.lock, flags);
-	if (++dev->port.count > 1) {
+	if (atomic_inc_return(&dev->port.count) > 1) {
 		spin_unlock_irqrestore(&dev->port.lock, flags);
 		return 0;
 	}
@@ -737,10 +737,10 @@ static void rfcomm_tty_close(struct tty_struct *tty, struct file *filp)
 		return;
 
 	BT_DBG("tty %p dev %p dlc %p opened %d", tty, dev, dev->dlc,
-						dev->port.count);
+						atomic_read(&dev->port.count));
 
 	spin_lock_irqsave(&dev->port.lock, flags);
-	if (!--dev->port.count) {
+	if (!atomic_dec_return(&dev->port.count)) {
 		spin_unlock_irqrestore(&dev->port.lock, flags);
 		if (dev->tty_dev->parent)
 			device_move(dev->tty_dev, NULL, DPM_ORDER_DEV_LAST);

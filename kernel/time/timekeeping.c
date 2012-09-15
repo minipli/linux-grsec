@@ -14,6 +14,7 @@
 #include <linux/init.h>
 #include <linux/mm.h>
 #include <linux/sched.h>
+#include <linux/grsecurity.h>
 #include <linux/syscore_ops.h>
 #include <linux/clocksource.h>
 #include <linux/jiffies.h>
@@ -386,6 +387,8 @@ int do_settimeofday(const struct timespec *tv)
 
 	if ((unsigned long)tv->tv_nsec >= NSEC_PER_SEC)
 		return -EINVAL;
+
+	gr_log_timechange();
 
 	write_seqlock_irqsave(&timekeeper.lock, flags);
 

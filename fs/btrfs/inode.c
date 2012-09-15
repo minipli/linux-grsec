@@ -7111,7 +7111,7 @@ fail:
 	return -ENOMEM;
 }
 
-static int btrfs_getattr(struct vfsmount *mnt,
+int btrfs_getattr(struct vfsmount *mnt,
 			 struct dentry *dentry, struct kstat *stat)
 {
 	struct inode *inode = dentry->d_inode;
@@ -7124,6 +7124,14 @@ static int btrfs_getattr(struct vfsmount *mnt,
 		ALIGN(BTRFS_I(inode)->delalloc_bytes, blocksize)) >> 9;
 	return 0;
 }
+
+EXPORT_SYMBOL(btrfs_getattr);
+
+dev_t get_btrfs_dev_from_inode(struct inode *inode)
+{
+	return BTRFS_I(inode)->root->anon_dev;
+}
+EXPORT_SYMBOL(get_btrfs_dev_from_inode);
 
 /*
  * If a file is moved, it will inherit the cow and compression flags of the new

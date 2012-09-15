@@ -536,7 +536,7 @@ static inline u32 next_command(struct ctlr_info *h, u8 q)
 	unsigned long flags;
 
 	if (unlikely(!(h->transMethod & CFGTBL_Trans_Performant)))
-		return h->access.command_completed(h, q);
+		return h->access->command_completed(h, q);
 
 	if ((rq->head[rq->current_entry] & 1) == rq->wraparound) {
 		a = rq->head[rq->current_entry];
@@ -3354,7 +3354,7 @@ static void start_io(struct ctlr_info *h)
 	while (!list_empty(&h->reqQ)) {
 		c = list_entry(h->reqQ.next, struct CommandList, list);
 		/* can't do anything if fifo is full */
-		if ((h->access.fifo_full(h))) {
+		if ((h->access->fifo_full(h))) {
 			dev_warn(&h->pdev->dev, "fifo full\n");
 			break;
 		}
@@ -3376,7 +3376,7 @@ static void start_io(struct ctlr_info *h)
 
 		/* Tell the controller execute command */
 		spin_unlock_irqrestore(&h->lock, flags);
-		h->access.submit_command(h, c);
+		h->access->submit_command(h, c);
 		spin_lock_irqsave(&h->lock, flags);
 	}
 	spin_unlock_irqrestore(&h->lock, flags);
@@ -3384,17 +3384,17 @@ static void start_io(struct ctlr_info *h)
 
 static inline unsigned long get_next_completion(struct ctlr_info *h, u8 q)
 {
-	return h->access.command_completed(h, q);
+	return h->access->command_completed(h, q);
 }
 
 static inline bool interrupt_pending(struct ctlr_info *h)
 {
-	return h->access.intr_pending(h);
+	return h->access->intr_pending(h);
 }
 
 static inline long interrupt_not_for_us(struct ctlr_info *h)
 {
-	return (h->access.intr_pending(h) == 0) ||
+	return (h->access->intr_pending(h) == 0) ||
 		(h->interrupts_enabled == 0);
 }
 
@@ -4298,7 +4298,7 @@ static int __devinit hpsa_pci_init(struct ctlr_info *h)
 	if (prod_index < 0)
 		return -ENODEV;
 	h->product_name = products[prod_index].product_name;
-	h->access = *(products[prod_index].access);
+	h->access = products[prod_index].access;
 
 	pci_disable_link_state(h->pdev, PCIE_LINK_STATE_L0S |
 			       PCIE_LINK_STATE_L1 | PCIE_LINK_STATE_CLKPM);
@@ -4580,7 +4580,7 @@ static void controller_lockup_detected(struct ctlr_info *h)
 
 	assert_spin_locked(&lockup_detector_lock);
 	remove_ctlr_from_lockup_detector_list(h);
-	h->access.set_intr_mask(h, HPSA_INTR_OFF);
+	h->access->set_intr_mask(h, HPSA_INTR_OFF);
 	spin_lock_irqsave(&h->lock, flags);
 	h->lockup_detected = readl(h->vaddr + SA5_SCRATCHPAD_OFFSET);
 	spin_unlock_irqrestore(&h->lock, flags);
@@ -4758,7 +4758,7 @@ reinit_after_soft_reset:
 	}
 
 	/* make sure the board interrupts are off */
-	h->access.set_intr_mask(h, HPSA_INTR_OFF);
+	h->access->set_intr_mask(h, HPSA_INTR_OFF);
 
 	if (hpsa_request_irq(h, do_hpsa_intr_msi, do_hpsa_intr_intx))
 		goto clean2;
@@ -4792,7 +4792,7 @@ reinit_after_soft_reset:
 		 * fake ones to scoop up any residual completions.
 		 */
 		spin_lock_irqsave(&h->lock, flags);
-		h->access.set_intr_mask(h, HPSA_INTR_OFF);
+		h->access->set_intr_mask(h, HPSA_INTR_OFF);
 		spin_unlock_irqrestore(&h->lock, flags);
 		free_irqs(h);
 		rc = hpsa_request_irq(h, hpsa_msix_discard_completions,
@@ -4811,9 +4811,9 @@ reinit_after_soft_reset:
 		dev_info(&h->pdev->dev, "Board READY.\n");
 		dev_info(&h->pdev->dev,
 			"Waiting for stale completions to drain.\n");
-		h->access.set_intr_mask(h, HPSA_INTR_ON);
+		h->access->set_intr_mask(h, HPSA_INTR_ON);
 		msleep(10000);
-		h->access.set_intr_mask(h, HPSA_INTR_OFF);
+		h->access->set_intr_mask(h, HPSA_INTR_OFF);
 
 		rc = controller_reset_failed(h->cfgtable);
 		if (rc)
@@ -4834,7 +4834,7 @@ reinit_after_soft_reset:
 	}
 
 	/* Turn the interrupts on so we can service requests */
-	h->access.set_intr_mask(h, HPSA_INTR_ON);
+	h->access->set_intr_mask(h, HPSA_INTR_ON);
 
 	hpsa_hba_inquiry(h);
 	hpsa_register_scsi(h);	/* hook ourselves into SCSI subsystem */
@@ -4886,7 +4886,7 @@ static void hpsa_shutdown(struct pci_dev *pdev)
 	 * To write all data in the battery backed cache to disks
 	 */
 	hpsa_flush_cache(h);
-	h->access.set_intr_mask(h, HPSA_INTR_OFF);
+	h->access->set_intr_mask(h, HPSA_INTR_OFF);
 	hpsa_free_irqs_and_disable_msix(h);
 }
 
@@ -5055,7 +5055,7 @@ static __devinit void hpsa_enter_performant_mode(struct ctlr_info *h,
 		return;
 	}
 	/* Change the access methods to the performant access methods */
-	h->access = SA5_performant_access;
+	h->access = &SA5_performant_access;
 	h->transMethod = CFGTBL_Trans_Performant;
 }
 
