@@ -460,6 +460,17 @@ static inline void nmi_nesting_postprocess(void)
 dotraplinkage notrace __kprobes void
 do_nmi(struct pt_regs *regs, long error_code)
 {
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if (!user_mode(regs)) {
+		unsigned long cs = regs->cs & 0xFFFF;
+		unsigned long ip = ktva_ktla(regs->ip);
+
+		if ((cs == __KERNEL_CS || cs == __KERNEXEC_KERNEL_CS) && ip <= (unsigned long)_etext)
+			regs->ip = ip;
+	}
+#endif
+
 	nmi_nesting_preprocess(regs);
 
 	nmi_enter();

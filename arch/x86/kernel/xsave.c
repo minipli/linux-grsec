@@ -129,7 +129,7 @@ int check_for_xstate(struct i387_fxsave_struct __user *buf,
 	    fx_sw_user->xstate_size > fx_sw_user->extended_size)
 		return -EINVAL;
 
-	err = __get_user(magic2, (__u32 *) (((void *)fpstate) +
+	err = __get_user(magic2, (__u32 __user *) (((void __user *)fpstate) +
 					    fx_sw_user->extended_size -
 					    FP_XSTATE_MAGIC2_SIZE));
 	if (err)
@@ -265,7 +265,7 @@ fx_only:
 	 * the other extended state.
 	 */
 	xrstor_state(init_xstate_buf, pcntxt_mask & ~XSTATE_FPSSE);
-	return fxrstor_checking((__force struct i387_fxsave_struct *)buf);
+	return fxrstor_checking((struct i387_fxsave_struct __force_kernel *)buf);
 }
 
 /*
@@ -294,7 +294,7 @@ int restore_i387_xstate(void __user *buf)
 	if (use_xsave())
 		err = restore_user_xstate(buf);
 	else
-		err = fxrstor_checking((__force struct i387_fxsave_struct *)
+		err = fxrstor_checking((struct i387_fxsave_struct __force_kernel *)
 				       buf);
 	if (unlikely(err)) {
 		/*

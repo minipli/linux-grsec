@@ -74,7 +74,7 @@ early_param("gbpages", parse_direct_gbpages_on);
  * around without checking the pgd every time.
  */
 
-pteval_t __supported_pte_mask __read_mostly = ~_PAGE_IOMAP;
+pteval_t __supported_pte_mask __read_only = ~(_PAGE_NX | _PAGE_IOMAP);
 EXPORT_SYMBOL_GPL(__supported_pte_mask);
 
 int force_personality32;
@@ -107,12 +107,22 @@ void sync_global_pgds(unsigned long start, unsigned long end)
 
 	for (address = start; address <= end; address += PGDIR_SIZE) {
 		const pgd_t *pgd_ref = pgd_offset_k(address);
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+		unsigned long cpu;
+#else
 		struct page *page;
+#endif
 
 		if (pgd_none(*pgd_ref))
 			continue;
 
 		spin_lock(&pgd_lock);
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+		for (cpu = 0; cpu < nr_cpu_ids; ++cpu) {
+			pgd_t *pgd = pgd_offset_cpu(cpu, address);
+#else
 		list_for_each_entry(page, &pgd_list, lru) {
 			pgd_t *pgd;
 			spinlock_t *pgt_lock;
@@ -121,6 +131,7 @@ void sync_global_pgds(unsigned long start, unsigned long end)
 			/* the pgt_lock only for Xen */
 			pgt_lock = &pgd_page_get_mm(page)->page_table_lock;
 			spin_lock(pgt_lock);
+#endif
 
 			if (pgd_none(*pgd))
 				set_pgd(pgd, *pgd_ref);
@@ -128,7 +139,10 @@ void sync_global_pgds(unsigned long start, unsigned long end)
 				BUG_ON(pgd_page_vaddr(*pgd)
 				       != pgd_page_vaddr(*pgd_ref));
 
+#ifndef CONFIG_PAX_PER_CPU_PGD
 			spin_unlock(pgt_lock);
+#endif
+
 		}
 		spin_unlock(&pgd_lock);
 	}
@@ -161,7 +175,7 @@ static pud_t *fill_pud(pgd_t *pgd, unsigned long vaddr)
 {
 	if (pgd_none(*pgd)) {
 		pud_t *pud = (pud_t *)spp_getpage();
-		pgd_populate(&init_mm, pgd, pud);
+		pgd_populate_kernel(&init_mm, pgd, pud);
 		if (pud != pud_offset(pgd, 0))
 			printk(KERN_ERR "PAGETABLE BUG #00! %p <-> %p\n",
 			       pud, pud_offset(pgd, 0));
@@ -173,7 +187,7 @@ static pmd_t *fill_pmd(pud_t *pud, unsigned long vaddr)
 {
 	if (pud_none(*pud)) {
 		pmd_t *pmd = (pmd_t *) spp_getpage();
-		pud_populate(&init_mm, pud, pmd);
+		pud_populate_kernel(&init_mm, pud, pmd);
 		if (pmd != pmd_offset(pud, 0))
 			printk(KERN_ERR "PAGETABLE BUG #01! %p <-> %p\n",
 			       pmd, pmd_offset(pud, 0));
@@ -202,7 +216,9 @@ void set_pte_vaddr_pud(pud_t *pud_page, unsigned long vaddr, pte_t new_pte)
 	pmd = fill_pmd(pud, vaddr);
 	pte = fill_pte(pmd, vaddr);
 
+	pax_open_kernel();
 	set_pte(pte, new_pte);
+	pax_close_kernel();
 
 	/*
 	 * It's enough to flush this one mapping.
@@ -261,14 +277,12 @@ static void __init __init_extra_mapping(unsigned long phys, unsigned long size,
 		pgd = pgd_offset_k((unsigned long)__va(phys));
 		if (pgd_none(*pgd)) {
 			pud = (pud_t *) spp_getpage();
-			set_pgd(pgd, __pgd(__pa(pud) | _KERNPG_TABLE |
-						_PAGE_USER));
+			set_pgd(pgd, __pgd(__pa(pud) | _PAGE_TABLE));
 		}
 		pud = pud_offset(pgd, (unsigned long)__va(phys));
 		if (pud_none(*pud)) {
 			pmd = (pmd_t *) spp_getpage();
-			set_pud(pud, __pud(__pa(pmd) | _KERNPG_TABLE |
-						_PAGE_USER));
+			set_pud(pud, __pud(__pa(pmd) | _PAGE_TABLE));
 		}
 		pmd = pmd_offset(pud, phys);
 		BUG_ON(!pmd_none(*pmd));
@@ -329,7 +343,7 @@ static __ref void *alloc_low_page(unsigned long *phys)
 	if (pfn >= pgt_buf_top)
 		panic("alloc_low_page: ran out of memory");
 
-	adr = early_memremap(pfn * PAGE_SIZE, PAGE_SIZE);
+	adr = (void __force_kernel *)early_memremap(pfn * PAGE_SIZE, PAGE_SIZE);
 	clear_page(adr);
 	*phys  = pfn * PAGE_SIZE;
 	return adr;
@@ -345,7 +359,7 @@ static __ref void *map_low_page(void *virt)
 
 	phys = __pa(virt);
 	left = phys & (PAGE_SIZE - 1);
-	adr = early_memremap(phys & PAGE_MASK, PAGE_SIZE);
+	adr = (void __force_kernel *)early_memremap(phys & PAGE_MASK, PAGE_SIZE);
 	adr = (void *)(((unsigned long)adr) | left);
 
 	return adr;
@@ -548,7 +562,7 @@ phys_pud_init(pud_t *pud_page, unsigned long addr, unsigned long end,
 		unmap_low_page(pmd);
 
 		spin_lock(&init_mm.page_table_lock);
-		pud_populate(&init_mm, pud, __va(pmd_phys));
+		pud_populate_kernel(&init_mm, pud, __va(pmd_phys));
 		spin_unlock(&init_mm.page_table_lock);
 	}
 	__flush_tlb_all();
@@ -594,7 +608,7 @@ kernel_physical_mapping_init(unsigned long start,
 		unmap_low_page(pud);
 
 		spin_lock(&init_mm.page_table_lock);
-		pgd_populate(&init_mm, pgd, __va(pud_phys));
+		pgd_populate_kernel(&init_mm, pgd, __va(pud_phys));
 		spin_unlock(&init_mm.page_table_lock);
 		pgd_changed = true;
 	}
@@ -685,6 +699,12 @@ void __init mem_init(void)
 	unsigned long absent_pages;
 
 	pci_iommu_alloc();
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	clone_pgd_range(get_cpu_pgd(0) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+#endif
 
 	/* clear_bss() already clear the empty_zero_page */
 
@@ -846,8 +866,8 @@ int kern_addr_valid(unsigned long addr)
 static struct vm_area_struct gate_vma = {
 	.vm_start	= VSYSCALL_START,
 	.vm_end		= VSYSCALL_START + (VSYSCALL_MAPPED_PAGES * PAGE_SIZE),
-	.vm_page_prot	= PAGE_READONLY_EXEC,
-	.vm_flags	= VM_READ | VM_EXEC
+	.vm_page_prot	= PAGE_READONLY,
+	.vm_flags	= VM_READ
 };
 
 struct vm_area_struct *get_gate_vma(struct mm_struct *mm)
@@ -881,7 +901,7 @@ int in_gate_area_no_mm(unsigned long addr)
 
 const char *arch_vma_name(struct vm_area_struct *vma)
 {
-	if (vma->vm_mm && vma->vm_start == (long)vma->vm_mm->context.vdso)
+	if (vma->vm_mm && vma->vm_start == vma->vm_mm->context.vdso)
 		return "[vdso]";
 	if (vma == &gate_vma)
 		return "[vsyscall]";

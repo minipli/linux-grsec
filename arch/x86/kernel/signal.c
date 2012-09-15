@@ -191,7 +191,7 @@ static unsigned long align_sigframe(unsigned long sp)
 	 * Align the stack pointer according to the i386 ABI,
 	 * i.e. so that on function entry ((sp + 4) & 15) == 0.
 	 */
-	sp = ((sp + 4) & -16ul) - 4;
+	sp = ((sp - 12) & -16ul) - 4;
 #else /* !CONFIG_X86_32 */
 	sp = round_down(sp, 16) - 8;
 #endif
@@ -242,11 +242,11 @@ get_sigframe(struct k_sigaction *ka, struct pt_regs *regs, size_t frame_size,
 	 * Return an always-bogus address instead so we will die with SIGSEGV.
 	 */
 	if (onsigstack && !likely(on_sig_stack(sp)))
-		return (void __user *)-1L;
+		return (__force void __user *)-1L;
 
 	/* save i387 state */
 	if (used_math() && save_i387_xstate(*fpstate) < 0)
-		return (void __user *)-1L;
+		return (__force void __user *)-1L;
 
 	return (void __user *)sp;
 }
@@ -301,9 +301,9 @@ __setup_frame(int sig, struct k_sigaction *ka, sigset_t *set,
 	}
 
 	if (current->mm->context.vdso)
-		restorer = VDSO32_SYMBOL(current->mm->context.vdso, sigreturn);
+		restorer = (__force void __user *)VDSO32_SYMBOL(current->mm->context.vdso, sigreturn);
 	else
-		restorer = &frame->retcode;
+		restorer = (void __user *)&frame->retcode;
 	if (ka->sa.sa_flags & SA_RESTORER)
 		restorer = ka->sa.sa_restorer;
 
@@ -317,7 +317,7 @@ __setup_frame(int sig, struct k_sigaction *ka, sigset_t *set,
 	 * reasons and because gdb uses it as a signature to notice
 	 * signal handler stack frames.
 	 */
-	err |= __put_user(*((u64 *)&retcode), (u64 *)frame->retcode);
+	err |= __put_user(*((u64 *)&retcode), (u64 __user *)frame->retcode);
 
 	if (err)
 		return -EFAULT;
@@ -371,7 +371,10 @@ static int __setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 		err |= __copy_to_user(&frame->uc.uc_sigmask, set, sizeof(*set));
 
 		/* Set up to return from userspace.  */
-		restorer = VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
+		if (current->mm->context.vdso)
+			restorer = (__force void __user *)VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
+		else
+			restorer = (void __user *)&frame->retcode;
 		if (ka->sa.sa_flags & SA_RESTORER)
 			restorer = ka->sa.sa_restorer;
 		put_user_ex(restorer, &frame->pretcode);
@@ -383,7 +386,7 @@ static int __setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 		 * reasons and because gdb uses it as a signature to notice
 		 * signal handler stack frames.
 		 */
-		put_user_ex(*((u64 *)&rt_retcode), (u64 *)frame->retcode);
+		put_user_ex(*((u64 *)&rt_retcode), (u64 __user *)frame->retcode);
 	} put_user_catch(err);
 
 	if (err)

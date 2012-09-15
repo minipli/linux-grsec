@@ -137,7 +137,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 	u16 orig_cmd;
 	struct pci_bus_region region;
 
-	mask = type ? PCI_ROM_ADDRESS_MASK : ~0;
+	mask = type ? (u32)PCI_ROM_ADDRESS_MASK : ~0;
 
 	if (!dev->mmio_always_on) {
 		pci_read_config_word(dev, PCI_COMMAND, &orig_cmd);

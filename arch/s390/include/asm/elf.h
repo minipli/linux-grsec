@@ -161,8 +161,14 @@ extern unsigned int vdso_enabled;
    the loader.  We need to make sure that it is out of the way of the program
    that it will "exec", and that there is sufficient room for the brk.  */
 
-extern unsigned long randomize_et_dyn(unsigned long base);
-#define ELF_ET_DYN_BASE		(randomize_et_dyn(STACK_TOP / 3 * 2))
+#define ELF_ET_DYN_BASE		(STACK_TOP / 3 * 2)
+
+#ifdef CONFIG_PAX_ASLR
+#define PAX_ELF_ET_DYN_BASE	(test_thread_flag(TIF_31BIT) ? 0x10000UL : 0x80000000UL)
+
+#define PAX_DELTA_MMAP_LEN	(test_thread_flag(TIF_31BIT) ? 15 : 26)
+#define PAX_DELTA_STACK_LEN	(test_thread_flag(TIF_31BIT) ? 15 : 26)
+#endif
 
 /* This yields a mask that user programs can use to figure out what
    instruction set this CPU supports. */
@@ -209,8 +215,5 @@ struct linux_binprm;
 
 #define ARCH_HAS_SETUP_ADDITIONAL_PAGES 1
 int arch_setup_additional_pages(struct linux_binprm *, int);
-
-extern unsigned long arch_randomize_brk(struct mm_struct *mm);
-#define arch_randomize_brk arch_randomize_brk
 
 #endif

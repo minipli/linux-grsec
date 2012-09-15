@@ -83,7 +83,7 @@ struct rcu_dynticks {
 	long long dynticks_nesting; /* Track irq/process nesting level. */
 				    /* Process level is worth LLONG_MAX/2. */
 	int dynticks_nmi_nesting;   /* Track NMI nesting level. */
-	atomic_t dynticks;	    /* Even value for idle, else odd. */
+	atomic_unchecked_t dynticks;/* Even value for idle, else odd. */
 #ifdef CONFIG_RCU_FAST_NO_HZ
 	int dyntick_drain;	    /* Prepare-for-idle state variable. */
 	unsigned long dyntick_holdoff;
