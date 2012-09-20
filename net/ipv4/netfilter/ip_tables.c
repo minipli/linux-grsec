@@ -1150,7 +1150,7 @@ static int get_info(struct net *net, void __user *user, int *len, int compat)
 		info.size = private->size;
 		strcpy(info.name, name);
 
-		if (copy_to_user(user, &info, *len) != 0)
+		if (copy_to_user(user, &info, len) != 0)
 			ret = -EFAULT;
 		else
 			ret = 0;
@@ -1979,7 +1979,7 @@ compat_do_ipt_get_ctl(struct sock *sk, int cmd, void __user *user, int *len)
 
 	switch (cmd) {
 	case IPT_SO_GET_INFO:
-		ret = get_info(sock_net(sk), user, len, 1);
+		ret = get_info(sock_net(sk), user, *len, 1);
 		break;
 	case IPT_SO_GET_ENTRIES:
 		ret = compat_get_entries(sock_net(sk), user, len);
@@ -2026,7 +2026,7 @@ do_ipt_get_ctl(struct sock *sk, int cmd, void __user *user, int *len)
 
 	switch (cmd) {
 	case IPT_SO_GET_INFO:
-		ret = get_info(sock_net(sk), user, len, 0);
+		ret = get_info(sock_net(sk), user, *len, 0);
 		break;
 
 	case IPT_SO_GET_ENTRIES:
