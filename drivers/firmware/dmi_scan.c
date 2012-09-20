@@ -452,11 +452,6 @@ void __init dmi_scan_machine(void)
 		}
 	}
 	else {
-		/*
-		 * no iounmap() for that ioremap(); it would be a no-op, but
-		 * it's so early in setup that sucker gets confused into doing
-		 * what it shouldn't if we actually call it.
-		 */
 		p = dmi_ioremap(0xF0000, 0x10000);
 		if (p == NULL)
 			goto error;
@@ -726,7 +721,7 @@ int dmi_walk(void (*decode)(const struct dmi_header *, void *),
 	if (buf == NULL)
 		return -1;
 
-	dmi_table(buf, dmi_len, dmi_num, decode, private_data);
+	dmi_table((char __force_kernel *)buf, dmi_len, dmi_num, decode, private_data);
 
 	iounmap(buf);
 	return 0;
