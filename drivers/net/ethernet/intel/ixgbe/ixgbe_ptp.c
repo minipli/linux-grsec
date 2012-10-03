@@ -805,7 +805,7 @@ void ixgbe_ptp_start_cyclecounter(struct ixgbe_adapter *adapter)
 	/* store the new cycle speed */
 	adapter->cycle_speed = cycle_speed;
 
-	ACCESS_ONCE(adapter->base_incval) = incval;
+	ACCESS_ONCE_RW(adapter->base_incval) = incval;
 	smp_mb();
 
 	/* grab the ptp lock */

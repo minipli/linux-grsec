@@ -410,7 +410,7 @@ static DEFINE_MUTEX(apm_mutex);
  * This is for buggy BIOS's that refer to (real mode) segment 0x40
  * even though they are called in protected mode.
  */
-static struct desc_struct bad_bios_desc = GDT_ENTRY_INIT(0x4092,
+static const struct desc_struct bad_bios_desc = GDT_ENTRY_INIT(0x4093,
 			(unsigned long)__va(0x400UL), PAGE_SIZE - 0x400 - 1);
 
 static const char driver_version[] = "1.16ac";	/* no spaces */
@@ -588,7 +588,10 @@ static long __apm_bios_call(void *_call)
 	BUG_ON(cpu != 0);
 	gdt = get_cpu_gdt_table(cpu);
 	save_desc_40 = gdt[0x40 / 8];
+
+	pax_open_kernel();
 	gdt[0x40 / 8] = bad_bios_desc;
+	pax_close_kernel();
 
 	apm_irq_save(flags);
 	APM_DO_SAVE_SEGS;
@@ -597,7 +600,11 @@ static long __apm_bios_call(void *_call)
 			  &call->esi);
 	APM_DO_RESTORE_SEGS;
 	apm_irq_restore(flags);
+
+	pax_open_kernel();
 	gdt[0x40 / 8] = save_desc_40;
+	pax_close_kernel();
+
 	put_cpu();
 
 	return call->eax & 0xff;
@@ -664,7 +671,10 @@ static long __apm_bios_call_simple(void *_call)
 	BUG_ON(cpu != 0);
 	gdt = get_cpu_gdt_table(cpu);
 	save_desc_40 = gdt[0x40 / 8];
+
+	pax_open_kernel();
 	gdt[0x40 / 8] = bad_bios_desc;
+	pax_close_kernel();
 
 	apm_irq_save(flags);
 	APM_DO_SAVE_SEGS;
@@ -672,7 +682,11 @@ static long __apm_bios_call_simple(void *_call)
 					 &call->eax);
 	APM_DO_RESTORE_SEGS;
 	apm_irq_restore(flags);
+
+	pax_open_kernel();
 	gdt[0x40 / 8] = save_desc_40;
+	pax_close_kernel();
+
 	put_cpu();
 	return error;
 }
@@ -2345,12 +2359,15 @@ static int __init apm_init(void)
 	 * code to that CPU.
 	 */
 	gdt = get_cpu_gdt_table(0);
+
+	pax_open_kernel();
 	set_desc_base(&gdt[APM_CS >> 3],
 		 (unsigned long)__va((unsigned long)apm_info.bios.cseg << 4));
 	set_desc_base(&gdt[APM_CS_16 >> 3],
 		 (unsigned long)__va((unsigned long)apm_info.bios.cseg_16 << 4));
 	set_desc_base(&gdt[APM_DS >> 3],
 		 (unsigned long)__va((unsigned long)apm_info.bios.dseg << 4));
+	pax_close_kernel();
 
 	proc_create("apm", 0, NULL, &apm_file_ops);
 
