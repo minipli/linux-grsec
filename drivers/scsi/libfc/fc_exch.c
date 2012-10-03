@@ -2174,13 +2174,13 @@ void fc_exch_update_stats(struct fc_lport *lport)
 
 	list_for_each_entry(ema, &lport->ema_list, ema_list) {
 		mp = ema->mp;
-		st->fc_no_free_exch += atomic_read(&mp->stats.no_free_exch);
+		st->fc_no_free_exch += atomic_read_unchecked(&mp->stats.no_free_exch);
 		st->fc_no_free_exch_xid +=
-				atomic_read(&mp->stats.no_free_exch_xid);
-		st->fc_xid_not_found += atomic_read(&mp->stats.xid_not_found);
-		st->fc_xid_busy += atomic_read(&mp->stats.xid_busy);
-		st->fc_seq_not_found += atomic_read(&mp->stats.seq_not_found);
-		st->fc_non_bls_resp += atomic_read(&mp->stats.non_bls_resp);
+				atomic_read_unchecked(&mp->stats.no_free_exch_xid);
+		st->fc_xid_not_found += atomic_read_unchecked(&mp->stats.xid_not_found);
+		st->fc_xid_busy += atomic_read_unchecked(&mp->stats.xid_busy);
+		st->fc_seq_not_found += atomic_read_unchecked(&mp->stats.seq_not_found);
+		st->fc_non_bls_resp += atomic_read_unchecked(&mp->stats.non_bls_resp);
 	}
 }
 EXPORT_SYMBOL(fc_exch_update_stats);
