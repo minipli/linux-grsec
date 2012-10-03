@@ -50,6 +50,10 @@
 #include <linux/seq_file.h>
 #include "udp_impl.h"
 
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+extern int grsec_enable_blackhole;
+#endif
+
 int ipv6_rcv_saddr_equal(const struct sock *sk, const struct sock *sk2)
 {
 	const struct in6_addr *sk_rcv_saddr6 = &inet6_sk(sk)->rcv_saddr;
@@ -615,7 +619,7 @@ int udpv6_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	return rc;
 drop:
 	UDP6_INC_STATS_BH(sock_net(sk), UDP_MIB_INERRORS, is_udplite);
-	atomic_inc(&sk->sk_drops);
+	atomic_inc_unchecked(&sk->sk_drops);
 	kfree_skb(skb);
 	return -1;
 }
@@ -673,7 +677,7 @@ static void flush_stack(struct sock **stack, unsigned int count,
 		if (likely(skb1 == NULL))
 			skb1 = (i == final) ? skb : skb_clone(skb, GFP_ATOMIC);
 		if (!skb1) {
-			atomic_inc(&sk->sk_drops);
+			atomic_inc_unchecked(&sk->sk_drops);
 			UDP6_INC_STATS_BH(sock_net(sk), UDP_MIB_RCVBUFERRORS,
 					  IS_UDPLITE(sk));
 			UDP6_INC_STATS_BH(sock_net(sk), UDP_MIB_INERRORS,
@@ -844,6 +848,9 @@ int __udp6_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 		goto discard;
 
 	UDP6_INC_STATS_BH(net, UDP_MIB_NOPORTS, proto == IPPROTO_UDPLITE);
+#ifdef CONFIG_GRKERNSEC_BLACKHOLE
+	if (!grsec_enable_blackhole || (skb->dev->flags & IFF_LOOPBACK))
+#endif
 	icmpv6_send(skb, ICMPV6_DEST_UNREACH, ICMPV6_PORT_UNREACH, 0);
 
 	kfree_skb(skb);
@@ -1453,8 +1460,13 @@ static void udp6_sock_seq_show(struct seq_file *seq, struct sock *sp, int bucket
 		   0, 0L, 0,
 		   sock_i_uid(sp), 0,
 		   sock_i_ino(sp),
-		   atomic_read(&sp->sk_refcnt), sp,
-		   atomic_read(&sp->sk_drops));
+		   atomic_read(&sp->sk_refcnt),
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		   NULL,
+#else
+		   sp,
+#endif
+		   atomic_read_unchecked(&sp->sk_drops));
 }
 
 int udp6_seq_show(struct seq_file *seq, void *v)

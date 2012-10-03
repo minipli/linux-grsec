@@ -29,6 +29,7 @@
 #include <linux/tty_driver.h>
 #include <linux/tty_flip.h>
 #include <linux/uaccess.h>
+#include <asm/local.h>
 
 #include "tty.h"
 #include "network.h"
@@ -99,10 +100,10 @@ static int ipw_open(struct tty_struct *linux_tty, struct file *filp)
 		mutex_unlock(&tty->ipw_tty_mutex);
 		return -ENODEV;
 	}
-	if (tty->port.count == 0)
+	if (atomic_read(&tty->port.count) == 0)
 		tty->tx_bytes_queued = 0;
 
-	tty->port.count++;
+	atomic_inc(&tty->port.count);
 
 	tty->port.tty = linux_tty;
 	linux_tty->driver_data = tty;
@@ -118,9 +119,7 @@ static int ipw_open(struct tty_struct *linux_tty, struct file *filp)
 
 static void do_ipw_close(struct ipw_tty *tty)
 {
-	tty->port.count--;
-
-	if (tty->port.count == 0) {
+	if (atomic_dec_return(&tty->port.count) == 0) {
 		struct tty_struct *linux_tty = tty->port.tty;
 
 		if (linux_tty != NULL) {
@@ -141,7 +140,7 @@ static void ipw_hangup(struct tty_struct *linux_tty)
 		return;
 
 	mutex_lock(&tty->ipw_tty_mutex);
-	if (tty->port.count == 0) {
+	if (atomic_read(&tty->port.count) == 0) {
 		mutex_unlock(&tty->ipw_tty_mutex);
 		return;
 	}
@@ -170,7 +169,7 @@ void ipwireless_tty_received(struct ipw_tty *tty, unsigned char *data,
 		return;
 	}
 
-	if (!tty->port.count) {
+	if (!atomic_read(&tty->port.count)) {
 		mutex_unlock(&tty->ipw_tty_mutex);
 		return;
 	}
@@ -212,7 +211,7 @@ static int ipw_write(struct tty_struct *linux_tty,
 		return -ENODEV;
 
 	mutex_lock(&tty->ipw_tty_mutex);
-	if (!tty->port.count) {
+	if (!atomic_read(&tty->port.count)) {
 		mutex_unlock(&tty->ipw_tty_mutex);
 		return -EINVAL;
 	}
@@ -252,7 +251,7 @@ static int ipw_write_room(struct tty_struct *linux_tty)
 	if (!tty)
 		return -ENODEV;
 
-	if (!tty->port.count)
+	if (!atomic_read(&tty->port.count))
 		return -EINVAL;
 
 	room = IPWIRELESS_TX_QUEUE_SIZE - tty->tx_bytes_queued;
@@ -294,7 +293,7 @@ static int ipw_chars_in_buffer(struct tty_struct *linux_tty)
 	if (!tty)
 		return 0;
 
-	if (!tty->port.count)
+	if (!atomic_read(&tty->port.count))
 		return 0;
 
 	return tty->tx_bytes_queued;
@@ -375,7 +374,7 @@ static int ipw_tiocmget(struct tty_struct *linux_tty)
 	if (!tty)
 		return -ENODEV;
 
-	if (!tty->port.count)
+	if (!atomic_read(&tty->port.count))
 		return -EINVAL;
 
 	return get_control_lines(tty);
@@ -391,7 +390,7 @@ ipw_tiocmset(struct tty_struct *linux_tty,
 	if (!tty)
 		return -ENODEV;
 
-	if (!tty->port.count)
+	if (!atomic_read(&tty->port.count))
 		return -EINVAL;
 
 	return set_control_lines(tty, set, clear);
@@ -405,7 +404,7 @@ static int ipw_ioctl(struct tty_struct *linux_tty,
 	if (!tty)
 		return -ENODEV;
 
-	if (!tty->port.count)
+	if (!atomic_read(&tty->port.count))
 		return -EINVAL;
 
 	/* FIXME: Exactly how is the tty object locked here .. */
@@ -561,7 +560,7 @@ void ipwireless_tty_free(struct ipw_tty *tty)
 				 * are gone */
 				mutex_lock(&ttyj->ipw_tty_mutex);
 			}
-			while (ttyj->port.count)
+			while (atomic_read(&ttyj->port.count))
 				do_ipw_close(ttyj);
 			ipwireless_disassociate_network_ttys(network,
 							     ttyj->channel_idx);

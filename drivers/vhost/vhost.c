@@ -635,7 +635,7 @@ static long vhost_set_memory(struct vhost_dev *d, struct vhost_memory __user *m)
 	return 0;
 }
 
-static long vhost_set_vring(struct vhost_dev *d, int ioctl, void __user *argp)
+static long vhost_set_vring(struct vhost_dev *d, unsigned int ioctl, void __user *argp)
 {
 	struct file *eventfp, *filep = NULL,
 		    *pollstart = NULL, *pollstop = NULL;

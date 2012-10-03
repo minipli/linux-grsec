@@ -30,7 +30,7 @@ struct real_mode_header {
 struct trampoline_header {
 #ifdef CONFIG_X86_32
 	u32 start;
-	u16 gdt_pad;
+	u16 boot_cs;
 	u16 gdt_limit;
 	u32 gdt_base;
 #else
