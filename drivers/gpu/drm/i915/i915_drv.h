@@ -268,7 +268,7 @@ struct drm_i915_display_funcs {
 	/* render clock increase/decrease */
 	/* display clock increase/decrease */
 	/* pll clock increase/decrease */
-};
+} __no_const;
 
 struct intel_device_info {
 	u8 gen;
@@ -386,7 +386,7 @@ typedef struct drm_i915_private {
 	int current_page;
 	int page_flipping;
 
-	atomic_t irq_received;
+	atomic_unchecked_t irq_received;
 
 	/* protects the irq masks */
 	spinlock_t irq_lock;
@@ -985,7 +985,7 @@ struct drm_i915_gem_object {
 	 * will be page flipped away on the next vblank.  When it
 	 * reaches 0, dev_priv->pending_flip_queue will be woken up.
 	 */
-	atomic_t pending_flip;
+	atomic_unchecked_t pending_flip;
 };
 
 #define to_intel_bo(x) container_of(x, struct drm_i915_gem_object, base)
@@ -1434,7 +1434,7 @@ extern struct i2c_adapter *intel_gmbus_get_adapter(
 		struct drm_i915_private *dev_priv, unsigned port);
 extern void intel_gmbus_set_speed(struct i2c_adapter *adapter, int speed);
 extern void intel_gmbus_force_bit(struct i2c_adapter *adapter, bool force_bit);
-extern inline bool intel_gmbus_is_forced_bit(struct i2c_adapter *adapter)
+static inline bool intel_gmbus_is_forced_bit(struct i2c_adapter *adapter)
 {
 	return container_of(adapter, struct intel_gmbus, adapter)->force_bit;
 }

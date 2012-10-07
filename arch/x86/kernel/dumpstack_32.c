@@ -38,15 +38,13 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
 		bp = stack_frame(task, regs);
 
 	for (;;) {
-		struct thread_info *context;
+		void *stack_start = (void *)((unsigned long)stack & ~(THREAD_SIZE-1));
 
-		context = (struct thread_info *)
-			((unsigned long)stack & (~(THREAD_SIZE - 1)));
-		bp = ops->walk_stack(context, stack, bp, ops, data, NULL, &graph);
+		bp = ops->walk_stack(task, stack_start, stack, bp, ops, data, NULL, &graph);
 
-		stack = (unsigned long *)context->previous_esp;
-		if (!stack)
+		if (stack_start == task_stack_page(task))
 			break;
+		stack = *(unsigned long **)stack_start;
 		if (ops->stack(data, "IRQ") < 0)
 			break;
 		touch_nmi_watchdog();
@@ -87,7 +85,7 @@ void show_regs(struct pt_regs *regs)
 	int i;
 
 	print_modules();
-	__show_regs(regs, !user_mode_vm(regs));
+	__show_regs(regs, !user_mode(regs));
 
 	printk(KERN_EMERG "Process %.*s (pid: %d, ti=%p task=%p task.ti=%p)\n",
 		TASK_COMM_LEN, current->comm, task_pid_nr(current),
@@ -96,21 +94,22 @@ void show_regs(struct pt_regs *regs)
 	 * When in-kernel, we also print out the stack and code at the
 	 * time of the fault..
 	 */
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		unsigned int code_prologue = code_bytes * 43 / 64;
 		unsigned int code_len = code_bytes;
 		unsigned char c;
 		u8 *ip;
+		unsigned long cs_base = get_desc_base(&get_cpu_gdt_table(smp_processor_id())[(0xffff & regs->cs) >> 3]);
 
 		printk(KERN_EMERG "Stack:\n");
 		show_stack_log_lvl(NULL, regs, &regs->sp, 0, KERN_EMERG);
 
 		printk(KERN_EMERG "Code: ");
 
-		ip = (u8 *)regs->ip - code_prologue;
+		ip = (u8 *)regs->ip - code_prologue + cs_base;
 		if (ip < (u8 *)PAGE_OFFSET || probe_kernel_address(ip, c)) {
 			/* try starting at IP */
-			ip = (u8 *)regs->ip;
+			ip = (u8 *)regs->ip + cs_base;
 			code_len = code_len - code_prologue + 1;
 		}
 		for (i = 0; i < code_len; i++, ip++) {
@@ -119,7 +118,7 @@ void show_regs(struct pt_regs *regs)
 				printk(KERN_CONT " Bad EIP value.");
 				break;
 			}
-			if (ip == (u8 *)regs->ip)
+			if (ip == (u8 *)regs->ip + cs_base)
 				printk(KERN_CONT "<%02x> ", c);
 			else
 				printk(KERN_CONT "%02x ", c);
@@ -132,6 +131,7 @@ int is_valid_bugaddr(unsigned long ip)
 {
 	unsigned short ud2;
 
+	ip = ktla_ktva(ip);
 	if (ip < PAGE_OFFSET)
 		return 0;
 	if (probe_kernel_address((unsigned short *)ip, ud2))
@@ -139,3 +139,15 @@ int is_valid_bugaddr(unsigned long ip)
 
 	return ud2 == 0x0b0f;
 }
+
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+void pax_check_alloca(unsigned long size)
+{
+	unsigned long sp = (unsigned long)&sp, stack_left;
+
+	/* all kernel stacks are of the same size */
+	stack_left = sp & (THREAD_SIZE - 1);
+	BUG_ON(stack_left < 256 || size >= stack_left - 256);
+}
+EXPORT_SYMBOL(pax_check_alloca);
+#endif

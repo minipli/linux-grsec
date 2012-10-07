@@ -757,7 +757,7 @@ struct snd_soc_platform_driver {
 	unsigned int (*read)(struct snd_soc_platform *, unsigned int);
 	int (*write)(struct snd_soc_platform *, unsigned int, unsigned int);
 	int (*bespoke_trigger)(struct snd_pcm_substream *, int);
-};
+} __do_const;
 
 struct snd_soc_platform {
 	const char *name;
@@ -949,7 +949,7 @@ struct snd_soc_pcm_runtime {
 	struct snd_soc_dai_link *dai_link;
 	struct mutex pcm_mutex;
 	enum snd_soc_pcm_subclass pcm_subclass;
-	struct snd_pcm_ops ops;
+	snd_pcm_ops_no_const ops;
 
 	unsigned int dev_registered:1;
 
