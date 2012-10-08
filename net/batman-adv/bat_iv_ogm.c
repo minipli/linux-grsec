@@ -63,7 +63,7 @@ static int bat_iv_ogm_iface_enable(struct hard_iface *hard_iface)
 
 	/* randomize initial seqno to avoid collision */
 	get_random_bytes(&random_seqno, sizeof(random_seqno));
-	atomic_set(&hard_iface->seqno, random_seqno);
+	atomic_set_unchecked(&hard_iface->seqno, random_seqno);
 
 	hard_iface->packet_len = BATMAN_OGM_HLEN;
 	hard_iface->packet_buff = kmalloc(hard_iface->packet_len, GFP_ATOMIC);
@@ -572,7 +572,7 @@ static void bat_iv_ogm_schedule(struct hard_iface *hard_iface,
 
 	/* change sequence number to network order */
 	batman_ogm_packet->seqno =
-			htonl((uint32_t)atomic_read(&hard_iface->seqno));
+			htonl((uint32_t)atomic_read_unchecked(&hard_iface->seqno));
 
 	batman_ogm_packet->ttvn = atomic_read(&bat_priv->ttvn);
 	batman_ogm_packet->tt_crc = htons((uint16_t)
@@ -592,7 +592,7 @@ static void bat_iv_ogm_schedule(struct hard_iface *hard_iface,
 	else
 		batman_ogm_packet->gw_flags = NO_FLAGS;
 
-	atomic_inc(&hard_iface->seqno);
+	atomic_inc_unchecked(&hard_iface->seqno);
 
 	slide_own_bcast_window(hard_iface);
 	bat_iv_ogm_queue_add(bat_priv, hard_iface->packet_buff,
@@ -956,7 +956,7 @@ static void bat_iv_ogm_process(const struct ethhdr *ethhdr,
 		return;
 
 	/* could be changed by schedule_own_packet() */
-	if_incoming_seqno = atomic_read(&if_incoming->seqno);
+	if_incoming_seqno = atomic_read_unchecked(&if_incoming->seqno);
 
 	has_directlink_flag = (batman_ogm_packet->flags & DIRECTLINK ? 1 : 0);
 

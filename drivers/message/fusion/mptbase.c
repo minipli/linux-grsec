@@ -6751,8 +6751,13 @@ static int mpt_iocinfo_proc_show(struct seq_file *m, void *v)
 	seq_printf(m, "  MaxChainDepth = 0x%02x frames\n", ioc->facts.MaxChainDepth);
 	seq_printf(m, "  MinBlockSize = 0x%02x bytes\n", 4*ioc->facts.BlockSize);
 
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	seq_printf(m, "  RequestFrames @ 0x%p (Dma @ 0x%p)\n", NULL, NULL);
+#else
 	seq_printf(m, "  RequestFrames @ 0x%p (Dma @ 0x%p)\n",
 					(void *)ioc->req_frames, (void *)(ulong)ioc->req_frames_dma);
+#endif
+
 	/*
 	 *  Rounding UP to nearest 4-kB boundary here...
 	 */

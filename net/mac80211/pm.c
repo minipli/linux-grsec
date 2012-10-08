@@ -34,7 +34,7 @@ int __ieee80211_suspend(struct ieee80211_hw *hw, struct cfg80211_wowlan *wowlan)
 	struct ieee80211_sub_if_data *sdata;
 	struct sta_info *sta;
 
-	if (!local->open_count)
+	if (!local_read(&local->open_count))
 		goto suspend;
 
 	ieee80211_scan_cancel(local);
@@ -72,7 +72,7 @@ int __ieee80211_suspend(struct ieee80211_hw *hw, struct cfg80211_wowlan *wowlan)
 	cancel_work_sync(&local->dynamic_ps_enable_work);
 	del_timer_sync(&local->dynamic_ps_timer);
 
-	local->wowlan = wowlan && local->open_count;
+	local->wowlan = wowlan && local_read(&local->open_count);
 	if (local->wowlan) {
 		int err = drv_suspend(local, wowlan);
 		if (err < 0) {
@@ -132,7 +132,7 @@ int __ieee80211_suspend(struct ieee80211_hw *hw, struct cfg80211_wowlan *wowlan)
 		drv_remove_interface(local, sdata);
 
 	/* stop hardware - this must stop RX */
-	if (local->open_count)
+	if (local_read(&local->open_count))
 		ieee80211_stop_device(local);
 
  suspend:

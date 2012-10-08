@@ -29,7 +29,7 @@ struct x86_init_mpparse {
 	void (*mpc_oem_bus_info)(struct mpc_bus *m, char *name);
 	void (*find_smp_config)(void);
 	void (*get_smp_config)(unsigned int early);
-};
+} __no_const;
 
 /**
  * struct x86_init_resources - platform specific resource related ops
@@ -43,7 +43,7 @@ struct x86_init_resources {
 	void (*probe_roms)(void);
 	void (*reserve_resources)(void);
 	char *(*memory_setup)(void);
-};
+} __no_const;
 
 /**
  * struct x86_init_irqs - platform specific interrupt setup
@@ -56,7 +56,7 @@ struct x86_init_irqs {
 	void (*pre_vector_init)(void);
 	void (*intr_init)(void);
 	void (*trap_init)(void);
-};
+} __no_const;
 
 /**
  * struct x86_init_oem - oem platform specific customizing functions
@@ -66,7 +66,7 @@ struct x86_init_irqs {
 struct x86_init_oem {
 	void (*arch_setup)(void);
 	void (*banner)(void);
-};
+} __no_const;
 
 /**
  * struct x86_init_mapping - platform specific initial kernel pagetable setup
@@ -77,7 +77,7 @@ struct x86_init_oem {
  */
 struct x86_init_mapping {
 	void (*pagetable_reserve)(u64 start, u64 end);
-};
+} __no_const;
 
 /**
  * struct x86_init_paging - platform specific paging functions
@@ -87,7 +87,7 @@ struct x86_init_mapping {
 struct x86_init_paging {
 	void (*pagetable_setup_start)(pgd_t *base);
 	void (*pagetable_setup_done)(pgd_t *base);
-};
+} __no_const;
 
 /**
  * struct x86_init_timers - platform specific timer setup
@@ -102,7 +102,7 @@ struct x86_init_timers {
 	void (*tsc_pre_init)(void);
 	void (*timer_init)(void);
 	void (*wallclock_init)(void);
-};
+} __no_const;
 
 /**
  * struct x86_init_iommu - platform specific iommu setup
@@ -110,7 +110,7 @@ struct x86_init_timers {
  */
 struct x86_init_iommu {
 	int (*iommu_init)(void);
-};
+} __no_const;
 
 /**
  * struct x86_init_pci - platform specific pci init functions
@@ -124,7 +124,7 @@ struct x86_init_pci {
 	int (*init)(void);
 	void (*init_irq)(void);
 	void (*fixup_irqs)(void);
-};
+} __no_const;
 
 /**
  * struct x86_init_ops - functions for platform specific setup
@@ -140,7 +140,7 @@ struct x86_init_ops {
 	struct x86_init_timers		timers;
 	struct x86_init_iommu		iommu;
 	struct x86_init_pci		pci;
-};
+} __no_const;
 
 /**
  * struct x86_cpuinit_ops - platform specific cpu hotplug setups
@@ -151,7 +151,7 @@ struct x86_cpuinit_ops {
 	void (*setup_percpu_clockev)(void);
 	void (*early_percpu_clock_init)(void);
 	void (*fixup_cpu_id)(struct cpuinfo_x86 *c, int node);
-};
+} __no_const;
 
 /**
  * struct x86_platform_ops - platform specific runtime functions
@@ -177,7 +177,7 @@ struct x86_platform_ops {
 	int (*i8042_detect)(void);
 	void (*save_sched_clock_state)(void);
 	void (*restore_sched_clock_state)(void);
-};
+} __no_const;
 
 struct pci_dev;
 
@@ -186,14 +186,14 @@ struct x86_msi_ops {
 	void (*teardown_msi_irq)(unsigned int irq);
 	void (*teardown_msi_irqs)(struct pci_dev *dev);
 	void (*restore_msi_irqs)(struct pci_dev *dev, int irq);
-};
+} __no_const;
 
 struct x86_io_apic_ops {
 	void		(*init)  (void);
 	unsigned int	(*read)  (unsigned int apic, unsigned int reg);
 	void		(*write) (unsigned int apic, unsigned int reg, unsigned int value);
 	void		(*modify)(unsigned int apic, unsigned int reg, unsigned int value);
-};
+} __no_const;
 
 extern struct x86_init_ops x86_init;
 extern struct x86_cpuinit_ops x86_cpuinit;

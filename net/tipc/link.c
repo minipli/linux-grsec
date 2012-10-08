@@ -1164,7 +1164,7 @@ static int link_send_sections_long(struct tipc_port *sender,
 	struct tipc_msg fragm_hdr;
 	struct sk_buff *buf, *buf_chain, *prev;
 	u32 fragm_crs, fragm_rest, hsz, sect_rest;
-	const unchar *sect_crs;
+	const unchar __user *sect_crs;
 	int curr_sect;
 	u32 fragm_no;
 
@@ -1205,7 +1205,7 @@ again:
 
 		if (!sect_rest) {
 			sect_rest = msg_sect[++curr_sect].iov_len;
-			sect_crs = (const unchar *)msg_sect[curr_sect].iov_base;
+			sect_crs = (const unchar __user *)msg_sect[curr_sect].iov_base;
 		}
 
 		if (sect_rest < fragm_rest)
@@ -1224,7 +1224,7 @@ error:
 			}
 		} else
 			skb_copy_to_linear_data_offset(buf, fragm_crs,
-						       sect_crs, sz);
+						       (const void __force_kernel *)sect_crs, sz);
 		sect_crs += sz;
 		sect_rest -= sz;
 		fragm_crs += sz;

@@ -23,10 +23,22 @@ unsigned int arch_mod_section_prepend(struct module *mod, unsigned int section);
 
 /* Allocator used for allocating struct module, core sections and init
    sections.  Returns NULL on failure. */
-void *module_alloc(unsigned long size);
+void *module_alloc(unsigned long size) __size_overflow(1);
+
+#ifdef CONFIG_PAX_KERNEXEC
+void *module_alloc_exec(unsigned long size) __size_overflow(1);
+#else
+#define module_alloc_exec(x) module_alloc(x)
+#endif
 
 /* Free memory returned from module_alloc. */
 void module_free(struct module *mod, void *module_region);
+
+#ifdef CONFIG_PAX_KERNEXEC
+void module_free_exec(struct module *mod, void *module_region);
+#else
+#define module_free_exec(x, y) module_free((x), (y))
+#endif
 
 /* Apply the given relocation to the (simplified) ELF.  Return -error
    or 0. */
