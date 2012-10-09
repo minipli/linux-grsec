@@ -716,7 +716,7 @@ struct IO_APIC_route_entry **alloc_ioapic_entries(void)
 	ioapic_entries = kzalloc(sizeof(*ioapic_entries) * nr_ioapics,
 				GFP_ATOMIC);
 	if (!ioapic_entries)
-		return 0;
+		return NULL;
 
 	for (apic = 0; apic < nr_ioapics; apic++) {
 		ioapic_entries[apic] =
@@ -733,7 +733,7 @@ nomem:
 		kfree(ioapic_entries[apic]);
 	kfree(ioapic_entries);
 
-	return 0;
+	return NULL;
 }
 
 /*
@@ -1150,7 +1150,7 @@ int IO_APIC_get_PCI_irq_vector(int bus, int slot, int pin,
 }
 EXPORT_SYMBOL(IO_APIC_get_PCI_irq_vector);
 
-void lock_vector_lock(void)
+void lock_vector_lock(void) __acquires(vector_lock)
 {
 	/* Used to the online set of cpus does not change
 	 * during assign_irq_vector.
@@ -1158,7 +1158,7 @@ void lock_vector_lock(void)
 	spin_lock(&vector_lock);
 }
 
-void unlock_vector_lock(void)
+void unlock_vector_lock(void) __releases(vector_lock)
 {
 	spin_unlock(&vector_lock);
 }
@@ -2542,7 +2542,7 @@ static void ack_apic_edge(unsigned int irq)
 	ack_APIC_irq();
 }
 
-atomic_t irq_mis_count;
+atomic_unchecked_t irq_mis_count;
 
 static void ack_apic_level(unsigned int irq)
 {
@@ -2626,7 +2626,7 @@ static void ack_apic_level(unsigned int irq)
 
 	/* Tail end of version 0x11 I/O APIC bug workaround */
 	if (!(v & (1 << (i & 0x1f)))) {
-		atomic_inc(&irq_mis_count);
+		atomic_inc_unchecked(&irq_mis_count);
 		spin_lock(&ioapic_lock);
 		__mask_and_edge_IO_APIC_irq(cfg);
 		__unmask_and_level_IO_APIC_irq(cfg);

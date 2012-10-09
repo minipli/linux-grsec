@@ -14,6 +14,15 @@
 #define __compiler_offsetof(a,b) __builtin_offsetof(a,b)
 #define __always_inline		inline __attribute__((always_inline))
 
+#ifdef SIZE_OVERFLOW_PLUGIN
+#define __size_overflow(...) __attribute__((size_overflow(__VA_ARGS__)))
+#define __intentional_overflow(...) __attribute__((intentional_overflow(__VA_ARGS__)))
+#endif
+
+#ifdef LATENT_ENTROPY_PLUGIN
+#define __latent_entropy __attribute__((latent_entropy))
+#endif
+
 /*
  * A trick to suppress uninitialized variable warning without generating any
  * code
@@ -36,4 +45,23 @@
    the kernel context */
 #define __cold			__attribute__((__cold__))
 
+#define __alloc_size(...)	__attribute((alloc_size(__VA_ARGS__)))
+#define __bos(ptr, arg)		__builtin_object_size((ptr), (arg))
+#define __bos0(ptr)		__bos((ptr), 0)
+#define __bos1(ptr)		__bos((ptr), 1)
+#endif
+
+#if __GNUC_MINOR__ >= 5
+#ifdef CONSTIFY_PLUGIN
+#define __no_const __attribute__((no_const))
+#define __do_const __attribute__((do_const))
+#endif
+#endif
+
+#if __GNUC_MINOR__ > 0
+#define __compiletime_object_size(obj) __builtin_object_size(obj, 0)
+#endif
+#if __GNUC_MINOR__ >= 4 && !defined(__CHECKER__)
+#define __compiletime_warning(message) __attribute__((warning(message)))
+#define __compiletime_error(message) __attribute__((error(message)))
 #endif
