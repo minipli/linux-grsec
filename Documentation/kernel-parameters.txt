@@ -806,6 +806,9 @@ and is between 256 and 4096 characters. It is defined in the file
 	gpt		[EFI] Forces disk with valid GPT signature but
 			invalid Protective MBR to be treated as GPT.
 
+	grsec_proc_gid=	[GRKERNSEC_PROC_USERGROUP] Chooses GID to
+			ignore grsecurity's /proc restrictions
+
 	gvp11=		[HW,SCSI]
 
 	hashdist=	[KNL,NUMA] Large hashes allocated during boot
@@ -855,6 +858,12 @@ and is between 256 and 4096 characters. It is defined in the file
 	hvc_iucv_allow=	[S390] Comma-separated list of z/VM user IDs.
 			       If specified, z/VM IUCV HVC accepts connections
 			       from listed z/VM user IDs only.
+
+	keep_bootcon	[KNL]
+			Do not unregister boot console at start. This is only
+			useful for debugging when something happens in the window
+			between unregistering the boot console and initializing
+			the real console.
 
 	i2c_bus=	[HW] Override the default board specific I2C bus speed
 			     or register an additional I2C bus that is not
@@ -1841,6 +1850,13 @@ and is between 256 and 4096 characters. It is defined in the file
 			Halt all CPUs after the first oops has been printed for
 			the specified number of seconds.  This is to be used if
 			your oopses keep scrolling off the screen.
+
+	pax_nouderef	[X86] disables UDEREF.  Most likely needed under certain
+			virtualization environments that don't cope well with the
+			expand down segment used by UDEREF on X86-32 or the frequent
+			page table updates on X86-64.
+
+	pax_softmode=	0/1 to disable/enable PaX softmode on boot already.
 
 	pcbit=		[HW,ISDN]
 

@@ -149,7 +149,7 @@ int radeon_pm_init(struct radeon_device *rdev);
  */
 struct radeon_fence_driver {
 	uint32_t			scratch_reg;
-	atomic_t			seq;
+	atomic_unchecked_t		seq;
 	uint32_t			last_seq;
 	unsigned long			count_timeout;
 	wait_queue_head_t		queue;
@@ -640,7 +640,7 @@ struct radeon_asic {
 			       uint32_t offset, uint32_t obj_size);
 	int (*clear_surface_reg)(struct radeon_device *rdev, int reg);
 	void (*bandwidth_update)(struct radeon_device *rdev);
-};
+} __no_const;
 
 /*
  * Asic structures

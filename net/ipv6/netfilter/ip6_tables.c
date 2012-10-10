@@ -1139,14 +1139,14 @@ static int compat_table_info(const struct xt_table_info *info,
 }
 #endif
 
-static int get_info(struct net *net, void __user *user, int *len, int compat)
+static int get_info(struct net *net, void __user *user, int len, int compat)
 {
 	char name[IP6T_TABLE_MAXNAMELEN];
 	struct xt_table *t;
 	int ret;
 
-	if (*len != sizeof(struct ip6t_getinfo)) {
-		duprintf("length %u != %zu\n", *len,
+	if (len != sizeof(struct ip6t_getinfo)) {
+		duprintf("length %u != %zu\n", len,
 			 sizeof(struct ip6t_getinfo));
 		return -EINVAL;
 	}
@@ -1173,6 +1173,7 @@ static int get_info(struct net *net, void __user *user, int *len, int compat)
 			private = &tmp;
 		}
 #endif
+		memset(&info, 0, sizeof(info));
 		info.valid_hooks = t->valid_hooks;
 		memcpy(info.hook_entry, private->hook_entry,
 		       sizeof(info.hook_entry));
@@ -1182,7 +1183,7 @@ static int get_info(struct net *net, void __user *user, int *len, int compat)
 		info.size = private->size;
 		strcpy(info.name, name);
 
-		if (copy_to_user(user, &info, *len) != 0)
+		if (copy_to_user(user, &info, len) != 0)
 			ret = -EFAULT;
 		else
 			ret = 0;
@@ -2014,7 +2015,7 @@ compat_do_ip6t_get_ctl(struct sock *sk, int cmd, void __user *user, int *len)
 
 	switch (cmd) {
 	case IP6T_SO_GET_INFO:
-		ret = get_info(sock_net(sk), user, len, 1);
+		ret = get_info(sock_net(sk), user, *len, 1);
 		break;
 	case IP6T_SO_GET_ENTRIES:
 		ret = compat_get_entries(sock_net(sk), user, len);
@@ -2061,7 +2062,7 @@ do_ip6t_get_ctl(struct sock *sk, int cmd, void __user *user, int *len)
 
 	switch (cmd) {
 	case IP6T_SO_GET_INFO:
-		ret = get_info(sock_net(sk), user, len, 0);
+		ret = get_info(sock_net(sk), user, *len, 0);
 		break;
 
 	case IP6T_SO_GET_ENTRIES:

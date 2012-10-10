@@ -15,9 +15,10 @@ enum vsyscall_num {
 
 #ifdef __KERNEL__
 #include <linux/seqlock.h>
+#include <linux/getcpu.h>
+#include <linux/time.h>
 
 #define __section_vgetcpu_mode __attribute__ ((unused, __section__ (".vgetcpu_mode"), aligned(16)))
-#define __section_jiffies __attribute__ ((unused, __section__ (".jiffies"), aligned(16)))
 
 /* Definitions for CONFIG_GENERIC_TIME definitions */
 #define __section_vsyscall_gtod_data __attribute__ \
@@ -31,7 +32,6 @@ enum vsyscall_num {
 #define VGETCPU_LSL	2
 
 extern int __vgetcpu_mode;
-extern volatile unsigned long __jiffies;
 
 /* kernel space (writeable) */
 extern int vgetcpu_mode;
@@ -39,6 +39,9 @@ extern struct timezone sys_tz;
 
 extern void map_vsyscall(void);
 
+extern int vgettimeofday(struct timeval * tv, struct timezone * tz);
+extern time_t vtime(time_t *t);
+extern long vgetcpu(unsigned *cpu, unsigned *node, struct getcpu_cache *tcache);
 #endif /* __KERNEL__ */
 
 #endif /* _ASM_X86_VSYSCALL_H */

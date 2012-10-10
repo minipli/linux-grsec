@@ -15,7 +15,7 @@
 #endif
 
 extern unsigned long
-print_context_stack(struct thread_info *tinfo,
+print_context_stack(struct task_struct *task, void *stack_start,
 		unsigned long *stack, unsigned long bp,
 		const struct stacktrace_ops *ops, void *data,
 		unsigned long *end, int *graph);

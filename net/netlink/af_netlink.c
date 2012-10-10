@@ -733,7 +733,7 @@ static void netlink_overrun(struct sock *sk)
 			sk->sk_error_report(sk);
 		}
 	}
-	atomic_inc(&sk->sk_drops);
+	atomic_inc_unchecked(&sk->sk_drops);
 }
 
 static struct sock *netlink_getsockbypid(struct sock *ssk, u32 pid)
@@ -1303,8 +1303,10 @@ static int netlink_sendmsg(struct kiocb *kiocb, struct socket *sock,
 			return -EINVAL;
 		dst_pid = addr->nl_pid;
 		dst_group = ffs(addr->nl_groups);
-		if (dst_group && !netlink_capable(sock, NL_NONROOT_SEND))
-			return -EPERM;
+		err =  -EPERM;
+		if ((dst_group || dst_pid) &&
+		    !netlink_capable(sock, NL_NONROOT_SEND))
+			goto out;
 	} else {
 		dst_pid = nlk->dst_pid;
 		dst_group = nlk->dst_group;
@@ -1966,15 +1968,23 @@ static int netlink_seq_show(struct seq_file *seq, void *v)
 		struct netlink_sock *nlk = nlk_sk(s);
 
 		seq_printf(seq, "%p %-3d %-6d %08x %-8d %-8d %p %-8d %-8d\n",
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+			   NULL,
+#else
 			   s,
+#endif
 			   s->sk_protocol,
 			   nlk->pid,
 			   nlk->groups ? (u32)nlk->groups[0] : 0,
 			   sk_rmem_alloc_get(s),
 			   sk_wmem_alloc_get(s),
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+			   NULL,
+#else
 			   nlk->cb,
+#endif
 			   atomic_read(&s->sk_refcnt),
-			   atomic_read(&s->sk_drops)
+			   atomic_read_unchecked(&s->sk_drops)
 			);
 
 	}
@@ -2060,6 +2070,27 @@ static void __net_exit netlink_net_exit(struct net *net)
 #endif
 }
 
+static void __init netlink_add_usersock_entry(void)
+{
+	unsigned long *listeners;
+	int groups = 32;
+
+	listeners = kzalloc(NLGRPSZ(groups) + sizeof(struct listeners_rcu_head),
+			    GFP_KERNEL);
+	if (!listeners)
+		panic("netlink_add_usersock_entry: Cannot allocate listneres\n");
+
+	netlink_table_grab();
+
+	nl_table[NETLINK_USERSOCK].groups = groups;
+	nl_table[NETLINK_USERSOCK].listeners = listeners;
+	nl_table[NETLINK_USERSOCK].module = THIS_MODULE;
+	nl_table[NETLINK_USERSOCK].registered = 1;
+	nl_table[NETLINK_USERSOCK].nl_nonroot = NL_NONROOT_SEND;
+
+	netlink_table_ungrab();
+}
+
 static struct pernet_operations __net_initdata netlink_net_ops = {
 	.init = netlink_net_init,
 	.exit = netlink_net_exit,
@@ -2107,6 +2138,8 @@ static int __init netlink_proto_init(void)
 		hash->mask = 0;
 		hash->rehash_time = jiffies;
 	}
+
+	netlink_add_usersock_entry();
 
 	sock_register(&netlink_family_ops);
 	register_pernet_subsys(&netlink_net_ops);

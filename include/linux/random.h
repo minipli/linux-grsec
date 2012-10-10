@@ -49,6 +49,10 @@ extern void add_input_randomness(unsigned int type, unsigned int code,
 				 unsigned int value);
 extern void add_interrupt_randomness(int irq, int irq_flags);
 
+#ifdef CONFIG_PAX_LATENT_ENTROPY
+extern void transfer_latent_entropy(void);
+#endif
+
 extern void get_random_bytes(void *buf, int nbytes);
 extern void get_random_bytes_arch(void *buf, int nbytes);
 void generate_random_uuid(unsigned char uuid_out[16]);
@@ -62,6 +66,24 @@ unsigned long randomize_range(unsigned long start, unsigned long end, unsigned l
 
 u32 random32(void);
 void srandom32(u32 seed);
+
+#ifdef CONFIG_ARCH_RANDOM
+# include <asm/archrandom.h>
+#else
+static inline int arch_get_random_long(unsigned long *v)
+{
+	return 0;
+}
+static inline int arch_get_random_int(unsigned int *v)
+{
+	return 0;
+}
+#endif
+
+static inline unsigned long pax_get_random_long(void)
+{
+	return random32() + (sizeof(long) > 4 ? (unsigned long)random32() << 32 : 0);
+}
 
 #ifdef CONFIG_ARCH_RANDOM
 # include <asm/archrandom.h>

@@ -563,10 +563,14 @@ extern const kernel_cap_t __cap_init_eff_set;
 	(security_real_capable_noaudit((t), (cap)) == 0)
 
 extern int capable(int cap);
+int capable_nolog(int cap);
 
 /* audit system wants to get cap info from files as well */
 struct dentry;
 extern int get_vfs_caps_from_disk(const struct dentry *dentry, struct cpu_vfs_cap_data *cpu_caps);
+
+extern int is_privileged_binary(const struct dentry *dentry);
+extern int is_root_privileged_binary(const struct dentry *dentry);
 
 #endif /* __KERNEL__ */
 

@@ -543,6 +543,7 @@ static int rfcomm_sock_getname(struct socket *sock, struct sockaddr *addr, int *
 
 	BT_DBG("sock %p, sk %p", sock, sk);
 
+	memset(sa, 0, sizeof(*sa));
 	sa->rc_family  = AF_BLUETOOTH;
 	sa->rc_channel = rfcomm_pi(sk)->channel;
 	if (peer)
@@ -792,7 +793,7 @@ static int rfcomm_sock_setsockopt(struct socket *sock, int level, int optname, c
 
 		sec.level = BT_SECURITY_LOW;
 
-		len = min_t(unsigned int, sizeof(sec), optlen);
+		len = min(sizeof(sec), len);
 		if (copy_from_user((char *) &sec, optval, len)) {
 			err = -EFAULT;
 			break;

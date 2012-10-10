@@ -147,9 +147,9 @@ printk(level "%s: " fmt "\n" , OHCI1394_DRIVER_NAME , ## args)
 printk(level "%s: fw-host%d: " fmt "\n" , OHCI1394_DRIVER_NAME, ohci->host->id , ## args)
 
 /* Module Parameters */
-static int phys_dma = 1;
+static int phys_dma;
 module_param(phys_dma, int, 0444);
-MODULE_PARM_DESC(phys_dma, "Enable physical DMA (default = 1).");
+MODULE_PARM_DESC(phys_dma, "Enable physical DMA (default = 0).");
 
 static void dma_trm_tasklet(unsigned long data);
 static void dma_trm_reset(struct dma_trm_ctx *d);

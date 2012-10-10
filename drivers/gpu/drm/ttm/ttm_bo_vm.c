@@ -73,7 +73,7 @@ static int ttm_bo_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	struct ttm_buffer_object *bo = (struct ttm_buffer_object *)
 	    vma->vm_private_data;
-	struct ttm_bo_device *bdev = bo->bdev;
+	struct ttm_bo_device *bdev;
 	unsigned long bus_base;
 	unsigned long bus_offset;
 	unsigned long bus_size;
@@ -87,6 +87,10 @@ static int ttm_bo_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	bool is_iomem;
 	unsigned long address = (unsigned long)vmf->virtual_address;
 	int retval = VM_FAULT_NOPAGE;
+
+	if (!bo)
+		return VM_FAULT_NOPAGE;
+	bdev = bo->bdev;
 
 	/*
 	 * Work around locking order reversal in fault / nopfn

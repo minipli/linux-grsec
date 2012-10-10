@@ -4,6 +4,7 @@
 
 #include <asm/cpufeature.h>
 #include <asm/dwarf2.h>
+#include <asm/alternative-asm.h>
 
 /*
  * memcpy - Copy a memory block.
@@ -34,6 +35,7 @@ memcpy_c:
 	rep movsq
 	movl %edx, %ecx
 	rep movsb
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(memcpy_c)
@@ -118,6 +120,7 @@ ENTRY(memcpy)
 	jnz .Lloop_1
 
 .Lend:
+	pax_force_retaddr 0, 1
 	ret
 	CFI_ENDPROC
 ENDPROC(memcpy)
@@ -128,7 +131,7 @@ ENDPROC(__memcpy)
 	 * It is also a lot simpler. Use this when possible:
 	 */
 
-	.section .altinstr_replacement, "ax"
+	.section .altinstr_replacement, "a"
 1:	.byte 0xeb				/* jmp <disp8> */
 	.byte (memcpy_c - memcpy) - (2f - 1b)	/* offset */
 2:

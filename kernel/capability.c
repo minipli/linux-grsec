@@ -254,7 +254,7 @@ SYSCALL_DEFINE2(capset, cap_user_header_t, header, const cap_user_data_t, data)
 	if (pid != 0 && pid != task_pid_vnr(current))
 		return -EPERM;
 
-	if (copy_from_user(&kdata, data,
+	if (tocopy > _KERNEL_CAPABILITY_U32S || copy_from_user(&kdata, data,
 			   tocopy * sizeof(struct __user_cap_data_struct)))
 		return -EFAULT;
 
@@ -305,10 +305,26 @@ int capable(int cap)
 		BUG();
 	}
 
-	if (security_capable(cap) == 0) {
+	if (security_capable(cap) == 0 && gr_is_capable(cap)) {
 		current->flags |= PF_SUPERPRIV;
 		return 1;
 	}
 	return 0;
 }
+
+int capable_nolog(int cap)
+{
+	if (unlikely(!cap_valid(cap))) {
+		printk(KERN_CRIT "capable() called with invalid cap=%u\n", cap);
+		BUG();
+	}
+
+	if (security_capable(cap) == 0 && gr_is_capable_nolog(cap)) {
+		current->flags |= PF_SUPERPRIV;
+		return 1;
+	}
+	return 0;
+}
+
 EXPORT_SYMBOL(capable);
+EXPORT_SYMBOL(capable_nolog);

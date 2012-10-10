@@ -74,8 +74,8 @@ void kgdb_breakpoint(void);
 
 extern int kgdb_connected;
 
-extern atomic_t			kgdb_setting_breakpoint;
-extern atomic_t			kgdb_cpu_doing_single_step;
+extern atomic_unchecked_t	kgdb_setting_breakpoint;
+extern atomic_unchecked_t	kgdb_cpu_doing_single_step;
 
 extern struct task_struct	*kgdb_usethread;
 extern struct task_struct	*kgdb_contthread;
@@ -235,7 +235,7 @@ struct kgdb_arch {
 	int	(*remove_hw_breakpoint)(unsigned long, int, enum kgdb_bptype);
 	void	(*remove_all_hw_break)(void);
 	void	(*correct_hw_break)(void);
-};
+} __do_const;
 
 /**
  * struct kgdb_io - Describe the interface for an I/O driver to talk with KGDB.
@@ -257,14 +257,14 @@ struct kgdb_io {
 	int			(*init) (void);
 	void			(*pre_exception) (void);
 	void			(*post_exception) (void);
-};
+} __do_const;
 
-extern struct kgdb_arch		arch_kgdb_ops;
+extern const struct kgdb_arch arch_kgdb_ops;
 
 extern unsigned long __weak kgdb_arch_pc(int exception, struct pt_regs *regs);
 
-extern int kgdb_register_io_module(struct kgdb_io *local_kgdb_io_ops);
-extern void kgdb_unregister_io_module(struct kgdb_io *local_kgdb_io_ops);
+extern int kgdb_register_io_module(const struct kgdb_io *local_kgdb_io_ops);
+extern void kgdb_unregister_io_module(const struct kgdb_io *local_kgdb_io_ops);
 
 extern int kgdb_hex2long(char **ptr, unsigned long *long_val);
 extern int kgdb_mem2hex(char *mem, char *buf, int count);
