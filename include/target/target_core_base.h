@@ -347,7 +347,7 @@ struct t10_reservation_ops {
 	int (*t10_seq_non_holder)(struct se_cmd *, unsigned char *, u32);
 	int (*t10_pr_register)(struct se_cmd *);
 	int (*t10_pr_clear)(struct se_cmd *);
-};
+} __no_const;
 
 struct t10_reservation {
 	/* Reservation effects all target ports */
@@ -466,8 +466,8 @@ struct se_cmd {
 	atomic_t		t_se_count;
 	atomic_t		t_task_cdbs_left;
 	atomic_t		t_task_cdbs_ex_left;
-	atomic_t		t_task_cdbs_sent;
-	atomic_t		t_transport_aborted;
+	atomic_unchecked_t	t_task_cdbs_sent;
+	atomic_unchecked_t	t_transport_aborted;
 	atomic_t		t_transport_active;
 	atomic_t		t_transport_complete;
 	atomic_t		t_transport_queue_active;
@@ -706,7 +706,7 @@ struct se_device {
 	/* Active commands on this virtual SE device */
 	atomic_t		simple_cmds;
 	atomic_t		depth_left;
-	atomic_t		dev_ordered_id;
+	atomic_unchecked_t	dev_ordered_id;
 	atomic_t		execute_tasks;
 	atomic_t		dev_ordered_sync;
 	atomic_t		dev_qf_count;

@@ -31,6 +31,7 @@
 	movl %r8d,%ecx
 	rep stosb
 	movq %r9,%rax
+	pax_force_retaddr
 	ret
 .Lmemset_e:
 	.previous
@@ -53,6 +54,7 @@
 	movl %edx,%ecx
 	rep stosb
 	movq %r9,%rax
+	pax_force_retaddr
 	ret
 .Lmemset_e_e:
 	.previous
@@ -60,13 +62,13 @@
 ENTRY(memset)
 ENTRY(__memset)
 	CFI_STARTPROC
-	movq %rdi,%r10
 	movq %rdx,%r11
 
 	/* expand byte value  */
 	movzbl %sil,%ecx
 	movabs $0x0101010101010101,%rax
 	mul    %rcx		/* with rax, clobbers rdx */
+	movq  %rdi,%rdx
 
 	/* align dst */
 	movl  %edi,%r9d
@@ -120,7 +122,8 @@ ENTRY(__memset)
 	jnz     .Lloop_1
 
 .Lende:
-	movq	%r10,%rax
+	movq	%rdx,%rax
+	pax_force_retaddr
 	ret
 
 	CFI_RESTORE_STATE

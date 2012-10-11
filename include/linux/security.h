@@ -37,6 +37,7 @@
 #include <linux/xfrm.h>
 #include <linux/slab.h>
 #include <linux/xattr.h>
+#include <linux/grsecurity.h>
 #include <net/flow.h>
 
 /* Maximum number of letters for an LSM name string */
