@@ -176,13 +176,153 @@
 	/*CFI_REL_OFFSET gs, PT_GS*/
 .endm
 .macro SET_KERNEL_GS reg
+
+#ifdef CONFIG_CC_STACKPROTECTOR
 	movl $(__KERNEL_STACK_CANARY), \reg
+#elif defined(CONFIG_PAX_MEMORY_UDEREF)
+	movl $(__USER_DS), \reg
+#else
+	xorl \reg, \reg
+#endif
+
 	movl \reg, %gs
 .endm
 
 #endif	/* CONFIG_X86_32_LAZY_GS */
 
-.macro SAVE_ALL
+.macro pax_enter_kernel
+#ifdef CONFIG_PAX_KERNEXEC
+	call pax_enter_kernel
+#endif
+.endm
+
+.macro pax_exit_kernel
+#ifdef CONFIG_PAX_KERNEXEC
+	call pax_exit_kernel
+#endif
+.endm
+
+#ifdef CONFIG_PAX_KERNEXEC
+ENTRY(pax_enter_kernel)
+#ifdef CONFIG_PARAVIRT
+	pushl %eax
+	pushl %ecx
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0)
+	mov %eax, %esi
+#else
+	mov %cr0, %esi
+#endif
+	bts $16, %esi
+	jnc 1f
+	mov %cs, %esi
+	cmp $__KERNEL_CS, %esi
+	jz 3f
+	ljmp $__KERNEL_CS, $3f
+1:	ljmp $__KERNEXEC_KERNEL_CS, $2f
+2:
+#ifdef CONFIG_PARAVIRT
+	mov %esi, %eax
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0)
+#else
+	mov %esi, %cr0
+#endif
+3:
+#ifdef CONFIG_PARAVIRT
+	popl %ecx
+	popl %eax
+#endif
+	ret
+ENDPROC(pax_enter_kernel)
+
+ENTRY(pax_exit_kernel)
+#ifdef CONFIG_PARAVIRT
+	pushl %eax
+	pushl %ecx
+#endif
+	mov %cs, %esi
+	cmp $__KERNEXEC_KERNEL_CS, %esi
+	jnz 2f
+#ifdef CONFIG_PARAVIRT
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0);
+	mov %eax, %esi
+#else
+	mov %cr0, %esi
+#endif
+	btr $16, %esi
+	ljmp $__KERNEL_CS, $1f
+1:
+#ifdef CONFIG_PARAVIRT
+	mov %esi, %eax
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0);
+#else
+	mov %esi, %cr0
+#endif
+2:
+#ifdef CONFIG_PARAVIRT
+	popl %ecx
+	popl %eax
+#endif
+	ret
+ENDPROC(pax_exit_kernel)
+#endif
+
+.macro pax_erase_kstack
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+	call pax_erase_kstack
+#endif
+.endm
+
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+/*
+ * ebp: thread_info
+ */
+ENTRY(pax_erase_kstack)
+	pushl %edi
+	pushl %ecx
+	pushl %eax
+
+	mov TI_lowest_stack(%ebp), %edi
+	mov $-0xBEEF, %eax
+	std
+
+1:	mov %edi, %ecx
+	and $THREAD_SIZE_asm - 1, %ecx
+	shr $2, %ecx
+	repne scasl
+	jecxz 2f
+
+	cmp $2*16, %ecx
+	jc 2f
+
+	mov $2*16, %ecx
+	repe scasl
+	jecxz 2f
+	jne 1b
+
+2:	cld
+	mov %esp, %ecx
+	sub %edi, %ecx
+
+	cmp $THREAD_SIZE_asm, %ecx
+	jb 3f
+	ud2
+3:
+
+	shr $2, %ecx
+	rep stosl
+
+	mov TI_task_thread_sp0(%ebp), %edi
+	sub $128, %edi
+	mov %edi, TI_lowest_stack(%ebp)
+
+	popl %eax
+	popl %ecx
+	popl %edi
+	ret
+ENDPROC(pax_erase_kstack)
+#endif
+
+.macro __SAVE_ALL _DS
 	cld
 	PUSH_GS
 	pushl_cfi %fs
@@ -205,12 +345,21 @@
 	CFI_REL_OFFSET ecx, 0
 	pushl_cfi %ebx
 	CFI_REL_OFFSET ebx, 0
-	movl $(__USER_DS), %edx
+	movl $\_DS, %edx
 	movl %edx, %ds
 	movl %edx, %es
 	movl $(__KERNEL_PERCPU), %edx
 	movl %edx, %fs
 	SET_KERNEL_GS %edx
+.endm
+
+.macro SAVE_ALL
+#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+	__SAVE_ALL __KERNEL_DS
+	pax_enter_kernel
+#else
+	__SAVE_ALL __USER_DS
+#endif
 .endm
 
 .macro RESTORE_INT_REGS
@@ -296,7 +445,7 @@ ENTRY(ret_from_fork)
 	popfl_cfi
 	jmp syscall_exit
 	CFI_ENDPROC
-END(ret_from_fork)
+ENDPROC(ret_from_fork)
 
 /*
  * Interrupt exit functions should be protected against kprobes
@@ -329,7 +478,15 @@ ret_from_intr:
 	andl $SEGMENT_RPL_MASK, %eax
 #endif
 	cmpl $USER_RPL, %eax
+
+#ifdef CONFIG_PAX_KERNEXEC
+	jae resume_userspace
+
+	pax_exit_kernel
+	jmp resume_kernel
+#else
 	jb resume_kernel		# not returning to v8086 or userspace
+#endif
 
 ENTRY(resume_userspace)
 	LOCKDEP_SYS_EXIT
@@ -341,8 +498,8 @@ ENTRY(resume_userspace)
 	andl $_TIF_WORK_MASK, %ecx	# is there any work to be done on
 					# int/exception return?
 	jne work_pending
-	jmp restore_all
-END(ret_from_exception)
+	jmp restore_all_pax
+ENDPROC(ret_from_exception)
 
 #ifdef CONFIG_PREEMPT
 ENTRY(resume_kernel)
@@ -357,7 +514,7 @@ need_resched:
 	jz restore_all
 	call preempt_schedule_irq
 	jmp need_resched
-END(resume_kernel)
+ENDPROC(resume_kernel)
 #endif
 	CFI_ENDPROC
 /*
@@ -391,27 +548,42 @@ sysenter_past_esp:
 	/*CFI_REL_OFFSET cs, 0*/
 	/*
 	 * Push current_thread_info()->sysenter_return to the stack.
-	 * A tiny bit of offset fixup is necessary - 4*4 means the 4 words
-	 * pushed above; +8 corresponds to copy_thread's esp0 setting.
 	 */
-	pushl_cfi ((TI_sysenter_return)-THREAD_SIZE+8+4*4)(%esp)
+	pushl_cfi $0
 	CFI_REL_OFFSET eip, 0
 
 	pushl_cfi %eax
 	SAVE_ALL
+	GET_THREAD_INFO(%ebp)
+	movl TI_sysenter_return(%ebp),%ebp
+	movl %ebp,PT_EIP(%esp)
 	ENABLE_INTERRUPTS(CLBR_NONE)
 
 /*
  * Load the potential sixth argument from user stack.
  * Careful about security.
  */
+	movl PT_OLDESP(%esp),%ebp
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	mov PT_OLDSS(%esp),%ds
+1:	movl %ds:(%ebp),%ebp
+	push %ss
+	pop %ds
+#else
 	cmpl $__PAGE_OFFSET-3,%ebp
 	jae syscall_fault
 1:	movl (%ebp),%ebp
+#endif
+
 	movl %ebp,PT_EBP(%esp)
 	_ASM_EXTABLE(1b,syscall_fault)
 
 	GET_THREAD_INFO(%ebp)
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pax_erase_kstack
+#endif
 
 	testl $_TIF_WORK_SYSCALL_ENTRY,TI_flags(%ebp)
 	jnz sysenter_audit
@@ -427,12 +599,24 @@ sysenter_do_call:
 	testl $_TIF_ALLWORK_MASK, %ecx
 	jne sysexit_audit
 sysenter_exit:
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pushl_cfi %eax
+	movl %esp, %eax
+	call pax_randomize_kstack
+	popl_cfi %eax
+#endif
+
+	pax_erase_kstack
+
 /* if something modifies registers it must also disable sysexit */
 	movl PT_EIP(%esp), %edx
 	movl PT_OLDESP(%esp), %ecx
 	xorl %ebp,%ebp
 	TRACE_IRQS_ON
 1:	mov  PT_FS(%esp), %fs
+2:	mov  PT_DS(%esp), %ds
+3:	mov  PT_ES(%esp), %es
 	PTGS_TO_GS
 	ENABLE_INTERRUPTS_SYSEXIT
 
@@ -449,6 +633,9 @@ sysenter_audit:
 	movl %eax,%edx			/* 2nd arg: syscall number */
 	movl $AUDIT_ARCH_I386,%eax	/* 1st arg: audit arch */
 	call __audit_syscall_entry
+
+	pax_erase_kstack
+
 	pushl_cfi %ebx
 	movl PT_EAX(%esp),%eax		/* reload syscall number */
 	jmp sysenter_do_call
@@ -474,10 +661,16 @@ sysexit_audit:
 
 	CFI_ENDPROC
 .pushsection .fixup,"ax"
-2:	movl $0,PT_FS(%esp)
+4:	movl $0,PT_FS(%esp)
+	jmp 1b
+5:	movl $0,PT_DS(%esp)
+	jmp 1b
+6:	movl $0,PT_ES(%esp)
 	jmp 1b
 .popsection
-	_ASM_EXTABLE(1b,2b)
+	_ASM_EXTABLE(1b,4b)
+	_ASM_EXTABLE(2b,5b)
+	_ASM_EXTABLE(3b,6b)
 	PTGS_TO_GS_EX
 ENDPROC(ia32_sysenter_target)
 
@@ -491,6 +684,11 @@ ENTRY(system_call)
 	pushl_cfi %eax			# save orig_eax
 	SAVE_ALL
 	GET_THREAD_INFO(%ebp)
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pax_erase_kstack
+#endif
+
 					# system call tracing in operation / emulation
 	testl $_TIF_WORK_SYSCALL_ENTRY,TI_flags(%ebp)
 	jnz syscall_trace_entry
@@ -508,6 +706,15 @@ syscall_exit:
 	movl TI_flags(%ebp), %ecx
 	testl $_TIF_ALLWORK_MASK, %ecx	# current->work
 	jne syscall_exit_work
+
+restore_all_pax:
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	movl %esp, %eax
+	call pax_randomize_kstack
+#endif
+
+	pax_erase_kstack
 
 restore_all:
 	TRACE_IRQS_IRET
@@ -565,14 +772,34 @@ ldt_ss:
  * compensating for the offset by changing to the ESPFIX segment with
  * a base address that matches for the difference.
  */
-#define GDT_ESPFIX_SS PER_CPU_VAR(gdt_page) + (GDT_ENTRY_ESPFIX_SS * 8)
+#define GDT_ESPFIX_SS (GDT_ENTRY_ESPFIX_SS * 8)(%ebx)
 	mov %esp, %edx			/* load kernel esp */
 	mov PT_OLDESP(%esp), %eax	/* load userspace esp */
 	mov %dx, %ax			/* eax: new kernel esp */
 	sub %eax, %edx			/* offset (low word is 0) */
+#ifdef CONFIG_SMP
+	movl PER_CPU_VAR(cpu_number), %ebx
+	shll $PAGE_SHIFT_asm, %ebx
+	addl $cpu_gdt_table, %ebx
+#else
+	movl $cpu_gdt_table, %ebx
+#endif
 	shr $16, %edx
-	mov %dl, GDT_ESPFIX_SS + 4 /* bits 16..23 */
-	mov %dh, GDT_ESPFIX_SS + 7 /* bits 24..31 */
+
+#ifdef CONFIG_PAX_KERNEXEC
+	mov %cr0, %esi
+	btr $16, %esi
+	mov %esi, %cr0
+#endif
+
+	mov %dl, 4 + GDT_ESPFIX_SS /* bits 16..23 */
+	mov %dh, 7 + GDT_ESPFIX_SS /* bits 24..31 */
+
+#ifdef CONFIG_PAX_KERNEXEC
+	bts $16, %esi
+	mov %esi, %cr0
+#endif
+
 	pushl_cfi $__ESPFIX_SS
 	pushl_cfi %eax			/* new kernel esp */
 	/* Disable interrupts, but do not irqtrace this section: we
@@ -601,35 +828,23 @@ work_resched:
 	movl TI_flags(%ebp), %ecx
 	andl $_TIF_WORK_MASK, %ecx	# is there any work to be done other
 					# than syscall tracing?
-	jz restore_all
+	jz restore_all_pax
 	testb $_TIF_NEED_RESCHED, %cl
 	jnz work_resched
 
 work_notifysig:				# deal with pending signals and
 					# notify-resume requests
+	movl %esp, %eax
 #ifdef CONFIG_VM86
 	testl $X86_EFLAGS_VM, PT_EFLAGS(%esp)
-	movl %esp, %eax
-	jne work_notifysig_v86		# returning to kernel-space or
+	jz 1f				# returning to kernel-space or
 					# vm86-space
-	TRACE_IRQS_ON
-	ENABLE_INTERRUPTS(CLBR_NONE)
-	movb PT_CS(%esp), %bl
-	andb $SEGMENT_RPL_MASK, %bl
-	cmpb $USER_RPL, %bl
-	jb resume_kernel
-	xorl %edx, %edx
-	call do_notify_resume
-	jmp resume_userspace
 
-	ALIGN
-work_notifysig_v86:
 	pushl_cfi %ecx			# save ti_flags for do_notify_resume
 	call save_v86_state		# %eax contains pt_regs pointer
 	popl_cfi %ecx
 	movl %eax, %esp
-#else
-	movl %esp, %eax
+1:
 #endif
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_NONE)
@@ -640,7 +855,7 @@ work_notifysig_v86:
 	xorl %edx, %edx
 	call do_notify_resume
 	jmp resume_userspace
-END(work_pending)
+ENDPROC(work_pending)
 
 	# perform syscall exit tracing
 	ALIGN
@@ -648,11 +863,14 @@ syscall_trace_entry:
 	movl $-ENOSYS,PT_EAX(%esp)
 	movl %esp, %eax
 	call syscall_trace_enter
+
+	pax_erase_kstack
+
 	/* What it returned is what we'll actually use.  */
 	cmpl $(NR_syscalls), %eax
 	jnae syscall_call
 	jmp syscall_exit
-END(syscall_trace_entry)
+ENDPROC(syscall_trace_entry)
 
 	# perform syscall exit tracing
 	ALIGN
@@ -665,20 +883,24 @@ syscall_exit_work:
 	movl %esp, %eax
 	call syscall_trace_leave
 	jmp resume_userspace
-END(syscall_exit_work)
+ENDPROC(syscall_exit_work)
 	CFI_ENDPROC
 
 	RING0_INT_FRAME			# can't unwind into user space anyway
 syscall_fault:
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	push %ss
+	pop %ds
+#endif
 	GET_THREAD_INFO(%ebp)
 	movl $-EFAULT,PT_EAX(%esp)
 	jmp resume_userspace
-END(syscall_fault)
+ENDPROC(syscall_fault)
 
 syscall_badsys:
 	movl $-ENOSYS,PT_EAX(%esp)
 	jmp resume_userspace
-END(syscall_badsys)
+ENDPROC(syscall_badsys)
 	CFI_ENDPROC
 /*
  * End of kprobes section
@@ -750,6 +972,36 @@ ENTRY(ptregs_clone)
 	CFI_ENDPROC
 ENDPROC(ptregs_clone)
 
+	ALIGN;
+ENTRY(kernel_execve)
+	CFI_STARTPROC
+	pushl_cfi %ebp
+	sub $PT_OLDSS+4,%esp
+	pushl_cfi %edi
+	pushl_cfi %ecx
+	pushl_cfi %eax
+	lea 3*4(%esp),%edi
+	mov $PT_OLDSS/4+1,%ecx
+	xorl %eax,%eax
+	rep stosl
+	popl_cfi %eax
+	popl_cfi %ecx
+	popl_cfi %edi
+	movl $X86_EFLAGS_IF,PT_EFLAGS(%esp)
+	pushl_cfi %esp
+	call sys_execve
+	add $4,%esp
+	CFI_ADJUST_CFA_OFFSET -4
+	GET_THREAD_INFO(%ebp)
+	test %eax,%eax
+	jz syscall_exit
+	add $PT_OLDSS+4,%esp
+	CFI_ADJUST_CFA_OFFSET -PT_OLDSS-4
+	popl_cfi %ebp
+	ret
+	CFI_ENDPROC
+ENDPROC(kernel_execve)
+
 .macro FIXUP_ESPFIX_STACK
 /*
  * Switch back for ESPFIX stack to the normal zerobased stack
@@ -759,8 +1011,15 @@ ENDPROC(ptregs_clone)
  * normal stack and adjusts ESP with the matching offset.
  */
 	/* fixup the stack */
-	mov GDT_ESPFIX_SS + 4, %al /* bits 16..23 */
-	mov GDT_ESPFIX_SS + 7, %ah /* bits 24..31 */
+#ifdef CONFIG_SMP
+	movl PER_CPU_VAR(cpu_number), %ebx
+	shll $PAGE_SHIFT_asm, %ebx
+	addl $cpu_gdt_table, %ebx
+#else
+	movl $cpu_gdt_table, %ebx
+#endif
+	mov 4 + GDT_ESPFIX_SS, %al /* bits 16..23 */
+	mov 7 + GDT_ESPFIX_SS, %ah /* bits 24..31 */
 	shl $16, %eax
 	addl %esp, %eax			/* the adjusted stack pointer */
 	pushl_cfi $__KERNEL_DS
@@ -813,7 +1072,7 @@ vector=vector+1
   .endr
 2:	jmp common_interrupt
 .endr
-END(irq_entries_start)
+ENDPROC(irq_entries_start)
 
 .previous
 END(interrupt)
@@ -861,7 +1120,7 @@ ENTRY(coprocessor_error)
 	pushl_cfi $do_coprocessor_error
 	jmp error_code
 	CFI_ENDPROC
-END(coprocessor_error)
+ENDPROC(coprocessor_error)
 
 ENTRY(simd_coprocessor_error)
 	RING0_INT_FRAME
@@ -882,7 +1141,7 @@ ENTRY(simd_coprocessor_error)
 #endif
 	jmp error_code
 	CFI_ENDPROC
-END(simd_coprocessor_error)
+ENDPROC(simd_coprocessor_error)
 
 ENTRY(device_not_available)
 	RING0_INT_FRAME
@@ -890,18 +1149,18 @@ ENTRY(device_not_available)
 	pushl_cfi $do_device_not_available
 	jmp error_code
 	CFI_ENDPROC
-END(device_not_available)
+ENDPROC(device_not_available)
 
 #ifdef CONFIG_PARAVIRT
 ENTRY(native_iret)
 	iret
 	_ASM_EXTABLE(native_iret, iret_exc)
-END(native_iret)
+ENDPROC(native_iret)
 
 ENTRY(native_irq_enable_sysexit)
 	sti
 	sysexit
-END(native_irq_enable_sysexit)
+ENDPROC(native_irq_enable_sysexit)
 #endif
 
 ENTRY(overflow)
@@ -910,7 +1169,7 @@ ENTRY(overflow)
 	pushl_cfi $do_overflow
 	jmp error_code
 	CFI_ENDPROC
-END(overflow)
+ENDPROC(overflow)
 
 ENTRY(bounds)
 	RING0_INT_FRAME
@@ -918,7 +1177,7 @@ ENTRY(bounds)
 	pushl_cfi $do_bounds
 	jmp error_code
 	CFI_ENDPROC
-END(bounds)
+ENDPROC(bounds)
 
 ENTRY(invalid_op)
 	RING0_INT_FRAME
@@ -926,7 +1185,7 @@ ENTRY(invalid_op)
 	pushl_cfi $do_invalid_op
 	jmp error_code
 	CFI_ENDPROC
-END(invalid_op)
+ENDPROC(invalid_op)
 
 ENTRY(coprocessor_segment_overrun)
 	RING0_INT_FRAME
@@ -934,35 +1193,35 @@ ENTRY(coprocessor_segment_overrun)
 	pushl_cfi $do_coprocessor_segment_overrun
 	jmp error_code
 	CFI_ENDPROC
-END(coprocessor_segment_overrun)
+ENDPROC(coprocessor_segment_overrun)
 
 ENTRY(invalid_TSS)
 	RING0_EC_FRAME
 	pushl_cfi $do_invalid_TSS
 	jmp error_code
 	CFI_ENDPROC
-END(invalid_TSS)
+ENDPROC(invalid_TSS)
 
 ENTRY(segment_not_present)
 	RING0_EC_FRAME
 	pushl_cfi $do_segment_not_present
 	jmp error_code
 	CFI_ENDPROC
-END(segment_not_present)
+ENDPROC(segment_not_present)
 
 ENTRY(stack_segment)
 	RING0_EC_FRAME
 	pushl_cfi $do_stack_segment
 	jmp error_code
 	CFI_ENDPROC
-END(stack_segment)
+ENDPROC(stack_segment)
 
 ENTRY(alignment_check)
 	RING0_EC_FRAME
 	pushl_cfi $do_alignment_check
 	jmp error_code
 	CFI_ENDPROC
-END(alignment_check)
+ENDPROC(alignment_check)
 
 ENTRY(divide_error)
 	RING0_INT_FRAME
@@ -970,7 +1229,7 @@ ENTRY(divide_error)
 	pushl_cfi $do_divide_error
 	jmp error_code
 	CFI_ENDPROC
-END(divide_error)
+ENDPROC(divide_error)
 
 #ifdef CONFIG_X86_MCE
 ENTRY(machine_check)
@@ -979,7 +1238,7 @@ ENTRY(machine_check)
 	pushl_cfi machine_check_vector
 	jmp error_code
 	CFI_ENDPROC
-END(machine_check)
+ENDPROC(machine_check)
 #endif
 
 ENTRY(spurious_interrupt_bug)
@@ -988,7 +1247,7 @@ ENTRY(spurious_interrupt_bug)
 	pushl_cfi $do_spurious_interrupt_bug
 	jmp error_code
 	CFI_ENDPROC
-END(spurious_interrupt_bug)
+ENDPROC(spurious_interrupt_bug)
 /*
  * End of kprobes section
  */
@@ -1100,7 +1359,7 @@ BUILD_INTERRUPT3(xen_hvm_callback_vector, XEN_HVM_EVTCHN_CALLBACK,
 
 ENTRY(mcount)
 	ret
-END(mcount)
+ENDPROC(mcount)
 
 ENTRY(ftrace_caller)
 	cmpl $0, function_trace_stop
@@ -1129,7 +1388,7 @@ ftrace_graph_call:
 .globl ftrace_stub
 ftrace_stub:
 	ret
-END(ftrace_caller)
+ENDPROC(ftrace_caller)
 
 #else /* ! CONFIG_DYNAMIC_FTRACE */
 
@@ -1165,7 +1424,7 @@ trace:
 	popl %ecx
 	popl %eax
 	jmp ftrace_stub
-END(mcount)
+ENDPROC(mcount)
 #endif /* CONFIG_DYNAMIC_FTRACE */
 #endif /* CONFIG_FUNCTION_TRACER */
 
@@ -1186,7 +1445,7 @@ ENTRY(ftrace_graph_caller)
 	popl %ecx
 	popl %eax
 	ret
-END(ftrace_graph_caller)
+ENDPROC(ftrace_graph_caller)
 
 .globl return_to_handler
 return_to_handler:
@@ -1241,15 +1500,18 @@ error_code:
 	movl $-1, PT_ORIG_EAX(%esp)	# no syscall to restart
 	REG_TO_PTGS %ecx
 	SET_KERNEL_GS %ecx
-	movl $(__USER_DS), %ecx
+	movl $(__KERNEL_DS), %ecx
 	movl %ecx, %ds
 	movl %ecx, %es
+
+	pax_enter_kernel
+
 	TRACE_IRQS_OFF
 	movl %esp,%eax			# pt_regs pointer
 	call *%edi
 	jmp ret_from_exception
 	CFI_ENDPROC
-END(page_fault)
+ENDPROC(page_fault)
 
 /*
  * Debug traps and NMI can happen at the one SYSENTER instruction
@@ -1291,7 +1553,7 @@ debug_stack_correct:
 	call do_debug
 	jmp ret_from_exception
 	CFI_ENDPROC
-END(debug)
+ENDPROC(debug)
 
 /*
  * NMI is doubly nasty. It can happen _while_ we're handling
@@ -1328,6 +1590,9 @@ nmi_stack_correct:
 	xorl %edx,%edx		# zero error code
 	movl %esp,%eax		# pt_regs pointer
 	call do_nmi
+
+	pax_exit_kernel
+
 	jmp restore_all_notrace
 	CFI_ENDPROC
 
@@ -1364,12 +1629,15 @@ nmi_espfix_stack:
 	FIXUP_ESPFIX_STACK		# %eax == %esp
 	xorl %edx,%edx			# zero error code
 	call do_nmi
+
+	pax_exit_kernel
+
 	RESTORE_REGS
 	lss 12+4(%esp), %esp		# back to espfix stack
 	CFI_ADJUST_CFA_OFFSET -24
 	jmp irq_return
 	CFI_ENDPROC
-END(nmi)
+ENDPROC(nmi)
 
 ENTRY(int3)
 	RING0_INT_FRAME
@@ -1381,14 +1649,14 @@ ENTRY(int3)
 	call do_int3
 	jmp ret_from_exception
 	CFI_ENDPROC
-END(int3)
+ENDPROC(int3)
 
 ENTRY(general_protection)
 	RING0_EC_FRAME
 	pushl_cfi $do_general_protection
 	jmp error_code
 	CFI_ENDPROC
-END(general_protection)
+ENDPROC(general_protection)
 
 #ifdef CONFIG_KVM_GUEST
 ENTRY(async_page_fault)
@@ -1396,7 +1664,7 @@ ENTRY(async_page_fault)
 	pushl_cfi $do_async_page_fault
 	jmp error_code
 	CFI_ENDPROC
-END(async_page_fault)
+ENDPROC(async_page_fault)
 #endif
 
 /*

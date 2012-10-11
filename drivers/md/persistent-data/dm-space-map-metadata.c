@@ -43,7 +43,7 @@ struct block_op {
 };
 
 struct sm_metadata {
-	struct dm_space_map sm;
+	dm_space_map_no_const sm;
 
 	struct ll_disk ll;
 	struct ll_disk old_ll;

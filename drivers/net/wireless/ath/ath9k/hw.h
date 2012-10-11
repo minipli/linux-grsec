@@ -656,7 +656,7 @@ struct ath_hw_private_ops {
 
 	/* ANI */
 	void (*ani_cache_ini_regs)(struct ath_hw *ah);
-};
+} __no_const;
 
 /**
  * struct ath_hw_ops - callbacks used by hardware code and driver code
@@ -686,7 +686,7 @@ struct ath_hw_ops {
 	void (*antdiv_comb_conf_set)(struct ath_hw *ah,
 			struct ath_hw_antcomb_conf *antconf);
 
-};
+} __no_const;
 
 struct ath_nf_limits {
 	s16 max;
@@ -706,7 +706,7 @@ enum ath_cal_list {
 #define AH_FASTCC       0x4
 
 struct ath_hw {
-	struct ath_ops reg_ops;
+	ath_ops_no_const reg_ops;
 
 	struct ieee80211_hw *hw;
 	struct ath_common common;

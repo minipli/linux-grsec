@@ -320,7 +320,7 @@ int batadv_hardif_enable_interface(struct batadv_hard_iface *hard_iface,
 	hard_iface->batman_adv_ptype.dev = hard_iface->net_dev;
 	dev_add_pack(&hard_iface->batman_adv_ptype);
 
-	atomic_set(&hard_iface->frag_seqno, 1);
+	atomic_set_unchecked(&hard_iface->frag_seqno, 1);
 	batadv_info(hard_iface->soft_iface, "Adding interface: %s\n",
 		    hard_iface->net_dev->name);
 
@@ -443,7 +443,7 @@ batadv_hardif_add_interface(struct net_device *net_dev)
 	/* This can't be called via a bat_priv callback because
 	 * we have no bat_priv yet.
 	 */
-	atomic_set(&hard_iface->seqno, 1);
+	atomic_set_unchecked(&hard_iface->seqno, 1);
 	hard_iface->packet_buff = NULL;
 
 	return hard_iface;
