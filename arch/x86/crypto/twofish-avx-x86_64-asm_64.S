@@ -21,6 +21,8 @@
  *
  */
 
+#include <asm/alternative-asm.h>
+
 .file "twofish-avx-x86_64-asm_64.S"
 .text
 
@@ -250,12 +252,14 @@ __twofish_enc_blk_8way:
 	outunpack_blocks(%rsi, RC1, RD1, RA1, RB1, RK1, RX, RY, RK2);
 	outunpack_blocks(%rax, RC2, RD2, RA2, RB2, RK1, RX, RY, RK2);
 
+	pax_force_retaddr
 	ret;
 
 __enc_xor8:
 	outunpack_xor_blocks(%rsi, RC1, RD1, RA1, RB1, RK1, RX, RY, RK2);
 	outunpack_xor_blocks(%rax, RC2, RD2, RA2, RB2, RK1, RX, RY, RK2);
 
+	pax_force_retaddr
 	ret;
 
 .align 8
@@ -297,4 +301,5 @@ twofish_dec_blk_8way:
 	outunpack_blocks(%rsi, RA1, RB1, RC1, RD1, RK1, RX, RY, RK2);
 	outunpack_blocks(%rax, RA2, RB2, RC2, RD2, RK1, RX, RY, RK2);
 
+	pax_force_retaddr
 	ret;
