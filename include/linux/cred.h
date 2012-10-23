@@ -208,6 +208,9 @@ static inline void validate_creds_for_do_exit(struct task_struct *tsk)
 static inline void validate_process_creds(void)
 {
 }
+static inline void validate_task_creds(struct task_struct *task)
+{
+}
 #endif
 
 /**

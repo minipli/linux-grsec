@@ -95,8 +95,6 @@
 
 #define NUM_SEL_MNT_OPTS 5
 
-extern struct security_operations *security_ops;
-
 /* SECMARK reference count */
 static atomic_t selinux_secmark_refcount = ATOMIC_INIT(0);
 
@@ -5511,7 +5509,7 @@ static int selinux_key_getsecurity(struct key *key, char **_buffer)
 
 #endif
 
-static struct security_operations selinux_ops = {
+static struct security_operations selinux_ops __read_only = {
 	.name =				"selinux",
 
 	.ptrace_access_check =		selinux_ptrace_access_check,
