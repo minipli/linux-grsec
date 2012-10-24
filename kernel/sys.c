@@ -1171,13 +1171,13 @@ DECLARE_RWSEM(uts_sem);
  * Work around broken programs that cannot handle "Linux 3.0".
  * Instead we map 3.x to 2.6.40+x, so e.g. 3.0 would be 2.6.40
  */
-static int override_release(char __user *release, int len)
+static int override_release(char __user *release, size_t len)
 {
 	int ret = 0;
-	char buf[65];
 
 	if (current->personality & UNAME26) {
-		char *rest = UTS_RELEASE;
+		char buf[65] = { 0 };
+		const char *rest = UTS_RELEASE;
 		int ndots = 0;
 		unsigned v;
 
@@ -1189,7 +1189,10 @@ static int override_release(char __user *release, int len)
 			rest++;
 		}
 		v = ((LINUX_VERSION_CODE >> 8) & 0xff) + 40;
+		if (sizeof buf < len)
+			len = sizeof buf;
 		snprintf(buf, len, "2.6.%u%s", v, rest);
+		buf[len - 1] = 0;
 		ret = copy_to_user(release, buf, len);
 	}
 	return ret;
@@ -1244,19 +1247,19 @@ SYSCALL_DEFINE1(olduname, struct oldold_utsname __user *, name)
 		return -EFAULT;
 
 	down_read(&uts_sem);
-	error = __copy_to_user(&name->sysname, &utsname()->sysname,
+	error = __copy_to_user(name->sysname, &utsname()->sysname,
 			       __OLD_UTS_LEN);
 	error |= __put_user(0, name->sysname + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->nodename, &utsname()->nodename,
+	error |= __copy_to_user(name->nodename, &utsname()->nodename,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->nodename + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->release, &utsname()->release,
+	error |= __copy_to_user(name->release, &utsname()->release,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->release + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->version, &utsname()->version,
+	error |= __copy_to_user(name->version, &utsname()->version,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->version + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->machine, &utsname()->machine,
+	error |= __copy_to_user(name->machine, &utsname()->machine,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->machine + __OLD_UTS_LEN);
 	up_read(&uts_sem);
@@ -1721,7 +1724,7 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			error = get_dumpable(me->mm);
 			break;
 		case PR_SET_DUMPABLE:
-			if (arg2 < 0 || arg2 > 1) {
+			if (arg2 > 1) {
 				error = -EINVAL;
 				break;
 			}
