@@ -53,6 +53,10 @@ extern void add_input_randomness(unsigned int type, unsigned int code,
 				 unsigned int value);
 extern void add_interrupt_randomness(int irq, int irq_flags);
 
+#ifdef CONFIG_PAX_LATENT_ENTROPY
+extern void transfer_latent_entropy(void);
+#endif
+
 extern void get_random_bytes(void *buf, int nbytes);
 extern void get_random_bytes_arch(void *buf, int nbytes);
 void generate_random_uuid(unsigned char uuid_out[16]);
@@ -69,12 +73,17 @@ void srandom32(u32 seed);
 
 u32 prandom32(struct rnd_state *);
 
+static inline unsigned long pax_get_random_long(void)
+{
+	return random32() + (sizeof(long) > 4 ? (unsigned long)random32() << 32 : 0);
+}
+
 /*
  * Handle minimum values for seeds
  */
 static inline u32 __seed(u32 x, u32 m)
 {
-	return (x < m) ? x + m : x;
+	return (x <= m) ? x + m + 1 : x;
 }
 
 /**

@@ -913,10 +913,19 @@ enum ptrace_syscall_dir {
 	PTRACE_SYSCALL_EXIT,
 };
 
+#ifdef CONFIG_GRKERNSEC_SETXID
+extern void gr_delayed_cred_worker(void);
+#endif
+
 static int ptrace_syscall_trace(struct pt_regs *regs, int scno,
 				enum ptrace_syscall_dir dir)
 {
 	unsigned long ip;
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
 
 	if (!test_thread_flag(TIF_SYSCALL_TRACE))
 		return scno;

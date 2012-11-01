@@ -217,8 +217,8 @@ static void fill_vector_allocation_domain(int cpu, struct cpumask *retmask,
 static void vsmp_apic_post_init(void)
 {
 	/* need to update phys_pkg_id */
-	apic->phys_pkg_id = apicid_phys_pkg_id;
-	apic->vector_allocation_domain = fill_vector_allocation_domain;
+	*(void **)&apic->phys_pkg_id = apicid_phys_pkg_id;
+	*(void **)&apic->vector_allocation_domain = fill_vector_allocation_domain;
 }
 
 void __init vsmp_init(void)
