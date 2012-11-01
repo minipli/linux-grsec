@@ -105,6 +105,8 @@ ftrace_modify_code_direct(unsigned long ip, unsigned const char *old_code,
 {
 	unsigned char replaced[MCOUNT_INSN_SIZE];
 
+	ip = ktla_ktva(ip);
+
 	/*
 	 * Note: Due to modules and __init, code can
 	 *  disappear and change, we need to protect against faulting
@@ -212,7 +214,7 @@ int ftrace_update_ftrace_func(ftrace_func_t func)
 	unsigned char old[MCOUNT_INSN_SIZE], *new;
 	int ret;
 
-	memcpy(old, &ftrace_call, MCOUNT_INSN_SIZE);
+	memcpy(old, (void *)ktla_ktva((unsigned long)ftrace_call), MCOUNT_INSN_SIZE);
 	new = ftrace_call_replace(ip, (unsigned long)func);
 
 	/* See comment above by declaration of modifying_ftrace_code */
@@ -604,6 +606,8 @@ static int ftrace_mod_jmp(unsigned long ip,
 			  int old_offset, int new_offset)
 {
 	unsigned char code[MCOUNT_INSN_SIZE];
+
+	ip = ktla_ktva(ip);
 
 	if (probe_kernel_read(code, (void *)ip, MCOUNT_INSN_SIZE))
 		return -EFAULT;
