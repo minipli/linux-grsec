@@ -502,7 +502,7 @@ static void befs_put_link(struct dentry *dentry, struct nameidata *nd, void *p)
 {
 	befs_inode_info *befs_ino = BEFS_I(dentry->d_inode);
 	if (befs_ino->i_flags & BEFS_LONG_SYMLINK) {
-		char *link = nd_get_link(nd);
+		const char *link = nd_get_link(nd);
 		if (!IS_ERR(link))
 			kfree(link);
 	}

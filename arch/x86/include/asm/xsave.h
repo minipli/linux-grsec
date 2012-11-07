@@ -65,6 +65,11 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 {
 	int err;
 
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	if ((unsigned long)buf < PAX_USER_SHADOW_BASE)
+		buf = (struct xsave_struct __user *)((void __user*)buf + PAX_USER_SHADOW_BASE);
+#endif
+
 	/*
 	 * Clear the xsave header first, so that reserved fields are
 	 * initialized to zero.
@@ -93,9 +98,14 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 static inline int xrestore_user(struct xsave_struct __user *buf, u64 mask)
 {
 	int err;
-	struct xsave_struct *xstate = ((__force struct xsave_struct *)buf);
+	struct xsave_struct *xstate = ((__force_kernel struct xsave_struct *)buf);
 	u32 lmask = mask;
 	u32 hmask = mask >> 32;
+
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	if ((unsigned long)xstate < PAX_USER_SHADOW_BASE)
+		xstate = (struct xsave_struct *)((void *)xstate + PAX_USER_SHADOW_BASE);
+#endif
 
 	__asm__ __volatile__("1: .byte " REX_PREFIX "0x0f,0xae,0x2f\n"
 			     "2:\n"

@@ -62,7 +62,7 @@ static int batadv_iv_ogm_iface_enable(struct batadv_hard_iface *hard_iface)
 
 	/* randomize initial seqno to avoid collision */
 	get_random_bytes(&random_seqno, sizeof(random_seqno));
-	atomic_set(&hard_iface->seqno, random_seqno);
+	atomic_set_unchecked(&hard_iface->seqno, random_seqno);
 
 	hard_iface->packet_len = BATADV_OGM_HLEN;
 	hard_iface->packet_buff = kmalloc(hard_iface->packet_len, GFP_ATOMIC);
@@ -600,8 +600,8 @@ static void batadv_iv_ogm_schedule(struct batadv_hard_iface *hard_iface)
 
 	/* change sequence number to network order */
 	batadv_ogm_packet->seqno =
-			htonl((uint32_t)atomic_read(&hard_iface->seqno));
-	atomic_inc(&hard_iface->seqno);
+			htonl((uint32_t)atomic_read_unchecked(&hard_iface->seqno));
+	atomic_inc_unchecked(&hard_iface->seqno);
 
 	batadv_ogm_packet->ttvn = atomic_read(&bat_priv->ttvn);
 	batadv_ogm_packet->tt_crc = htons(bat_priv->tt_crc);
@@ -1001,7 +1001,7 @@ static void batadv_iv_ogm_process(const struct ethhdr *ethhdr,
 		return;
 
 	/* could be changed by schedule_own_packet() */
-	if_incoming_seqno = atomic_read(&if_incoming->seqno);
+	if_incoming_seqno = atomic_read_unchecked(&if_incoming->seqno);
 
 	if (batadv_ogm_packet->flags & BATADV_DIRECTLINK)
 		has_directlink_flag = 1;
