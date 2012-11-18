@@ -149,7 +149,7 @@ int drm_open(struct inode *inode, struct file *filp)
 	retcode = drm_open_helper(inode, filp, dev);
 	if (retcode)
 		goto err_undo;
-	atomic_inc(&dev->counts[_DRM_STAT_OPENS]);
+	atomic_inc_unchecked(&dev->counts[_DRM_STAT_OPENS]);
 	if (need_setup) {
 		retcode = drm_setup(dev);
 		if (retcode)
