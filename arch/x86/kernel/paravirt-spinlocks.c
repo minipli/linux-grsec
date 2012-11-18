@@ -13,7 +13,7 @@ default_spin_lock_flags(arch_spinlock_t *lock, unsigned long flags)
 	arch_spin_lock(lock);
 }
 
-struct pv_lock_ops pv_lock_ops = {
+struct pv_lock_ops pv_lock_ops __read_only = {
 #ifdef CONFIG_SMP
 	.spin_is_locked = __ticket_spin_is_locked,
 	.spin_is_contended = __ticket_spin_is_contended,

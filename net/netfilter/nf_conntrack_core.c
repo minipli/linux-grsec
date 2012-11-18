@@ -1529,6 +1529,10 @@ err_extend:
 #define UNCONFIRMED_NULLS_VAL	((1<<30)+0)
 #define DYING_NULLS_VAL		((1<<30)+1)
 
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+static atomic_unchecked_t conntrack_cache_id = ATOMIC_INIT(0);
+#endif
+
 static int nf_conntrack_init_net(struct net *net)
 {
 	int ret;
@@ -1542,7 +1546,11 @@ static int nf_conntrack_init_net(struct net *net)
 		goto err_stat;
 	}
 
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	net->ct.slabname = kasprintf(GFP_KERNEL, "nf_conntrack_%08lx", atomic_inc_return_unchecked(&conntrack_cache_id));
+#else
 	net->ct.slabname = kasprintf(GFP_KERNEL, "nf_conntrack_%p", net);
+#endif
 	if (!net->ct.slabname) {
 		ret = -ENOMEM;
 		goto err_slabname;

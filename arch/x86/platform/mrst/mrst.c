@@ -78,13 +78,15 @@ struct sfi_rtc_table_entry sfi_mrtc_array[SFI_MRTC_MAX];
 EXPORT_SYMBOL_GPL(sfi_mrtc_array);
 int sfi_mrtc_num;
 
-static void mrst_power_off(void)
+static __noreturn void mrst_power_off(void)
 {
+	BUG();
 }
 
-static void mrst_reboot(void)
+static __noreturn void mrst_reboot(void)
 {
 	intel_scu_ipc_simple_command(IPCMSG_COLD_BOOT, 0);
+	BUG();
 }
 
 /* parse all the mtimer info to a static mtimer array */
