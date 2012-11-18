@@ -471,7 +471,7 @@ static tree cast_to_new_size_overflow_type(gimple stmt, tree rhs, tree size_over
 	if (rhs == NULL_TREE)
 		return NULL_TREE;
 
-	if (types_compatible_p(TREE_TYPE(rhs), size_overflow_type))
+	if (types_compatible_p(TREE_TYPE(rhs), size_overflow_type) && gimple_plf(stmt, MY_STMT))
 		return rhs;
 
 	gsi = gsi_for_stmt(stmt);
