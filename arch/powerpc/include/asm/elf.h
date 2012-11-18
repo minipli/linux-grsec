@@ -178,8 +178,19 @@ typedef elf_fpreg_t elf_vsrreghalf_t32[ELF_NVSRHALFREG];
    the loader.  We need to make sure that it is out of the way of the program
    that it will "exec", and that there is sufficient room for the brk.  */
 
-extern unsigned long randomize_et_dyn(unsigned long base);
-#define ELF_ET_DYN_BASE		(randomize_et_dyn(0x20000000))
+#define ELF_ET_DYN_BASE		(0x20000000)
+
+#ifdef CONFIG_PAX_ASLR
+#define PAX_ELF_ET_DYN_BASE	(0x10000000UL)
+
+#ifdef __powerpc64__
+#define PAX_DELTA_MMAP_LEN	(is_32bit_task() ? 16 : 28)
+#define PAX_DELTA_STACK_LEN	(is_32bit_task() ? 16 : 28)
+#else
+#define PAX_DELTA_MMAP_LEN	15
+#define PAX_DELTA_STACK_LEN	15
+#endif
+#endif
 
 /*
  * Our registers are always unsigned longs, whether we're a 32 bit
@@ -273,9 +284,6 @@ extern int arch_setup_additional_pages(struct linux_binprm *bprm,
 #define STACK_RND_MASK (is_32bit_task() ? \
 	(0x7ff >> (PAGE_SHIFT - 12)) : \
 	(0x3ffff >> (PAGE_SHIFT - 12)))
-
-extern unsigned long arch_randomize_brk(struct mm_struct *mm);
-#define arch_randomize_brk arch_randomize_brk
 
 #endif /* __KERNEL__ */
 

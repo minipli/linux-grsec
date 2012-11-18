@@ -2196,7 +2196,7 @@ intel_finish_fb(struct drm_framebuffer *old_fb)
 
 	wait_event(dev_priv->pending_flip_queue,
 		   atomic_read(&dev_priv->mm.wedged) ||
-		   atomic_read(&obj->pending_flip) == 0);
+		   atomic_read_unchecked(&obj->pending_flip) == 0);
 
 	/* Big Hammer, we also need to ensure that any pending
 	 * MI_WAIT_FOR_EVENT inside a user batch buffer on the
@@ -6971,7 +6971,7 @@ static void do_intel_finish_page_flip(struct drm_device *dev,
 
 	obj = work->old_fb_obj;
 
-	atomic_clear_mask(1 << intel_crtc->plane,
+	atomic_clear_mask_unchecked(1 << intel_crtc->plane,
 			  &obj->pending_flip.counter);
 
 	wake_up(&dev_priv->pending_flip_queue);
@@ -7167,7 +7167,13 @@ static int intel_gen6_queue_flip(struct drm_device *dev,
 	OUT_RING(fb->pitch | obj->tiling_mode);
 	OUT_RING(obj->gtt_offset);
 
-	pf = I915_READ(PF_CTL(intel_crtc->pipe)) & PF_ENABLE;
+	/* Contrary to the suggestions in the documentation,
+	 * "Enable Panel Fitter" does not seem to be required when page
+	 * flipping with a non-native mode, and worse causes a normal
+	 * modeset to fail.
+	 * pf = I915_READ(PF_CTL(intel_crtc->pipe)) & PF_ENABLE;
+	 */
+	pf = 0;
 	pipesrc = I915_READ(PIPESRC(intel_crtc->pipe)) & 0x0fff0fff;
 	OUT_RING(pf | pipesrc);
 	ADVANCE_LP_RING();
@@ -7299,7 +7305,7 @@ static int intel_crtc_page_flip(struct drm_crtc *crtc,
 	/* Block clients from rendering to the new back buffer until
 	 * the flip occurs and the object is no longer visible.
 	 */
-	atomic_add(1 << intel_crtc->plane, &work->old_fb_obj->pending_flip);
+	atomic_add_unchecked(1 << intel_crtc->plane, &work->old_fb_obj->pending_flip);
 
 	ret = dev_priv->display.queue_flip(dev, crtc, fb, obj);
 	if (ret)
@@ -7313,7 +7319,7 @@ static int intel_crtc_page_flip(struct drm_crtc *crtc,
 	return 0;
 
 cleanup_pending:
-	atomic_sub(1 << intel_crtc->plane, &work->old_fb_obj->pending_flip);
+	atomic_sub_unchecked(1 << intel_crtc->plane, &work->old_fb_obj->pending_flip);
 	drm_gem_object_unreference(&work->old_fb_obj->base);
 	drm_gem_object_unreference(&obj->base);
 	mutex_unlock(&dev->struct_mutex);
