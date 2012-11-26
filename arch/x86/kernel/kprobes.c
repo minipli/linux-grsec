@@ -120,8 +120,11 @@ static void __kprobes __synthesize_relative_insn(void *from, void *to, u8 op)
 	} __attribute__((packed)) *insn;
 
 	insn = (struct __arch_relative_insn *)from;
+
+	pax_open_kernel();
 	insn->raddr = (s32)((long)(to) - ((long)(from) + 5));
 	insn->op = op;
+	pax_close_kernel();
 }
 
 /* Insert a jump instruction at address 'from', which jumps to address 'to'.*/
@@ -164,7 +167,7 @@ int __kprobes can_boost(kprobe_opcode_t *opcodes)
 	kprobe_opcode_t opcode;
 	kprobe_opcode_t *orig_opcodes = opcodes;
 
-	if (search_exception_tables((unsigned long)opcodes))
+	if (search_exception_tables(ktva_ktla((unsigned long)opcodes)))
 		return 0;	/* Page fault may occur on this address. */
 
 retry:
@@ -332,7 +335,9 @@ int __kprobes __copy_instruction(u8 *dest, u8 *src)
 	/* Another subsystem puts a breakpoint, failed to recover */
 	if (insn.opcode.bytes[0] == BREAKPOINT_INSTRUCTION)
 		return 0;
+	pax_open_kernel();
 	memcpy(dest, insn.kaddr, insn.length);
+	pax_close_kernel();
 
 #ifdef CONFIG_X86_64
 	if (insn_rip_relative(&insn)) {
@@ -355,7 +360,9 @@ int __kprobes __copy_instruction(u8 *dest, u8 *src)
 		newdisp = (u8 *) src + (s64) insn.displacement.value - (u8 *) dest;
 		BUG_ON((s64) (s32) newdisp != newdisp); /* Sanity check.  */
 		disp = (u8 *) dest + insn_offset_displacement(&insn);
+		pax_open_kernel();
 		*(s32 *) disp = (s32) newdisp;
+		pax_close_kernel();
 	}
 #endif
 	return insn.length;
@@ -485,7 +492,7 @@ setup_singlestep(struct kprobe *p, struct pt_regs *regs, struct kprobe_ctlblk *k
 		 * nor set current_kprobe, because it doesn't use single
 		 * stepping.
 		 */
-		regs->ip = (unsigned long)p->ainsn.insn;
+		regs->ip = ktva_ktla((unsigned long)p->ainsn.insn);
 		preempt_enable_no_resched();
 		return;
 	}
@@ -504,7 +511,7 @@ setup_singlestep(struct kprobe *p, struct pt_regs *regs, struct kprobe_ctlblk *k
 	if (p->opcode == BREAKPOINT_INSTRUCTION)
 		regs->ip = (unsigned long)p->addr;
 	else
-		regs->ip = (unsigned long)p->ainsn.insn;
+		regs->ip = ktva_ktla((unsigned long)p->ainsn.insn);
 }
 
 /*
@@ -583,7 +590,7 @@ static int __kprobes kprobe_handler(struct pt_regs *regs)
 				setup_singlestep(p, regs, kcb, 0);
 			return 1;
 		}
-	} else if (*addr != BREAKPOINT_INSTRUCTION) {
+	} else if (*(kprobe_opcode_t *)ktla_ktva((unsigned long)addr) != BREAKPOINT_INSTRUCTION) {
 		/*
 		 * The breakpoint instruction was removed right
 		 * after we hit it.  Another cpu has removed
@@ -628,6 +635,9 @@ static void __used __kprobes kretprobe_trampoline_holder(void)
 			"	movq %rax, 152(%rsp)\n"
 			RESTORE_REGS_STRING
 			"	popfq\n"
+#ifdef KERNEXEC_PLUGIN
+			"	btsq $63,(%rsp)\n"
+#endif
 #else
 			"	pushf\n"
 			SAVE_REGS_STRING
@@ -765,7 +775,7 @@ static void __kprobes
 resume_execution(struct kprobe *p, struct pt_regs *regs, struct kprobe_ctlblk *kcb)
 {
 	unsigned long *tos = stack_addr(regs);
-	unsigned long copy_ip = (unsigned long)p->ainsn.insn;
+	unsigned long copy_ip = ktva_ktla((unsigned long)p->ainsn.insn);
 	unsigned long orig_ip = (unsigned long)p->addr;
 	kprobe_opcode_t *insn = p->ainsn.insn;
 
@@ -947,7 +957,7 @@ kprobe_exceptions_notify(struct notifier_block *self, unsigned long val, void *d
 	struct die_args *args = data;
 	int ret = NOTIFY_DONE;
 
-	if (args->regs && user_mode_vm(args->regs))
+	if (args->regs && user_mode(args->regs))
 		return ret;
 
 	switch (val) {

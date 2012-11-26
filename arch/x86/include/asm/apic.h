@@ -44,7 +44,7 @@ static inline void generic_apic_probe(void)
 
 #ifdef CONFIG_X86_LOCAL_APIC
 
-extern unsigned int apic_verbosity;
+extern int apic_verbosity;
 extern int local_apic_timer_c2_ok;
 
 extern int disable_apic;
@@ -391,7 +391,7 @@ struct apic {
 	 */
 	int (*x86_32_numa_cpu_node)(int cpu);
 #endif
-};
+} __do_const;
 
 /*
  * Pointer to the local APIC driver in use on this system (there's

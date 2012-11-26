@@ -98,8 +98,6 @@ EXPORT_SYMBOL_GPL(xen_start_info);
 
 struct shared_info xen_dummy_shared_info;
 
-void *xen_initial_gdt;
-
 RESERVE_BRK(shared_info_page_brk, PAGE_SIZE);
 __read_mostly int xen_have_vector_callback;
 EXPORT_SYMBOL_GPL(xen_have_vector_callback);
@@ -917,21 +915,21 @@ static u32 xen_safe_apic_wait_icr_idle(void)
 
 static void set_xen_basic_apic_ops(void)
 {
-	apic->read = xen_apic_read;
-	apic->write = xen_apic_write;
-	apic->icr_read = xen_apic_icr_read;
-	apic->icr_write = xen_apic_icr_write;
-	apic->wait_icr_idle = xen_apic_wait_icr_idle;
-	apic->safe_wait_icr_idle = xen_safe_apic_wait_icr_idle;
-	apic->set_apic_id = xen_set_apic_id;
-	apic->get_apic_id = xen_get_apic_id;
+	*(void **)&apic->read = xen_apic_read;
+	*(void **)&apic->write = xen_apic_write;
+	*(void **)&apic->icr_read = xen_apic_icr_read;
+	*(void **)&apic->icr_write = xen_apic_icr_write;
+	*(void **)&apic->wait_icr_idle = xen_apic_wait_icr_idle;
+	*(void **)&apic->safe_wait_icr_idle = xen_safe_apic_wait_icr_idle;
+	*(void **)&apic->set_apic_id = xen_set_apic_id;
+	*(void **)&apic->get_apic_id = xen_get_apic_id;
 
 #ifdef CONFIG_SMP
-	apic->send_IPI_allbutself = xen_send_IPI_allbutself;
-	apic->send_IPI_mask_allbutself = xen_send_IPI_mask_allbutself;
-	apic->send_IPI_mask = xen_send_IPI_mask;
-	apic->send_IPI_all = xen_send_IPI_all;
-	apic->send_IPI_self = xen_send_IPI_self;
+	*(void **)&apic->send_IPI_allbutself = xen_send_IPI_allbutself;
+	*(void **)&apic->send_IPI_mask_allbutself = xen_send_IPI_mask_allbutself;
+	*(void **)&apic->send_IPI_mask = xen_send_IPI_mask;
+	*(void **)&apic->send_IPI_all = xen_send_IPI_all;
+	*(void **)&apic->send_IPI_self = xen_send_IPI_self;
 #endif
 }
 
@@ -1221,30 +1219,30 @@ static const struct pv_apic_ops xen_apic_ops __initconst = {
 #endif
 };
 
-static void xen_reboot(int reason)
+static __noreturn void xen_reboot(int reason)
 {
 	struct sched_shutdown r = { .reason = reason };
 
-	if (HYPERVISOR_sched_op(SCHEDOP_shutdown, &r))
-		BUG();
+	HYPERVISOR_sched_op(SCHEDOP_shutdown, &r);
+	BUG();
 }
 
-static void xen_restart(char *msg)
+static __noreturn void xen_restart(char *msg)
 {
 	xen_reboot(SHUTDOWN_reboot);
 }
 
-static void xen_emergency_restart(void)
+static __noreturn void xen_emergency_restart(void)
 {
 	xen_reboot(SHUTDOWN_reboot);
 }
 
-static void xen_machine_halt(void)
+static __noreturn void xen_machine_halt(void)
 {
 	xen_reboot(SHUTDOWN_poweroff);
 }
 
-static void xen_machine_power_off(void)
+static __noreturn void xen_machine_power_off(void)
 {
 	if (pm_power_off)
 		pm_power_off();
@@ -1347,7 +1345,17 @@ asmlinkage void __init xen_start_kernel(void)
 	__userpte_alloc_gfp &= ~__GFP_HIGHMEM;
 
 	/* Work out if we support NX */
-	x86_configure_nx();
+#if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
+	if ((cpuid_eax(0x80000000) & 0xffff0000) == 0x80000000 &&
+	    (cpuid_edx(0x80000001) & (1U << (X86_FEATURE_NX & 31)))) {
+		unsigned l, h;
+
+		__supported_pte_mask |= _PAGE_NX;
+		rdmsr(MSR_EFER, l, h);
+		l |= EFER_NX;
+		wrmsr(MSR_EFER, l, h);
+	}
+#endif
 
 	xen_setup_features();
 
@@ -1377,13 +1385,6 @@ asmlinkage void __init xen_start_kernel(void)
 	}
 
 	machine_ops = xen_machine_ops;
-
-	/*
-	 * The only reliable way to retain the initial address of the
-	 * percpu gdt_page is to remember it here, so we can go and
-	 * mark it RW later, when the initial percpu area is freed.
-	 */
-	xen_initial_gdt = &per_cpu(gdt_page, 0);
 
 	xen_smp_init();
 

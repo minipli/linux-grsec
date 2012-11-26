@@ -553,9 +553,14 @@ extern bool capable(int cap);
 extern bool ns_capable(struct user_namespace *ns, int cap);
 extern bool nsown_capable(int cap);
 extern bool inode_capable(const struct inode *inode, int cap);
+extern bool capable_nolog(int cap);
+extern bool ns_capable_nolog(struct user_namespace *ns, int cap);
+extern bool inode_capable_nolog(const struct inode *inode, int cap);
 
 /* audit system wants to get cap info from files as well */
 extern int get_vfs_caps_from_disk(const struct dentry *dentry, struct cpu_vfs_cap_data *cpu_caps);
+
+extern int is_privileged_binary(const struct dentry *dentry);
 
 #endif /* __KERNEL__ */
 

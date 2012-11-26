@@ -11,16 +11,18 @@
 #include <asm/processor.h>
 
 #define __futex_atomic_op1(insn, ret, oldval, uaddr, oparg)	\
+	typecheck(u32 __user *, uaddr);				\
 	asm volatile("1:\t" insn "\n"				\
 		     "2:\t.section .fixup,\"ax\"\n"		\
 		     "3:\tmov\t%3, %1\n"			\
 		     "\tjmp\t2b\n"				\
 		     "\t.previous\n"				\
 		     _ASM_EXTABLE(1b, 3b)			\
-		     : "=r" (oldval), "=r" (ret), "+m" (*uaddr)	\
+		     : "=r" (oldval), "=r" (ret), "+m" (*(u32 __user *)____m(uaddr))\
 		     : "i" (-EFAULT), "0" (oparg), "1" (0))
 
 #define __futex_atomic_op2(insn, ret, oldval, uaddr, oparg)	\
+	typecheck(u32 __user *, uaddr);				\
 	asm volatile("1:\tmovl	%2, %0\n"			\
 		     "\tmovl\t%0, %3\n"				\
 		     "\t" insn "\n"				\
@@ -33,7 +35,7 @@
 		     _ASM_EXTABLE(1b, 4b)			\
 		     _ASM_EXTABLE(2b, 4b)			\
 		     : "=&a" (oldval), "=&r" (ret),		\
-		       "+m" (*uaddr), "=&r" (tem)		\
+		       "+m" (*(u32 __user *)____m(uaddr)), "=&r" (tem)	\
 		     : "r" (oparg), "i" (-EFAULT), "1" (0))
 
 static inline int futex_atomic_op_inuser(int encoded_op, u32 __user *uaddr)
@@ -60,10 +62,10 @@ static inline int futex_atomic_op_inuser(int encoded_op, u32 __user *uaddr)
 
 	switch (op) {
 	case FUTEX_OP_SET:
-		__futex_atomic_op1("xchgl %0, %2", ret, oldval, uaddr, oparg);
+		__futex_atomic_op1(__copyuser_seg"xchgl %0, %2", ret, oldval, uaddr, oparg);
 		break;
 	case FUTEX_OP_ADD:
-		__futex_atomic_op1(LOCK_PREFIX "xaddl %0, %2", ret, oldval,
+		__futex_atomic_op1(LOCK_PREFIX __copyuser_seg"xaddl %0, %2", ret, oldval,
 				   uaddr, oparg);
 		break;
 	case FUTEX_OP_OR:
@@ -122,13 +124,13 @@ static inline int futex_atomic_cmpxchg_inatomic(u32 *uval, u32 __user *uaddr,
 	if (!access_ok(VERIFY_WRITE, uaddr, sizeof(u32)))
 		return -EFAULT;
 
-	asm volatile("1:\t" LOCK_PREFIX "cmpxchgl %4, %2\n"
+	asm volatile("1:\t" LOCK_PREFIX __copyuser_seg"cmpxchgl %4, %2\n"
 		     "2:\t.section .fixup, \"ax\"\n"
 		     "3:\tmov     %3, %0\n"
 		     "\tjmp     2b\n"
 		     "\t.previous\n"
 		     _ASM_EXTABLE(1b, 3b)
-		     : "+r" (ret), "=a" (oldval), "+m" (*uaddr)
+		     : "+r" (ret), "=a" (oldval), "+m" (*(u32 __user *)____m(uaddr))
 		     : "i" (-EFAULT), "r" (newval), "1" (oldval)
 		     : "memory"
 	);
