@@ -430,7 +430,7 @@ int handle_rt_signal64(int signr, struct k_sigaction *ka, siginfo_t *info,
 	current->thread.fpscr.val = 0;
 
 	/* Set up to return from userspace. */
-	if (vdso64_rt_sigtramp && current->mm->context.vdso_base) {
+	if (vdso64_rt_sigtramp && current->mm->context.vdso_base != ~0UL) {
 		regs->link = current->mm->context.vdso_base + vdso64_rt_sigtramp;
 	} else {
 		err |= setup_trampoline(__NR_rt_sigreturn, &frame->tramp[0]);

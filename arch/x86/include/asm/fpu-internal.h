@@ -82,9 +82,11 @@ static inline void sanitize_i387_state(struct task_struct *tsk)
 }
 
 #ifdef CONFIG_X86_64
-static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
+static inline int fxrstor_checking(struct i387_fxsave_struct __user *fx)
 {
 	int err;
+
+	fx = (struct i387_fxsave_struct __user *)____m(fx);
 
 	/* See comment in fxsave() below. */
 #ifdef CONFIG_AS_FXSAVEQ
@@ -114,6 +116,8 @@ static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
 static inline int fxsave_user(struct i387_fxsave_struct __user *fx)
 {
 	int err;
+
+	fx = (struct i387_fxsave_struct __user *)____m(fx);
 
 	/*
 	 * Clear the bytes not touched by the fxsave and reserved
@@ -183,15 +187,15 @@ static inline void fpu_fxsave(struct fpu *fpu)
 #else  /* CONFIG_X86_32 */
 
 /* perform fxrstor iff the processor has extended states, otherwise frstor */
-static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
+static inline int fxrstor_checking(struct i387_fxsave_struct __user *fx)
 {
 	/*
 	 * The "nop" is needed to make the instructions the same
 	 * length.
 	 */
 	alternative_input(
-		"nop ; frstor %1",
-		"fxrstor %1",
+		__copyuser_seg" frstor %1; nop",
+		__copyuser_seg" fxrstor %1",
 		X86_FEATURE_FXSR,
 		"m" (*fx));
 
@@ -271,7 +275,7 @@ static inline int restore_fpu_checking(struct task_struct *tsk)
 		"emms\n\t"		/* clear stack tags */
 		"fildl %P[addr]",	/* set F?P to defined value */
 		X86_FEATURE_FXSAVE_LEAK,
-		[addr] "m" (tsk->thread.fpu.has_fpu));
+		[addr] "m" (init_tss[smp_processor_id()].x86_tss.sp0));
 
 	return fpu_restore_checking(&tsk->thread.fpu);
 }
@@ -334,14 +338,17 @@ static inline void __thread_fpu_begin(struct task_struct *tsk)
 typedef struct { int preload; } fpu_switch_t;
 
 /*
- * FIXME! We could do a totally lazy restore, but we need to
- * add a per-cpu "this was the task that last touched the FPU
- * on this CPU" variable, and the task needs to have a "I last
- * touched the FPU on this CPU" and check them.
+ * Must be run with preemption disabled: this clears the fpu_owner_task,
+ * on this CPU.
  *
- * We don't do that yet, so "fpu_lazy_restore()" always returns
- * false, but some day..
+ * This will disable any lazy FPU state restore of the current FPU state,
+ * but if the current thread owns the FPU, it will still be saved by.
  */
+static inline void __cpu_disable_lazy_restore(unsigned int cpu)
+{
+	per_cpu(fpu_owner_task, cpu) = NULL;
+}
+
 static inline int fpu_lazy_restore(struct task_struct *new, unsigned int cpu)
 {
 	return new == this_cpu_read_stable(fpu_owner_task) &&

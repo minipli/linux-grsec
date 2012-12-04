@@ -302,9 +302,9 @@ int __srcu_read_lock(struct srcu_struct *sp)
 	preempt_disable();
 	idx = rcu_dereference_index_check(sp->completed,
 					  rcu_read_lock_sched_held()) & 0x1;
-	ACCESS_ONCE(this_cpu_ptr(sp->per_cpu_ref)->c[idx]) += 1;
+	ACCESS_ONCE_RW(this_cpu_ptr(sp->per_cpu_ref)->c[idx]) += 1;
 	smp_mb(); /* B */  /* Avoid leaking the critical section. */
-	ACCESS_ONCE(this_cpu_ptr(sp->per_cpu_ref)->seq[idx]) += 1;
+	ACCESS_ONCE_RW(this_cpu_ptr(sp->per_cpu_ref)->seq[idx]) += 1;
 	preempt_enable();
 	return idx;
 }
@@ -320,7 +320,7 @@ void __srcu_read_unlock(struct srcu_struct *sp, int idx)
 {
 	preempt_disable();
 	smp_mb(); /* C */  /* Avoid leaking the critical section. */
-	ACCESS_ONCE(this_cpu_ptr(sp->per_cpu_ref)->c[idx]) -= 1;
+	ACCESS_ONCE_RW(this_cpu_ptr(sp->per_cpu_ref)->c[idx]) -= 1;
 	preempt_enable();
 }
 EXPORT_SYMBOL_GPL(__srcu_read_unlock);

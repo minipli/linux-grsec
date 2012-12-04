@@ -31,7 +31,7 @@ struct cleancache_ops {
 	void (*invalidate_page)(int, struct cleancache_filekey, pgoff_t);
 	void (*invalidate_inode)(int, struct cleancache_filekey);
 	void (*invalidate_fs)(int);
-};
+} __no_const;
 
 extern struct cleancache_ops
 	cleancache_register_ops(struct cleancache_ops *ops);

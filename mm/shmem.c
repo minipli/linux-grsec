@@ -31,7 +31,7 @@
 #include <linux/export.h>
 #include <linux/swap.h>
 
-static struct vfsmount *shm_mnt;
+struct vfsmount *shm_mnt;
 
 #ifdef CONFIG_SHMEM
 /*
@@ -75,7 +75,7 @@ static struct vfsmount *shm_mnt;
 #define BOGO_DIRENT_SIZE 20
 
 /* Symlink up to this size is kmalloc'ed instead of using a swappable page */
-#define SHORT_SYMLINK_LEN 128
+#define SHORT_SYMLINK_LEN 64
 
 struct shmem_xattr {
 	struct list_head list;	/* anchored by shmem_inode_info->xattr_list */
@@ -2219,6 +2219,11 @@ static const struct xattr_handler *shmem_xattr_handlers[] = {
 static int shmem_xattr_validate(const char *name)
 {
 	struct { const char *prefix; size_t len; } arr[] = {
+
+#ifdef CONFIG_PAX_XATTR_PAX_FLAGS
+		{ XATTR_USER_PREFIX, XATTR_USER_PREFIX_LEN},
+#endif
+
 		{ XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN },
 		{ XATTR_TRUSTED_PREFIX, XATTR_TRUSTED_PREFIX_LEN }
 	};
@@ -2271,6 +2276,15 @@ static int shmem_setxattr(struct dentry *dentry, const char *name,
 	err = shmem_xattr_validate(name);
 	if (err)
 		return err;
+
+#ifdef CONFIG_PAX_XATTR_PAX_FLAGS
+	if (!strncmp(name, XATTR_USER_PREFIX, XATTR_USER_PREFIX_LEN)) {
+		if (strcmp(name, XATTR_NAME_PAX_FLAGS))
+			return -EOPNOTSUPP;
+		if (size > 8)
+			return -EINVAL;
+	}
+#endif
 
 	if (size == 0)
 		value = "";  /* empty EA, do not remove */
@@ -2606,8 +2620,7 @@ int shmem_fill_super(struct super_block *sb, void *data, int silent)
 	int err = -ENOMEM;
 
 	/* Round up to L1_CACHE_BYTES to resist false sharing */
-	sbinfo = kzalloc(max((int)sizeof(struct shmem_sb_info),
-				L1_CACHE_BYTES), GFP_KERNEL);
+	sbinfo = kzalloc(max(sizeof(struct shmem_sb_info), L1_CACHE_BYTES), GFP_KERNEL);
 	if (!sbinfo)
 		return -ENOMEM;
 

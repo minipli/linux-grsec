@@ -1757,7 +1757,7 @@ static unsigned long get_segment_base(unsigned int segment)
 		if (idx > GDT_ENTRIES)
 			return 0;
 
-		desc = __this_cpu_ptr(&gdt_page.gdt[0]);
+		desc = get_cpu_gdt_table(smp_processor_id());
 	}
 
 	return get_desc_base(desc + idx);
@@ -1847,7 +1847,7 @@ perf_callchain_user(struct perf_callchain_entry *entry, struct pt_regs *regs)
 			break;
 
 		perf_callchain_store(entry, frame.return_address);
-		fp = frame.next_frame;
+		fp = (const void __force_user *)frame.next_frame;
 	}
 }
 
