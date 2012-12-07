@@ -583,7 +583,7 @@ static snd_pcm_uframes_t soc_pcm_pointer(struct snd_pcm_substream *substream)
 }
 
 /* ASoC PCM operations */
-static struct snd_pcm_ops soc_pcm_ops = {
+static snd_pcm_ops_no_const soc_pcm_ops = {
 	.open		= soc_pcm_open,
 	.close		= soc_pcm_close,
 	.hw_params	= soc_pcm_hw_params,
