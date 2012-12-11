@@ -31,7 +31,7 @@
 #include <linux/export.h>
 #include <linux/swap.h>
 
-static struct vfsmount *shm_mnt;
+struct vfsmount *shm_mnt;
 
 #ifdef CONFIG_SHMEM
 /*
@@ -75,7 +75,7 @@ static struct vfsmount *shm_mnt;
 #define BOGO_DIRENT_SIZE 20
 
 /* Symlink up to this size is kmalloc'ed instead of using a swappable page */
-#define SHORT_SYMLINK_LEN 128
+#define SHORT_SYMLINK_LEN 64
 
 struct shmem_xattr {
 	struct list_head list;	/* anchored by shmem_inode_info->xattr_list */
@@ -921,25 +921,8 @@ static struct mempolicy *shmem_get_sbmpol(struct shmem_sb_info *sbinfo)
 static struct page *shmem_swapin(swp_entry_t swap, gfp_t gfp,
 			struct shmem_inode_info *info, pgoff_t index)
 {
-	struct mempolicy mpol, *spol;
 	struct vm_area_struct pvma;
-
-	spol = mpol_cond_copy(&mpol,
-			mpol_shared_policy_lookup(&info->policy, index));
-
-	/* Create a pseudo vma that just contains the policy */
-	pvma.vm_start = 0;
-	/* Bias interleave by inode number to distribute better across nodes */
-	pvma.vm_pgoff = index + info->vfs_inode.i_ino;
-	pvma.vm_ops = NULL;
-	pvma.vm_policy = spol;
-	return swapin_readahead(swap, gfp, &pvma, 0);
-}
-
-static struct page *shmem_alloc_page(gfp_t gfp,
-			struct shmem_inode_info *info, pgoff_t index)
-{
-	struct vm_area_struct pvma;
+	struct page *page;
 
 	/* Create a pseudo vma that just contains the policy */
 	pvma.vm_start = 0;
@@ -948,10 +931,33 @@ static struct page *shmem_alloc_page(gfp_t gfp,
 	pvma.vm_ops = NULL;
 	pvma.vm_policy = mpol_shared_policy_lookup(&info->policy, index);
 
-	/*
-	 * alloc_page_vma() will drop the shared policy reference
-	 */
-	return alloc_page_vma(gfp, &pvma, 0);
+	page = swapin_readahead(swap, gfp, &pvma, 0);
+
+	/* Drop reference taken by mpol_shared_policy_lookup() */
+	mpol_cond_put(pvma.vm_policy);
+
+	return page;
+}
+
+static struct page *shmem_alloc_page(gfp_t gfp,
+			struct shmem_inode_info *info, pgoff_t index)
+{
+	struct vm_area_struct pvma;
+	struct page *page;
+
+	/* Create a pseudo vma that just contains the policy */
+	pvma.vm_start = 0;
+	/* Bias interleave by inode number to distribute better across nodes */
+	pvma.vm_pgoff = index + info->vfs_inode.i_ino;
+	pvma.vm_ops = NULL;
+	pvma.vm_policy = mpol_shared_policy_lookup(&info->policy, index);
+
+	page = alloc_page_vma(gfp, &pvma, 0);
+
+	/* Drop reference taken by mpol_shared_policy_lookup() */
+	mpol_cond_put(pvma.vm_policy);
+
+	return page;
 }
 #else /* !CONFIG_NUMA */
 #ifdef CONFIG_TMPFS
@@ -2219,6 +2225,11 @@ static const struct xattr_handler *shmem_xattr_handlers[] = {
 static int shmem_xattr_validate(const char *name)
 {
 	struct { const char *prefix; size_t len; } arr[] = {
+
+#ifdef CONFIG_PAX_XATTR_PAX_FLAGS
+		{ XATTR_USER_PREFIX, XATTR_USER_PREFIX_LEN},
+#endif
+
 		{ XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN },
 		{ XATTR_TRUSTED_PREFIX, XATTR_TRUSTED_PREFIX_LEN }
 	};
@@ -2271,6 +2282,15 @@ static int shmem_setxattr(struct dentry *dentry, const char *name,
 	err = shmem_xattr_validate(name);
 	if (err)
 		return err;
+
+#ifdef CONFIG_PAX_XATTR_PAX_FLAGS
+	if (!strncmp(name, XATTR_USER_PREFIX, XATTR_USER_PREFIX_LEN)) {
+		if (strcmp(name, XATTR_NAME_PAX_FLAGS))
+			return -EOPNOTSUPP;
+		if (size > 8)
+			return -EINVAL;
+	}
+#endif
 
 	if (size == 0)
 		value = "";  /* empty EA, do not remove */
@@ -2606,8 +2626,7 @@ int shmem_fill_super(struct super_block *sb, void *data, int silent)
 	int err = -ENOMEM;
 
 	/* Round up to L1_CACHE_BYTES to resist false sharing */
-	sbinfo = kzalloc(max((int)sizeof(struct shmem_sb_info),
-				L1_CACHE_BYTES), GFP_KERNEL);
+	sbinfo = kzalloc(max(sizeof(struct shmem_sb_info), L1_CACHE_BYTES), GFP_KERNEL);
 	if (!sbinfo)
 		return -ENOMEM;
 

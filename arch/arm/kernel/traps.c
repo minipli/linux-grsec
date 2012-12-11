@@ -266,6 +266,8 @@ static arch_spinlock_t die_lock = __ARCH_SPIN_LOCK_UNLOCKED;
 static int die_owner = -1;
 static unsigned int die_nest_count;
 
+extern void gr_handle_kernel_exploit(void);
+
 static unsigned long oops_begin(void)
 {
 	int cpu;
@@ -308,6 +310,9 @@ static void oops_end(unsigned long flags, struct pt_regs *regs, int signr)
 		panic("Fatal exception in interrupt");
 	if (panic_on_oops)
 		panic("Fatal exception");
+
+	gr_handle_kernel_exploit();
+
 	if (signr)
 		do_exit(signr);
 }

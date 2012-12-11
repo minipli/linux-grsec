@@ -714,7 +714,7 @@ void solos_bh(unsigned long card_arg)
 				}
 				atm_charge(vcc, skb->truesize);
 				vcc->push(vcc, skb);
-				atomic_inc(&vcc->stats->rx);
+				atomic_inc_unchecked(&vcc->stats->rx);
 				break;
 
 			case PKT_STATUS:
@@ -1009,7 +1009,7 @@ static uint32_t fpga_tx(struct solos_card *card)
 			vcc = SKB_CB(oldskb)->vcc;
 
 			if (vcc) {
-				atomic_inc(&vcc->stats->tx);
+				atomic_inc_unchecked(&vcc->stats->tx);
 				solos_pop(vcc, oldskb);
 			} else
 				dev_kfree_skb_irq(oldskb);

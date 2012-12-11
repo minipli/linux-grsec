@@ -182,14 +182,13 @@ unsigned long kernel_stack_pointer(struct pt_regs *regs)
 {
 	unsigned long context = (unsigned long)regs & ~(THREAD_SIZE - 1);
 	unsigned long sp = (unsigned long)&regs->sp;
-	struct thread_info *tinfo;
 
-	if (context == (sp & ~(THREAD_SIZE - 1)))
+	if (context == ((sp + 8) & ~(THREAD_SIZE - 1)))
 		return sp;
 
-	tinfo = (struct thread_info *)context;
-	if (tinfo->previous_esp)
-		return tinfo->previous_esp;
+	sp = *(unsigned long *)context;
+	if (sp)
+		return sp;
 
 	return (unsigned long)regs;
 }
@@ -854,7 +853,7 @@ long arch_ptrace(struct task_struct *child, long request,
 		 unsigned long addr, unsigned long data)
 {
 	int ret;
-	unsigned long __user *datap = (unsigned long __user *)data;
+	unsigned long __user *datap = (__force unsigned long __user *)data;
 
 	switch (request) {
 	/* read the word at location addr in the USER area. */
@@ -939,14 +938,14 @@ long arch_ptrace(struct task_struct *child, long request,
 		if ((int) addr < 0)
 			return -EIO;
 		ret = do_get_thread_area(child, addr,
-					(struct user_desc __user *)data);
+					(__force struct user_desc __user *) data);
 		break;
 
 	case PTRACE_SET_THREAD_AREA:
 		if ((int) addr < 0)
 			return -EIO;
 		ret = do_set_thread_area(child, addr,
-					(struct user_desc __user *)data, 0);
+					(__force struct user_desc __user *) data, 0);
 		break;
 #endif
 
@@ -1456,7 +1455,7 @@ static void fill_sigtrap_info(struct task_struct *tsk,
 	memset(info, 0, sizeof(*info));
 	info->si_signo = SIGTRAP;
 	info->si_code = si_code;
-	info->si_addr = user_mode_vm(regs) ? (void __user *)regs->ip : NULL;
+	info->si_addr = user_mode(regs) ? (__force void __user *)regs->ip : NULL;
 }
 
 void user_single_step_siginfo(struct task_struct *tsk,
@@ -1485,6 +1484,10 @@ void send_sigtrap(struct task_struct *tsk, struct pt_regs *regs,
 # define IS_IA32	0
 #endif
 
+#ifdef CONFIG_GRKERNSEC_SETXID
+extern void gr_delayed_cred_worker(void);
+#endif
+
 /*
  * We must return the syscall number to actually look up in the table.
  * This can be -1L to skip running any syscall at all.
@@ -1492,6 +1495,11 @@ void send_sigtrap(struct task_struct *tsk, struct pt_regs *regs,
 long syscall_trace_enter(struct pt_regs *regs)
 {
 	long ret = 0;
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+                gr_delayed_cred_worker();
+#endif		
 
 	/*
 	 * If we stepped into a sysenter/syscall insn, it trapped in
@@ -1540,6 +1548,11 @@ out:
 void syscall_trace_leave(struct pt_regs *regs)
 {
 	bool step;
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+                gr_delayed_cred_worker();
+#endif		
 
 	audit_syscall_exit(regs);
 

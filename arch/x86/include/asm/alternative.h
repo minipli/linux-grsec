@@ -105,7 +105,7 @@ static inline int alternatives_text_reserved(void *start, void *end)
 	".section .discard,\"aw\",@progbits\n"				\
 	DISCARD_ENTRY(1)						\
 	".previous\n"							\
-	".section .altinstr_replacement, \"ax\"\n"			\
+	".section .altinstr_replacement, \"a\"\n"			\
 	ALTINSTR_REPLACEMENT(newinstr, feature, 1)			\
 	".previous"
 
@@ -119,7 +119,7 @@ static inline int alternatives_text_reserved(void *start, void *end)
 	DISCARD_ENTRY(1)						\
 	DISCARD_ENTRY(2)						\
 	".previous\n"							\
-	".section .altinstr_replacement, \"ax\"\n"			\
+	".section .altinstr_replacement, \"a\"\n"			\
 	ALTINSTR_REPLACEMENT(newinstr1, feature1, 1)			\
 	ALTINSTR_REPLACEMENT(newinstr2, feature2, 2)			\
 	".previous"

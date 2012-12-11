@@ -1252,6 +1252,7 @@ config LATENCYTOP
 	depends on DEBUG_KERNEL
 	depends on STACKTRACE_SUPPORT
 	depends on PROC_FS
+	depends on !GRKERNSEC_HIDESYM
 	select FRAME_POINTER if !MIPS && !PPC && !S390 && !MICROBLAZE && !ARM_UNWIND
 	select KALLSYMS
 	select KALLSYMS_ALL
@@ -1267,7 +1268,7 @@ source kernel/trace/Kconfig
 
 config PROVIDE_OHCI1394_DMA_INIT
 	bool "Remote debugging over FireWire early on boot"
-	depends on PCI && X86
+	depends on PCI && X86 && !GRKERNSEC
 	help
 	  If you want to debug problems which hang or crash the kernel early
 	  on boot and the crashing machine has a FireWire port, you can use
@@ -1296,7 +1297,7 @@ config PROVIDE_OHCI1394_DMA_INIT
 
 config FIREWIRE_OHCI_REMOTE_DMA
 	bool "Remote debugging over FireWire with firewire-ohci"
-	depends on FIREWIRE_OHCI
+	depends on FIREWIRE_OHCI && !GRKERNSEC
 	help
 	  This option lets you use the FireWire bus for remote debugging
 	  with help of the firewire-ohci driver. It enables unfiltered
