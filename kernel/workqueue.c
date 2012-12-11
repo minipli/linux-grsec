@@ -1422,7 +1422,7 @@ retry:
 			/* morph UNBOUND to REBIND atomically */
 			worker_flags &= ~WORKER_UNBOUND;
 			worker_flags |= WORKER_REBIND;
-			ACCESS_ONCE(worker->flags) = worker_flags;
+			ACCESS_ONCE_RW(worker->flags) = worker_flags;
 
 			idle_rebind.cnt++;
 			worker->idle_rebind = &idle_rebind;
@@ -1448,7 +1448,7 @@ retry:
 		/* morph UNBOUND to REBIND atomically */
 		worker_flags &= ~WORKER_UNBOUND;
 		worker_flags |= WORKER_REBIND;
-		ACCESS_ONCE(worker->flags) = worker_flags;
+		ACCESS_ONCE_RW(worker->flags) = worker_flags;
 
 		if (test_and_set_bit(WORK_STRUCT_PENDING_BIT,
 				     work_data_bits(rebind_work)))
