@@ -119,7 +119,7 @@ static void __kprobes __synthesize_relative_insn(void *from, void *to, u8 op)
 		s32 raddr;
 	} __attribute__((packed)) *insn;
 
-	insn = (struct __arch_relative_insn *)from;
+	insn = (struct __arch_relative_insn *)ktla_ktva(from);
 
 	pax_open_kernel();
 	insn->raddr = (s32)((long)(to) - ((long)(from) + 5));
@@ -241,9 +241,9 @@ __recover_probed_insn(kprobe_opcode_t *buf, unsigned long addr)
 	 *  for the first byte, we can recover the original instruction
 	 *  from it and kp->opcode.
 	 */
-	memcpy(buf, kp->addr, MAX_INSN_SIZE * sizeof(kprobe_opcode_t));
+	memcpy(buf, ktla_ktva(kp->addr), MAX_INSN_SIZE * sizeof(kprobe_opcode_t));
 	buf[0] = kp->opcode;
-	return (unsigned long)buf;
+	return ktva_ktla((unsigned long)buf);
 }
 
 /*
@@ -509,7 +509,7 @@ setup_singlestep(struct kprobe *p, struct pt_regs *regs, struct kprobe_ctlblk *k
 	regs->flags &= ~X86_EFLAGS_IF;
 	/* single step inline if the instruction is an int3 */
 	if (p->opcode == BREAKPOINT_INSTRUCTION)
-		regs->ip = (unsigned long)p->addr;
+		regs->ip = ktla_ktva((unsigned long)p->addr);
 	else
 		regs->ip = ktva_ktla((unsigned long)p->ainsn.insn);
 }

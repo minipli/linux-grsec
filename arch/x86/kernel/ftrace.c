@@ -214,7 +214,7 @@ int ftrace_update_ftrace_func(ftrace_func_t func)
 	unsigned char old[MCOUNT_INSN_SIZE], *new;
 	int ret;
 
-	memcpy(old, (void *)ktla_ktva((unsigned long)ftrace_call), MCOUNT_INSN_SIZE);
+	memcpy(old, ktla_ktva((void *)ftrace_call), MCOUNT_INSN_SIZE);
 	new = ftrace_call_replace(ip, (unsigned long)func);
 
 	/* See comment above by declaration of modifying_ftrace_code */
@@ -258,7 +258,7 @@ static int ftrace_write(unsigned long ip, const char *val, int size)
 	 * kernel identity mapping to modify code.
 	 */
 	if (within(ip, (unsigned long)_text, (unsigned long)_etext))
-		ip = (unsigned long)__va(__pa(ip));
+		ip = (unsigned long)__va(__pa(ktla_ktva(ip)));
 
 	return probe_kernel_write((void *)ip, val, size);
 }
@@ -268,7 +268,7 @@ static int add_break(unsigned long ip, const char *old)
 	unsigned char replaced[MCOUNT_INSN_SIZE];
 	unsigned char brk = BREAKPOINT_INSTRUCTION;
 
-	if (probe_kernel_read(replaced, (void *)ip, MCOUNT_INSN_SIZE))
+	if (probe_kernel_read(replaced, (void *)ktla_ktva(ip), MCOUNT_INSN_SIZE))
 		return -EFAULT;
 
 	/* Make sure it is what we expect it to be */
@@ -574,7 +574,7 @@ ftrace_modify_code(unsigned long ip, unsigned const char *old_code,
 	return ret;
 
  fail_update:
-	probe_kernel_write((void *)ip, &old_code[0], 1);
+	probe_kernel_write((void *)ktla_ktva(ip), &old_code[0], 1);
 	goto out;
 }
 
