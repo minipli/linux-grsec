@@ -111,6 +111,7 @@ struct team_mode_ops {
 	void (*port_enabled)(struct team *team, struct team_port *port);
 	void (*port_disabled)(struct team *team, struct team_port *port);
 };
+typedef struct team_mode_ops __no_const team_mode_ops_no_const;
 
 enum team_option_type {
 	TEAM_OPTION_TYPE_U32,
@@ -185,7 +186,7 @@ struct team {
 	struct list_head option_inst_list; /* list of option instances */
 
 	const struct team_mode *mode;
-	struct team_mode_ops ops;
+	team_mode_ops_no_const ops;
 	bool queue_override_enabled;
 	struct list_head *qom_lists; /* array of queue override mapping lists */
 	long mode_priv[TEAM_MODE_PRIV_LONGS];
