@@ -50,25 +50,25 @@
  * A tmem host implementation must use this function to register callbacks
  * for memory allocation.
  */
-static struct tmem_hostops tmem_hostops;
+static struct tmem_hostops *tmem_hostops;
 
 static void tmem_objnode_tree_init(void);
 
 void tmem_register_hostops(struct tmem_hostops *m)
 {
 	tmem_objnode_tree_init();
-	tmem_hostops = *m;
+	tmem_hostops = m;
 }
 
 /*
  * A tmem host implementation must use this function to register
  * callbacks for a page-accessible memory (PAM) implementation.
  */
-static struct tmem_pamops tmem_pamops;
+static struct tmem_pamops *tmem_pamops;
 
 void tmem_register_pamops(struct tmem_pamops *m)
 {
-	tmem_pamops = *m;
+	tmem_pamops = m;
 }
 
 /*
@@ -174,7 +174,7 @@ static void tmem_obj_init(struct tmem_obj *obj, struct tmem_hashbucket *hb,
 	obj->pampd_count = 0;
 #ifdef CONFIG_RAMSTER
 	if (tmem_pamops.new_obj != NULL)
-		(*tmem_pamops.new_obj)(obj);
+		(tmem_pamops->new_obj)(obj);
 #endif
 	SET_SENTINEL(obj, OBJ);
 
@@ -210,7 +210,7 @@ static void tmem_pool_flush(struct tmem_pool *pool, bool destroy)
 			rbnode = rb_next(rbnode);
 			tmem_pampd_destroy_all_in_obj(obj, true);
 			tmem_obj_free(obj, hb);
-			(*tmem_hostops.obj_free)(obj, pool);
+			(tmem_hostops->obj_free)(obj, pool);
 		}
 		spin_unlock(&hb->lock);
 	}
@@ -261,7 +261,7 @@ static struct tmem_objnode *tmem_objnode_alloc(struct tmem_obj *obj)
 	ASSERT_SENTINEL(obj, OBJ);
 	BUG_ON(obj->pool == NULL);
 	ASSERT_SENTINEL(obj->pool, POOL);
-	objnode = (*tmem_hostops.objnode_alloc)(obj->pool);
+	objnode = (tmem_hostops->objnode_alloc)(obj->pool);
 	if (unlikely(objnode == NULL))
 		goto out;
 	objnode->obj = obj;
@@ -290,7 +290,7 @@ static void tmem_objnode_free(struct tmem_objnode *objnode)
 	ASSERT_SENTINEL(pool, POOL);
 	objnode->obj->objnode_count--;
 	objnode->obj = NULL;
-	(*tmem_hostops.objnode_free)(objnode, pool);
+	(tmem_hostops->objnode_free)(objnode, pool);
 }
 
 /*
@@ -348,7 +348,7 @@ static void *tmem_pampd_replace_in_obj(struct tmem_obj *obj, uint32_t index,
 		void *old_pampd = *(void **)slot;
 		*(void **)slot = new_pampd;
 		if (!no_free)
-			(*tmem_pamops.free)(old_pampd, obj->pool,
+			(tmem_pamops->free)(old_pampd, obj->pool,
 						NULL, 0, false);
 		ret = new_pampd;
 	}
@@ -505,7 +505,7 @@ static void tmem_objnode_node_destroy(struct tmem_obj *obj,
 		if (objnode->slots[i]) {
 			if (ht == 1) {
 				obj->pampd_count--;
-				(*tmem_pamops.free)(objnode->slots[i],
+				(tmem_pamops->free)(objnode->slots[i],
 						obj->pool, NULL, 0, true);
 				objnode->slots[i] = NULL;
 				continue;
@@ -524,7 +524,7 @@ static void tmem_pampd_destroy_all_in_obj(struct tmem_obj *obj,
 		return;
 	if (obj->objnode_tree_height == 0) {
 		obj->pampd_count--;
-		(*tmem_pamops.free)(obj->objnode_tree_root,
+		(tmem_pamops->free)(obj->objnode_tree_root,
 					obj->pool, NULL, 0, true);
 	} else {
 		tmem_objnode_node_destroy(obj, obj->objnode_tree_root,
@@ -535,7 +535,7 @@ static void tmem_pampd_destroy_all_in_obj(struct tmem_obj *obj,
 	obj->objnode_tree_root = NULL;
 #ifdef CONFIG_RAMSTER
 	if (tmem_pamops.free_obj != NULL)
-		(*tmem_pamops.free_obj)(obj->pool, obj, pool_destroy);
+		(tmem_pamops->free_obj)(obj->pool, obj, pool_destroy);
 #endif
 }
 
@@ -574,7 +574,7 @@ int tmem_put(struct tmem_pool *pool, struct tmem_oid *oidp, uint32_t index,
 			/* if found, is a dup put, flush the old one */
 			pampd_del = tmem_pampd_delete_from_obj(obj, index);
 			BUG_ON(pampd_del != pampd);
-			(*tmem_pamops.free)(pampd, pool, oidp, index, true);
+			(tmem_pamops->free)(pampd, pool, oidp, index, true);
 			if (obj->pampd_count == 0) {
 				objnew = obj;
 				objfound = NULL;
@@ -582,7 +582,7 @@ int tmem_put(struct tmem_pool *pool, struct tmem_oid *oidp, uint32_t index,
 			pampd = NULL;
 		}
 	} else {
-		obj = objnew = (*tmem_hostops.obj_alloc)(pool);
+		obj = objnew = (tmem_hostops->obj_alloc)(pool);
 		if (unlikely(obj == NULL)) {
 			ret = -ENOMEM;
 			goto out;
@@ -597,16 +597,16 @@ int tmem_put(struct tmem_pool *pool, struct tmem_oid *oidp, uint32_t index,
 	if (unlikely(ret == -ENOMEM))
 		/* may have partially built objnode tree ("stump") */
 		goto delete_and_free;
-	(*tmem_pamops.create_finish)(pampd, is_ephemeral(pool));
+	(tmem_pamops->create_finish)(pampd, is_ephemeral(pool));
 	goto out;
 
 delete_and_free:
 	(void)tmem_pampd_delete_from_obj(obj, index);
 	if (pampd)
-		(*tmem_pamops.free)(pampd, pool, NULL, 0, true);
+		(tmem_pamops->free)(pampd, pool, NULL, 0, true);
 	if (objnew) {
 		tmem_obj_free(objnew, hb);
-		(*tmem_hostops.obj_free)(objnew, pool);
+		(tmem_hostops->obj_free)(objnew, pool);
 	}
 out:
 	spin_unlock(&hb->lock);
@@ -651,7 +651,7 @@ void tmem_localify_finish(struct tmem_obj *obj, uint32_t index,
 	if (pampd != NULL) {
 		BUG_ON(obj == NULL);
 		(void)tmem_pampd_replace_in_obj(obj, index, pampd, 1);
-		(*tmem_pamops.create_finish)(pampd, is_ephemeral(obj->pool));
+		(tmem_pamops->create_finish)(pampd, is_ephemeral(obj->pool));
 	} else if (delete) {
 		BUG_ON(obj == NULL);
 		(void)tmem_pampd_delete_from_obj(obj, index);
@@ -671,7 +671,7 @@ static int tmem_repatriate(void **ppampd, struct tmem_hashbucket *hb,
 	int ret = 0;
 
 	if (!is_ephemeral(pool))
-		new_pampd = (*tmem_pamops.repatriate_preload)(
+		new_pampd = (tmem_pamops->repatriate_preload)(
 				old_pampd, pool, oidp, index, &intransit);
 	if (intransit)
 		ret = -EAGAIN;
@@ -680,7 +680,7 @@ static int tmem_repatriate(void **ppampd, struct tmem_hashbucket *hb,
 	/* must release the hb->lock else repatriate can't sleep */
 	spin_unlock(&hb->lock);
 	if (!intransit)
-		ret = (*tmem_pamops.repatriate)(old_pampd, new_pampd, pool,
+		ret = (tmem_pamops->repatriate)(old_pampd, new_pampd, pool,
 						oidp, index, free, data);
 	if (ret == -EAGAIN) {
 		/* rare I think, but should cond_resched()??? */
@@ -714,7 +714,7 @@ int tmem_replace(struct tmem_pool *pool, struct tmem_oid *oidp,
 	new_pampd = tmem_pampd_replace_in_obj(obj, index, new_pampd, 0);
 	/* if we bug here, pamops wasn't properly set up for ramster */
 	BUG_ON(tmem_pamops.replace_in_obj == NULL);
-	ret = (*tmem_pamops.replace_in_obj)(new_pampd, obj);
+	ret = (tmem_pamops->replace_in_obj)(new_pampd, obj);
 out:
 	spin_unlock(&hb->lock);
 	return ret;
@@ -776,15 +776,15 @@ int tmem_get(struct tmem_pool *pool, struct tmem_oid *oidp, uint32_t index,
 	if (free) {
 		if (obj->pampd_count == 0) {
 			tmem_obj_free(obj, hb);
-			(*tmem_hostops.obj_free)(obj, pool);
+			(tmem_hostops->obj_free)(obj, pool);
 			obj = NULL;
 		}
 	}
 	if (free)
-		ret = (*tmem_pamops.get_data_and_free)(
+		ret = (tmem_pamops->get_data_and_free)(
 				data, sizep, raw, pampd, pool, oidp, index);
 	else
-		ret = (*tmem_pamops.get_data)(
+		ret = (tmem_pamops->get_data)(
 				data, sizep, raw, pampd, pool, oidp, index);
 	if (ret < 0)
 		goto out;
@@ -816,10 +816,10 @@ int tmem_flush_page(struct tmem_pool *pool,
 	pampd = tmem_pampd_delete_from_obj(obj, index);
 	if (pampd == NULL)
 		goto out;
-	(*tmem_pamops.free)(pampd, pool, oidp, index, true);
+	(tmem_pamops->free)(pampd, pool, oidp, index, true);
 	if (obj->pampd_count == 0) {
 		tmem_obj_free(obj, hb);
-		(*tmem_hostops.obj_free)(obj, pool);
+		(tmem_hostops->obj_free)(obj, pool);
 	}
 	ret = 0;
 
@@ -844,7 +844,7 @@ int tmem_flush_object(struct tmem_pool *pool, struct tmem_oid *oidp)
 		goto out;
 	tmem_pampd_destroy_all_in_obj(obj, false);
 	tmem_obj_free(obj, hb);
-	(*tmem_hostops.obj_free)(obj, pool);
+	(tmem_hostops->obj_free)(obj, pool);
 	ret = 0;
 
 out:
