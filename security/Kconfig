@@ -343,7 +343,7 @@ config PAX_DLRESOLVE
 
 config PAX_KERNEXEC
 	bool "Enforce non-executable kernel pages"
-	depends on (PPC || X86) && !COMPAT_VDSO && !XEN && (!X86_32 || X86_WP_WORKS_OK)
+	depends on X86 && !COMPAT_VDSO && !XEN && (!X86_32 || X86_WP_WORKS_OK)
 	select PAX_PER_CPU_PGD if X86_64 || (X86_32 && X86_PAE)
 	select PAX_KERNEXEC_PLUGIN if X86_64
 	help
