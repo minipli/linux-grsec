@@ -82,9 +82,11 @@ static inline void sanitize_i387_state(struct task_struct *tsk)
 }
 
 #ifdef CONFIG_X86_64
-static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
+static inline int fxrstor_checking(struct i387_fxsave_struct __user *fx)
 {
 	int err;
+
+	fx = (struct i387_fxsave_struct __user *)____m(fx);
 
 	/* See comment in fxsave() below. */
 #ifdef CONFIG_AS_FXSAVEQ
@@ -114,6 +116,8 @@ static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
 static inline int fxsave_user(struct i387_fxsave_struct __user *fx)
 {
 	int err;
+
+	fx = (struct i387_fxsave_struct __user *)____m(fx);
 
 	/*
 	 * Clear the bytes not touched by the fxsave and reserved
@@ -183,15 +187,15 @@ static inline void fpu_fxsave(struct fpu *fpu)
 #else  /* CONFIG_X86_32 */
 
 /* perform fxrstor iff the processor has extended states, otherwise frstor */
-static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
+static inline int fxrstor_checking(struct i387_fxsave_struct __user *fx)
 {
 	/*
 	 * The "nop" is needed to make the instructions the same
 	 * length.
 	 */
 	alternative_input(
-		"nop ; frstor %1",
-		"fxrstor %1",
+		__copyuser_seg" frstor %1; nop",
+		__copyuser_seg" fxrstor %1",
 		X86_FEATURE_FXSR,
 		"m" (*fx));
 
@@ -250,7 +254,14 @@ static inline int __save_init_fpu(struct task_struct *tsk)
 
 static inline int fpu_fxrstor_checking(struct fpu *fpu)
 {
-	return fxrstor_checking(&fpu->state->fxsave);
+	int ret;
+	mm_segment_t fs;
+
+	fs = get_fs();
+	set_fs(KERNEL_DS);
+	ret = fxrstor_checking(&fpu->state->fxsave);
+	set_fs(fs);
+	return ret;
 }
 
 static inline int fpu_restore_checking(struct fpu *fpu)
@@ -271,7 +282,7 @@ static inline int restore_fpu_checking(struct task_struct *tsk)
 		"emms\n\t"		/* clear stack tags */
 		"fildl %P[addr]",	/* set F?P to defined value */
 		X86_FEATURE_FXSAVE_LEAK,
-		[addr] "m" (tsk->thread.fpu.has_fpu));
+		[addr] "m" (init_tss[smp_processor_id()].x86_tss.sp0));
 
 	return fpu_restore_checking(&tsk->thread.fpu);
 }
