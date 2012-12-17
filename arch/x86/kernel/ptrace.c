@@ -183,14 +183,13 @@ unsigned long kernel_stack_pointer(struct pt_regs *regs)
 {
 	unsigned long context = (unsigned long)regs & ~(THREAD_SIZE - 1);
 	unsigned long sp = (unsigned long)&regs->sp;
-	struct thread_info *tinfo;
 
-	if (context == (sp & ~(THREAD_SIZE - 1)))
+	if (context == ((sp + 8) & ~(THREAD_SIZE - 1)))
 		return sp;
 
-	tinfo = (struct thread_info *)context;
-	if (tinfo->previous_esp)
-		return tinfo->previous_esp;
+	sp = *(unsigned long *)context;
+	if (sp)
+		return sp;
 
 	return (unsigned long)regs;
 }
@@ -855,7 +854,7 @@ long arch_ptrace(struct task_struct *child, long request,
 		 unsigned long addr, unsigned long data)
 {
 	int ret;
-	unsigned long __user *datap = (unsigned long __user *)data;
+	unsigned long __user *datap = (__force unsigned long __user *)data;
 
 	switch (request) {
 	/* read the word at location addr in the USER area. */
@@ -940,14 +939,14 @@ long arch_ptrace(struct task_struct *child, long request,
 		if ((int) addr < 0)
 			return -EIO;
 		ret = do_get_thread_area(child, addr,
-					(struct user_desc __user *)data);
+					(__force struct user_desc __user *) data);
 		break;
 
 	case PTRACE_SET_THREAD_AREA:
 		if ((int) addr < 0)
 			return -EIO;
 		ret = do_set_thread_area(child, addr,
-					(struct user_desc __user *)data, 0);
+					(__force struct user_desc __user *) data, 0);
 		break;
 #endif
 
@@ -1454,7 +1453,7 @@ static void fill_sigtrap_info(struct task_struct *tsk,
 	memset(info, 0, sizeof(*info));
 	info->si_signo = SIGTRAP;
 	info->si_code = si_code;
-	info->si_addr = user_mode_vm(regs) ? (void __user *)regs->ip : NULL;
+	info->si_addr = user_mode(regs) ? (__force void __user *)regs->ip : NULL;
 }
 
 void user_single_step_siginfo(struct task_struct *tsk,
