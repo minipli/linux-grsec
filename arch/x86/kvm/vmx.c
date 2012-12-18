@@ -1332,7 +1332,11 @@ static void reload_tss(void)
 	struct desc_struct *descs;
 
 	descs = (void *)gdt->address;
+
+	pax_open_kernel();
 	descs[GDT_ENTRY_TSS].type = 9; /* available TSS */
+	pax_close_kernel();
+
 	load_TR_desc();
 }
 
@@ -1545,6 +1549,10 @@ static void vmx_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 		 */
 		vmcs_writel(HOST_TR_BASE, kvm_read_tr_base()); /* 22.2.4 */
 		vmcs_writel(HOST_GDTR_BASE, gdt->address);   /* 22.2.4 */
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+		vmcs_writel(HOST_CR3, read_cr3());  /* 22.2.3  FIXME: shadow tables */
+#endif
 
 		rdmsrl(MSR_IA32_SYSENTER_ESP, sysenter_esp);
 		vmcs_writel(HOST_IA32_SYSENTER_ESP, sysenter_esp); /* 22.2.3 */
@@ -2669,8 +2677,11 @@ static __init int hardware_setup(void)
 	if (!cpu_has_vmx_flexpriority())
 		flexpriority_enabled = 0;
 
-	if (!cpu_has_vmx_tpr_shadow())
-		kvm_x86_ops->update_cr8_intercept = NULL;
+	if (!cpu_has_vmx_tpr_shadow()) {
+		pax_open_kernel();
+		*(void **)&kvm_x86_ops->update_cr8_intercept = NULL;
+		pax_close_kernel();
+	}
 
 	if (enable_ept && !cpu_has_vmx_ept_2m_page())
 		kvm_disable_largepages();
@@ -3712,7 +3723,10 @@ static void vmx_set_constant_host_state(void)
 
 	vmcs_writel(HOST_CR0, read_cr0() & ~X86_CR0_TS);  /* 22.2.3 */
 	vmcs_writel(HOST_CR4, read_cr4());  /* 22.2.3, 22.2.5 */
+
+#ifndef CONFIG_PAX_PER_CPU_PGD
 	vmcs_writel(HOST_CR3, read_cr3());  /* 22.2.3  FIXME: shadow tables */
+#endif
 
 	vmcs_write16(HOST_CS_SELECTOR, __KERNEL_CS);  /* 22.2.4 */
 #ifdef CONFIG_X86_64
@@ -3733,7 +3747,7 @@ static void vmx_set_constant_host_state(void)
 	native_store_idt(&dt);
 	vmcs_writel(HOST_IDTR_BASE, dt.address);   /* 22.2.4 */
 
-	vmcs_writel(HOST_RIP, vmx_return); /* 22.2.5 */
+	vmcs_writel(HOST_RIP, ktla_ktva(vmx_return)); /* 22.2.5 */
 
 	rdmsr(MSR_IA32_SYSENTER_CS, low32, high32);
 	vmcs_write32(HOST_IA32_SYSENTER_CS, low32);
@@ -6279,6 +6293,12 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 		"jmp 2f \n\t"
 		"1: " __ex(ASM_VMX_VMRESUME) "\n\t"
 		"2: "
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		"ljmp %[cs],$3f\n\t"
+		"3: "
+#endif
+
 		/* Save guest registers, load host registers, keep flags */
 		"mov %0, %c[wordsize](%%" _ASM_SP ") \n\t"
 		"pop %0 \n\t"
@@ -6331,6 +6351,11 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 #endif
 		[cr2]"i"(offsetof(struct vcpu_vmx, vcpu.arch.cr2)),
 		[wordsize]"i"(sizeof(ulong))
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		,[cs]"i"(__KERNEL_CS)
+#endif
+
 	      : "cc", "memory"
 #ifdef CONFIG_X86_64
 		, "rax", "rbx", "rdi", "rsi"
@@ -6344,7 +6369,7 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	if (debugctlmsr)
 		update_debugctlmsr(debugctlmsr);
 
-#ifndef CONFIG_X86_64
+#ifdef CONFIG_X86_32
 	/*
 	 * The sysexit path does not restore ds/es, so we must set them to
 	 * a reasonable value ourselves.
@@ -6353,8 +6378,18 @@ static void __noclone vmx_vcpu_run(struct kvm_vcpu *vcpu)
 	 * may be executed in interrupt context, which saves and restore segments
 	 * around it, nullifying its effect.
 	 */
-	loadsegment(ds, __USER_DS);
-	loadsegment(es, __USER_DS);
+	loadsegment(ds, __KERNEL_DS);
+	loadsegment(es, __KERNEL_DS);
+	loadsegment(ss, __KERNEL_DS);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	loadsegment(fs, __KERNEL_PERCPU);
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	__set_fs(current_thread_info()->addr_limit);
+#endif
+
 #endif
 
 	vcpu->arch.regs_avail = ~((1 << VCPU_REGS_RIP) | (1 << VCPU_REGS_RSP)

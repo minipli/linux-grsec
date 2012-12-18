@@ -144,7 +144,6 @@ again:
 		*addr = max_addr;
 	}
 
-free_pool:
 	efi_call_phys1(sys_table->boottime->free_pool, map);
 
 fail:
@@ -208,7 +207,6 @@ static efi_status_t low_alloc(unsigned long size, unsigned long align,
 	if (i == map_size / desc_size)
 		status = EFI_NOT_FOUND;
 
-free_pool:
 	efi_call_phys1(sys_table->boottime->free_pool, map);
 fail:
 	return status;

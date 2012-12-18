@@ -195,7 +195,7 @@ static unsigned long align_sigframe(unsigned long sp)
 	 * Align the stack pointer according to the i386 ABI,
 	 * i.e. so that on function entry ((sp + 4) & 15) == 0.
 	 */
-	sp = ((sp + 4) & -16ul) - 4;
+	sp = ((sp - 12) & -16ul) - 4;
 #else /* !CONFIG_X86_32 */
 	sp = round_down(sp, 16) - 8;
 #endif
@@ -303,9 +303,9 @@ __setup_frame(int sig, struct k_sigaction *ka, sigset_t *set,
 	}
 
 	if (current->mm->context.vdso)
-		restorer = VDSO32_SYMBOL(current->mm->context.vdso, sigreturn);
+		restorer = (__force void __user *)VDSO32_SYMBOL(current->mm->context.vdso, sigreturn);
 	else
-		restorer = &frame->retcode;
+		restorer = (void __user *)&frame->retcode;
 	if (ka->sa.sa_flags & SA_RESTORER)
 		restorer = ka->sa.sa_restorer;
 
@@ -319,7 +319,7 @@ __setup_frame(int sig, struct k_sigaction *ka, sigset_t *set,
 	 * reasons and because gdb uses it as a signature to notice
 	 * signal handler stack frames.
 	 */
-	err |= __put_user(*((u64 *)&retcode), (u64 *)frame->retcode);
+	err |= __put_user(*((u64 *)&retcode), (u64 __user *)frame->retcode);
 
 	if (err)
 		return -EFAULT;
@@ -369,7 +369,10 @@ static int __setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 		put_user_ex(current->sas_ss_size, &frame->uc.uc_stack.ss_size);
 
 		/* Set up to return from userspace.  */
-		restorer = VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
+		if (current->mm->context.vdso)
+			restorer = (__force void __user *)VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
+		else
+			restorer = (void __user *)&frame->retcode;
 		if (ka->sa.sa_flags & SA_RESTORER)
 			restorer = ka->sa.sa_restorer;
 		put_user_ex(restorer, &frame->pretcode);
@@ -381,7 +384,7 @@ static int __setup_rt_frame(int sig, struct k_sigaction *ka, siginfo_t *info,
 		 * reasons and because gdb uses it as a signature to notice
 		 * signal handler stack frames.
 		 */
-		put_user_ex(*((u64 *)&rt_retcode), (u64 *)frame->retcode);
+		put_user_ex(*((u64 *)&rt_retcode), (u64 __user *)frame->retcode);
 	} put_user_catch(err);
 	
 	err |= copy_siginfo_to_user(&frame->info, info);

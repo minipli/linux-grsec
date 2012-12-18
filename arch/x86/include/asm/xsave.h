@@ -71,7 +71,9 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 		return -EFAULT;
 
 	__asm__ __volatile__(ASM_STAC "\n"
-			     "1: .byte " REX_PREFIX "0x0f,0xae,0x27\n"
+			     "1:"
+			     __copyuser_seg
+			     ".byte " REX_PREFIX "0x0f,0xae,0x27\n"
 			     "2: " ASM_CLAC "\n"
 			     ".section .fixup,\"ax\"\n"
 			     "3:  movl $-1,%[err]\n"
@@ -87,12 +89,14 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 static inline int xrestore_user(struct xsave_struct __user *buf, u64 mask)
 {
 	int err;
-	struct xsave_struct *xstate = ((__force struct xsave_struct *)buf);
+	struct xsave_struct *xstate = ((__force_kernel struct xsave_struct *)buf);
 	u32 lmask = mask;
 	u32 hmask = mask >> 32;
 
 	__asm__ __volatile__(ASM_STAC "\n"
-			     "1: .byte " REX_PREFIX "0x0f,0xae,0x2f\n"
+			     "1:"
+			     __copyuser_seg
+			     ".byte " REX_PREFIX "0x0f,0xae,0x2f\n"
 			     "2: " ASM_CLAC "\n"
 			     ".section .fixup,\"ax\"\n"
 			     "3:  movl $-1,%[err]\n"
