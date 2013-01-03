@@ -1240,7 +1240,6 @@ static void __init map_lowmem(void)
 			initmap.virtual = (unsigned long)__init_begin;
 			initmap.length = _sdata - __init_begin;
 			initmap.type = MT_MEMORY;
-			printk(KERN_ALERT "PAX: allocating init_begin at %08lx, length %08lx\n", initmap.virtual, initmap.length);
 			create_mapping(&initmap);
 
 			/* when freeing initmem we will make this RX */
@@ -1248,12 +1247,10 @@ static void __init map_lowmem(void)
 			kernel.virtual = (unsigned long)_stext;
 			kernel.length = __init_begin - _stext;
 			kernel.type = MT_MEMORY;
-			printk(KERN_ALERT "PAX: allocating kernel text at %08lx, length %08lx\n", kernel.virtual, kernel.length);
 			create_mapping(&kernel);
 
 			if (map.virtual < (unsigned long)_stext) {
 				map.length = (unsigned long)_stext - map.virtual;
-				printk(KERN_ALERT "PAX: allocating shit before text at %08lx, length %08lx\n", map.virtual, map.length);
 				map.type = MT_MEMORY;
 				create_mapping(&map);
 			}
@@ -1261,7 +1258,6 @@ static void __init map_lowmem(void)
 			map.pfn = __phys_to_pfn(__pa(_sdata));
 			map.virtual = (unsigned long)_sdata;
 			map.length = end - __pa(_sdata);
-			printk(KERN_ALERT "PAX: allocating data at %08lx, length %08lx\n", map.virtual, map.length);
 		}
 
 		map.type = MT_MEMORY_RW;

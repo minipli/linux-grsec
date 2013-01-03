@@ -112,6 +112,25 @@ extern void __list_del_entry(struct list_head *entry);
 extern void list_del(struct list_head *entry);
 #endif
 
+#if defined(CONFIG_PAX_KERNEXEC) && defined(CONFIG_DEBUG_LIST)
+extern void pax_list_add_tail(struct list_head *new, struct list_head *head);
+extern void pax_list_del(struct list_head *entry);
+#else
+static inline void pax_list_add_tail(struct list_head *new, struct list_head *head)
+{
+	pax_open_kernel();
+	list_add_tail(new, head);
+	pax_close_kernel();
+}
+
+static inline void pax_list_del(struct list_head *entry)
+{
+	pax_open_kernel();
+	list_del(entry);
+	pax_close_kernel();
+}
+#endif
+
 /**
  * list_replace - replace old entry by new one
  * @old : the element to be replaced
