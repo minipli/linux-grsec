@@ -789,6 +789,10 @@ static char *initcall_level_names[] __initdata = {
 	"late",
 };
 
+#ifdef CONFIG_PAX_LATENT_ENTROPY
+u64 latent_entropy;
+#endif
+
 static void __init do_initcall_level(int level)
 {
 	extern const struct kernel_param __start___param[], __stop___param[];
@@ -805,7 +809,7 @@ static void __init do_initcall_level(int level)
 		do_one_initcall(*fn);
 
 #ifdef CONFIG_PAX_LATENT_ENTROPY
-		transfer_latent_entropy();
+		add_device_randomness(&latent_entropy, sizeof(latent_entropy));
 #endif
 
 	}
@@ -846,7 +850,7 @@ static void __init do_pre_smp_initcalls(void)
 		do_one_initcall(*fn);
 
 #ifdef CONFIG_PAX_LATENT_ENTROPY
-		transfer_latent_entropy();
+		add_device_randomness(&latent_entropy, sizeof(latent_entropy));
 #endif
 
 	}

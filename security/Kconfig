@@ -345,7 +345,7 @@ config PAX_DLRESOLVE
 
 config PAX_KERNEXEC
 	bool "Enforce non-executable kernel pages"
-	depends on X86 && !COMPAT_VDSO && !XEN && (!X86_32 || X86_WP_WORKS_OK)
+	depends on (X86 || ARM_LPAE) && !COMPAT_VDSO && !XEN && (!X86_32 || X86_WP_WORKS_OK)
 	select PAX_PER_CPU_PGD if X86_64 || (X86_32 && X86_PAE)
 	select PAX_KERNEXEC_PLUGIN if X86_64
 	help
@@ -578,7 +578,7 @@ config PAX_REFCOUNT
 
 config PAX_USERCOPY
 	bool "Harden heap object copies between kernel and userland"
-	depends on ARM || PPC || SPARC || X86
+	depends on ARM || IA64 || PPC || SPARC || X86
 	depends on SLAB || SLUB || SLOB
 	select PAX_USERCOPY_SLABS
 	help
