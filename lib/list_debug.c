@@ -13,6 +13,7 @@
 #include <linux/rculist.h>
 #include <linux/mm.h>
 
+#ifdef CONFIG_DEBUG_LIST
 /*
  * Insert a new entry between two known consecutive entries.
  *
@@ -119,16 +120,19 @@ void __list_add_rcu(struct list_head *new,
 	next->prev = new;
 }
 EXPORT_SYMBOL(__list_add_rcu);
+#endif
 
-#ifdef CONFIG_PAX_KERNEXEC
 void pax_list_add_tail(struct list_head *new, struct list_head *head)
 {
 	struct list_head *prev, *next;
 
 	prev = head->prev;
 	next = head;
+
+#ifdef CONFIG_DEBUG_LIST
 	if (!__list_add_debug(new, prev, next))
 		return;
+#endif
 
 	pax_open_kernel();
 	next->prev = new;
@@ -141,8 +145,10 @@ EXPORT_SYMBOL(pax_list_add_tail);
 
 void pax_list_del(struct list_head *entry)
 {
+#ifdef CONFIG_DEBUG_LIST
 	if (!__list_del_entry_debug(entry))
 		return;
+#endif
 
 	pax_open_kernel();
 	__list_del(entry->prev, entry->next);
@@ -151,4 +157,3 @@ void pax_list_del(struct list_head *entry)
 	pax_close_kernel();
 }
 EXPORT_SYMBOL(pax_list_del);
-#endif
