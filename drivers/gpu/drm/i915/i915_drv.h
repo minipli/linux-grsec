@@ -274,12 +274,12 @@ struct drm_i915_display_funcs {
 	/* render clock increase/decrease */
 	/* display clock increase/decrease */
 	/* pll clock increase/decrease */
-} __no_const;
+};
 
 struct drm_i915_gt_funcs {
 	void (*force_wake_get)(struct drm_i915_private *dev_priv);
 	void (*force_wake_put)(struct drm_i915_private *dev_priv);
-} __no_const;
+};
 
 #define DEV_INFO_FLAGS \
 	DEV_INFO_FLAG(is_mobile) DEV_INFO_SEP \
@@ -500,7 +500,7 @@ typedef struct drm_i915_private {
 	} edp;
 	bool no_aux_handshake;
 
-	notifier_block_no_const lid_notifier;
+	struct notifier_block lid_notifier;
 
 	int crt_ddc_pin;
 	struct drm_i915_fence_reg fence_regs[I915_MAX_NUM_FENCES]; /* assume 965 */

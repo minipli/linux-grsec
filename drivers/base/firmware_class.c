@@ -118,7 +118,7 @@ struct firmware_cache {
 
 	struct delayed_work work;
 
-	notifier_block_no_const pm_notify;
+	struct notifier_block   pm_notify;
 #endif
 };
 
