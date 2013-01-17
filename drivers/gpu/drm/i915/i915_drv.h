@@ -229,7 +229,7 @@ struct drm_i915_display_funcs {
 	/* render clock increase/decrease */
 	/* display clock increase/decrease */
 	/* pll clock increase/decrease */
-} __no_const;
+};
 
 struct intel_device_info {
 	u8 gen;

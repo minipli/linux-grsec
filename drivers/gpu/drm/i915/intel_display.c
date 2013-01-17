@@ -7477,11 +7477,15 @@ static void intel_crtc_init(struct drm_device *dev, int pipe)
 	if (HAS_PCH_SPLIT(dev)) {
 		if (pipe == 2 && IS_IVYBRIDGE(dev))
 			intel_crtc->no_pll = true;
-		intel_helper_funcs.prepare = ironlake_crtc_prepare;
-		intel_helper_funcs.commit = ironlake_crtc_commit;
+		pax_open_kernel();
+		*(void **)&intel_helper_funcs.prepare = ironlake_crtc_prepare;
+		*(void **)&intel_helper_funcs.commit = ironlake_crtc_commit;
+		pax_close_kernel();
 	} else {
-		intel_helper_funcs.prepare = i9xx_crtc_prepare;
-		intel_helper_funcs.commit = i9xx_crtc_commit;
+		pax_open_kernel();
+		*(void **)&intel_helper_funcs.prepare = i9xx_crtc_prepare;
+		*(void **)&intel_helper_funcs.commit = i9xx_crtc_commit;
+		pax_close_kernel();
 	}
 
 	drm_crtc_helper_add(&intel_crtc->base, &intel_helper_funcs);
