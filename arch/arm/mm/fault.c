@@ -25,6 +25,7 @@
 #include <asm/system_misc.h>
 #include <asm/system_info.h>
 #include <asm/tlbflush.h>
+#include <asm/sections.h>
 
 #include "fault.h"
 
@@ -138,6 +139,19 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 	if (fixup_exception(regs))
 		return;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	if (fsr & FSR_WRITE) {
+		if (((unsigned long)_stext <= addr && addr < init_mm.end_code) || (MODULES_VADDR <= addr && addr < MODULES_END)) {
+			if (current->signal->curr_ip)
+				printk(KERN_ERR "PAX: From %pI4: %s:%d, uid/euid: %u/%u, attempted to modify kernel code\n",
+						 &current->signal->curr_ip, current->comm, task_pid_nr(current), current_uid(), current_euid());
+			else
+				printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code\n",
+						 current->comm, task_pid_nr(current), current_uid(), current_euid());
+		}
+	}
+#endif
+
 	/*
 	 * No handler, we'll have to terminate things with extreme prejudice.
 	 */
@@ -171,6 +185,13 @@ __do_user_fault(struct task_struct *tsk, unsigned long addr,
 		       tsk->comm, sig, addr, fsr);
 		show_pte(tsk->mm, addr);
 		show_regs(regs);
+	}
+#endif
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	if (fsr & FSR_LNX_PF) {
+		pax_report_fault(regs, (void *)regs->ARM_pc, (void *)regs->ARM_sp);
+		do_group_exit(SIGKILL);
 	}
 #endif
 
@@ -398,6 +419,33 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 }
 #endif					/* CONFIG_MMU */
 
+#ifdef CONFIG_PAX_PAGEEXEC
+void pax_report_insns(struct pt_regs *regs, void *pc, void *sp)
+{
+	long i;
+
+	printk(KERN_ERR "PAX: bytes at PC: ");
+	for (i = 0; i < 20; i++) {
+		unsigned char c;
+		if (get_user(c, (__force unsigned char __user *)pc+i))
+			printk(KERN_CONT "?? ");
+		else
+			printk(KERN_CONT "%02x ", c);
+	}
+	printk("\n");
+
+	printk(KERN_ERR "PAX: bytes at SP-4: ");
+	for (i = -1; i < 20; i++) {
+		unsigned long c;
+		if (get_user(c, (__force unsigned long __user *)sp+i))
+			printk(KERN_CONT "???????? ");
+		else
+			printk(KERN_CONT "%08lx ", c);
+	}
+	printk("\n");
+}
+#endif
+
 /*
  * First Level Translation Fault Handler
  *
@@ -575,12 +623,41 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 	const struct fsr_info *inf = ifsr_info + fsr_fs(ifsr);
 	struct siginfo info;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	if (!user_mode(regs) && is_xn_fault(ifsr)) {
+		if (current->signal->curr_ip)
+			printk(KERN_ERR "PAX: From %pI4: %s:%d, uid/euid: %u/%u, attempted to execute %s memory at %08lx\n",
+					 &current->signal->curr_ip, current->comm, task_pid_nr(current), current_uid(), current_euid(),
+					 addr >= TASK_SIZE ? "non-executable kernel" : "userland", addr);
+		else
+			printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to execute %s memory at %08lx\n",
+					 current->comm, task_pid_nr(current), current_uid(), current_euid(),
+					 addr >= TASK_SIZE ? "non-executable kernel" : "userland", addr);
+		goto die;
+	}
+#endif
+
+#ifdef CONFIG_PAX_REFCOUNT
+	if (fsr_fs(ifsr) == FAULT_CODE_DEBUG) {
+		unsigned int bkpt;
+
+		if (!probe_kernel_address((unsigned int *)addr, bkpt) && bkpt == 0xe12f1073) {
+			current->thread.error_code = ifsr;
+			current->thread.trap_no = 0;
+			pax_report_refcount_overflow(regs);
+			fixup_exception(regs);
+			return;
+		}
+	}
+#endif
+
 	if (!inf->fn(addr, ifsr | FSR_LNX_PF, regs))
 		return;
 
 	printk(KERN_ALERT "Unhandled prefetch abort: %s (0x%03x) at 0x%08lx\n",
 		inf->name, ifsr, addr);
 
+die:
 	info.si_signo = inf->sig;
 	info.si_errno = 0;
 	info.si_code  = inf->code;

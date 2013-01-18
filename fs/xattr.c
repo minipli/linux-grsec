@@ -319,7 +319,7 @@ EXPORT_SYMBOL_GPL(vfs_removexattr);
  * Extended attribute SET operations
  */
 static long
-setxattr(struct dentry *d, const char __user *name, const void __user *value,
+setxattr(struct path *path, const char __user *name, const void __user *value,
 	 size_t size, int flags)
 {
 	int error;
@@ -355,7 +355,12 @@ setxattr(struct dentry *d, const char __user *name, const void __user *value,
 			posix_acl_fix_xattr_from_user(kvalue, size);
 	}
 
-	error = vfs_setxattr(d, kname, kvalue, size, flags);
+	if (!gr_acl_handle_setxattr(path->dentry, path->mnt)) {
+		error = -EACCES;
+		goto out;
+	}
+
+	error = vfs_setxattr(path->dentry, kname, kvalue, size, flags);
 out:
 	if (vvalue)
 		vfree(vvalue);
@@ -376,7 +381,7 @@ SYSCALL_DEFINE5(setxattr, const char __user *, pathname,
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
-		error = setxattr(path.dentry, name, value, size, flags);
+		error = setxattr(&path, name, value, size, flags);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -395,7 +400,7 @@ SYSCALL_DEFINE5(lsetxattr, const char __user *, pathname,
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
-		error = setxattr(path.dentry, name, value, size, flags);
+		error = setxattr(&path, name, value, size, flags);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -406,16 +411,14 @@ SYSCALL_DEFINE5(fsetxattr, int, fd, const char __user *, name,
 		const void __user *,value, size_t, size, int, flags)
 {
 	struct fd f = fdget(fd);
-	struct dentry *dentry;
 	int error = -EBADF;
 
 	if (!f.file)
 		return error;
-	dentry = f.file->f_path.dentry;
-	audit_inode(NULL, dentry, 0);
+	audit_inode(NULL, f.file->f_path.dentry, 0);
 	error = mnt_want_write_file(f.file);
 	if (!error) {
-		error = setxattr(dentry, name, value, size, flags);
+		error = setxattr(&f.file->f_path, name, value, size, flags);
 		mnt_drop_write_file(f.file);
 	}
 	fdput(f);
