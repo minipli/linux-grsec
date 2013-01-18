@@ -86,8 +86,6 @@ EXPORT_SYMBOL_GPL(xen_start_info);
 
 struct shared_info xen_dummy_shared_info;
 
-void *xen_initial_gdt;
-
 RESERVE_BRK(shared_info_page_brk, PAGE_SIZE);
 __read_mostly int xen_have_vector_callback;
 EXPORT_SYMBOL_GPL(xen_have_vector_callback);
@@ -761,12 +759,12 @@ static u32 xen_safe_apic_wait_icr_idle(void)
 
 static void set_xen_basic_apic_ops(void)
 {
-	apic->read = xen_apic_read;
-	apic->write = xen_apic_write;
-	apic->icr_read = xen_apic_icr_read;
-	apic->icr_write = xen_apic_icr_write;
-	apic->wait_icr_idle = xen_apic_wait_icr_idle;
-	apic->safe_wait_icr_idle = xen_safe_apic_wait_icr_idle;
+	*(void **)&apic->read = xen_apic_read;
+	*(void **)&apic->write = xen_apic_write;
+	*(void **)&apic->icr_read = xen_apic_icr_read;
+	*(void **)&apic->icr_write = xen_apic_icr_write;
+	*(void **)&apic->wait_icr_idle = xen_apic_wait_icr_idle;
+	*(void **)&apic->safe_wait_icr_idle = xen_safe_apic_wait_icr_idle;
 }
 
 #endif
@@ -1057,7 +1055,7 @@ static const struct pv_apic_ops xen_apic_ops __initconst = {
 #endif
 };
 
-static void xen_reboot(int reason)
+static __noreturn void xen_reboot(int reason)
 {
 	struct sched_shutdown r = { .reason = reason };
 
@@ -1065,17 +1063,17 @@ static void xen_reboot(int reason)
 		BUG();
 }
 
-static void xen_restart(char *msg)
+static __noreturn void xen_restart(char *msg)
 {
 	xen_reboot(SHUTDOWN_reboot);
 }
 
-static void xen_emergency_restart(void)
+static __noreturn void xen_emergency_restart(void)
 {
 	xen_reboot(SHUTDOWN_reboot);
 }
 
-static void xen_machine_halt(void)
+static __noreturn void xen_machine_halt(void)
 {
 	xen_reboot(SHUTDOWN_poweroff);
 }
@@ -1125,14 +1123,14 @@ static const struct machine_ops xen_machine_ops __initconst = {
  */
 static void __init xen_setup_stackprotector(void)
 {
-	pv_cpu_ops.write_gdt_entry = xen_write_gdt_entry_boot;
-	pv_cpu_ops.load_gdt = xen_load_gdt_boot;
+	*(void **)&pv_cpu_ops.write_gdt_entry = xen_write_gdt_entry_boot;
+	*(void **)&pv_cpu_ops.load_gdt = xen_load_gdt_boot;
 
 	setup_stack_canary_segment(0);
 	switch_to_new_gdt(0);
 
-	pv_cpu_ops.write_gdt_entry = xen_write_gdt_entry;
-	pv_cpu_ops.load_gdt = xen_load_gdt;
+	*(void **)&pv_cpu_ops.write_gdt_entry = xen_write_gdt_entry;
+	*(void **)&pv_cpu_ops.load_gdt = xen_load_gdt;
 }
 
 /* First C function to be called on Xen boot */
@@ -1151,13 +1149,13 @@ asmlinkage void __init xen_start_kernel(void)
 
 	/* Install Xen paravirt ops */
 	pv_info = xen_info;
-	pv_init_ops = xen_init_ops;
-	pv_cpu_ops = xen_cpu_ops;
-	pv_apic_ops = xen_apic_ops;
+	memcpy((void *)&pv_init_ops, &xen_init_ops, sizeof pv_init_ops);
+	memcpy((void *)&pv_cpu_ops, &xen_cpu_ops, sizeof pv_cpu_ops);
+	memcpy((void *)&pv_apic_ops, &xen_apic_ops, sizeof pv_apic_ops);
 
-	x86_init.resources.memory_setup = xen_memory_setup;
-	x86_init.oem.arch_setup = xen_arch_setup;
-	x86_init.oem.banner = xen_banner;
+	*(void **)&x86_init.resources.memory_setup = xen_memory_setup;
+	*(void **)&x86_init.oem.arch_setup = xen_arch_setup;
+	*(void **)&x86_init.oem.banner = xen_banner;
 
 	xen_init_time_ops();
 
@@ -1181,7 +1179,17 @@ asmlinkage void __init xen_start_kernel(void)
 	__userpte_alloc_gfp &= ~__GFP_HIGHMEM;
 
 	/* Work out if we support NX */
-	x86_configure_nx();
+#if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
+	if ((cpuid_eax(0x80000000) & 0xffff0000) == 0x80000000 &&
+	    (cpuid_edx(0x80000001) & (1U << (X86_FEATURE_NX & 31)))) {
+		unsigned l, h;
+
+		__supported_pte_mask |= _PAGE_NX;
+		rdmsr(MSR_EFER, l, h);
+		l |= EFER_NX;
+		wrmsr(MSR_EFER, l, h);
+	}
+#endif
 
 	xen_setup_features();
 
@@ -1210,14 +1218,7 @@ asmlinkage void __init xen_start_kernel(void)
 		pv_mmu_ops.ptep_modify_prot_commit = xen_ptep_modify_prot_commit;
 	}
 
-	machine_ops = xen_machine_ops;
-
-	/*
-	 * The only reliable way to retain the initial address of the
-	 * percpu gdt_page is to remember it here, so we can go and
-	 * mark it RW later, when the initial percpu area is freed.
-	 */
-	xen_initial_gdt = &per_cpu(gdt_page, 0);
+	memcpy((void *)&machine_ops, &xen_machine_ops, sizeof machine_ops);
 
 	xen_smp_init();
 
@@ -1293,7 +1294,7 @@ asmlinkage void __init xen_start_kernel(void)
 		add_preferred_console("tty", 0, NULL);
 		add_preferred_console("hvc", 0, NULL);
 		if (pci_xen)
-			x86_init.pci.arch_init = pci_xen_init;
+			*(void **)&x86_init.pci.arch_init = pci_xen_init;
 	} else {
 		const struct dom0_vga_console_info *info =
 			(void *)((char *)xen_start_info +
@@ -1307,8 +1308,8 @@ asmlinkage void __init xen_start_kernel(void)
 		pci_request_acs();
 
 		/* Avoid searching for BIOS MP tables */
-		x86_init.mpparse.find_smp_config = x86_init_noop;
-		x86_init.mpparse.get_smp_config = x86_init_uint_noop;
+		*(void **)&x86_init.mpparse.find_smp_config = x86_init_noop;
+		*(void **)&x86_init.mpparse.get_smp_config = x86_init_uint_noop;
 	}
 #ifdef CONFIG_PCI
 	/* PCI BIOS service won't work from a PV guest. */
@@ -1420,7 +1421,7 @@ static void __init xen_hvm_guest_init(void)
 	xen_hvm_smp_init();
 	register_cpu_notifier(&xen_hvm_cpu_notifier);
 	xen_unplug_emulated_devices();
-	x86_init.irqs.intr_init = xen_init_IRQ;
+	*(void **)&x86_init.irqs.intr_init = xen_init_IRQ;
 	xen_hvm_init_time_ops();
 	xen_hvm_init_mmu_ops();
 }

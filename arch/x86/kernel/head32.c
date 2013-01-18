@@ -19,12 +19,13 @@
 #include <asm/io_apic.h>
 #include <asm/bios_ebda.h>
 #include <asm/tlbflush.h>
+#include <asm/boot.h>
 
 static void __init i386_default_early_setup(void)
 {
 	/* Initialize 32bit specific setup functions */
-	x86_init.resources.reserve_resources = i386_reserve_resources;
-	x86_init.mpparse.setup_ioapic_ids = setup_ioapic_ids_from_mpc;
+	*(void **)&x86_init.resources.reserve_resources = i386_reserve_resources;
+	*(void **)&x86_init.mpparse.setup_ioapic_ids = setup_ioapic_ids_from_mpc;
 
 	reserve_ebda_region();
 }
@@ -33,7 +34,7 @@ void __init i386_start_kernel(void)
 {
 	memblock_init();
 
-	memblock_x86_reserve_range(__pa_symbol(&_text), __pa_symbol(&__bss_stop), "TEXT DATA BSS");
+	memblock_x86_reserve_range(LOAD_PHYSICAL_ADDR, __pa_symbol(&__bss_stop), "TEXT DATA BSS");
 
 #ifdef CONFIG_BLK_DEV_INITRD
 	/* Reserve INITRD */
