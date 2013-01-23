@@ -127,7 +127,7 @@ struct kmem_cache *kmem_cache_create(const char *name, size_t size, size_t align
 		err = __kmem_cache_create(s, flags);
 		if (!err) {
 
-			s->refcount = 1;
+			atomic_set(&s->refcount, 1);
 			list_add(&s->list, &slab_caches);
 
 		} else {
@@ -163,8 +163,7 @@ void kmem_cache_destroy(struct kmem_cache *s)
 {
 	get_online_cpus();
 	mutex_lock(&slab_mutex);
-	s->refcount--;
-	if (!s->refcount) {
+	if (atomic_dec_and_test(&s->refcount)) {
 		list_del(&s->list);
 
 		if (!__kmem_cache_shutdown(s)) {
