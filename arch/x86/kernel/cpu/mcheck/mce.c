@@ -45,6 +45,7 @@
 #include <asm/processor.h>
 #include <asm/mce.h>
 #include <asm/msr.h>
+#include <asm/local.h>
 
 #include "mce-internal.h"
 
@@ -254,7 +255,7 @@ static void print_mce(struct mce *m)
 			!(m->mcgstatus & MCG_STATUS_EIPV) ? " !INEXACT!" : "",
 				m->cs, m->ip);
 
-		if (m->cs == __KERNEL_CS)
+		if (m->cs == __KERNEL_CS || m->cs == __KERNEXEC_KERNEL_CS)
 			print_symbol("{%s}", m->ip);
 		pr_cont("\n");
 	}
@@ -287,10 +288,10 @@ static void print_mce(struct mce *m)
 
 #define PANIC_TIMEOUT 5 /* 5 seconds */
 
-static atomic_t mce_paniced;
+static atomic_unchecked_t mce_paniced;
 
 static int fake_panic;
-static atomic_t mce_fake_paniced;
+static atomic_unchecked_t mce_fake_paniced;
 
 /* Panic in progress. Enable interrupts and wait for final IPI */
 static void wait_for_panic(void)
@@ -314,7 +315,7 @@ static void mce_panic(char *msg, struct mce *final, char *exp)
 		/*
 		 * Make sure only one CPU runs in machine check panic
 		 */
-		if (atomic_inc_return(&mce_paniced) > 1)
+		if (atomic_inc_return_unchecked(&mce_paniced) > 1)
 			wait_for_panic();
 		barrier();
 
@@ -322,7 +323,7 @@ static void mce_panic(char *msg, struct mce *final, char *exp)
 		console_verbose();
 	} else {
 		/* Don't log too much for fake panic */
-		if (atomic_inc_return(&mce_fake_paniced) > 1)
+		if (atomic_inc_return_unchecked(&mce_fake_paniced) > 1)
 			return;
 	}
 	/* First print corrected ones that are still unlogged */
@@ -694,7 +695,7 @@ static int mce_timed_out(u64 *t)
 	 * might have been modified by someone else.
 	 */
 	rmb();
-	if (atomic_read(&mce_paniced))
+	if (atomic_read_unchecked(&mce_paniced))
 		wait_for_panic();
 	if (!monarch_timeout)
 		goto out;
@@ -1659,7 +1660,7 @@ static void unexpected_machine_check(struct pt_regs *regs, long error_code)
 }
 
 /* Call the installed machine check handler for this CPU setup. */
-void (*machine_check_vector)(struct pt_regs *, long error_code) =
+void (*machine_check_vector)(struct pt_regs *, long error_code) __read_only =
 						unexpected_machine_check;
 
 /*
@@ -1682,7 +1683,9 @@ void __cpuinit mcheck_cpu_init(struct cpuinfo_x86 *c)
 		return;
 	}
 
+	pax_open_kernel();
 	machine_check_vector = do_machine_check;
+	pax_close_kernel();
 
 	__mcheck_cpu_init_generic();
 	__mcheck_cpu_init_vendor(c);
@@ -1696,7 +1699,7 @@ void __cpuinit mcheck_cpu_init(struct cpuinfo_x86 *c)
  */
 
 static DEFINE_SPINLOCK(mce_chrdev_state_lock);
-static int mce_chrdev_open_count;	/* #times opened */
+static local_t mce_chrdev_open_count;	/* #times opened */
 static int mce_chrdev_open_exclu;	/* already open exclusive? */
 
 static int mce_chrdev_open(struct inode *inode, struct file *file)
@@ -1704,7 +1707,7 @@ static int mce_chrdev_open(struct inode *inode, struct file *file)
 	spin_lock(&mce_chrdev_state_lock);
 
 	if (mce_chrdev_open_exclu ||
-	    (mce_chrdev_open_count && (file->f_flags & O_EXCL))) {
+	    (local_read(&mce_chrdev_open_count) && (file->f_flags & O_EXCL))) {
 		spin_unlock(&mce_chrdev_state_lock);
 
 		return -EBUSY;
@@ -1712,7 +1715,7 @@ static int mce_chrdev_open(struct inode *inode, struct file *file)
 
 	if (file->f_flags & O_EXCL)
 		mce_chrdev_open_exclu = 1;
-	mce_chrdev_open_count++;
+	local_inc(&mce_chrdev_open_count);
 
 	spin_unlock(&mce_chrdev_state_lock);
 
@@ -1723,7 +1726,7 @@ static int mce_chrdev_release(struct inode *inode, struct file *file)
 {
 	spin_lock(&mce_chrdev_state_lock);
 
-	mce_chrdev_open_count--;
+	local_dec(&mce_chrdev_open_count);
 	mce_chrdev_open_exclu = 0;
 
 	spin_unlock(&mce_chrdev_state_lock);
@@ -2367,7 +2370,7 @@ mce_cpu_callback(struct notifier_block *nfb, unsigned long action, void *hcpu)
 	return NOTIFY_OK;
 }
 
-static struct notifier_block mce_cpu_notifier __cpuinitdata = {
+static struct notifier_block mce_cpu_notifier __cpuinitconst = {
 	.notifier_call = mce_cpu_callback,
 };
 
@@ -2445,7 +2448,7 @@ struct dentry *mce_get_debugfs_dir(void)
 static void mce_reset(void)
 {
 	cpu_missing = 0;
-	atomic_set(&mce_fake_paniced, 0);
+	atomic_set_unchecked(&mce_fake_paniced, 0);
 	atomic_set(&mce_executing, 0);
 	atomic_set(&mce_callin, 0);
 	atomic_set(&global_nwo, 0);
