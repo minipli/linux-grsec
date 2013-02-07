@@ -313,6 +313,7 @@ struct pv_mmu_ops {
 	struct paravirt_callee_save make_pud;
 
 	void (*set_pgd)(pgd_t *pudp, pgd_t pgdval);
+	void (*set_pgd_batched)(pgd_t *pudp, pgd_t pgdval);
 #endif	/* PAGETABLE_LEVELS == 4 */
 #endif	/* PAGETABLE_LEVELS >= 3 */
 
@@ -324,6 +325,12 @@ struct pv_mmu_ops {
 	   an mfn.  We can tell which is which from the index. */
 	void (*set_fixmap)(unsigned /* enum fixed_addresses */ idx,
 			   phys_addr_t phys, pgprot_t flags);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long (*pax_open_kernel)(void);
+	unsigned long (*pax_close_kernel)(void);
+#endif
+
 };
 
 struct arch_spinlock;

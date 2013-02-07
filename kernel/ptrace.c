@@ -122,6 +122,40 @@ void __ptrace_unlink(struct task_struct *child)
 	spin_unlock(&child->sighand->siglock);
 }
 
+/* Ensure that nothing can wake it up, even SIGKILL */
+static bool ptrace_freeze_traced(struct task_struct *task)
+{
+	bool ret = false;
+
+	/* Lockless, nobody but us can set this flag */
+	if (task->jobctl & JOBCTL_LISTENING)
+		return ret;
+
+	spin_lock_irq(&task->sighand->siglock);
+	if (task_is_traced(task) && !__fatal_signal_pending(task)) {
+		task->state = __TASK_TRACED;
+		ret = true;
+	}
+	spin_unlock_irq(&task->sighand->siglock);
+
+	return ret;
+}
+
+static void ptrace_unfreeze_traced(struct task_struct *task)
+{
+	if (task->state != __TASK_TRACED)
+		return;
+
+	WARN_ON(!task->ptrace || task->parent != current);
+
+	spin_lock_irq(&task->sighand->siglock);
+	if (__fatal_signal_pending(task))
+		wake_up_state(task, __TASK_TRACED);
+	else
+		task->state = TASK_TRACED;
+	spin_unlock_irq(&task->sighand->siglock);
+}
+
 /**
  * ptrace_check_attach - check whether ptracee is ready for ptrace operation
  * @child: ptracee to check for
@@ -151,28 +185,34 @@ int ptrace_check_attach(struct task_struct *child, bool ignore_state)
 	 * be changed by us so it's not changing right after this.
 	 */
 	read_lock(&tasklist_lock);
-	if ((child->ptrace & PT_PTRACED) && child->parent == current) {
+	if (child->ptrace && child->parent == current) {
+		WARN_ON(child->state == __TASK_TRACED);
 		/*
 		 * child->sighand can't be NULL, release_task()
 		 * does ptrace_unlink() before __exit_signal().
 		 */
-		spin_lock_irq(&child->sighand->siglock);
-		WARN_ON_ONCE(task_is_stopped(child));
-		if (ignore_state || (task_is_traced(child) &&
-				     !(child->jobctl & JOBCTL_LISTENING)))
+		if (ignore_state || ptrace_freeze_traced(child))
 			ret = 0;
-		spin_unlock_irq(&child->sighand->siglock);
 	}
 	read_unlock(&tasklist_lock);
 
-	if (!ret && !ignore_state)
-		ret = wait_task_inactive(child, TASK_TRACED) ? 0 : -ESRCH;
+	if (!ret && !ignore_state) {
+		if (!wait_task_inactive(child, __TASK_TRACED)) {
+			/*
+			 * This can only happen if may_ptrace_stop() fails and
+			 * ptrace_stop() changes ->state back to TASK_RUNNING,
+			 * so we should not worry about leaking __TASK_TRACED.
+			 */
+			WARN_ON(child->state == __TASK_TRACED);
+			ret = -ESRCH;
+		}
+	}
 
-	/* All systems go.. */
 	return ret;
 }
 
-int __ptrace_may_access(struct task_struct *task, unsigned int mode)
+static int __ptrace_may_access(struct task_struct *task, unsigned int mode,
+			       unsigned int log)
 {
 	const struct cred *cred = current_cred(), *tcred;
 
@@ -198,7 +238,8 @@ int __ptrace_may_access(struct task_struct *task, unsigned int mode)
 	     cred->gid == tcred->sgid &&
 	     cred->gid == tcred->gid))
 		goto ok;
-	if (ns_capable(tcred->user->user_ns, CAP_SYS_PTRACE))
+	if ((!log && ns_capable_nolog(tcred->user->user_ns, CAP_SYS_PTRACE)) ||
+	    (log && ns_capable(tcred->user->user_ns, CAP_SYS_PTRACE)))
 		goto ok;
 	rcu_read_unlock();
 	return -EPERM;
@@ -207,7 +248,9 @@ ok:
 	smp_rmb();
 	if (task->mm)
 		dumpable = get_dumpable(task->mm);
-	if (!dumpable && !task_ns_capable(task, CAP_SYS_PTRACE))
+	if (!dumpable &&
+		((!log && !task_ns_capable_nolog(task, CAP_SYS_PTRACE)) ||
+		 (log && !task_ns_capable(task, CAP_SYS_PTRACE))))
 		return -EPERM;
 
 	return security_ptrace_access_check(task, mode);
@@ -217,7 +260,21 @@ bool ptrace_may_access(struct task_struct *task, unsigned int mode)
 {
 	int err;
 	task_lock(task);
-	err = __ptrace_may_access(task, mode);
+	err = __ptrace_may_access(task, mode, 0);
+	task_unlock(task);
+	return !err;
+}
+
+bool ptrace_may_access_nolock(struct task_struct *task, unsigned int mode)
+{
+	return __ptrace_may_access(task, mode, 0);
+}
+
+bool ptrace_may_access_log(struct task_struct *task, unsigned int mode)
+{
+	int err;
+	task_lock(task);
+	err = __ptrace_may_access(task, mode, 1);
 	task_unlock(task);
 	return !err;
 }
@@ -262,7 +319,7 @@ static int ptrace_attach(struct task_struct *task, long request,
 		goto out;
 
 	task_lock(task);
-	retval = __ptrace_may_access(task, PTRACE_MODE_ATTACH);
+	retval = __ptrace_may_access(task, PTRACE_MODE_ATTACH, 1);
 	task_unlock(task);
 	if (retval)
 		goto unlock_creds;
@@ -277,7 +334,7 @@ static int ptrace_attach(struct task_struct *task, long request,
 	task->ptrace = PT_PTRACED;
 	if (seize)
 		task->ptrace |= PT_SEIZED;
-	if (task_ns_capable(task, CAP_SYS_PTRACE))
+	if (task_ns_capable_nolog(task, CAP_SYS_PTRACE))
 		task->ptrace |= PT_PTRACE_CAP;
 
 	__ptrace_link(task, current);
@@ -483,7 +540,7 @@ int ptrace_readdata(struct task_struct *tsk, unsigned long src, char __user *dst
 				break;
 			return -EIO;
 		}
-		if (copy_to_user(dst, buf, retval))
+		if (retval > sizeof(buf) || copy_to_user(dst, buf, retval))
 			return -EFAULT;
 		copied += retval;
 		src += retval;
@@ -680,7 +737,7 @@ int ptrace_request(struct task_struct *child, long request,
 	bool seized = child->ptrace & PT_SEIZED;
 	int ret = -EIO;
 	siginfo_t siginfo, *si;
-	void __user *datavp = (void __user *) data;
+	void __user *datavp = (__force void __user *) data;
 	unsigned long __user *datalp = datavp;
 	unsigned long flags;
 
@@ -882,14 +939,21 @@ SYSCALL_DEFINE4(ptrace, long, request, long, pid, unsigned long, addr,
 		goto out;
 	}
 
+	if (gr_handle_ptrace(child, request)) {
+		ret = -EPERM;
+		goto out_put_task_struct;
+	}
+
 	if (request == PTRACE_ATTACH || request == PTRACE_SEIZE) {
 		ret = ptrace_attach(child, request, data);
 		/*
 		 * Some architectures need to do book-keeping after
 		 * a ptrace attach.
 		 */
-		if (!ret)
+		if (!ret) {
 			arch_ptrace_attach(child);
+			gr_audit_ptrace(child);
+		}
 		goto out_put_task_struct;
 	}
 
@@ -899,6 +963,8 @@ SYSCALL_DEFINE4(ptrace, long, request, long, pid, unsigned long, addr,
 		goto out_put_task_struct;
 
 	ret = arch_ptrace(child, request, addr, data);
+	if (ret || request != PTRACE_DETACH)
+		ptrace_unfreeze_traced(child);
 
  out_put_task_struct:
 	put_task_struct(child);
@@ -915,7 +981,7 @@ int generic_ptrace_peekdata(struct task_struct *tsk, unsigned long addr,
 	copied = access_process_vm(tsk, addr, &tmp, sizeof(tmp), 0);
 	if (copied != sizeof(tmp))
 		return -EIO;
-	return put_user(tmp, (unsigned long __user *)data);
+	return put_user(tmp, (__force unsigned long __user *)data);
 }
 
 int generic_ptrace_pokedata(struct task_struct *tsk, unsigned long addr,
@@ -1025,21 +1091,31 @@ asmlinkage long compat_sys_ptrace(compat_long_t request, compat_long_t pid,
 		goto out;
 	}
 
+	if (gr_handle_ptrace(child, request)) {
+		ret = -EPERM;
+		goto out_put_task_struct;
+	}
+
 	if (request == PTRACE_ATTACH || request == PTRACE_SEIZE) {
 		ret = ptrace_attach(child, request, data);
 		/*
 		 * Some architectures need to do book-keeping after
 		 * a ptrace attach.
 		 */
-		if (!ret)
+		if (!ret) {
 			arch_ptrace_attach(child);
+			gr_audit_ptrace(child);
+		}
 		goto out_put_task_struct;
 	}
 
 	ret = ptrace_check_attach(child, request == PTRACE_KILL ||
 				  request == PTRACE_INTERRUPT);
-	if (!ret)
+	if (!ret) {
 		ret = compat_arch_ptrace(child, request, addr, data);
+		if (ret || request != PTRACE_DETACH)
+			ptrace_unfreeze_traced(child);
+	}
 
  out_put_task_struct:
 	put_task_struct(child);
