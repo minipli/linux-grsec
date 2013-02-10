@@ -175,7 +175,7 @@ config PAX_NOEXEC
 
 config PAX_PAGEEXEC
 	bool "Paging based non-executable pages"
-	depends on !COMPAT_VDSO && PAX_NOEXEC && (!X86_32 || M586 || M586TSC || M586MMX || M686 || MPENTIUMII || MPENTIUMIII || MPENTIUMM || MCORE2 || MPENTIUM4 || MPSC || MATOM || MK7 || MK8 || MWINCHIPC6 || MWINCHIP2 || MWINCHIP3D || MVIAC3_2 || MVIAC7)
+	depends on PAX_NOEXEC && (!X86_32 || M586 || M586TSC || M586MMX || M686 || MPENTIUMII || MPENTIUMIII || MPENTIUMM || MCORE2 || MPENTIUM4 || MPSC || MATOM || MK7 || MK8 || MWINCHIPC6 || MWINCHIP2 || MWINCHIP3D || MVIAC3_2 || MVIAC7)
 	select X86_PAE if X86_32 && !HIGHMEM4G && (MCORE2 || MPSC || MATOM || MK8)
 	select ARCH_TRACK_EXEC_LIMIT if X86_32
 	select S390_SWITCH_AMODE if S390
@@ -198,7 +198,7 @@ config PAX_PAGEEXEC
 
 config PAX_SEGMEXEC
 	bool "Segmentation based non-executable pages"
-	depends on !COMPAT_VDSO && PAX_NOEXEC && X86_32
+	depends on PAX_NOEXEC && X86_32
 	help
 	  This implementation is based on the segmentation feature of the
 	  CPU and has a very small performance impact, however applications
@@ -345,7 +345,7 @@ config PAX_DLRESOLVE
 
 config PAX_KERNEXEC
 	bool "Enforce non-executable kernel pages"
-	depends on X86 && !COMPAT_VDSO && !XEN && (!X86_32 || X86_WP_WORKS_OK)
+	depends on X86 && !XEN && (!X86_32 || X86_WP_WORKS_OK)
 	select PAX_PER_CPU_PGD if X86_64 || (X86_32 && X86_PAE)
 	select PAX_KERNEXEC_PLUGIN if X86_64
 	help
@@ -540,7 +540,7 @@ config PAX_MEMORY_STACKLEAK
 
 config PAX_MEMORY_UDEREF
 	bool "Prevent invalid userland pointer dereference"
-	depends on X86 && !COMPAT_VDSO && !UML_X86 && !XEN
+	depends on X86 && !UML_X86 && !XEN
 	select PAX_PER_CPU_PGD if X86_64
 	help
 	  By saying Y here the kernel will be prevented from dereferencing
