@@ -30,6 +30,9 @@
 #include <asm/pgtable-2level.h>
 #endif
 
+#define ktla_ktva(addr)		(addr)
+#define ktva_ktla(addr)		(addr)
+
 /*
  * Just any arbitrary offset to the start of the vmalloc VM area: the
  * current 8MB value just means that there will be a 8MB "hole" after the
@@ -45,6 +48,9 @@
 #define LIBRARY_TEXT_START	0x0c000000
 
 #ifndef __ASSEMBLY__
+extern pteval_t __supported_pte_mask;
+extern pmdval_t __supported_pmd_mask;
+
 extern void __pte_error(const char *file, int line, pte_t);
 extern void __pmd_error(const char *file, int line, pmd_t);
 extern void __pgd_error(const char *file, int line, pgd_t);
@@ -52,6 +58,17 @@ extern void __pgd_error(const char *file, int line, pgd_t);
 #define pte_ERROR(pte)		__pte_error(__FILE__, __LINE__, pte)
 #define pmd_ERROR(pmd)		__pmd_error(__FILE__, __LINE__, pmd)
 #define pgd_ERROR(pgd)		__pgd_error(__FILE__, __LINE__, pgd)
+
+#define  __HAVE_ARCH_PAX_OPEN_KERNEL
+#define  __HAVE_ARCH_PAX_CLOSE_KERNEL
+
+#ifdef CONFIG_PAX_KERNEXEC
+static inline unsigned long pax_open_kernel(void) { return 0; /* TODO */ }
+static inline unsigned long pax_close_kernel(void) { return 0; /* TODO */ }
+#else
+static inline unsigned long pax_open_kernel(void) { return 0; }
+static inline unsigned long pax_close_kernel(void) { return 0; }
+#endif
 
 /*
  * This is the lowest virtual address we can permit any user space
@@ -63,8 +80,8 @@ extern void __pgd_error(const char *file, int line, pgd_t);
 /*
  * The pgprot_* and protection_map entries will be fixed up in runtime
  * to include the cachable and bufferable bits based on memory policy,
- * as well as any architecture dependent bits like global/ASID and SMP
- * shared mapping bits.
+ * as well as any architecture dependent bits like global/ASID, PXN,
+ * and SMP shared mapping bits.
  */
 #define _L_PTE_DEFAULT	L_PTE_PRESENT | L_PTE_YOUNG
 
@@ -242,7 +259,7 @@ static inline pte_t pte_mkspecial(pte_t pte) { return pte; }
 
 static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
 {
-	const pteval_t mask = L_PTE_XN | L_PTE_RDONLY | L_PTE_USER;
+	const pteval_t mask = L_PTE_XN | L_PTE_RDONLY | L_PTE_USER | __supported_pte_mask;
 	pte_val(pte) = (pte_val(pte) & ~mask) | (pgprot_val(newprot) & mask);
 	return pte;
 }

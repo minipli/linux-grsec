@@ -72,6 +72,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	unsigned long start_addr;
 	int do_align = 0;
 	int aliasing = cache_is_vipt_aliasing();
+	unsigned long offset = gr_rand_threadstack_offset(mm, filp, flags);
 
 	/*
 	 * We only need to do colour alignment if either the I or D
@@ -93,6 +94,10 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	if (len > TASK_SIZE)
 		return -ENOMEM;
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (addr) {
 		if (do_align)
 			addr = COLOUR_ALIGN(addr, pgoff);
@@ -100,15 +105,14 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 			addr = PAGE_ALIGN(addr);
 
 		vma = find_vma(mm, addr);
-		if (TASK_SIZE - len >= addr &&
-		    (!vma || addr + len <= vma->vm_start))
+		if (TASK_SIZE - len >= addr && check_heap_stack_gap(vma, addr, len, offset))
 			return addr;
 	}
 	if (len > mm->cached_hole_size) {
-	        start_addr = addr = mm->free_area_cache;
+		start_addr = addr = mm->free_area_cache;
 	} else {
-	        start_addr = addr = mm->mmap_base;
-	        mm->cached_hole_size = 0;
+		start_addr = addr = mm->mmap_base;
+		mm->cached_hole_size = 0;
 	}
 
 full_search:
@@ -124,14 +128,14 @@ full_search:
 			 * Start a new search - just in case we missed
 			 * some holes.
 			 */
-			if (start_addr != TASK_UNMAPPED_BASE) {
-				start_addr = addr = TASK_UNMAPPED_BASE;
+			if (start_addr != mm->mmap_base) {
+				start_addr = addr = mm->mmap_base;
 				mm->cached_hole_size = 0;
 				goto full_search;
 			}
 			return -ENOMEM;
 		}
-		if (!vma || addr + len <= vma->vm_start) {
+		if (check_heap_stack_gap(vma, addr, len, offset)) {
 			/*
 			 * Remember the place where we stopped the search:
 			 */
@@ -156,6 +160,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	unsigned long addr = addr0;
 	int do_align = 0;
 	int aliasing = cache_is_vipt_aliasing();
+	unsigned long offset = gr_rand_threadstack_offset(mm, filp, flags);
 
 	/*
 	 * We only need to do colour alignment if either the I or D
@@ -175,6 +180,10 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 		return addr;
 	}
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	/* requesting a specific address */
 	if (addr) {
 		if (do_align)
@@ -182,8 +191,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 		else
 			addr = PAGE_ALIGN(addr);
 		vma = find_vma(mm, addr);
-		if (TASK_SIZE - len >= addr &&
-				(!vma || addr + len <= vma->vm_start))
+		if (TASK_SIZE - len >= addr && check_heap_stack_gap(vma, addr, len, offset))
 			return addr;
 	}
 
@@ -203,7 +211,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	/* make sure it can fit in the remaining address space */
 	if (addr > len) {
 		vma = find_vma(mm, addr-len);
-		if (!vma || addr <= vma->vm_start)
+		if (check_heap_stack_gap(vma, addr - len, len, offset))
 			/* remember the address as a hint for next time */
 			return (mm->free_area_cache = addr-len);
 	}
@@ -212,17 +220,17 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 		goto bottomup;
 
 	addr = mm->mmap_base - len;
-	if (do_align)
-		addr = COLOUR_ALIGN_DOWN(addr, pgoff);
 
 	do {
+		if (do_align)
+			addr = COLOUR_ALIGN_DOWN(addr, pgoff);
 		/*
 		 * Lookup failure means no vma is above this address,
 		 * else if new region fits below vma->vm_start,
 		 * return with success:
 		 */
 		vma = find_vma(mm, addr);
-		if (!vma || addr+len <= vma->vm_start)
+		if (check_heap_stack_gap(vma, addr, len, offset))
 			/* remember the address as a hint for next time */
 			return (mm->free_area_cache = addr);
 
@@ -231,10 +239,8 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 			mm->cached_hole_size = vma->vm_start - addr;
 
 		/* try just below the current vma->vm_start */
-		addr = vma->vm_start - len;
-		if (do_align)
-			addr = COLOUR_ALIGN_DOWN(addr, pgoff);
-	} while (len < vma->vm_start);
+		addr = skip_heap_stack_gap(vma, len, offset);
+	} while (!IS_ERR_VALUE(addr));
 
 bottomup:
 	/*
@@ -259,6 +265,10 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 {
 	unsigned long random_factor = 0UL;
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(current->mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	/* 8 bits of randomness in 20 address space bits */
 	if ((current->flags & PF_RANDOMIZE) &&
 	    !(current->personality & ADDR_NO_RANDOMIZE))
@@ -266,10 +276,22 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 
 	if (mmap_is_legacy()) {
 		mm->mmap_base = TASK_UNMAPPED_BASE + random_factor;
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (mm->pax_flags & MF_PAX_RANDMMAP)
+			mm->mmap_base += mm->delta_mmap;
+#endif
+
 		mm->get_unmapped_area = arch_get_unmapped_area;
 		mm->unmap_area = arch_unmap_area;
 	} else {
 		mm->mmap_base = mmap_base(random_factor);
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (mm->pax_flags & MF_PAX_RANDMMAP)
+			mm->mmap_base -= mm->delta_mmap + mm->delta_stack;
+#endif
+
 		mm->get_unmapped_area = arch_get_unmapped_area_topdown;
 		mm->unmap_area = arch_unmap_area_topdown;
 	}

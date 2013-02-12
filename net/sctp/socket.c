@@ -3388,7 +3388,7 @@ static int sctp_setsockopt_auth_key(struct sock *sk,
 
 	ret = sctp_auth_set_key(sctp_sk(sk)->ep, asoc, authkey);
 out:
-	kfree(authkey);
+	kzfree(authkey);
 	return ret;
 }
 
@@ -4661,6 +4661,8 @@ static int sctp_getsockopt_peer_addrs(struct sock *sk, int len,
 		addrlen = sctp_get_af_specific(temp.sa.sa_family)->sockaddr_len;
 		if (space_left < addrlen)
 			return -ENOMEM;
+		if (addrlen > sizeof(temp) || addrlen < 0)
+			return -EFAULT;
 		if (copy_to_user(to, &temp, addrlen))
 			return -EFAULT;
 		to += addrlen;
