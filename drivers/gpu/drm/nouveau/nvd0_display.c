@@ -1389,7 +1389,7 @@ nvd0_sor_dpms(struct drm_encoder *encoder, int mode)
 	nv_wait(device, 0x61c030 + (or * 0x0800), 0x10000000, 0x00000000);
 
 	if (nv_encoder->dcb->type == DCB_OUTPUT_DP) {
-		struct dp_train_func func = {
+		static struct dp_train_func func = {
 			.link_set = nvd0_sor_dp_link_set,
 			.train_set = nvd0_sor_dp_train_set,
 			.train_adj = nvd0_sor_dp_train_adj
