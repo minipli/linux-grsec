@@ -23,6 +23,8 @@
  *
  */
 
+#include <asm/alternative-asm.h>
+
 .file "cast5-avx-x86_64-asm_64.S"
 
 .extern cast5_s1
@@ -293,6 +295,7 @@ __skip_enc:
 	leaq 3*(2*4*4)(%r11), %rax;
 	outunpack_blocks(%rax, RR4, RL4, RTMP, RX, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 
 __enc_xor16:
@@ -303,6 +306,7 @@ __enc_xor16:
 	leaq 3*(2*4*4)(%r11), %rax;
 	outunpack_xor_blocks(%rax, RR4, RL4, RTMP, RX, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 
 .align 16
@@ -369,6 +373,7 @@ __dec_tail:
 	leaq 3*(2*4*4)(%r11), %rax;
 	outunpack_blocks(%rax, RR4, RL4, RTMP, RX, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 
 __skip_dec:
