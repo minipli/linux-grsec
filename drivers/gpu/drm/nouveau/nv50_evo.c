@@ -152,9 +152,9 @@ nv50_evo_channel_new(struct drm_device *dev, int chid,
 		kzalloc(sizeof(*evo->object->oclass), GFP_KERNEL);
 	evo->object->oclass->ofuncs =
 		kzalloc(sizeof(*evo->object->oclass->ofuncs), GFP_KERNEL);
-	evo->object->oclass->ofuncs->rd32 = nv50_evo_rd32;
-	evo->object->oclass->ofuncs->wr32 = nv50_evo_wr32;
-	evo->object->oclass->ofuncs->rd08 =
+	*(void**)&evo->object->oclass->ofuncs->rd32 = nv50_evo_rd32;
+	*(void**)&evo->object->oclass->ofuncs->wr32 = nv50_evo_wr32;
+	*(void**)&evo->object->oclass->ofuncs->rd08 =
 		ioremap(pci_resource_start(dev->pdev, 0) +
 			NV50_PDISPLAY_USER(evo->handle), PAGE_SIZE);
 	return 0;
