@@ -1206,7 +1206,7 @@ out:
 EXPORT_SYMBOL_GPL(register_efivars);
 
 static struct efivars __efivars;
-static struct efivar_operations ops;
+static efivar_operations_no_const ops __read_only;
 
 /*
  * For now we register the efi subsystem with the firmware subsystem
