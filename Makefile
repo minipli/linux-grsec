@@ -576,7 +576,11 @@ else
 KBUILD_CFLAGS	+= -O2
 endif
 
+ifeq ($(call cc-ifversion, -ge, 0408, y), y)
+PLUGINCC := $(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-plugin.sh "$(HOSTCXX)" "$(HOSTCXX)" "$(CC)")
+else
 PLUGINCC := $(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-plugin.sh "$(HOSTCC)" "$(HOSTCXX)" "$(CC)")
+endif
 ifneq ($(PLUGINCC),)
 ifdef CONFIG_PAX_CONSTIFY_PLUGIN
 CONSTIFY_PLUGIN_CFLAGS := -fplugin=$(objtree)/tools/gcc/constify_plugin.so -DCONSTIFY_PLUGIN
