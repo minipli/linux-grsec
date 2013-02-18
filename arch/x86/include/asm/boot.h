@@ -11,9 +11,14 @@
 #include <asm/pgtable_types.h>
 
 /* Physical address where kernel should be loaded. */
-#define LOAD_PHYSICAL_ADDR ((CONFIG_PHYSICAL_START \
+#define ____LOAD_PHYSICAL_ADDR ((CONFIG_PHYSICAL_START \
 				+ (CONFIG_PHYSICAL_ALIGN - 1)) \
 				& ~(CONFIG_PHYSICAL_ALIGN - 1))
+
+#ifndef __ASSEMBLY__
+extern unsigned char __LOAD_PHYSICAL_ADDR[];
+#define LOAD_PHYSICAL_ADDR ((unsigned long)__LOAD_PHYSICAL_ADDR)
+#endif
 
 /* Minimum kernel alignment, as a power of two */
 #ifdef CONFIG_X86_64

@@ -23,6 +23,8 @@
  *
  */
 
+#include <asm/alternative-asm.h>
+
 .file "cast6-avx-x86_64-asm_64.S"
 
 .extern cast6_s1
@@ -324,12 +326,14 @@ __cast6_enc_blk_8way:
 	outunpack_blocks(%r11, RA1, RB1, RC1, RD1, RTMP, RX, RKRF, RKM);
 	outunpack_blocks(%rax, RA2, RB2, RC2, RD2, RTMP, RX, RKRF, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 
 __enc_xor8:
 	outunpack_xor_blocks(%r11, RA1, RB1, RC1, RD1, RTMP, RX, RKRF, RKM);
 	outunpack_xor_blocks(%rax, RA2, RB2, RC2, RD2, RTMP, RX, RKRF, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 
 .align 16
@@ -380,4 +384,5 @@ cast6_dec_blk_8way:
 	outunpack_blocks(%r11, RA1, RB1, RC1, RD1, RTMP, RX, RKRF, RKM);
 	outunpack_blocks(%rax, RA2, RB2, RC2, RD2, RTMP, RX, RKRF, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
