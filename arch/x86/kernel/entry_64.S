@@ -1154,6 +1154,7 @@ ENTRY(stub_\func)
 	DEFAULT_FRAME 0 8		/* offset 8: return address */
 	call sys_\func
 	RESTORE_TOP_OF_STACK %r11, 8
+	pax_force_retaddr
 	ret $REST_SKIP		/* pop extended registers */
 	CFI_ENDPROC
 ENDPROC(stub_\func)
