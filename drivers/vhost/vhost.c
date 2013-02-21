@@ -631,7 +631,7 @@ static long vhost_set_memory(struct vhost_dev *d, struct vhost_memory __user *m)
 	return 0;
 }
 
-static long vhost_set_vring(struct vhost_dev *d, int ioctl, void __user *argp)
+static long vhost_set_vring(struct vhost_dev *d, unsigned int ioctl, void __user *argp)
 {
 	struct file *eventfp, *filep = NULL,
 		    *pollstart = NULL, *pollstop = NULL;
@@ -1073,7 +1073,7 @@ static int translate_desc(struct vhost_dev *dev, u64 addr, u32 len,
 		}
 		_iov = iov + ret;
 		size = reg->memory_size - addr + reg->guest_phys_addr;
-		_iov->iov_len = min((u64)len, size);
+		_iov->iov_len = min((u64)len - s, size);
 		_iov->iov_base = (void __user *)(unsigned long)
 			(reg->userspace_addr + addr - reg->guest_phys_addr);
 		s += size;

@@ -341,7 +341,7 @@ out:
  * This usage means that zero-order pages may not be compound.
  */
 
-static void free_compound_page(struct page *page)
+void free_compound_page(struct page *page)
 {
 	__free_pages_ok(page, compound_order(page));
 }
@@ -654,6 +654,10 @@ static bool free_pages_prepare(struct page *page, unsigned int order)
 	int i;
 	int bad = 0;
 
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	unsigned long index = 1UL << order;
+#endif
+
 	trace_mm_page_free_direct(page, order);
 	kmemcheck_free_shadow(page, order);
 
@@ -669,6 +673,12 @@ static bool free_pages_prepare(struct page *page, unsigned int order)
 		debug_check_no_obj_freed(page_address(page),
 					   PAGE_SIZE << order);
 	}
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	for (; index; --index)
+		sanitize_highpage(page + index - 1);
+#endif
+
 	arch_free_page(page, order);
 	kernel_map_pages(page, 1 << order, 0);
 
@@ -784,8 +794,10 @@ static int prep_new_page(struct page *page, int order, gfp_t gfp_flags)
 	arch_alloc_page(page, order);
 	kernel_map_pages(page, 1 << order, 1);
 
+#ifndef CONFIG_PAX_MEMORY_SANITIZE
 	if (gfp_flags & __GFP_ZERO)
 		prep_zero_page(page, order, gfp_flags);
+#endif
 
 	if (order && (gfp_flags & __GFP_COMP))
 		prep_compound_page(page, order);
@@ -3395,7 +3407,13 @@ static int pageblock_is_reserved(unsigned long start_pfn, unsigned long end_pfn)
 	unsigned long pfn;
 
 	for (pfn = start_pfn; pfn < end_pfn; pfn++) {
+#ifdef CONFIG_X86_32
+		/* boot failures in VMware 8 on 32bit vanilla since
+		   this change */
+		if (!pfn_valid(pfn) || PageReserved(pfn_to_page(pfn)))
+#else
 		if (!pfn_valid_within(pfn) || PageReserved(pfn_to_page(pfn)))
+#endif
 			return 1;
 	}
 	return 0;
@@ -4253,10 +4271,11 @@ static void __meminit calculate_node_totalpages(struct pglist_data *pgdat,
  * round what is now in bits to nearest long in bits, then return it in
  * bytes.
  */
-static unsigned long __init usemap_size(unsigned long zonesize)
+static unsigned long __init usemap_size(unsigned long zone_start_pfn, unsigned long zonesize)
 {
 	unsigned long usemapsize;
 
+	zonesize += zone_start_pfn & (pageblock_nr_pages-1);
 	usemapsize = roundup(zonesize, pageblock_nr_pages);
 	usemapsize = usemapsize >> pageblock_order;
 	usemapsize *= NR_PAGEBLOCK_BITS;
@@ -4266,17 +4285,19 @@ static unsigned long __init usemap_size(unsigned long zonesize)
 }
 
 static void __init setup_usemap(struct pglist_data *pgdat,
-				struct zone *zone, unsigned long zonesize)
+				struct zone *zone,
+				unsigned long zone_start_pfn,
+				unsigned long zonesize)
 {
-	unsigned long usemapsize = usemap_size(zonesize);
+	unsigned long usemapsize = usemap_size(zone_start_pfn, zonesize);
 	zone->pageblock_flags = NULL;
 	if (usemapsize)
 		zone->pageblock_flags = alloc_bootmem_node_nopanic(pgdat,
 								   usemapsize);
 }
 #else
-static inline void setup_usemap(struct pglist_data *pgdat,
-				struct zone *zone, unsigned long zonesize) {}
+static inline void setup_usemap(struct pglist_data *pgdat, struct zone *zone,
+				unsigned long zone_start_pfn, unsigned long zonesize) {}
 #endif /* CONFIG_SPARSEMEM */
 
 #ifdef CONFIG_HUGETLB_PAGE_SIZE_VARIABLE
@@ -4401,7 +4422,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 			continue;
 
 		set_pageblock_order();
-		setup_usemap(pgdat, zone, size);
+		setup_usemap(pgdat, zone, zone_start_pfn, size);
 		ret = init_currently_empty_zone(zone, zone_start_pfn,
 						size, MEMMAP_EARLY);
 		BUG_ON(ret);
