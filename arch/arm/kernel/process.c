@@ -28,7 +28,6 @@
 #include <linux/tick.h>
 #include <linux/utsname.h>
 #include <linux/uaccess.h>
-#include <linux/random.h>
 #include <linux/hw_breakpoint.h>
 #include <linux/cpuidle.h>
 #include <linux/leds.h>
@@ -256,9 +255,10 @@ void machine_power_off(void)
 	machine_shutdown();
 	if (pm_power_off)
 		pm_power_off();
+	BUG();
 }
 
-void machine_restart(char *cmd)
+__noreturn void machine_restart(char *cmd)
 {
 	machine_shutdown();
 
@@ -283,8 +283,8 @@ void __show_regs(struct pt_regs *regs)
 		init_utsname()->release,
 		(int)strcspn(init_utsname()->version, " "),
 		init_utsname()->version);
-	print_symbol("PC is at %s\n", instruction_pointer(regs));
-	print_symbol("LR is at %s\n", regs->ARM_lr);
+	printk("PC is at %pA\n", instruction_pointer(regs));
+	printk("LR is at %pA\n", regs->ARM_lr);
 	printk("pc : [<%08lx>]    lr : [<%08lx>]    psr: %08lx\n"
 	       "sp : %08lx  ip : %08lx  fp : %08lx\n",
 		regs->ARM_pc, regs->ARM_lr, regs->ARM_cpsr,
@@ -450,12 +450,6 @@ unsigned long get_wchan(struct task_struct *p)
 			return frame.pc;
 	} while (count ++ < 16);
 	return 0;
-}
-
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long range_end = mm->brk + 0x02000000;
-	return randomize_range(mm->brk, range_end, 0) ? : mm->brk;
 }
 
 #ifdef CONFIG_MMU

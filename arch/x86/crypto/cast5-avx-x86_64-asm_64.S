@@ -23,6 +23,8 @@
  *
  */
 
+#include <asm/alternative-asm.h>
+
 .file "cast5-avx-x86_64-asm_64.S"
 
 .extern cast_s1
@@ -281,6 +283,7 @@ __skip_enc:
 	outunpack_blocks(RR3, RL3, RTMP, RX, RKM);
 	outunpack_blocks(RR4, RL4, RTMP, RX, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 
 .align 16
@@ -353,6 +356,7 @@ __dec_tail:
 	outunpack_blocks(RR3, RL3, RTMP, RX, RKM);
 	outunpack_blocks(RR4, RL4, RTMP, RX, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 
 __skip_dec:
@@ -392,6 +396,7 @@ cast5_ecb_enc_16way:
 	vmovdqu RR4, (6*4*4)(%r11);
 	vmovdqu RL4, (7*4*4)(%r11);
 
+	pax_force_retaddr
 	ret;
 
 .align 16
@@ -427,6 +432,7 @@ cast5_ecb_dec_16way:
 	vmovdqu RR4, (6*4*4)(%r11);
 	vmovdqu RL4, (7*4*4)(%r11);
 
+	pax_force_retaddr
 	ret;
 
 .align 16
@@ -479,6 +485,7 @@ cast5_cbc_dec_16way:
 
 	popq %r12;
 
+	pax_force_retaddr
 	ret;
 
 .align 16
@@ -555,4 +562,5 @@ cast5_ctr_16way:
 
 	popq %r12;
 
+	pax_force_retaddr
 	ret;

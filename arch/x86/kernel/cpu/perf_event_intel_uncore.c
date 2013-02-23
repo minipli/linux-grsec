@@ -2826,7 +2826,7 @@ static int
 	return NOTIFY_OK;
 }
 
-static struct notifier_block uncore_cpu_nb __cpuinitdata = {
+static struct notifier_block uncore_cpu_nb = {
 	.notifier_call	= uncore_cpu_notifier,
 	/*
 	 * to migrate uncore events, our notifier should be executed
