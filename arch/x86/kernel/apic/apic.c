@@ -131,7 +131,7 @@ static int __init parse_lapic(char *arg)
 {
 	if (config_enabled(CONFIG_X86_32) && !arg)
 		force_enable_local_apic = 1;
-	else if (!strncmp(arg, "notscdeadline", 13))
+	else if (arg && !strncmp(arg, "notscdeadline", 13))
 		setup_clear_cpu_cap(X86_FEATURE_TSC_DEADLINE_TIMER);
 	return 0;
 }
@@ -189,7 +189,7 @@ int first_system_vector = 0xfe;
 /*
  * Debug level, exported for io_apic.c
  */
-unsigned int apic_verbosity;
+int apic_verbosity;
 
 int pic_mode;
 
@@ -1956,7 +1956,7 @@ void smp_error_interrupt(struct pt_regs *regs)
 	apic_write(APIC_ESR, 0);
 	v1 = apic_read(APIC_ESR);
 	ack_APIC_irq();
-	atomic_inc(&irq_err_count);
+	atomic_inc_unchecked(&irq_err_count);
 
 	apic_printk(APIC_DEBUG, KERN_DEBUG "APIC error on CPU%d: %02x(%02x)",
 		    smp_processor_id(), v0 , v1);

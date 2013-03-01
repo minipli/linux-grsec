@@ -733,6 +733,7 @@ struct efivar_operations {
 	efi_set_variable_t *set_variable;
 	efi_query_variable_info_t *query_variable_info;
 };
+typedef struct efivar_operations __no_const efivar_operations_no_const;
 
 struct efivars {
 	/*

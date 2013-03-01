@@ -132,7 +132,7 @@ struct efivar_attribute {
 };
 
 static struct efivars __efivars;
-static struct efivar_operations ops;
+static efivar_operations_no_const ops __read_only;
 
 #define PSTORE_EFI_ATTRIBUTES \
 	(EFI_VARIABLE_NON_VOLATILE | \

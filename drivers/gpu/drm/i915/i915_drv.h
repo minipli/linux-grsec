@@ -656,7 +656,7 @@ typedef struct drm_i915_private {
 	drm_dma_handle_t *status_page_dmah;
 	struct resource mch_res;
 
-	atomic_t irq_received;
+	atomic_unchecked_t irq_received;
 
 	/* protects the irq masks */
 	spinlock_t irq_lock;
@@ -1102,7 +1102,7 @@ struct drm_i915_gem_object {
 	 * will be page flipped away on the next vblank.  When it
 	 * reaches 0, dev_priv->pending_flip_queue will be woken up.
 	 */
-	atomic_t pending_flip;
+	atomic_unchecked_t pending_flip;
 };
 #define to_gem_object(obj) (&((struct drm_i915_gem_object *)(obj))->base)
 
@@ -1633,7 +1633,7 @@ extern struct i2c_adapter *intel_gmbus_get_adapter(
 		struct drm_i915_private *dev_priv, unsigned port);
 extern void intel_gmbus_set_speed(struct i2c_adapter *adapter, int speed);
 extern void intel_gmbus_force_bit(struct i2c_adapter *adapter, bool force_bit);
-extern inline bool intel_gmbus_is_forced_bit(struct i2c_adapter *adapter)
+static inline bool intel_gmbus_is_forced_bit(struct i2c_adapter *adapter)
 {
 	return container_of(adapter, struct intel_gmbus, adapter)->force_bit;
 }
