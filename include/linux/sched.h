@@ -1120,7 +1120,7 @@ struct sched_class {
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	void (*task_move_group) (struct task_struct *p, int on_rq);
 #endif
-};
+} __do_const;
 
 struct load_weight {
 	unsigned long weight, inv_weight;
