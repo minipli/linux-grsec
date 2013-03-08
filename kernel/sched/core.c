@@ -4939,7 +4939,9 @@ static void sd_free_ctl_entry(ctl_table_no_const *tablep)
 	for (entry = tablep; entry->mode; entry++) {
 		if (entry->child) {
 			sd_free_ctl_entry(entry->child);
+			pax_open_kernel();
 			entry->child = NULL;
+			pax_close_kernel();
 		}
 		if (entry->proc_handler == NULL)
 			kfree(entry->procname);
@@ -5067,7 +5069,9 @@ static void unregister_sched_domain_sysctl(void)
 	sd_sysctl_header = NULL;
 	if (sd_ctl_dir[0].child) {
 		sd_free_ctl_entry(sd_ctl_dir[0].child);
+		pax_open_kernel();
 		sd_ctl_dir[0].child = NULL;
+		pax_close_kernel();
 	}
 }
 #else
