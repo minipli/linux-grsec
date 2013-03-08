@@ -75,7 +75,7 @@ hotplug_cfd(struct notifier_block *nfb, unsigned long action, void *hcpu)
 	return NOTIFY_OK;
 }
 
-static struct notifier_block __cpuinitdata hotplug_cfd_notifier = {
+static struct notifier_block hotplug_cfd_notifier = {
 	.notifier_call		= hotplug_cfd,
 };
 
@@ -591,22 +591,22 @@ int smp_call_function(smp_call_func_t func, void *info, int wait)
 }
 EXPORT_SYMBOL(smp_call_function);
 
-void ipi_call_lock(void)
+void ipi_call_lock(void) __acquires(call_function.lock)
 {
 	raw_spin_lock(&call_function.lock);
 }
 
-void ipi_call_unlock(void)
+void ipi_call_unlock(void) __releases(call_function.lock)
 {
 	raw_spin_unlock(&call_function.lock);
 }
 
-void ipi_call_lock_irq(void)
+void ipi_call_lock_irq(void) __acquires(call_function.lock)
 {
 	raw_spin_lock_irq(&call_function.lock);
 }
 
-void ipi_call_unlock_irq(void)
+void ipi_call_unlock_irq(void) __releases(call_function.lock)
 {
 	raw_spin_unlock_irq(&call_function.lock);
 }
