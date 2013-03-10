@@ -38,6 +38,7 @@
 #include "rtl.h"
 #include "emit-rtl.h"
 #include "tree-flow.h"
+#include "langhooks.h"
 
 #if BUILDING_GCC_VERSION >= 4008
 #define TODO_dump_func 0
@@ -48,7 +49,7 @@ int plugin_is_GPL_compatible;
 static tree latent_entropy_decl;
 
 static struct plugin_info latent_entropy_plugin_info = {
-	.version	= "201302112000",
+	.version	= "201303092140",
 	.help		= NULL
 };
 
@@ -292,6 +293,7 @@ static void start_unit_callback(void *gcc_data, void *user_data)
 	DECL_EXTERNAL(latent_entropy_decl) = 1;
 	DECL_ARTIFICIAL(latent_entropy_decl) = 0;
 	DECL_INITIAL(latent_entropy_decl) = NULL;
+	lang_hooks.decls.pushdecl(latent_entropy_decl);
 //	DECL_ASSEMBLER_NAME(latent_entropy_decl);
 //	varpool_finalize_decl(latent_entropy_decl);
 //	varpool_mark_needed_node(latent_entropy_decl);

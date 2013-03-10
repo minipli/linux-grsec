@@ -33,7 +33,7 @@ int i386_mmap_check(unsigned long addr, unsigned long len, unsigned long flags)
 		pax_task_size = SEGMEXEC_TASK_SIZE;
 #endif
 
-	if (len > pax_task_size || addr > pax_task_size - len)
+	if ((flags & MAP_FIXED) && len > pax_task_size || addr > pax_task_size - len)
 		return -EINVAL;
 
 	return 0;
