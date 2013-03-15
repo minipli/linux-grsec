@@ -2019,7 +2019,7 @@ static void devm_input_device_unregister(struct device *dev, void *res)
  */
 int input_register_device(struct input_dev *dev)
 {
-	static atomic_t input_no = ATOMIC_INIT(0);
+	static atomic_unchecked_t input_no = ATOMIC_INIT(0);
 	struct input_devres *devres = NULL;
 	struct input_handler *handler;
 	unsigned int packet_size;
@@ -2074,7 +2074,7 @@ int input_register_device(struct input_dev *dev)
 		dev->setkeycode = input_default_setkeycode;
 
 	dev_set_name(&dev->dev, "input%ld",
-		     (unsigned long) atomic_inc_return(&input_no) - 1);
+		     (unsigned long) atomic_inc_return_unchecked(&input_no) - 1);
 
 	error = device_add(&dev->dev);
 	if (error)

@@ -46,11 +46,11 @@ dump_user_backtrace_32(struct stack_frame_ia32 *head)
 	struct stack_frame_ia32 *fp;
 	unsigned long bytes;
 
-	bytes = copy_from_user_nmi(bufhead, head, sizeof(bufhead));
+	bytes = copy_from_user_nmi(bufhead, (const char __force_user *)head, sizeof(bufhead));
 	if (bytes != sizeof(bufhead))
 		return NULL;
 
-	fp = (struct stack_frame_ia32 *) compat_ptr(bufhead[0].next_frame);
+	fp = (struct stack_frame_ia32 __force_kernel *) compat_ptr(bufhead[0].next_frame);
 
 	oprofile_add_trace(bufhead[0].return_address);
 
@@ -92,7 +92,7 @@ static struct stack_frame *dump_user_backtrace(struct stack_frame *head)
 	struct stack_frame bufhead[2];
 	unsigned long bytes;
 
-	bytes = copy_from_user_nmi(bufhead, head, sizeof(bufhead));
+	bytes = copy_from_user_nmi(bufhead, (const char __force_user *)head, sizeof(bufhead));
 	if (bytes != sizeof(bufhead))
 		return NULL;
 
@@ -111,7 +111,7 @@ x86_backtrace(struct pt_regs * const regs, unsigned int depth)
 {
 	struct stack_frame *head = (struct stack_frame *)frame_pointer(regs);
 
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		unsigned long stack = kernel_stack_pointer(regs);
 		if (depth)
 			dump_trace(NULL, regs, (unsigned long *)stack, 0,

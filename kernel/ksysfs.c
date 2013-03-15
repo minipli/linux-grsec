@@ -46,6 +46,8 @@ static ssize_t uevent_helper_store(struct kobject *kobj,
 {
 	if (count+1 > UEVENT_HELPER_PATH_LEN)
 		return -ENOENT;
+	if (!capable(CAP_SYS_ADMIN))
+		return -EPERM;
 	memcpy(uevent_helper, buf, count);
 	uevent_helper[count] = '\0';
 	if (count && uevent_helper[count-1] == '\n')
@@ -172,7 +174,7 @@ static ssize_t notes_read(struct file *filp, struct kobject *kobj,
 	return count;
 }
 
-static struct bin_attribute notes_attr = {
+static bin_attribute_no_const notes_attr __read_only = {
 	.attr = {
 		.name = "notes",
 		.mode = S_IRUGO,
