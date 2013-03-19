@@ -145,7 +145,7 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 	     (MODULES_VADDR <= addr && addr < MODULES_END)))
 	{
 		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code\n", current->comm, task_pid_nr(current),
-				from_kuid(&init_user_ns, current_uid()), from_kuid(&init_user_ns, current_euid()));
+				from_kuid_munged(&init_user_ns, current_uid()), from_kuid_munged(&init_user_ns, current_euid()));
 	}
 #endif
 
@@ -591,7 +591,7 @@ do_DataAbort(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 #ifdef CONFIG_PAX_MEMORY_UDEREF
 	if (addr < TASK_SIZE && is_domain_fault(fsr)) {
 		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to access userland memory at %08lx\n", current->comm, task_pid_nr(current),
-				from_kuid(&init_user_ns, current_uid()), from_kuid(&init_user_ns, current_euid()), addr);
+				from_kuid_munged(&init_user_ns, current_uid()), from_kuid_munged(&init_user_ns, current_euid()), addr);
 		goto die;
 	}
 #endif
@@ -629,10 +629,23 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 	const struct fsr_info *inf = ifsr_info + fsr_fs(ifsr);
 	struct siginfo info;
 
+	if (user_mode(regs)) {
+		if (addr == 0xffff0fe0UL) {
+			/*
+			 * PaX: __kuser_get_tls emulation
+			 */
+			regs->ARM_r0 = current_thread_info()->tp_value;
+			regs->ARM_pc = regs->ARM_lr;
+			return;
+		}
+	}
+
 #if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
-	if (!user_mode(regs) && (is_domain_fault(ifsr) || is_xn_fault(ifsr))) {
-		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to execute %s memory at %08lx\n", current->comm, task_pid_nr(current),
-				from_kuid(&init_user_ns, current_uid()), from_kuid(&init_user_ns, current_euid()),
+	else if (is_domain_fault(ifsr) || is_xn_fault(ifsr)) {
+		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to execute %s memory at %08lx\n",
+				current->comm, task_pid_nr(current),
+				from_kuid_munged(&init_user_ns, current_uid()),
+				from_kuid_munged(&init_user_ns, current_euid()),
 				addr >= TASK_SIZE ? "non-executable kernel" : "userland", addr);
 		goto die;
 	}

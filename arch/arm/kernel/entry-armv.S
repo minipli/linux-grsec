@@ -979,7 +979,7 @@ kuser_cmpxchg64_fixup:
 
 	/* pad to next slot */
 	.rept	(16 - (. - __kuser_cmpxchg64)/4)
-	.word	0
+	.word	0xbe00be00
 	.endr
 
 	.align	5
