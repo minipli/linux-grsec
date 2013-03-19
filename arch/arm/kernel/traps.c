@@ -601,7 +601,9 @@ asmlinkage int arm_syscall(int no, struct pt_regs *regs)
 			 * The user helper at 0xffff0fe0 must be used instead.
 			 * (see entry-armv.S for details)
 			 */
+			pax_open_kernel();
 			*((unsigned int *)0xffff0ff0) = regs->ARM_r0;
+			pax_close_kernel();
 		}
 		return 0;
 
@@ -824,8 +826,14 @@ void __init early_trap_init(void *vectors_base)
 	extern char __vectors_start[], __vectors_end[];
 	extern char __kuser_helper_start[], __kuser_helper_end[];
 	int kuser_sz = __kuser_helper_end - __kuser_helper_start;
+	unsigned short *clr = (unsigned short *)vectors_base;
+	unsigned int i;
 
 	vectors_page = vectors_base;
+
+	/* clear vectors mapping with bkpt 0 */
+	for (i = 0; i < 0x1000/sizeof(unsigned short); i++)
+		clr[i] = 0xbe00;
 
 	/*
 	 * Copy the vectors, stubs and kuser helpers (in entry-armv.S)
@@ -841,13 +849,10 @@ void __init early_trap_init(void *vectors_base)
 	 */
 	kuser_get_tls_init(vectors);
 
-	/*
-	 * Copy signal return handlers into the vector page, and
-	 * set sigreturn to be a pointer to these.
-	 */
-	memcpy((void *)(vectors + KERN_SIGRETURN_CODE - CONFIG_VECTORS_BASE),
-	       sigreturn_codes, sizeof(sigreturn_codes));
-
 	flush_icache_range(vectors, vectors + PAGE_SIZE);
-	modify_domain(DOMAIN_USER, DOMAIN_CLIENT);
+
+#ifndef CONFIG_PAX_MEMORY_UDEREF
+	modify_domain(DOMAIN_USER, DOMAIN_USERCLIENT);
+#endif
+
 }

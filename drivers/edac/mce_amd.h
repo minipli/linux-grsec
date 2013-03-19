@@ -78,7 +78,7 @@ extern const char * const ii_msgs[];
 struct amd_decoder_ops {
 	bool (*mc0_mce)(u16, u8);
 	bool (*mc1_mce)(u16, u8);
-};
+} __no_const;
 
 void amd_report_gart_errors(bool);
 void amd_register_ecc_decoder(void (*f)(int, struct mce *));
