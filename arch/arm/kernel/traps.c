@@ -826,14 +826,8 @@ void __init early_trap_init(void *vectors_base)
 	extern char __vectors_start[], __vectors_end[];
 	extern char __kuser_helper_start[], __kuser_helper_end[];
 	int kuser_sz = __kuser_helper_end - __kuser_helper_start;
-	unsigned short *clr = (unsigned short *)vectors_base;
-	unsigned int i;
 
 	vectors_page = vectors_base;
-
-	/* clear vectors mapping with bkpt 0 */
-	for (i = 0; i < 0x1000/sizeof(unsigned short); i++)
-		clr[i] = 0xbe00;
 
 	/*
 	 * Copy the vectors, stubs and kuser helpers (in entry-armv.S)
