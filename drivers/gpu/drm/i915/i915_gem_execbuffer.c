@@ -672,7 +672,7 @@ i915_gem_execbuffer_move_to_gpu(struct intel_ring_buffer *ring,
 			i915_gem_clflush_object(obj);
 
 		if (obj->base.pending_write_domain)
-			flips |= atomic_read(&obj->pending_flip);
+			flips |= atomic_read_unchecked(&obj->pending_flip);
 
 		flush_domains |= obj->base.write_domain;
 	}
@@ -703,18 +703,23 @@ i915_gem_check_execbuffer(struct drm_i915_gem_execbuffer2 *exec)
 
 static int
 validate_exec_list(struct drm_i915_gem_exec_object2 *exec,
-		   int count)
+		   unsigned int count)
 {
-	int i;
+	unsigned int i;
+	int relocs_total = 0;
+	int relocs_max = INT_MAX / sizeof(struct drm_i915_gem_relocation_entry);
 
 	for (i = 0; i < count; i++) {
 		char __user *ptr = (char __user *)(uintptr_t)exec[i].relocs_ptr;
 		int length; /* limited by fault_in_pages_readable() */
 
-		/* First check for malicious input causing overflow */
-		if (exec[i].relocation_count >
-		    INT_MAX / sizeof(struct drm_i915_gem_relocation_entry))
+		/* First check for malicious input causing overflow in
+		 * the worst case where we need to allocate the entire
+		 * relocation tree as a single array.
+		 */
+		if (exec[i].relocation_count > relocs_max - relocs_total)
 			return -EINVAL;
+		relocs_total += exec[i].relocation_count;
 
 		length = exec[i].relocation_count *
 			sizeof(struct drm_i915_gem_relocation_entry);
@@ -1197,7 +1202,7 @@ i915_gem_execbuffer2(struct drm_device *dev, void *data,
 		return -ENOMEM;
 	}
 	ret = copy_from_user(exec2_list,
-			     (struct drm_i915_relocation_entry __user *)
+			     (struct drm_i915_gem_exec_object2 __user *)
 			     (uintptr_t) args->buffers_ptr,
 			     sizeof(*exec2_list) * args->buffer_count);
 	if (ret != 0) {

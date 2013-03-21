@@ -15,7 +15,9 @@
 #define _LINUX_SYSRQ_H
 
 #include <linux/errno.h>
+#include <linux/compiler.h>
 #include <linux/types.h>
+#include <linux/compiler.h>
 
 /* Enable/disable SYSRQ support by default (0==no, 1==yes). */
 #define SYSRQ_DEFAULT_ENABLE	1
@@ -36,7 +38,7 @@ struct sysrq_key_op {
 	char *help_msg;
 	char *action_msg;
 	int enable_mask;
-};
+} __do_const;
 
 #ifdef CONFIG_MAGIC_SYSRQ
 
