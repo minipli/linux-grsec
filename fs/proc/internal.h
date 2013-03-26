@@ -28,8 +28,6 @@ struct vmalloc_info {
 	unsigned long	largest_chunk;
 };
 
-extern struct mm_struct *mm_for_maps(struct task_struct *);
-
 #ifdef CONFIG_MMU
 #define VMALLOC_TOTAL (VMALLOC_END - VMALLOC_START)
 extern void get_vmalloc_info(struct vmalloc_info *vmi);
@@ -51,6 +49,9 @@ extern int proc_pid_status(struct seq_file *m, struct pid_namespace *ns,
 				struct pid *pid, struct task_struct *task);
 extern int proc_pid_statm(struct seq_file *m, struct pid_namespace *ns,
 				struct pid *pid, struct task_struct *task);
+#ifdef CONFIG_GRKERNSEC_PROC_IPADDR
+extern int proc_pid_ipaddr(struct task_struct *task, char *buffer);
+#endif
 extern loff_t mem_lseek(struct file *file, loff_t offset, int orig);
 
 extern const struct file_operations proc_maps_operations;

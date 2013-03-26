@@ -278,7 +278,9 @@ int xfrm_register_mode(struct xfrm_mode *mode, int family)
 	if (!try_module_get(afinfo->owner))
 		goto out;
 
-	mode->afinfo = afinfo;
+	pax_open_kernel();
+	*(void **)&mode->afinfo = afinfo;
+	pax_close_kernel();
 	modemap[mode->encap] = mode;
 	err = 0;
 
@@ -1985,8 +1987,10 @@ int __xfrm_init_state(struct xfrm_state *x, bool init_replay)
 		goto error;
 
 	x->outer_mode = xfrm_get_mode(x->props.mode, family);
-	if (x->outer_mode == NULL)
+	if (x->outer_mode == NULL) {
+		err = -EPROTONOSUPPORT;
 		goto error;
+	}
 
 	if (init_replay) {
 		err = xfrm_init_replay(x);
