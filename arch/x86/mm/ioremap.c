@@ -331,7 +331,7 @@ void unxlate_dev_mem_ptr(unsigned long phys, void *addr)
 {
 	if (page_is_ram(phys >> PAGE_SHIFT))
 #ifdef CONFIG_HIGHMEM
-	if ((start >> PAGE_SHIFT) < max_low_pfn)
+	if ((phys >> PAGE_SHIFT) < max_low_pfn)
 #endif
 		return;
 

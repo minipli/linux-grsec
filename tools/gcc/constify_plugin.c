@@ -43,7 +43,7 @@
 int plugin_is_GPL_compatible;
 
 static struct plugin_info const_plugin_info = {
-	.version	= "201303070020",
+	.version	= "201303270300",
 	.help		= "no-constify\tturn off constification\n",
 };
 
@@ -498,6 +498,11 @@ int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version 
 			continue;
 		}
 		error(G_("unkown option '-fplugin-arg-%s-%s'"), plugin_name, argv[i].key);
+	}
+
+	if (strcmp(lang_hooks.name, "GNU C")) {
+		inform(UNKNOWN_LOCATION, G_("%s supports C only"), plugin_name);
+		constify = false;
 	}
 
 	register_callback(plugin_name, PLUGIN_INFO, NULL, &const_plugin_info);
