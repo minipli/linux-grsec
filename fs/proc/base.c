@@ -910,7 +910,7 @@ static ssize_t environ_read(struct file *file, char __user *buf,
 
 	ret = 0;
 	while (count > 0) {
-		int this_len, retval, max_len;
+		long this_len, retval, max_len;
 
 		this_len = mm->env_end - (mm->env_start + src);
 
@@ -2510,7 +2510,7 @@ static void *proc_self_follow_link(struct dentry *dentry, struct nameidata *nd)
 static void proc_self_put_link(struct dentry *dentry, struct nameidata *nd,
 				void *cookie)
 {
-	char *s = nd_get_link(nd);
+	const char *s = nd_get_link(nd);
 	if (!IS_ERR(s))
 		__putname(s);
 }

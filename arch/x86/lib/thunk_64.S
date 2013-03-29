@@ -8,6 +8,7 @@
 #include <linux/linkage.h>
 #include <asm/dwarf2.h>
 #include <asm/calling.h>
+#include <asm/alternative-asm.h>
 
 	/* rdi:	arg1 ... normal C conventions. rax is saved/restored. */
 	.macro THUNK name, func, put_ret_addr_in_rdi=0
@@ -41,5 +42,6 @@
 	SAVE_ARGS
 restore:
 	RESTORE_ARGS
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC

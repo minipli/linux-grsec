@@ -167,7 +167,7 @@ static int ca_commit(struct count_array *old, struct count_array *new)
 /*----------------------------------------------------------------*/
 
 struct sm_checker {
-	struct dm_space_map sm;
+	dm_space_map_no_const sm;
 
 	struct count_array old_counts;
 	struct count_array counts;
