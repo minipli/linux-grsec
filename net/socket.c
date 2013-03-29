@@ -1670,6 +1670,8 @@ SYSCALL_DEFINE3(getpeername, int, fd, struct sockaddr __user *, usockaddr,
  *	the protocol.
  */
 
+asmlinkage long sys_sendto(int, void *, size_t, unsigned, struct sockaddr *, int) __intentional_overflow(0);
+
 SYSCALL_DEFINE6(sendto, int, fd, void __user *, buff, size_t, len,
 		unsigned, flags, struct sockaddr __user *, addr,
 		int, addr_len)

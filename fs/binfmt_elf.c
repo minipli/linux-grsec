@@ -1085,7 +1085,7 @@ static int load_elf_binary(struct linux_binprm *bprm, struct pt_regs *regs)
 #ifdef CONFIG_ARCH_TRACK_EXEC_LIMIT
 	if ((current->mm->pax_flags & MF_PAX_PAGEEXEC) && !(__supported_pte_mask & _PAGE_NX)) {
 		current->mm->context.user_cs_limit = PAGE_SIZE;
-		current->mm->def_flags |= VM_PAGEEXEC;
+		current->mm->def_flags |= VM_PAGEEXEC | VM_NOHUGEPAGE;
 	}
 #endif
 
@@ -1309,19 +1309,20 @@ static int load_elf_binary(struct linux_binprm *bprm, struct pt_regs *regs)
 
 #ifdef CONFIG_PAX_RANDMMAP
 	if (current->mm->pax_flags & MF_PAX_RANDMMAP) {
-		unsigned long start, size;
+		unsigned long start, size, flags, vm_flags;
 
 		start = ELF_PAGEALIGN(elf_brk);
 		size = PAGE_SIZE + ((pax_get_random_long() & ((1UL << 22) - 1UL)) << 4);
-		down_write(&current->mm->mmap_sem);
-		retval = -ENOMEM;
-		if (!find_vma_intersection(current->mm, start, start + size + PAGE_SIZE)) {
-			unsigned long prot = PROT_NONE;
+		flags = MAP_FIXED | MAP_PRIVATE;
+		vm_flags = VM_DONTEXPAND | VM_RESERVED;
 
-			current->mm->brk_gap = PAGE_ALIGN(size) >> PAGE_SHIFT;
+		down_write(&current->mm->mmap_sem);
+		start = get_unmapped_area(NULL, start, PAGE_ALIGN(size), 0, flags);
+		retval = -ENOMEM;
+		if (!IS_ERR_VALUE(start) && !find_vma_intersection(current->mm, start, start + size + PAGE_SIZE)) {
 //			if (current->personality & ADDR_NO_RANDOMIZE)
-//				prot = PROT_READ;
-			start = do_mmap(NULL, start, size, prot, MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE, 0);
+//				vm_flags |= VM_READ | VM_MAYREAD;
+			start = mmap_region(NULL, start, PAGE_ALIGN(size), flags, vm_flags, 0);
 			retval = IS_ERR_VALUE(start) ? start : 0;
 		}
 		up_write(&current->mm->mmap_sem);

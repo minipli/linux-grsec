@@ -287,7 +287,7 @@ void vmalloc_sync_all(void)
 			pmd_t *ret;
 #else
 		list_for_each_entry(page, &pgd_list, lru) {
-			pgd_t *pgd = page_address(page);
+			pgd_t *pgd;
 			spinlock_t *pgt_lock;
 			pmd_t *ret;
 
@@ -295,6 +295,7 @@ void vmalloc_sync_all(void)
 			pgt_lock = &pgd_page_get_mm(page)->page_table_lock;
 
 			spin_lock(pgt_lock);
+			pgd = page_address(page);
 #endif
 
 			ret = vmalloc_sync_one(pgd, address);

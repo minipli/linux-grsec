@@ -4,6 +4,8 @@
 #ifndef __ASMARM_CACHE_H
 #define __ASMARM_CACHE_H
 
+#include <linux/const.h>
+
 #define L1_CACHE_SHIFT		CONFIG_ARM_L1_CACHE_SHIFT
 #define L1_CACHE_BYTES		(_AC(1,UL) << L1_CACHE_SHIFT)
 

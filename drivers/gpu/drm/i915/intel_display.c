@@ -8840,7 +8840,7 @@ struct intel_quirk {
 	int subsystem_vendor;
 	int subsystem_device;
 	void (*hook)(struct drm_device *dev);
-};
+} __do_const;
 
 struct intel_quirk intel_quirks[] = {
 	/* HP Compaq 2730p needs pipe A force quirk (LP: #291555) */

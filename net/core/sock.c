@@ -406,7 +406,7 @@ struct dst_entry *sk_dst_check(struct sock *sk, u32 cookie)
 }
 EXPORT_SYMBOL(sk_dst_check);
 
-static int sock_bindtodevice(struct sock *sk, char __user *optval, int optlen)
+static int sock_bindtodevice(struct sock *sk, char __user *optval, unsigned int optlen)
 {
 	int ret = -ENOPROTOOPT;
 #ifdef CONFIG_NETDEVICES
@@ -420,7 +420,7 @@ static int sock_bindtodevice(struct sock *sk, char __user *optval, int optlen)
 		goto out;
 
 	ret = -EINVAL;
-	if (optlen < 0)
+	if (optlen > INT_MAX)
 		goto out;
 
 	/* Bind this socket to a particular device like "eth0",

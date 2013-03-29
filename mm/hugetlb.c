@@ -1973,15 +1973,17 @@ static int hugetlb_sysctl_handler_common(bool obey_mempolicy,
 	struct hstate *h = &default_hstate;
 	unsigned long tmp;
 	int ret;
+	ctl_table_no_const hugetlb_table;
 
 	tmp = h->max_huge_pages;
 
 	if (write && h->order >= MAX_ORDER)
 		return -EINVAL;
 
-	table->data = &tmp;
-	table->maxlen = sizeof(unsigned long);
-	ret = proc_doulongvec_minmax(table, write, buffer, length, ppos);
+	hugetlb_table = *table;
+	hugetlb_table.data = &tmp;
+	hugetlb_table.maxlen = sizeof(unsigned long);
+	ret = proc_doulongvec_minmax(&hugetlb_table, write, buffer, length, ppos);
 	if (ret)
 		goto out;
 
@@ -2038,15 +2040,17 @@ int hugetlb_overcommit_handler(struct ctl_table *table, int write,
 	struct hstate *h = &default_hstate;
 	unsigned long tmp;
 	int ret;
+	ctl_table_no_const hugetlb_table;
 
 	tmp = h->nr_overcommit_huge_pages;
 
 	if (write && h->order >= MAX_ORDER)
 		return -EINVAL;
 
-	table->data = &tmp;
-	table->maxlen = sizeof(unsigned long);
-	ret = proc_doulongvec_minmax(table, write, buffer, length, ppos);
+	hugetlb_table = *table;
+	hugetlb_table.data = &tmp;
+	hugetlb_table.maxlen = sizeof(unsigned long);
+	ret = proc_doulongvec_minmax(&hugetlb_table, write, buffer, length, ppos);
 	if (ret)
 		goto out;
 
