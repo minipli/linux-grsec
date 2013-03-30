@@ -1612,7 +1612,7 @@ static __net_exit void ipv4_mib_exit_net(struct net *net)
 	snmp_mib_free((void __percpu **)net->mib.tcp_statistics);
 }
 
-static __net_initdata struct pernet_operations ipv4_mib_ops = {
+static __net_initconst struct pernet_operations ipv4_mib_ops = {
 	.init = ipv4_mib_init_net,
 	.exit = ipv4_mib_exit_net,
 };

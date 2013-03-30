@@ -641,7 +641,7 @@ static void __net_exit ip_rt_do_proc_exit(struct net *net)
 #endif
 }
 
-static struct pernet_operations ip_rt_proc_ops __net_initdata =  {
+static struct pernet_operations ip_rt_proc_ops __net_initconst =  {
 	.init = ip_rt_do_proc_init,
 	.exit = ip_rt_do_proc_exit,
 };
@@ -3415,7 +3415,7 @@ static __net_exit void sysctl_route_net_exit(struct net *net)
 	kfree(tbl);
 }
 
-static __net_initdata struct pernet_operations sysctl_route_ops = {
+static __net_initconst struct pernet_operations sysctl_route_ops = {
 	.init = sysctl_route_net_init,
 	.exit = sysctl_route_net_exit,
 };
@@ -3430,7 +3430,7 @@ static __net_init int rt_genid_init(struct net *net)
 	return 0;
 }
 
-static __net_initdata struct pernet_operations rt_genid_ops = {
+static __net_initconst struct pernet_operations rt_genid_ops = {
 	.init = rt_genid_init,
 };
 

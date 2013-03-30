@@ -4431,7 +4431,7 @@ static void __net_exit dev_proc_net_exit(struct net *net)
 	proc_net_remove(net, "dev");
 }
 
-static struct pernet_operations __net_initdata dev_proc_ops = {
+static struct pernet_operations __net_initconst dev_proc_ops = {
 	.init = dev_proc_net_init,
 	.exit = dev_proc_net_exit,
 };
@@ -6505,7 +6505,7 @@ static void __net_exit netdev_exit(struct net *net)
 	kfree(net->dev_index_head);
 }
 
-static struct pernet_operations __net_initdata netdev_net_ops = {
+static struct pernet_operations __net_initconst netdev_net_ops = {
 	.init = netdev_init,
 	.exit = netdev_exit,
 };
@@ -6567,7 +6567,7 @@ static void __net_exit default_device_exit_batch(struct list_head *net_list)
 	rtnl_unlock();
 }
 
-static struct pernet_operations __net_initdata default_device_ops = {
+static struct pernet_operations __net_initconst default_device_ops = {
 	.exit = default_device_exit,
 	.exit_batch = default_device_exit_batch,
 };
