@@ -79,7 +79,7 @@ int create_user_ns(struct cred *new)
 		return ret;
 	}
 
-	kref_init(&ns->kref);
+	atomic_set(&ns->count, 1);
 	/* Leave the new->user_ns reference with the new user namespace. */
 	ns->parent = parent_ns;
 	ns->owner = owner;
@@ -105,15 +105,16 @@ int unshare_userns(unsigned long unshare_flags, struct cred **new_cred)
 	return create_user_ns(cred);
 }
 
-void free_user_ns(struct kref *kref)
+void free_user_ns(struct user_namespace *ns)
 {
-	struct user_namespace *parent, *ns =
-		container_of(kref, struct user_namespace, kref);
+	struct user_namespace *parent;
 
-	parent = ns->parent;
-	proc_free_inum(ns->proc_inum);
-	kmem_cache_free(user_ns_cachep, ns);
-	put_user_ns(parent);
+	do {
+		parent = ns->parent;
+		proc_free_inum(ns->proc_inum);
+		kmem_cache_free(user_ns_cachep, ns);
+		ns = parent;
+	} while (atomic_dec_and_test(&parent->count));
 }
 EXPORT_SYMBOL(free_user_ns);
 
@@ -804,7 +805,7 @@ static int userns_install(struct nsproxy *nsproxy, void *ns)
 	if (atomic_read(&current->mm->mm_users) > 1)
 		return -EINVAL;
 
-	if (current->fs->users != 1)
+	if (atomic_read(&current->fs->users) != 1)
 		return -EINVAL;
 
 	if (!ns_capable(user_ns, CAP_SYS_ADMIN))
