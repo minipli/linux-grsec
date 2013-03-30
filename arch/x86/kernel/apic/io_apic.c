@@ -1096,7 +1096,7 @@ int IO_APIC_get_PCI_irq_vector(int bus, int slot, int pin,
 }
 EXPORT_SYMBOL(IO_APIC_get_PCI_irq_vector);
 
-void lock_vector_lock(void)
+void lock_vector_lock(void) __acquires(vector_lock)
 {
 	/* Used to the online set of cpus does not change
 	 * during assign_irq_vector.
@@ -1104,7 +1104,7 @@ void lock_vector_lock(void)
 	raw_spin_lock(&vector_lock);
 }
 
-void unlock_vector_lock(void)
+void unlock_vector_lock(void) __releases(vector_lock)
 {
 	raw_spin_unlock(&vector_lock);
 }
@@ -2510,7 +2510,7 @@ static void ack_apic_edge(struct irq_data *data)
 	ack_APIC_irq();
 }
 
-atomic_t irq_mis_count;
+atomic_unchecked_t irq_mis_count;
 
 static void ack_apic_level(struct irq_data *data)
 {
@@ -2576,7 +2576,7 @@ static void ack_apic_level(struct irq_data *data)
 	 * at the cpu.
 	 */
 	if (!(v & (1 << (i & 0x1f)))) {
-		atomic_inc(&irq_mis_count);
+		atomic_inc_unchecked(&irq_mis_count);
 
 		eoi_ioapic_irq(irq, cfg);
 	}
@@ -2634,13 +2634,16 @@ static void ir_print_prefix(struct irq_data *data, struct seq_file *p)
 
 static void irq_remap_modify_chip_defaults(struct irq_chip *chip)
 {
-	chip->irq_print_chip = ir_print_prefix;
-	chip->irq_ack = ir_ack_apic_edge;
-	chip->irq_eoi = ir_ack_apic_level;
+	pax_open_kernel();
+	*(void **)&chip->irq_print_chip = ir_print_prefix;
+	*(void **)&chip->irq_ack = ir_ack_apic_edge;
+	*(void **)&chip->irq_eoi = ir_ack_apic_level;
 
 #ifdef CONFIG_SMP
-	chip->irq_set_affinity = ir_ioapic_set_affinity;
+	*(void **)&chip->irq_set_affinity = ir_ioapic_set_affinity;
 #endif
+
+	pax_close_kernel();
 }
 #endif /* CONFIG_IRQ_REMAP */
 
