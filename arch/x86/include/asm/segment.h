@@ -64,10 +64,15 @@
  *  26 - ESPFIX small SS
  *  27 - per-cpu			[ offset to per-cpu data area ]
  *  28 - stack_canary-20		[ for stack protector ]
- *  29 - unused
- *  30 - unused
+ *  29 - PCI BIOS CS
+ *  30 - PCI BIOS DS
  *  31 - TSS for double fault handler
  */
+#define GDT_ENTRY_KERNEXEC_EFI_CS	(1)
+#define GDT_ENTRY_KERNEXEC_EFI_DS	(2)
+#define __KERNEXEC_EFI_CS	(GDT_ENTRY_KERNEXEC_EFI_CS*8)
+#define __KERNEXEC_EFI_DS	(GDT_ENTRY_KERNEXEC_EFI_DS*8)
+
 #define GDT_ENTRY_TLS_MIN	6
 #define GDT_ENTRY_TLS_MAX 	(GDT_ENTRY_TLS_MIN + GDT_ENTRY_TLS_ENTRIES - 1)
 
@@ -78,6 +83,8 @@
 #define GDT_ENTRY_KERNEL_BASE		(12)
 
 #define GDT_ENTRY_KERNEL_CS		(GDT_ENTRY_KERNEL_BASE+0)
+
+#define GDT_ENTRY_KERNEXEC_KERNEL_CS	(4)
 
 #define GDT_ENTRY_KERNEL_DS		(GDT_ENTRY_KERNEL_BASE+1)
 
@@ -103,6 +110,12 @@
 #else
 #define __KERNEL_STACK_CANARY		0
 #endif
+
+#define GDT_ENTRY_PCIBIOS_CS		(GDT_ENTRY_KERNEL_BASE+17)
+#define __PCIBIOS_CS (GDT_ENTRY_PCIBIOS_CS * 8)
+
+#define GDT_ENTRY_PCIBIOS_DS		(GDT_ENTRY_KERNEL_BASE+18)
+#define __PCIBIOS_DS (GDT_ENTRY_PCIBIOS_DS * 8)
 
 #define GDT_ENTRY_DOUBLEFAULT_TSS	31
 
@@ -141,7 +154,7 @@
  */
 
 /* Matches PNP_CS32 and PNP_CS16 (they must be consecutive) */
-#define SEGMENT_IS_PNP_CODE(x)   (((x) & 0xf4) == GDT_ENTRY_PNPBIOS_BASE * 8)
+#define SEGMENT_IS_PNP_CODE(x)   (((x) & 0xFFFCU) == PNP_CS32 || ((x) & 0xFFFCU) == PNP_CS16)
 
 
 #else
@@ -165,6 +178,8 @@
 #define __USER32_CS   (GDT_ENTRY_DEFAULT_USER32_CS*8+3)
 #define __USER32_DS	__USER_DS
 
+#define GDT_ENTRY_KERNEXEC_KERNEL_CS 7
+
 #define GDT_ENTRY_TSS 8	/* needs two entries */
 #define GDT_ENTRY_LDT 10 /* needs two entries */
 #define GDT_ENTRY_TLS_MIN 12
@@ -185,6 +200,7 @@
 #endif
 
 #define __KERNEL_CS	(GDT_ENTRY_KERNEL_CS*8)
+#define __KERNEXEC_KERNEL_CS	(GDT_ENTRY_KERNEXEC_KERNEL_CS*8)
 #define __KERNEL_DS	(GDT_ENTRY_KERNEL_DS*8)
 #define __USER_DS	(GDT_ENTRY_DEFAULT_USER_DS*8+3)
 #define __USER_CS	(GDT_ENTRY_DEFAULT_USER_CS*8+3)
@@ -265,7 +281,7 @@ static inline unsigned long get_limit(unsigned long segment)
 {
 	unsigned long __limit;
 	asm("lsll %1,%0" : "=r" (__limit) : "r" (segment));
-	return __limit + 1;
+	return __limit;
 }
 
 #endif /* !__ASSEMBLY__ */

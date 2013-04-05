@@ -24,6 +24,8 @@
  *
  */
 
+#include <asm/alternative-asm.h>
+
 .file "serpent-sse2-x86_64-asm_64.S"
 .text
 
@@ -692,12 +694,14 @@ __serpent_enc_blk_8way:
 	write_blocks(%rsi, RA1, RB1, RC1, RD1, RK0, RK1, RK2);
 	write_blocks(%rax, RA2, RB2, RC2, RD2, RK0, RK1, RK2);
 
+	pax_force_retaddr
 	ret;
 
 __enc_xor8:
 	xor_blocks(%rsi, RA1, RB1, RC1, RD1, RK0, RK1, RK2);
 	xor_blocks(%rax, RA2, RB2, RC2, RD2, RK0, RK1, RK2);
 
+	pax_force_retaddr
 	ret;
 
 .align 8
@@ -755,4 +759,5 @@ serpent_dec_blk_8way:
 	write_blocks(%rsi, RC1, RD1, RB1, RE1, RK0, RK1, RK2);
 	write_blocks(%rax, RC2, RD2, RB2, RE2, RK0, RK1, RK2);
 
+	pax_force_retaddr
 	ret;
