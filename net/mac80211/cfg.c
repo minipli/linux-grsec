@@ -790,7 +790,7 @@ static int ieee80211_set_monitor_channel(struct wiphy *wiphy,
 			ret = ieee80211_vif_use_channel(sdata, chandef,
 					IEEE80211_CHANCTX_EXCLUSIVE);
 		}
-	} else if (local->open_count == local->monitors) {
+	} else if (local_read(&local->open_count) == local->monitors) {
 		local->_oper_channel = chandef->chan;
 		local->_oper_channel_type = cfg80211_get_chandef_type(chandef);
 		ieee80211_hw_config(local, 0);
@@ -2499,7 +2499,7 @@ static int ieee80211_cancel_roc(struct ieee80211_local *local,
 			list_del(&dep->list);
 			mutex_unlock(&local->mtx);
 
-			ieee80211_roc_notify_destroy(dep);
+			ieee80211_roc_notify_destroy(dep, true);
 			return 0;
 		}
 
@@ -2539,7 +2539,7 @@ static int ieee80211_cancel_roc(struct ieee80211_local *local,
 			ieee80211_start_next_roc(local);
 		mutex_unlock(&local->mtx);
 
-		ieee80211_roc_notify_destroy(found);
+		ieee80211_roc_notify_destroy(found, true);
 	} else {
 		/* work may be pending so use it all the time */
 		found->abort = true;
@@ -2549,6 +2549,8 @@ static int ieee80211_cancel_roc(struct ieee80211_local *local,
 
 		/* work will clean up etc */
 		flush_delayed_work(&found->work);
+		WARN_ON(!found->to_be_freed);
+		kfree(found);
 	}
 
 	return 0;
@@ -2716,7 +2718,7 @@ static void ieee80211_mgmt_frame_register(struct wiphy *wiphy,
 		else
 			local->probe_req_reg--;
 
-		if (!local->open_count)
+		if (!local_read(&local->open_count))
 			break;
 
 		ieee80211_queue_work(&local->hw, &local->reconfig_filter);

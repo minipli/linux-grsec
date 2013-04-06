@@ -1068,7 +1068,7 @@ static struct dib0070_config dib7070p_dib0070_config = {
 
 struct dib0700_adapter_state {
 	int (*set_param_save) (struct dvb_frontend *);
-};
+} __no_const;
 
 static int dib7070_set_param_override(struct dvb_frontend *fe)
 {

@@ -28,6 +28,7 @@
 #include <net/ieee80211_radiotap.h>
 #include <net/cfg80211.h>
 #include <net/mac80211.h>
+#include <asm/local.h>
 #include "key.h"
 #include "sta_info.h"
 #include "debug.h"
@@ -346,6 +347,7 @@ struct ieee80211_roc_work {
 	struct ieee80211_channel *chan;
 
 	bool started, abort, hw_begun, notified;
+	bool to_be_freed;
 
 	unsigned long hw_start_time;
 
@@ -909,7 +911,7 @@ struct ieee80211_local {
 	/* also used to protect ampdu_ac_queue and amdpu_ac_stop_refcnt */
 	spinlock_t queue_stop_reason_lock;
 
-	int open_count;
+	local_t open_count;
 	int monitors, cooked_mntrs;
 	/* number of interfaces with corresponding FIF_ flags */
 	int fif_fcsfail, fif_plcpfail, fif_control, fif_other_bss, fif_pspoll,
@@ -1363,7 +1365,7 @@ void ieee80211_offchannel_return(struct ieee80211_local *local);
 void ieee80211_roc_setup(struct ieee80211_local *local);
 void ieee80211_start_next_roc(struct ieee80211_local *local);
 void ieee80211_roc_purge(struct ieee80211_sub_if_data *sdata);
-void ieee80211_roc_notify_destroy(struct ieee80211_roc_work *roc);
+void ieee80211_roc_notify_destroy(struct ieee80211_roc_work *roc, bool free);
 void ieee80211_sw_roc_work(struct work_struct *work);
 void ieee80211_handle_roc_started(struct ieee80211_roc_work *roc);
 
