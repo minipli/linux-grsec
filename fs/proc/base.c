@@ -809,7 +809,7 @@ static ssize_t mem_rw(struct file *file, char __user *buf,
 		goto free;
 
 	while (count > 0) {
-		int this_len = min_t(int, count, PAGE_SIZE);
+		ssize_t this_len = min_t(ssize_t, count, PAGE_SIZE);
 
 		if (write && copy_from_user(page, buf, this_len)) {
 			copied = -EFAULT;
@@ -891,7 +891,7 @@ static ssize_t environ_read(struct file *file, char __user *buf,
 	struct task_struct *task = get_proc_task(file->f_dentry->d_inode);
 	char *page;
 	unsigned long src = *ppos;
-	int ret = -ESRCH;
+	ssize_t ret = -ESRCH;
 	struct mm_struct *mm;
 
 	if (!task)
