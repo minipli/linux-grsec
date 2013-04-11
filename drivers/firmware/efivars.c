@@ -1233,7 +1233,7 @@ efivar_create_sysfs_entry(struct efivars *efivars,
 static int
 create_efivars_bin_attributes(struct efivars *efivars)
 {
-	struct bin_attribute *attr;
+	bin_attribute_no_const *attr;
 	int error;
 
 	/* new_var */
@@ -1425,7 +1425,7 @@ out:
 }
 EXPORT_SYMBOL_GPL(register_efivars);
 
-static struct efivar_operations ops;
+static efivar_operations_no_const ops __read_only;
 
 /*
  * For now we register the efi subsystem with the firmware subsystem
