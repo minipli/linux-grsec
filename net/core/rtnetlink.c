@@ -58,7 +58,7 @@ struct rtnl_link {
 	rtnl_doit_func		doit;
 	rtnl_dumpit_func	dumpit;
 	rtnl_calcit_func 	calcit;
-};
+} __no_const;
 
 static DEFINE_MUTEX(rtnl_mutex);
 
@@ -299,10 +299,13 @@ int __rtnl_link_register(struct rtnl_link_ops *ops)
 	if (rtnl_link_ops_get(ops->kind))
 		return -EEXIST;
 
-	if (!ops->dellink)
-		ops->dellink = unregister_netdevice_queue;
+	if (!ops->dellink) {
+		pax_open_kernel();
+		*(void **)&ops->dellink = unregister_netdevice_queue;
+		pax_close_kernel();
+	}
 
-	list_add_tail(&ops->list, &link_ops);
+	pax_list_add_tail((struct list_head *)&ops->list, &link_ops);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(__rtnl_link_register);
@@ -349,7 +352,7 @@ void __rtnl_link_unregister(struct rtnl_link_ops *ops)
 	for_each_net(net) {
 		__rtnl_kill_links(net, ops);
 	}
-	list_del(&ops->list);
+	pax_list_del((struct list_head *)&ops->list);
 }
 EXPORT_SYMBOL_GPL(__rtnl_link_unregister);
 
@@ -1068,7 +1071,7 @@ static int rtnl_dump_ifinfo(struct sk_buff *skb, struct netlink_callback *cb)
 	rcu_read_lock();
 	cb->seq = net->dev_base_seq;
 
-	if (nlmsg_parse(cb->nlh, sizeof(struct rtgenmsg), tb, IFLA_MAX,
+	if (nlmsg_parse(cb->nlh, sizeof(struct ifinfomsg), tb, IFLA_MAX,
 			ifla_policy) >= 0) {
 
 		if (tb[IFLA_EXT_MASK])
@@ -1924,7 +1927,7 @@ static u16 rtnl_calcit(struct sk_buff *skb, struct nlmsghdr *nlh)
 	u32 ext_filter_mask = 0;
 	u16 min_ifinfo_dump_size = 0;
 
-	if (nlmsg_parse(nlh, sizeof(struct rtgenmsg), tb, IFLA_MAX,
+	if (nlmsg_parse(nlh, sizeof(struct ifinfomsg), tb, IFLA_MAX,
 			ifla_policy) >= 0) {
 		if (tb[IFLA_EXT_MASK])
 			ext_filter_mask = nla_get_u32(tb[IFLA_EXT_MASK]);
