@@ -29,7 +29,7 @@ static inline void gro_cells_receive(struct gro_cells *gcells, struct sk_buff *s
 		cell += skb_get_rx_queue(skb) & gcells->gro_cells_mask;
 
 	if (skb_queue_len(&cell->napi_skbs) > netdev_max_backlog) {
-		atomic_long_inc(&dev->rx_dropped);
+		atomic_long_inc_unchecked(&dev->rx_dropped);
 		kfree_skb(skb);
 		return;
 	}
@@ -73,8 +73,8 @@ static inline int gro_cells_init(struct gro_cells *gcells, struct net_device *de
 	int i;
 
 	gcells->gro_cells_mask = roundup_pow_of_two(netif_get_num_default_rss_queues()) - 1;
-	gcells->cells = kcalloc(sizeof(struct gro_cell),
-				gcells->gro_cells_mask + 1,
+	gcells->cells = kcalloc(gcells->gro_cells_mask + 1,
+				sizeof(struct gro_cell),
 				GFP_KERNEL);
 	if (!gcells->cells)
 		return -ENOMEM;

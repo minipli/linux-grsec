@@ -57,7 +57,7 @@ static void dump_mem(const char *, const char *, unsigned long, unsigned long);
 void dump_backtrace_entry(unsigned long where, unsigned long from, unsigned long frame)
 {
 #ifdef CONFIG_KALLSYMS
-	printk("[<%08lx>] (%pS) from [<%08lx>] (%pS)\n", where, (void *)where, from, (void *)from);
+	printk("[<%08lx>] (%pA) from [<%08lx>] (%pA)\n", where, (void *)where, from, (void *)from);
 #else
 	printk("Function entered at [<%08lx>] from [<%08lx>]\n", where, from);
 #endif
@@ -266,6 +266,8 @@ static arch_spinlock_t die_lock = __ARCH_SPIN_LOCK_UNLOCKED;
 static int die_owner = -1;
 static unsigned int die_nest_count;
 
+extern void gr_handle_kernel_exploit(void);
+
 static unsigned long oops_begin(void)
 {
 	int cpu;
@@ -308,6 +310,9 @@ static void oops_end(unsigned long flags, struct pt_regs *regs, int signr)
 		panic("Fatal exception in interrupt");
 	if (panic_on_oops)
 		panic("Fatal exception");
+
+	gr_handle_kernel_exploit();
+
 	if (signr)
 		do_exit(signr);
 }
@@ -601,7 +606,9 @@ asmlinkage int arm_syscall(int no, struct pt_regs *regs)
 			 * The user helper at 0xffff0fe0 must be used instead.
 			 * (see entry-armv.S for details)
 			 */
+			pax_open_kernel();
 			*((unsigned int *)0xffff0ff0) = regs->ARM_r0;
+			pax_close_kernel();
 		}
 		return 0;
 
@@ -841,13 +848,10 @@ void __init early_trap_init(void *vectors_base)
 	 */
 	kuser_get_tls_init(vectors);
 
-	/*
-	 * Copy signal return handlers into the vector page, and
-	 * set sigreturn to be a pointer to these.
-	 */
-	memcpy((void *)(vectors + KERN_SIGRETURN_CODE - CONFIG_VECTORS_BASE),
-	       sigreturn_codes, sizeof(sigreturn_codes));
-
 	flush_icache_range(vectors, vectors + PAGE_SIZE);
-	modify_domain(DOMAIN_USER, DOMAIN_CLIENT);
+
+#ifndef CONFIG_PAX_MEMORY_UDEREF
+	modify_domain(DOMAIN_USER, DOMAIN_USERCLIENT);
+#endif
+
 }

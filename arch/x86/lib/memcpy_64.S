@@ -33,6 +33,7 @@
 	rep movsq
 	movl %edx, %ecx
 	rep movsb
+	pax_force_retaddr
 	ret
 .Lmemcpy_e:
 	.previous
@@ -49,6 +50,7 @@
 	movq %rdi, %rax
 	movq %rdx, %rcx
 	rep movsb
+	pax_force_retaddr
 	ret
 .Lmemcpy_e_e:
 	.previous
@@ -76,13 +78,13 @@ ENTRY(memcpy)
 	 */
 	movq 0*8(%rsi),	%r8
 	movq 1*8(%rsi),	%r9
-	movq 2*8(%rsi),	%r10
+	movq 2*8(%rsi),	%rcx
 	movq 3*8(%rsi),	%r11
 	leaq 4*8(%rsi),	%rsi
 
 	movq %r8,	0*8(%rdi)
 	movq %r9,	1*8(%rdi)
-	movq %r10,	2*8(%rdi)
+	movq %rcx,	2*8(%rdi)
 	movq %r11,	3*8(%rdi)
 	leaq 4*8(%rdi),	%rdi
 	jae  .Lcopy_forward_loop
@@ -105,12 +107,12 @@ ENTRY(memcpy)
 	subq $0x20,	%rdx
 	movq -1*8(%rsi),	%r8
 	movq -2*8(%rsi),	%r9
-	movq -3*8(%rsi),	%r10
+	movq -3*8(%rsi),	%rcx
 	movq -4*8(%rsi),	%r11
 	leaq -4*8(%rsi),	%rsi
 	movq %r8,		-1*8(%rdi)
 	movq %r9,		-2*8(%rdi)
-	movq %r10,		-3*8(%rdi)
+	movq %rcx,		-3*8(%rdi)
 	movq %r11,		-4*8(%rdi)
 	leaq -4*8(%rdi),	%rdi
 	jae  .Lcopy_backward_loop
@@ -130,12 +132,13 @@ ENTRY(memcpy)
 	 */
 	movq 0*8(%rsi), %r8
 	movq 1*8(%rsi),	%r9
-	movq -2*8(%rsi, %rdx),	%r10
+	movq -2*8(%rsi, %rdx),	%rcx
 	movq -1*8(%rsi, %rdx),	%r11
 	movq %r8,	0*8(%rdi)
 	movq %r9,	1*8(%rdi)
-	movq %r10,	-2*8(%rdi, %rdx)
+	movq %rcx,	-2*8(%rdi, %rdx)
 	movq %r11,	-1*8(%rdi, %rdx)
+	pax_force_retaddr
 	retq
 	.p2align 4
 .Lless_16bytes:
@@ -148,6 +151,7 @@ ENTRY(memcpy)
 	movq -1*8(%rsi, %rdx),	%r9
 	movq %r8,	0*8(%rdi)
 	movq %r9,	-1*8(%rdi, %rdx)
+	pax_force_retaddr
 	retq
 	.p2align 4
 .Lless_8bytes:
@@ -161,6 +165,7 @@ ENTRY(memcpy)
 	movl -4(%rsi, %rdx), %r8d
 	movl %ecx, (%rdi)
 	movl %r8d, -4(%rdi, %rdx)
+	pax_force_retaddr
 	retq
 	.p2align 4
 .Lless_3bytes:
@@ -179,6 +184,7 @@ ENTRY(memcpy)
 	movb %cl, (%rdi)
 
 .Lend:
+	pax_force_retaddr
 	retq
 	CFI_ENDPROC
 ENDPROC(memcpy)
