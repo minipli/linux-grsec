@@ -4729,7 +4729,7 @@ static struct sk_buff *tcp_collapse_one(struct sock *sk, struct sk_buff *skb,
  * simplifies code)
  */
 static void
-tcp_collapse(struct sock *sk, struct sk_buff_head *list,
+__intentional_overflow(5,6) tcp_collapse(struct sock *sk, struct sk_buff_head *list,
 	     struct sk_buff *head, struct sk_buff *tail,
 	     u32 start, u32 end)
 {
@@ -5544,6 +5544,9 @@ slow_path:
 	if (len < (th->doff << 2) || tcp_checksum_complete_user(sk, skb))
 		goto csum_error;
 
+	if (!th->ack && !th->rst)
+		goto discard;
+
 	/*
 	 *	Standard slow path.
 	 */
@@ -5552,7 +5555,7 @@ slow_path:
 		return 0;
 
 step5:
-	if (th->ack && tcp_ack(sk, skb, FLAG_SLOWPATH) < 0)
+	if (tcp_ack(sk, skb, FLAG_SLOWPATH) < 0)
 		goto discard;
 
 	/* ts_recent update must be made after we are sure that the packet
@@ -5788,6 +5791,7 @@ discard:
 	    tcp_paws_reject(&tp->rx_opt, 0))
 		goto discard_and_undo;
 
+#ifndef CONFIG_GRKERNSEC_NO_SIMULT_CONNECT
 	if (th->syn) {
 		/* We see SYN without ACK. It is attempt of
 		 * simultaneous connect with crossed SYNs.
@@ -5836,6 +5840,7 @@ discard:
 		goto discard;
 #endif
 	}
+#endif
 	/* "fifth, if neither of the SYN or RST bits is set then
 	 * drop the segment and return."
 	 */
@@ -5879,7 +5884,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			goto discard;
 
 		if (th->syn) {
-			if (th->fin)
+			if (th->fin || th->urg || th->psh)
 				goto discard;
 			if (icsk->icsk_af_ops->conn_request(sk, skb) < 0)
 				return 1;
@@ -5918,11 +5923,14 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		return 0;
 	}
 
+	if (!th->ack && !th->rst)
+		goto discard;
+
 	if (!tcp_validate_incoming(sk, skb, th, 0))
 		return 0;
 
 	/* step 5: check the ACK field */
-	if (th->ack) {
+	if (true) {
 		int acceptable = tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
 
 		switch (sk->sk_state) {
@@ -6027,8 +6035,7 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			}
 			break;
 		}
-	} else
-		goto discard;
+	}
 
 	/* ts_recent update must be made after we are sure that the packet
 	 * is in window.
