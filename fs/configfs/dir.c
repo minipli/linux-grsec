@@ -1564,7 +1564,8 @@ static int configfs_readdir(struct file * filp, void * dirent, filldir_t filldir
 			}
 			for (p=q->next; p!= &parent_sd->s_children; p=p->next) {
 				struct configfs_dirent *next;
-				const char * name;
+				const unsigned char * name;
+				char d_name[sizeof(next->s_dentry->d_iname)];
 				int len;
 				struct inode *inode = NULL;
 
@@ -1574,7 +1575,12 @@ static int configfs_readdir(struct file * filp, void * dirent, filldir_t filldir
 					continue;
 
 				name = configfs_get_name(next);
-				len = strlen(name);
+				if (next->s_dentry && name == next->s_dentry->d_iname) {
+					len =  next->s_dentry->d_name.len;
+					memcpy(d_name, name, len);
+					name = d_name;
+				} else
+					len = strlen(name);
 
 				/*
 				 * We'll have a dentry and an inode for
