@@ -65,6 +65,8 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 {
 	int err;
 
+	buf = (struct xsave_struct __user *)____m(buf);
+
 	/*
 	 * Clear the xsave header first, so that reserved fields are
 	 * initialized to zero.
@@ -74,7 +76,9 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 	if (unlikely(err))
 		return -EFAULT;
 
-	__asm__ __volatile__("1: .byte " REX_PREFIX "0x0f,0xae,0x27\n"
+	__asm__ __volatile__("1:"
+			     __copyuser_seg
+			     ".byte " REX_PREFIX "0x0f,0xae,0x27\n"
 			     "2:\n"
 			     ".section .fixup,\"ax\"\n"
 			     "3:  movl $-1,%[err]\n"
@@ -96,11 +100,13 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 static inline int xrestore_user(struct xsave_struct __user *buf, u64 mask)
 {
 	int err;
-	struct xsave_struct *xstate = ((__force struct xsave_struct *)buf);
+	struct xsave_struct *xstate = ((__force_kernel struct xsave_struct *)____m(buf));
 	u32 lmask = mask;
 	u32 hmask = mask >> 32;
 
-	__asm__ __volatile__("1: .byte " REX_PREFIX "0x0f,0xae,0x2f\n"
+	__asm__ __volatile__("1:"
+			     __copyuser_seg
+			     ".byte " REX_PREFIX "0x0f,0xae,0x2f\n"
 			     "2:\n"
 			     ".section .fixup,\"ax\"\n"
 			     "3:  movl $-1,%[err]\n"
