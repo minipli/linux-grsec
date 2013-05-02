@@ -672,7 +672,7 @@ i915_gem_execbuffer_move_to_gpu(struct intel_ring_buffer *ring,
 			i915_gem_clflush_object(obj);
 
 		if (obj->base.pending_write_domain)
-			flips |= atomic_read(&obj->pending_flip);
+			flips |= atomic_read_unchecked(&obj->pending_flip);
 
 		flush_domains |= obj->base.write_domain;
 	}
@@ -703,9 +703,9 @@ i915_gem_check_execbuffer(struct drm_i915_gem_execbuffer2 *exec)
 
 static int
 validate_exec_list(struct drm_i915_gem_exec_object2 *exec,
-		   int count)
+		   unsigned int count)
 {
-	int i;
+	unsigned int i;
 	int relocs_total = 0;
 	int relocs_max = INT_MAX / sizeof(struct drm_i915_gem_relocation_entry);
 
@@ -1202,7 +1202,7 @@ i915_gem_execbuffer2(struct drm_device *dev, void *data,
 		return -ENOMEM;
 	}
 	ret = copy_from_user(exec2_list,
-			     (struct drm_i915_relocation_entry __user *)
+			     (struct drm_i915_gem_exec_object2 __user *)
 			     (uintptr_t) args->buffers_ptr,
 			     sizeof(*exec2_list) * args->buffer_count);
 	if (ret != 0) {
