@@ -455,7 +455,7 @@ static void accumulate_16bit_val(u32 *acc, u16 val)
 
 	if (wrapped)
 		newacc += 65536;
-	ACCESS_ONCE(*acc) = newacc;
+	ACCESS_ONCE_RW(*acc) = newacc;
 }
 
 void be_parse_stats(struct be_adapter *adapter)
@@ -759,8 +759,9 @@ static struct sk_buff *be_insert_vlan_in_pkt(struct be_adapter *adapter,
 
 	if (vlan_tx_tag_present(skb)) {
 		vlan_tag = be_get_tx_vlan_tag(adapter, skb);
-		__vlan_put_tag(skb, vlan_tag);
-		skb->vlan_tci = 0;
+		skb = __vlan_put_tag(skb, vlan_tag);
+		if (skb)
+			skb->vlan_tci = 0;
 	}
 
 	return skb;
