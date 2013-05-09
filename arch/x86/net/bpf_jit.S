@@ -9,6 +9,7 @@
  */
 #include <linux/linkage.h>
 #include <asm/dwarf2.h>
+#include <asm/alternative-asm.h>
 
 /*
  * Calling convention :
@@ -35,6 +36,7 @@ sk_load_word_positive_offset:
 	jle	bpf_slow_path_word
 	mov     (SKBDATA,%rsi),%eax
 	bswap   %eax  			/* ntohl() */
+	pax_force_retaddr
 	ret
 
 sk_load_half:
@@ -52,6 +54,7 @@ sk_load_half_positive_offset:
 	jle	bpf_slow_path_half
 	movzwl	(SKBDATA,%rsi),%eax
 	rol	$8,%ax			# ntohs()
+	pax_force_retaddr
 	ret
 
 sk_load_byte:
@@ -66,6 +69,7 @@ sk_load_byte_positive_offset:
 	cmp	%esi,%r9d   /* if (offset >= hlen) goto bpf_slow_path_byte */
 	jle	bpf_slow_path_byte
 	movzbl	(SKBDATA,%rsi),%eax
+	pax_force_retaddr
 	ret
 
 /**
@@ -87,6 +91,7 @@ sk_load_byte_msh_positive_offset:
 	movzbl	(SKBDATA,%rsi),%ebx
 	and	$15,%bl
 	shl	$2,%bl
+	pax_force_retaddr
 	ret
 
 /* rsi contains offset and can be scratched */
@@ -109,6 +114,7 @@ bpf_slow_path_word:
 	js	bpf_error
 	mov	-12(%rbp),%eax
 	bswap	%eax
+	pax_force_retaddr
 	ret
 
 bpf_slow_path_half:
@@ -117,12 +123,14 @@ bpf_slow_path_half:
 	mov	-12(%rbp),%ax
 	rol	$8,%ax
 	movzwl	%ax,%eax
+	pax_force_retaddr
 	ret
 
 bpf_slow_path_byte:
 	bpf_slow_path_common(1)
 	js	bpf_error
 	movzbl	-12(%rbp),%eax
+	pax_force_retaddr
 	ret
 
 bpf_slow_path_byte_msh:
@@ -133,6 +141,7 @@ bpf_slow_path_byte_msh:
 	and	$15,%al
 	shl	$2,%al
 	xchg	%eax,%ebx
+	pax_force_retaddr
 	ret
 
 #define sk_negative_common(SIZE)				\
@@ -157,6 +166,7 @@ sk_load_word_negative_offset:
 	sk_negative_common(4)
 	mov	(%rax), %eax
 	bswap	%eax
+	pax_force_retaddr
 	ret
 
 bpf_slow_path_half_neg:
@@ -168,6 +178,7 @@ sk_load_half_negative_offset:
 	mov	(%rax),%ax
 	rol	$8,%ax
 	movzwl	%ax,%eax
+	pax_force_retaddr
 	ret
 
 bpf_slow_path_byte_neg:
@@ -177,6 +188,7 @@ sk_load_byte_negative_offset:
 	.globl	sk_load_byte_negative_offset
 	sk_negative_common(1)
 	movzbl	(%rax), %eax
+	pax_force_retaddr
 	ret
 
 bpf_slow_path_byte_msh_neg:
@@ -190,6 +202,7 @@ sk_load_byte_msh_negative_offset:
 	and	$15,%al
 	shl	$2,%al
 	xchg	%eax,%ebx
+	pax_force_retaddr
 	ret
 
 bpf_error:
@@ -197,4 +210,5 @@ bpf_error:
 	xor		%eax,%eax
 	mov		-8(%rbp),%rbx
 	leaveq
+	pax_force_retaddr
 	ret

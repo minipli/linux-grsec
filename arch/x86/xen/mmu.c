@@ -1739,13 +1739,17 @@ static void *m2v(phys_addr_t maddr)
 }
 
 /* Set the page permissions on an identity-mapped pages */
-static void set_page_prot(void *addr, pgprot_t prot)
+static void set_page_prot_flags(void *addr, pgprot_t prot, unsigned long flags)
 {
 	unsigned long pfn = __pa(addr) >> PAGE_SHIFT;
 	pte_t pte = pfn_pte(pfn, prot);
 
-	if (HYPERVISOR_update_va_mapping((unsigned long)addr, pte, 0))
+	if (HYPERVISOR_update_va_mapping((unsigned long)addr, pte, flags))
 		BUG();
+}
+static void set_page_prot(void *addr, pgprot_t prot)
+{
+	return set_page_prot_flags(addr, prot, UVMF_NONE);
 }
 #ifdef CONFIG_X86_32
 static void __init xen_map_identity_early(pmd_t *pmd, unsigned long max_pfn)
@@ -1830,12 +1834,12 @@ static void __init check_pt_base(unsigned long *pt_base, unsigned long *pt_end,
 				 unsigned long addr)
 {
 	if (*pt_base == PFN_DOWN(__pa(addr))) {
-		set_page_prot((void *)addr, PAGE_KERNEL);
+		set_page_prot_flags((void *)addr, PAGE_KERNEL, UVMF_INVLPG);
 		clear_page((void *)addr);
 		(*pt_base)++;
 	}
 	if (*pt_end == PFN_DOWN(__pa(addr))) {
-		set_page_prot((void *)addr, PAGE_KERNEL);
+		set_page_prot_flags((void *)addr, PAGE_KERNEL, UVMF_INVLPG);
 		clear_page((void *)addr);
 		(*pt_end)--;
 	}
@@ -1881,6 +1885,9 @@ void __init xen_setup_kernel_pagetable(pgd_t *pgd, unsigned long max_pfn)
 	/* L3_k[510] -> level2_kernel_pgt
 	 * L3_i[511] -> level2_fixmap_pgt */
 	convert_pfn_mfn(level3_kernel_pgt);
+	convert_pfn_mfn(level3_vmalloc_start_pgt);
+	convert_pfn_mfn(level3_vmalloc_end_pgt);
+	convert_pfn_mfn(level3_vmemmap_pgt);
 
 	/* We get [511][511] and have Xen's version of level2_kernel_pgt */
 	l3 = m2v(pgd[pgd_index(__START_KERNEL_map)].pgd);
@@ -1910,8 +1917,12 @@ void __init xen_setup_kernel_pagetable(pgd_t *pgd, unsigned long max_pfn)
 	set_page_prot(init_level4_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_ident_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_kernel_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level3_vmalloc_start_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level3_vmalloc_end_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level3_vmemmap_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level3_user_vsyscall, PAGE_KERNEL_RO);
 	set_page_prot(level2_ident_pgt, PAGE_KERNEL_RO);
+	set_page_prot(level2_vmemmap_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level2_kernel_pgt, PAGE_KERNEL_RO);
 	set_page_prot(level2_fixmap_pgt, PAGE_KERNEL_RO);
 
@@ -2097,6 +2108,7 @@ static void __init xen_post_allocator_init(void)
 	pv_mmu_ops.set_pud = xen_set_pud;
 #if PAGETABLE_LEVELS == 4
 	pv_mmu_ops.set_pgd = xen_set_pgd;
+	pv_mmu_ops.set_pgd_batched = xen_set_pgd;
 #endif
 
 	/* This will work as long as patching hasn't happened yet
@@ -2178,6 +2190,7 @@ static const struct pv_mmu_ops xen_mmu_ops __initconst = {
 	.pud_val = PV_CALLEE_SAVE(xen_pud_val),
 	.make_pud = PV_CALLEE_SAVE(xen_make_pud),
 	.set_pgd = xen_set_pgd_hyper,
+	.set_pgd_batched = xen_set_pgd_hyper,
 
 	.alloc_pud = xen_alloc_pmd_init,
 	.release_pud = xen_release_pmd_init,
