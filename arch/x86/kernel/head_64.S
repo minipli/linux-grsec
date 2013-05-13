@@ -466,7 +466,6 @@ NEXT_PAGE(early_dynamic_pgts)
 	.data
 
 NEXT_PAGE(init_level4_pgt)
-	.quad   level3_ident_pgt - __START_KERNEL_map + _KERNPG_TABLE
 	.org    init_level4_pgt + L4_PAGE_OFFSET*8, 0
 	.quad   level3_ident_pgt - __START_KERNEL_map + _KERNPG_TABLE
 	.org	init_level4_pgt + L4_VMALLOC_START*8, 0
