@@ -455,8 +455,7 @@ static void numaq_setup_portio_remap(void)
 		(u_long) xquad_portio, (u_long) num_quads*XQUAD_PORTIO_QUAD);
 }
 
-/* Use __refdata to keep false positive warning calm.  */
-static struct apic __refdata apic_numaq = {
+static struct apic apic_numaq __read_only = {
 
 	.name				= "NUMAQ",
 	.probe				= probe_numaq,
