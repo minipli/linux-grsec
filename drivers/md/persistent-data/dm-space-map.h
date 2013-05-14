@@ -60,6 +60,7 @@ struct dm_space_map {
 	int (*root_size)(struct dm_space_map *sm, size_t *result);
 	int (*copy_root)(struct dm_space_map *sm, void *copy_to_here_le, size_t len);
 };
+typedef struct dm_space_map __no_const dm_space_map_no_const;
 
 /*----------------------------------------------------------------*/
 
