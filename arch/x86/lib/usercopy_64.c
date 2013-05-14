@@ -39,7 +39,7 @@ unsigned long __clear_user(void __user *addr, unsigned long size)
 		_ASM_EXTABLE(0b,3b)
 		_ASM_EXTABLE(1b,2b)
 		: [size8] "=&c"(size), [dst] "=&D" (__d0)
-		: [size1] "r"(size & 7), "[size8]" (size / 8), "[dst]"(addr),
+		: [size1] "r"(size & 7), "[size8]" (size / 8), "[dst]"(____m(addr)),
 		  [zero] "r" (0UL), [eight] "r" (8UL));
 	clac();
 	return size;
@@ -54,12 +54,11 @@ unsigned long clear_user(void __user *to, unsigned long n)
 }
 EXPORT_SYMBOL(clear_user);
 
-unsigned long copy_in_user(void __user *to, const void __user *from, unsigned len)
+unsigned long copy_in_user(void __user *to, const void __user *from, unsigned long len)
 {
-	if (access_ok(VERIFY_WRITE, to, len) && access_ok(VERIFY_READ, from, len)) { 
-		return copy_user_generic((__force void *)to, (__force void *)from, len);
-	} 
-	return len;		
+	if (access_ok(VERIFY_WRITE, to, len) && access_ok(VERIFY_READ, from, len))
+		return copy_user_generic((void __force_kernel *)____m(to), (void __force_kernel *)____m(from), len);
+	return len;
 }
 EXPORT_SYMBOL(copy_in_user);
 
@@ -69,7 +68,7 @@ EXPORT_SYMBOL(copy_in_user);
  * it is not necessary to optimize tail handling.
  */
 unsigned long
-copy_user_handle_tail(char *to, char *from, unsigned len, unsigned zerorest)
+copy_user_handle_tail(char __user *to, char __user *from, unsigned long len, unsigned zerorest)
 {
 	char c;
 	unsigned zero_len;
@@ -87,3 +86,15 @@ copy_user_handle_tail(char *to, char *from, unsigned len, unsigned zerorest)
 	clac();
 	return len;
 }
+
+void copy_from_user_overflow(void)
+{
+	WARN(1, "Buffer overflow detected!\n");
+}
+EXPORT_SYMBOL(copy_from_user_overflow);
+
+void copy_to_user_overflow(void)
+{
+	WARN(1, "Buffer overflow detected!\n");
+}
+EXPORT_SYMBOL(copy_to_user_overflow);

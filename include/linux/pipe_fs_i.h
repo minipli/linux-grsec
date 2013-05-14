@@ -45,9 +45,9 @@ struct pipe_buffer {
 struct pipe_inode_info {
 	wait_queue_head_t wait;
 	unsigned int nrbufs, curbuf, buffers;
-	unsigned int readers;
-	unsigned int writers;
-	unsigned int waiting_writers;
+	atomic_t readers;
+	atomic_t writers;
+	atomic_t waiting_writers;
 	unsigned int r_counter;
 	unsigned int w_counter;
 	struct page *tmp_page;

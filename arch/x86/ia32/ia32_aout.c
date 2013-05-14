@@ -159,6 +159,8 @@ static int aout_core_dump(long signr, struct pt_regs *regs, struct file *file,
 	unsigned long dump_start, dump_size;
 	struct user32 dump;
 
+	memset(&dump, 0, sizeof(dump));
+
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 	has_dumped = 1;

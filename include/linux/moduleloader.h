@@ -25,8 +25,20 @@ unsigned int arch_mod_section_prepend(struct module *mod, unsigned int section);
    sections.  Returns NULL on failure. */
 void *module_alloc(unsigned long size);
 
+#ifdef CONFIG_PAX_KERNEXEC
+void *module_alloc_exec(unsigned long size);
+#else
+#define module_alloc_exec(x) module_alloc(x)
+#endif
+
 /* Free memory returned from module_alloc. */
 void module_free(struct module *mod, void *module_region);
+
+#ifdef CONFIG_PAX_KERNEXEC
+void module_free_exec(struct module *mod, void *module_region);
+#else
+#define module_free_exec(x, y) module_free((x), (y))
+#endif
 
 /*
  * Apply the given relocation to the (simplified) ELF.  Return -error
@@ -45,7 +57,9 @@ static inline int apply_relocate(Elf_Shdr *sechdrs,
 				 unsigned int relsec,
 				 struct module *me)
 {
+#ifdef CONFIG_MODULES
 	printk(KERN_ERR "module %s: REL relocation unsupported\n", me->name);
+#endif
 	return -ENOEXEC;
 }
 #endif
@@ -67,7 +81,9 @@ static inline int apply_relocate_add(Elf_Shdr *sechdrs,
 				     unsigned int relsec,
 				     struct module *me)
 {
+#ifdef CONFIG_MODULES
 	printk(KERN_ERR "module %s: REL relocation unsupported\n", me->name);
+#endif
 	return -ENOEXEC;
 }
 #endif

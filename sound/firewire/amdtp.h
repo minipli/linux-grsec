@@ -139,7 +139,7 @@ static inline bool amdtp_out_streaming_error(struct amdtp_out_stream *s)
 static inline void amdtp_out_stream_pcm_trigger(struct amdtp_out_stream *s,
 						struct snd_pcm_substream *pcm)
 {
-	ACCESS_ONCE(s->pcm) = pcm;
+	ACCESS_ONCE_RW(s->pcm) = pcm;
 }
 
 static inline bool cip_sfc_is_base_44100(enum cip_sfc sfc)
