@@ -66,7 +66,7 @@ static int nommu_region_show(struct seq_file *m, struct vm_region *region)
 		if (len < 1)
 			len = 1;
 		seq_printf(m, "%*c", len, ' ');
-		seq_path(m, &file->f_path, "");
+		seq_path(m, &file->f_path, "\n\\");
 	}
 
 	seq_putc(m, '\n');
