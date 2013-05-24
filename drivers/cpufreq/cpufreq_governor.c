@@ -201,8 +201,8 @@ int cpufreq_governor_dbs(struct dbs_data *dbs_data,
 {
 	struct od_cpu_dbs_info_s *od_dbs_info = NULL;
 	struct cs_cpu_dbs_info_s *cs_dbs_info = NULL;
-	struct cs_ops *cs_ops = NULL;
-	struct od_ops *od_ops = NULL;
+	const struct cs_ops *cs_ops = NULL;
+	const struct od_ops *od_ops = NULL;
 	struct od_dbs_tuners *od_tuners = dbs_data->tuners;
 	struct cs_dbs_tuners *cs_tuners = dbs_data->tuners;
 	struct cpu_dbs_common_info *cpu_cdbs;

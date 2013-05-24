@@ -52,7 +52,7 @@ struct core_name {
 	char *corename;
 	int used, size;
 };
-static atomic_t call_count = ATOMIC_INIT(1);
+static atomic_unchecked_t call_count = ATOMIC_INIT(1);
 
 /* The maximal length of core_pattern is also specified in sysctl.c */
 
@@ -60,7 +60,7 @@ static int expand_corename(struct core_name *cn)
 {
 	char *old_corename = cn->corename;
 
-	cn->size = CORENAME_MAX_SIZE * atomic_inc_return(&call_count);
+	cn->size = CORENAME_MAX_SIZE * atomic_inc_return_unchecked(&call_count);
 	cn->corename = krealloc(old_corename, cn->size, GFP_KERNEL);
 
 	if (!cn->corename) {
@@ -157,7 +157,7 @@ static int format_corename(struct core_name *cn, struct coredump_params *cprm)
 	int pid_in_pattern = 0;
 	int err = 0;
 
-	cn->size = CORENAME_MAX_SIZE * atomic_read(&call_count);
+	cn->size = CORENAME_MAX_SIZE * atomic_read_unchecked(&call_count);
 	cn->corename = kmalloc(cn->size, GFP_KERNEL);
 	cn->used = 0;
 
@@ -414,17 +414,17 @@ static void wait_for_dump_helpers(struct file *file)
 	pipe = file_inode(file)->i_pipe;
 
 	pipe_lock(pipe);
-	pipe->readers++;
-	pipe->writers--;
+	atomic_inc(&pipe->readers);
+	atomic_dec(&pipe->writers);
 
-	while ((pipe->readers > 1) && (!signal_pending(current))) {
+	while ((atomic_read(&pipe->readers) > 1) && (!signal_pending(current))) {
 		wake_up_interruptible_sync(&pipe->wait);
 		kill_fasync(&pipe->fasync_readers, SIGIO, POLL_IN);
 		pipe_wait(pipe);
 	}
 
-	pipe->readers--;
-	pipe->writers++;
+	atomic_dec(&pipe->readers);
+	atomic_inc(&pipe->writers);
 	pipe_unlock(pipe);
 
 }
@@ -471,7 +471,7 @@ void do_coredump(siginfo_t *siginfo)
 	int ispipe;
 	struct files_struct *displaced;
 	bool need_nonrelative = false;
-	static atomic_t core_dump_count = ATOMIC_INIT(0);
+	static atomic_unchecked_t core_dump_count = ATOMIC_INIT(0);
 	struct coredump_params cprm = {
 		.siginfo = siginfo,
 		.regs = signal_pt_regs(),
@@ -556,7 +556,7 @@ void do_coredump(siginfo_t *siginfo)
 		}
 		cprm.limit = RLIM_INFINITY;
 
-		dump_count = atomic_inc_return(&core_dump_count);
+		dump_count = atomic_inc_return_unchecked(&core_dump_count);
 		if (core_pipe_limit && (core_pipe_limit < dump_count)) {
 			printk(KERN_WARNING "Pid %d(%s) over core_pipe_limit\n",
 			       task_tgid_vnr(current), current->comm);
@@ -640,7 +640,7 @@ close_fail:
 		filp_close(cprm.file, NULL);
 fail_dropcount:
 	if (ispipe)
-		atomic_dec(&core_dump_count);
+		atomic_dec_unchecked(&core_dump_count);
 fail_unlock:
 	kfree(cn.corename);
 fail_corename:
@@ -659,7 +659,7 @@ fail:
  */
 int dump_write(struct file *file, const void *addr, int nr)
 {
-	return access_ok(VERIFY_READ, addr, nr) && file->f_op->write(file, addr, nr, &file->f_pos) == nr;
+	return access_ok(VERIFY_READ, addr, nr) && file->f_op->write(file, (const char __force_user *)addr, nr, &file->f_pos) == nr;
 }
 EXPORT_SYMBOL(dump_write);
 

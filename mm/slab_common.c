@@ -22,7 +22,7 @@
 
 #include "slab.h"
 
-enum slab_state slab_state;
+enum slab_state slab_state __read_only;
 LIST_HEAD(slab_caches);
 DEFINE_MUTEX(slab_mutex);
 struct kmem_cache *kmem_cache;
@@ -209,7 +209,7 @@ kmem_cache_create_memcg(struct mem_cgroup *memcg, const char *name, size_t size,
 
 		err = __kmem_cache_create(s, flags);
 		if (!err) {
-			s->refcount = 1;
+			atomic_set(&s->refcount, 1);
 			list_add(&s->list, &slab_caches);
 			memcg_cache_list_add(memcg, s);
 		} else {
@@ -255,8 +255,7 @@ void kmem_cache_destroy(struct kmem_cache *s)
 
 	get_online_cpus();
 	mutex_lock(&slab_mutex);
-	s->refcount--;
-	if (!s->refcount) {
+	if (atomic_dec_and_test(&s->refcount)) {
 		list_del(&s->list);
 
 		if (!__kmem_cache_shutdown(s)) {
@@ -302,7 +301,7 @@ void __init create_boot_cache(struct kmem_cache *s, const char *name, size_t siz
 		panic("Creation of kmalloc slab %s size=%zd failed. Reason %d\n",
 					name, size, err);
 
-	s->refcount = -1;	/* Exempt from merging for now */
+	atomic_set(&s->refcount, -1);	/* Exempt from merging for now */
 }
 
 struct kmem_cache *__init create_kmalloc_cache(const char *name, size_t size,
@@ -315,7 +314,7 @@ struct kmem_cache *__init create_kmalloc_cache(const char *name, size_t size,
 
 	create_boot_cache(s, name, size, flags);
 	list_add(&s->list, &slab_caches);
-	s->refcount = 1;
+	atomic_set(&s->refcount, 1);
 	return s;
 }
 
