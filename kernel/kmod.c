@@ -292,7 +292,7 @@ static int wait_for_helper(void *data)
 		 *
 		 * Thus the __user pointer cast is valid here.
 		 */
-		sys_wait4(pid, (int __user *)&ret, 0, NULL);
+		sys_wait4(pid, (int __force_user *)&ret, 0, NULL);
 
 		/*
 		 * If ret is 0, either ____call_usermodehelper failed and the
@@ -649,7 +649,7 @@ EXPORT_SYMBOL(call_usermodehelper_fns);
 static int proc_cap_handler(struct ctl_table *table, int write,
 			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table t;
+	ctl_table_no_const t;
 	unsigned long cap_array[_KERNEL_CAPABILITY_U32S];
 	kernel_cap_t new_cap;
 	int err, i;
