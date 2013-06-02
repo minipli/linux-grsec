@@ -264,7 +264,7 @@ int frag_send_skb(struct sk_buff *skb, struct bat_priv *bat_priv,
 	frag1->flags = UNI_FRAG_HEAD | large_tail;
 	frag2->flags = large_tail;
 
-	seqno = atomic_add_return(2, &hard_iface->frag_seqno);
+	seqno = atomic_add_return_unchecked(2, &hard_iface->frag_seqno);
 	frag1->seqno = htons(seqno - 1);
 	frag2->seqno = htons(seqno);
 
