@@ -164,6 +164,13 @@ extern unsigned int vdso_enabled;
    that it will "exec", and that there is sufficient room for the brk.  */
 #define ELF_ET_DYN_BASE		(STACK_TOP / 3 * 2)
 
+#ifdef CONFIG_PAX_ASLR
+#define PAX_ELF_ET_DYN_BASE	(test_thread_flag(TIF_31BIT) ? 0x10000UL : 0x80000000UL)
+
+#define PAX_DELTA_MMAP_LEN	(test_thread_flag(TIF_31BIT) ? 15 : 26)
+#define PAX_DELTA_STACK_LEN	(test_thread_flag(TIF_31BIT) ? 15 : 26)
+#endif
+
 /* This yields a mask that user programs can use to figure out what
    instruction set this CPU supports. */
 
@@ -182,7 +189,8 @@ extern char elf_platform[];
 #define ELF_PLATFORM (elf_platform)
 
 #ifndef __s390x__
-#define SET_PERSONALITY(ex) set_personality(PER_LINUX)
+#define SET_PERSONALITY(ex) \
+	set_personality(PER_LINUX | (current->personality & (~PER_MASK)))
 #else /* __s390x__ */
 #define SET_PERSONALITY(ex)					\
 do {								\

@@ -2228,9 +2228,9 @@ static void init_substream(struct snd_usb_stream *as, int stream, struct audiofo
 	subs->direction = stream;
 	subs->dev = as->chip->dev;
 	if (snd_usb_get_speed(subs->dev) == USB_SPEED_FULL) {
-		subs->ops = audio_urb_ops[stream];
+		memcpy((void *)&subs->ops, &audio_urb_ops[stream], sizeof(subs->ops));
 	} else {
-		subs->ops = audio_urb_ops_high_speed[stream];
+		memcpy((void *)&subs->ops, &audio_urb_ops_high_speed[stream], sizeof(subs->ops));
 		switch (as->chip->usb_id) {
 		case USB_ID(0x041e, 0x3f02): /* E-Mu 0202 USB */
 		case USB_ID(0x041e, 0x3f04): /* E-Mu 0404 USB */

@@ -54,6 +54,7 @@
 #include <linux/mount.h>
 #include <linux/pagemap.h>
 #include <linux/syscalls.h>
+#include <linux/ptrace.h>
 #include <linux/signal.h>
 #include <linux/module.h>
 #include <linux/magic.h>
@@ -222,6 +223,11 @@ get_futex_key(u32 __user *uaddr, int fshared, union futex_key *key, int rw)
 	struct mm_struct *mm = current->mm;
 	struct page *page;
 	int err, ro = 0;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((mm->pax_flags & MF_PAX_SEGMEXEC) && address >= SEGMEXEC_TASK_SIZE)
+		return -EFAULT;
+#endif
 
 	/*
 	 * The futex address must be "naturally" aligned.
@@ -665,8 +671,8 @@ static int futex_lock_pi_atomic(u32 __user *uaddr, struct futex_hash_bucket *hb,
 				struct futex_pi_state **ps,
 				struct task_struct *task, int set_waiters)
 {
-	int lock_taken, ret, ownerdied = 0;
-	u32 uval, newval, curval;
+	int lock_taken, ret, force_take = 0;
+	u32 uval, newval, curval, vpid = task_pid_vnr(task);
 
 retry:
 	ret = lock_taken = 0;
@@ -676,7 +682,7 @@ retry:
 	 * (by doing a 0 -> TID atomic cmpxchg), while holding all
 	 * the locks. It will most likely not succeed.
 	 */
-	newval = task_pid_vnr(task);
+	newval = vpid;
 	if (set_waiters)
 		newval |= FUTEX_WAITERS;
 
@@ -688,7 +694,7 @@ retry:
 	/*
 	 * Detect deadlocks.
 	 */
-	if ((unlikely((curval & FUTEX_TID_MASK) == task_pid_vnr(task))))
+	if ((unlikely((curval & FUTEX_TID_MASK) == vpid)))
 		return -EDEADLK;
 
 	/*
@@ -706,17 +712,15 @@ retry:
 	newval = curval | FUTEX_WAITERS;
 
 	/*
-	 * There are two cases, where a futex might have no owner (the
-	 * owner TID is 0): OWNER_DIED. We take over the futex in this
-	 * case. We also do an unconditional take over, when the owner
-	 * of the futex died.
-	 *
-	 * This is safe as we are protected by the hash bucket lock !
+	 * Should we force take the futex? See below.
 	 */
-	if (unlikely(ownerdied || !(curval & FUTEX_TID_MASK))) {
-		/* Keep the OWNER_DIED bit */
-		newval = (curval & ~FUTEX_TID_MASK) | task_pid_vnr(task);
-		ownerdied = 0;
+	if (unlikely(force_take)) {
+		/*
+		 * Keep the OWNER_DIED and the WAITERS bit and set the
+		 * new TID value.
+		 */
+		newval = (curval & ~FUTEX_TID_MASK) | vpid;
+		force_take = 0;
 		lock_taken = 1;
 	}
 
@@ -728,7 +732,7 @@ retry:
 		goto retry;
 
 	/*
-	 * We took the lock due to owner died take over.
+	 * We took the lock due to forced take over.
 	 */
 	if (unlikely(lock_taken))
 		return 1;
@@ -743,20 +747,25 @@ retry:
 		switch (ret) {
 		case -ESRCH:
 			/*
-			 * No owner found for this futex. Check if the
-			 * OWNER_DIED bit is set to figure out whether
-			 * this is a robust futex or not.
+			 * We failed to find an owner for this
+			 * futex. So we have no pi_state to block
+			 * on. This can happen in two cases:
+			 *
+			 * 1) The owner died
+			 * 2) A stale FUTEX_WAITERS bit
+			 *
+			 * Re-read the futex value.
 			 */
 			if (get_futex_value_locked(&curval, uaddr))
 				return -EFAULT;
 
 			/*
-			 * We simply start over in case of a robust
-			 * futex. The code above will take the futex
-			 * and return happy.
+			 * If the owner died or we have a stale
+			 * WAITERS bit the owner TID in the user space
+			 * futex is 0.
 			 */
-			if (curval & FUTEX_OWNER_DIED) {
-				ownerdied = 1;
+			if (!(curval & FUTEX_TID_MASK)) {
+				force_take = 1;
 				goto retry;
 			}
 		default:
@@ -774,6 +783,9 @@ retry:
 static void wake_futex(struct futex_q *q)
 {
 	struct task_struct *p = q->task;
+
+	if (WARN(q->pi_state || q->rt_waiter, "refusing to wake PI futex\n"))
+		return;
 
 	/*
 	 * We set q->lock_ptr = NULL _before_ we wake up the task. If
@@ -1014,6 +1026,10 @@ retry_private:
 
 	plist_for_each_entry_safe(this, next, head, list) {
 		if (match_futex (&this->key, &key1)) {
+			if (this->pi_state || this->rt_waiter) {
+				ret = -EINVAL;
+				goto out_unlock;
+			}
 			wake_futex(this);
 			if (++ret >= nr_wake)
 				break;
@@ -1026,6 +1042,10 @@ retry_private:
 		op_ret = 0;
 		plist_for_each_entry_safe(this, next, head, list) {
 			if (match_futex (&this->key, &key2)) {
+				if (this->pi_state || this->rt_waiter) {
+					ret = -EINVAL;
+					goto out_unlock;
+				}
 				wake_futex(this);
 				if (++op_ret >= nr_wake2)
 					break;
@@ -1034,6 +1054,7 @@ retry_private:
 		ret += op_ret;
 	}
 
+out_unlock:
 	double_unlock_hb(hb1, hb2);
 out_put_keys:
 	put_futex_key(fshared, &key2);
@@ -1328,9 +1349,13 @@ retry_private:
 		/*
 		 * FUTEX_WAIT_REQEUE_PI and FUTEX_CMP_REQUEUE_PI should always
 		 * be paired with each other and no other futex ops.
+		 *
+		 * We should never be requeueing a futex_q with a pi_state,
+		 * which is awaiting a futex_unlock_pi().
 		 */
 		if ((requeue_pi && !this->rt_waiter) ||
-		    (!requeue_pi && this->rt_waiter)) {
+		    (!requeue_pi && this->rt_waiter) ||
+		    this->pi_state) {
 			ret = -EINVAL;
 			break;
 		}
@@ -1831,6 +1856,8 @@ static int futex_wait(u32 __user *uaddr, int fshared,
 	struct futex_q q;
 	int ret;
 
+	pax_track_stack();
+
 	if (!bitset)
 		return -EINVAL;
 
@@ -1883,7 +1910,7 @@ retry:
 
 	restart = &current_thread_info()->restart_block;
 	restart->fn = futex_wait_restart;
-	restart->futex.uaddr = (u32 *)uaddr;
+	restart->futex.uaddr = uaddr;
 	restart->futex.val = val;
 	restart->futex.time = abs_time->tv64;
 	restart->futex.bitset = bitset;
@@ -2245,6 +2272,8 @@ static int futex_wait_requeue_pi(u32 __user *uaddr, int fshared,
 	struct futex_q q;
 	int res, ret;
 
+	pax_track_stack();
+
 	if (uaddr == uaddr2)
 		return -EINVAL;
 
@@ -2438,6 +2467,10 @@ SYSCALL_DEFINE3(get_robust_list, int, pid,
 		if (!p)
 			goto err_unlock;
 		ret = -EPERM;
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+		if (!ptrace_may_access(p, PTRACE_MODE_READ))
+			goto err_unlock;
+#endif
 		pcred = __task_cred(p);
 		if (cred->euid != pcred->euid &&
 		    cred->euid != pcred->uid &&
@@ -2504,7 +2537,7 @@ retry:
  */
 static inline int fetch_robust_entry(struct robust_list __user **entry,
 				     struct robust_list __user * __user *head,
-				     int *pi)
+				     unsigned int *pi)
 {
 	unsigned long uentry;
 
@@ -2685,6 +2718,7 @@ static int __init futex_init(void)
 {
 	u32 curval;
 	int i;
+	mm_segment_t oldfs;
 
 	/*
 	 * This will fail and we want it. Some arch implementations do
@@ -2696,7 +2730,10 @@ static int __init futex_init(void)
 	 * implementation, the non functional ones will return
 	 * -ENOSYS.
 	 */
+	oldfs = get_fs();
+	set_fs(USER_DS);
 	curval = cmpxchg_futex_value_locked(NULL, 0, 0);
+	set_fs(oldfs);
 	if (curval == -EFAULT)
 		futex_cmpxchg_enabled = 1;
 

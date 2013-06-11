@@ -2084,6 +2084,8 @@ static int do_tcp_setsockopt(struct sock *sk, int level,
 	int val;
 	int err = 0;
 
+	pax_track_stack();
+
 	/* This is a string value all the others are int's */
 	if (optname == TCP_CONGESTION) {
 		char name[TCP_CA_NAME_MAX];
@@ -2353,6 +2355,8 @@ static int do_tcp_getsockopt(struct sock *sk, int level,
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 	int val, len;
+
+	pax_track_stack();
 
 	if (get_user(len, optlen))
 		return -EFAULT;
@@ -2826,7 +2830,11 @@ int tcp_md5_hash_skb_data(struct tcp_md5sig_pool *hp,
 
 	for (i = 0; i < shi->nr_frags; ++i) {
 		const struct skb_frag_struct *f = &shi->frags[i];
-		sg_set_page(&sg, f->page, f->size, f->page_offset);
+		unsigned int offset = f->page_offset;
+		struct page *page = f->page + (offset >> PAGE_SHIFT);
+
+		sg_set_page(&sg, page, f->size,
+			    offset_in_page(offset));
 		if (crypto_hash_update(desc, &sg, f->size))
 			return 1;
 	}

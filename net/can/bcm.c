@@ -164,9 +164,15 @@ static int bcm_proc_show(struct seq_file *m, void *v)
 	struct bcm_sock *bo = bcm_sk(sk);
 	struct bcm_op *op;
 
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	seq_printf(m, ">>> socket %p", NULL);
+	seq_printf(m, " / sk %p", NULL);
+	seq_printf(m, " / bo %p", NULL);
+#else
 	seq_printf(m, ">>> socket %p", sk->sk_socket);
 	seq_printf(m, " / sk %p", sk);
 	seq_printf(m, " / bo %p", bo);
+#endif
 	seq_printf(m, " / dropped %lu", bo->dropped_usr_msgs);
 	seq_printf(m, " / bound %s", bcm_proc_getifname(ifname, bo->ifindex));
 	seq_printf(m, " <<<\n");
@@ -1090,6 +1096,9 @@ static int bcm_rx_setup(struct bcm_msg_head *msg_head, struct msghdr *msg,
 		/* bcm_can_tx / bcm_tx_timeout_handler needs this */
 		op->sk = sk;
 		op->ifindex = ifindex;
+
+		/* ifindex for timeout events w/o previous frame reception */
+		op->rx_ifindex = ifindex;
 
 		/* initialize uninitialized (kzalloc) structure */
 		hrtimer_init(&op->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);

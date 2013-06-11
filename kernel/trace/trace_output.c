@@ -237,7 +237,7 @@ int trace_seq_path(struct trace_seq *s, struct path *path)
 		return 0;
 	p = d_path(path, s->buffer + s->len, PAGE_SIZE - s->len);
 	if (!IS_ERR(p)) {
-		p = mangle_path(s->buffer + s->len, p, "\n");
+		p = mangle_path(s->buffer + s->len, p, "\n\\");
 		if (p) {
 			s->len = p - s->buffer;
 			return 1;
@@ -711,14 +711,16 @@ int register_ftrace_event(struct trace_event *event)
 			goto out;
 	}
 
+	pax_open_kernel();
 	if (event->trace == NULL)
-		event->trace = trace_nop_print;
+		*(void **)&event->trace = trace_nop_print;
 	if (event->raw == NULL)
-		event->raw = trace_nop_print;
+		*(void **)&event->raw = trace_nop_print;
 	if (event->hex == NULL)
-		event->hex = trace_nop_print;
+		*(void **)&event->hex = trace_nop_print;
 	if (event->binary == NULL)
-		event->binary = trace_nop_print;
+		*(void **)&event->binary = trace_nop_print;
+	pax_close_kernel();
 
 	key = event->type & (EVENT_HASHSIZE - 1);
 

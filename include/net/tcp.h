@@ -237,6 +237,7 @@ extern int sysctl_tcp_base_mss;
 extern int sysctl_tcp_workaround_signed_windows;
 extern int sysctl_tcp_slow_start_after_idle;
 extern int sysctl_tcp_max_ssthresh;
+extern int sysctl_tcp_challenge_ack_limit;
 
 extern atomic_t tcp_memory_allocated;
 extern struct percpu_counter tcp_sockets_allocated;
@@ -483,7 +484,7 @@ extern void tcp_retransmit_timer(struct sock *sk);
 extern void tcp_xmit_retransmit_queue(struct sock *);
 extern void tcp_simple_retransmit(struct sock *);
 extern int tcp_trim_head(struct sock *, struct sk_buff *, u32);
-extern int tcp_fragment(struct sock *, struct sk_buff *, u32, unsigned int);
+extern int __intentional_overflow(3) tcp_fragment(struct sock *, struct sk_buff *, u32, unsigned int);
 
 extern void tcp_send_probe0(struct sock *);
 extern void tcp_send_partial(struct sock *);
@@ -632,8 +633,8 @@ struct tcp_skb_cb {
 		struct inet6_skb_parm	h6;
 #endif
 	} header;	/* For incoming frames		*/
-	__u32		seq;		/* Starting sequence number	*/
-	__u32		end_seq;	/* SEQ + FIN + SYN + datalen	*/
+	__u32		seq __intentional_overflow(0);	/* Starting sequence number	*/
+	__u32		end_seq __intentional_overflow(0);	/* SEQ + FIN + SYN + datalen	*/
 	__u32		when;		/* used to compute rtt's	*/
 	__u8		flags;		/* TCP header flags.		*/
 
@@ -658,7 +659,7 @@ struct tcp_skb_cb {
 #define TCPCB_EVER_RETRANS	0x80	/* Ever retransmitted frame	*/
 #define TCPCB_RETRANS		(TCPCB_SACKED_RETRANS|TCPCB_EVER_RETRANS)
 
-	__u32		ack_seq;	/* Sequence number ACK'd	*/
+	__u32		ack_seq __intentional_overflow(0);	/* Sequence number ACK'd	*/
 };
 
 #define TCP_SKB_CB(__skb)	((struct tcp_skb_cb *)&((__skb)->cb[0]))

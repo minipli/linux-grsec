@@ -23,7 +23,7 @@ struct restart_block {
 		};
 		/* For futex_wait and futex_wait_requeue_pi */
 		struct {
-			u32 *uaddr;
+			u32 __user *uaddr;
 			u32 val;
 			u32 flags;
 			u32 bitset;
@@ -125,6 +125,13 @@ static inline void set_restore_sigmask(void)
 	set_thread_flag(TIF_SIGPENDING);
 }
 #endif	/* TIF_RESTORE_SIGMASK && !HAVE_SET_RESTORE_SIGMASK */
+
+extern void __check_object_size(const void *ptr, unsigned long n, bool to);
+static inline void check_object_size(const void *ptr, unsigned long n, bool to)
+{
+	if (!__builtin_constant_p(n))
+		__check_object_size(ptr, n, to);
+}
 
 #endif	/* __KERNEL__ */
 

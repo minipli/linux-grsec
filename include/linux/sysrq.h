@@ -15,6 +15,7 @@
 #define _LINUX_SYSRQ_H
 
 #include <linux/errno.h>
+#include <linux/compiler.h>
 
 struct pt_regs;
 struct tty_struct;
@@ -35,7 +36,7 @@ struct sysrq_key_op {
 	char *help_msg;
 	char *action_msg;
 	int enable_mask;
-};
+} __do_const;
 
 #ifdef CONFIG_MAGIC_SYSRQ
 

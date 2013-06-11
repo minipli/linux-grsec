@@ -1306,6 +1306,13 @@ static int udf_load_logicalvol(struct super_block *sb, sector_t block,
 		return 1;
 	BUG_ON(ident != TAG_IDENT_LVD);
 	lvd = (struct logicalVolDesc *)bh->b_data;
+	table_len = le32_to_cpu(lvd->mapTableLength);
+	if (sizeof(*lvd) + table_len > sb->s_blocksize) {
+		udf_error(sb, __func__, "error loading logical volume descriptor: "
+			"Partition table too long (%u > %lu)\n", table_len,
+			sb->s_blocksize - sizeof(*lvd));
+		goto out_bh;
+	}
 
 	table_len = le32_to_cpu(lvd->mapTableLength);
 	if (table_len > sb->s_blocksize - sizeof(*lvd)) {

@@ -146,7 +146,7 @@ static int tty_open(struct inode *, struct file *);
 static int tty_release(struct inode *, struct file *);
 long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg);
 #ifdef CONFIG_COMPAT
-static long tty_compat_ioctl(struct file *file, unsigned int cmd,
+long tty_compat_ioctl(struct file *file, unsigned int cmd,
 				unsigned long arg);
 #else
 #define tty_compat_ioctl NULL
@@ -856,6 +856,14 @@ void start_tty(struct tty_struct *tty)
 
 EXPORT_SYMBOL(start_tty);
 
+static void tty_update_time(struct timespec *time)
+{
+	unsigned long sec = get_seconds();
+	sec -= sec % 60;
+	if ((long)(sec - time->tv_sec) > 0)
+		time->tv_sec = sec;
+}
+
 /**
  *	tty_read	-	read method for tty device files
  *	@file: pointer to tty file
@@ -894,8 +902,10 @@ static ssize_t tty_read(struct file *file, char __user *buf, size_t count,
 	else
 		i = -EIO;
 	tty_ldisc_deref(ld);
+
 	if (i > 0)
-		inode->i_atime = current_fs_time(inode->i_sb);
+		tty_update_time(&inode->i_atime);
+
 	return i;
 }
 
@@ -995,8 +1005,7 @@ static inline ssize_t do_tty_write(
 		cond_resched();
 	}
 	if (written) {
-		struct inode *inode = file->f_path.dentry->d_inode;
-		inode->i_mtime = current_fs_time(inode->i_sb);
+		tty_update_time(&file->f_dentry->d_inode->i_mtime);
 		ret = written;
 	}
 out:
@@ -1774,6 +1783,7 @@ got_driver:
 
 		if (IS_ERR(tty)) {
 			mutex_unlock(&tty_mutex);
+			tty_driver_kref_put(driver);
 			return PTR_ERR(tty);
 		}
 	}
@@ -2603,8 +2613,10 @@ long tty_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	return retval;
 }
 
+EXPORT_SYMBOL(tty_ioctl);
+
 #ifdef CONFIG_COMPAT
-static long tty_compat_ioctl(struct file *file, unsigned int cmd,
+long tty_compat_ioctl(struct file *file, unsigned int cmd,
 				unsigned long arg)
 {
 	struct inode *inode = file->f_dentry->d_inode;
@@ -2628,6 +2640,8 @@ static long tty_compat_ioctl(struct file *file, unsigned int cmd,
 
 	return retval;
 }
+
+EXPORT_SYMBOL(tty_compat_ioctl);
 #endif
 
 /*
@@ -3073,7 +3087,7 @@ EXPORT_SYMBOL_GPL(get_current_tty);
 
 void tty_default_fops(struct file_operations *fops)
 {
-	*fops = tty_fops;
+	memcpy((void *)fops, &tty_fops, sizeof(tty_fops));
 }
 
 /*

@@ -66,6 +66,8 @@ int reiserfs_readdir_dentry(struct dentry *dentry, void *dirent,
 	struct reiserfs_dir_entry de;
 	int ret = 0;
 
+	pax_track_stack();
+
 	reiserfs_write_lock(inode->i_sb);
 
 	reiserfs_check_lock_depth(inode->i_sb, "readdir");
@@ -187,6 +189,8 @@ int reiserfs_readdir_dentry(struct dentry *dentry, void *dirent,
 				next_pos = deh_offset(deh) + 1;
 
 				if (item_moved(&tmp_ih, &path_to_entry)) {
+					set_cpu_key_k_offset(&pos_key,
+							     next_pos);
 					goto research;
 				}
 			}	/* for */

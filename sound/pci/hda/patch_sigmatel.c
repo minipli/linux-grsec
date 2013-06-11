@@ -5220,7 +5220,7 @@ again:
 	snd_hda_codec_write_cache(codec, nid, 0,
 			AC_VERB_SET_CONNECT_SEL, num_dacs);
 
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 
 	codec->proc_widget_hook = stac92hd_proc_hook;
 
@@ -5294,7 +5294,7 @@ static int patch_stac92hd71bxx(struct hda_codec *codec)
 		return -ENOMEM;
 
 	codec->spec = spec;
-	codec->patch_ops = stac92xx_patch_ops;
+	memcpy((void *)&codec->patch_ops, &stac92xx_patch_ops, sizeof(stac92xx_patch_ops));
 	spec->num_pins = STAC92HD71BXX_NUM_PINS;
 	switch (codec->vendor_id) {
 	case 0x111d76b6:

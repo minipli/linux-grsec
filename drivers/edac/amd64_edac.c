@@ -106,8 +106,11 @@ static int amd64_search_set_scrub_rate(struct pci_dev *ctl, u32 new_bw,
 	 * memory controller and apply to register. Search for the first
 	 * bandwidth entry that is greater or equal than the setting requested
 	 * and program that. If at last entry, turn off DRAM scrubbing.
+	 *
+	 * If no suitable bandwidth is found, turn off DRAM scrubbing entirely
+	 * by falling back to the last element in scrubrates[].
 	 */
-	for (i = 0; i < ARRAY_SIZE(scrubrates); i++) {
+	for (i = 0; i < ARRAY_SIZE(scrubrates) - 1; i++) {
 		/*
 		 * skip scrub rates which aren't recommended
 		 * (see F10 BKDG, F3x58)
@@ -117,12 +120,6 @@ static int amd64_search_set_scrub_rate(struct pci_dev *ctl, u32 new_bw,
 
 		if (scrubrates[i].bandwidth <= new_bw)
 			break;
-
-		/*
-		 * if no suitable bandwidth found, turn off DRAM scrubbing
-		 * entirely by falling back to the last element in the
-		 * scrubrates array.
-		 */
 	}
 
 	scrubval = scrubrates[i].scrubval;
@@ -3099,7 +3096,7 @@ static void __devexit amd64_remove_one_instance(struct pci_dev *pdev)
  * PCI core identifies what devices are on a system during boot, and then
  * inquiry this table to see if this driver is for a given device found.
  */
-static const struct pci_device_id amd64_pci_table[] __devinitdata = {
+static const struct pci_device_id amd64_pci_table[] __devinitconst = {
 	{
 		.vendor		= PCI_VENDOR_ID_AMD,
 		.device		= PCI_DEVICE_ID_AMD_K8_NB_MEMCTL,

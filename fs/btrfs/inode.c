@@ -63,7 +63,7 @@ static const struct inode_operations btrfs_file_inode_operations;
 static const struct address_space_operations btrfs_aops;
 static const struct address_space_operations btrfs_symlink_aops;
 static const struct file_operations btrfs_dir_file_operations;
-static struct extent_io_ops btrfs_extent_io_ops;
+static const struct extent_io_ops btrfs_extent_io_ops;
 
 static struct kmem_cache *btrfs_inode_cachep;
 struct kmem_cache *btrfs_trans_handle_cachep;
@@ -925,6 +925,7 @@ static int cow_file_range_async(struct inode *inode, struct page *locked_page,
 			 1, 0, NULL, GFP_NOFS);
 	while (start < end) {
 		async_cow = kmalloc(sizeof(*async_cow), GFP_NOFS);
+		BUG_ON(!async_cow);
 		async_cow->inode = inode;
 		async_cow->root = root;
 		async_cow->locked_page = locked_page;
@@ -4591,6 +4592,8 @@ static noinline int uncompress_inline(struct btrfs_path *path,
 	inline_size = btrfs_file_extent_inline_item_len(leaf,
 					btrfs_item_nr(leaf, path->slots[0]));
 	tmp = kmalloc(inline_size, GFP_NOFS);
+	if (!tmp)
+		return -ENOMEM;
 	ptr = btrfs_file_extent_inline_start(item);
 
 	read_extent_buffer(leaf, tmp, ptr, inline_size);
@@ -5972,7 +5975,7 @@ static const struct file_operations btrfs_dir_file_operations = {
 	.fsync		= btrfs_sync_file,
 };
 
-static struct extent_io_ops btrfs_extent_io_ops = {
+static const struct extent_io_ops btrfs_extent_io_ops = {
 	.fill_delalloc = run_delalloc_range,
 	.submit_bio_hook = btrfs_submit_bio_hook,
 	.merge_bio_hook = btrfs_merge_bio_hook,

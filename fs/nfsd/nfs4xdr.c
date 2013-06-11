@@ -268,7 +268,7 @@ nfsd4_decode_fattr(struct nfsd4_compoundargs *argp, u32 *bmval,
 		iattr->ia_valid |= ATTR_SIZE;
 	}
 	if (bmval[0] & FATTR4_WORD0_ACL) {
-		int nace;
+		u32 nace;
 		struct nfs4_ace *ace;
 
 		READ_BUF(4); len += 4;
@@ -1750,6 +1750,8 @@ nfsd4_encode_fattr(struct svc_fh *fhp, struct svc_export *exp,
 	struct nfs4_acl *acl = NULL;
 	struct nfsd4_compoundres *resp = rqstp->rq_resp;
 	u32 minorversion = resp->cstate.minorversion;
+
+	pax_track_stack();
 
 	BUG_ON(bmval1 & NFSD_WRITEONLY_ATTRS_WORD1);
 	BUG_ON(bmval0 & ~nfsd_suppattrs0(minorversion));

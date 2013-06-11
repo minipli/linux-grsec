@@ -169,6 +169,8 @@ static int aout_core_dump(long signr, struct pt_regs *regs, struct file *file,
 	unsigned long dump_start, dump_size;
 	struct user32 dump;
 
+	memset(&dump, 0, sizeof(dump));
+
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 	has_dumped = 1;
@@ -218,12 +220,6 @@ static int aout_core_dump(long signr, struct pt_regs *regs, struct file *file,
 		dump_size = dump.u_ssize << PAGE_SHIFT;
 		DUMP_WRITE(dump_start, dump_size);
 	}
-	/*
-	 * Finally dump the task struct.  Not be used by gdb, but
-	 * could be useful
-	 */
-	set_fs(KERNEL_DS);
-	DUMP_WRITE(current, sizeof(*current));
 end_coredump:
 	set_fs(fs);
 	return has_dumped;
@@ -327,6 +323,13 @@ static int load_aout_binary(struct linux_binprm *bprm, struct pt_regs *regs)
 	current->mm->free_area_cache = TASK_UNMAPPED_BASE;
 	current->mm->cached_hole_size = 0;
 
+	retval = setup_arg_pages(bprm, IA32_STACK_TOP, EXSTACK_DEFAULT);
+	if (retval < 0) {
+		/* Someone check-me: is this error path enough? */
+		send_sig(SIGKILL, current, 0);
+		return retval;
+	}
+
 	install_exec_creds(bprm);
 	current->flags &= ~PF_FORKNOEXEC;
 
@@ -421,13 +424,6 @@ beyond_if:
 	set_binfmt(&aout_format);
 
 	set_brk(current->mm->start_brk, current->mm->brk);
-
-	retval = setup_arg_pages(bprm, IA32_STACK_TOP, EXSTACK_DEFAULT);
-	if (retval < 0) {
-		/* Someone check-me: is this error path enough? */
-		send_sig(SIGKILL, current, 0);
-		return retval;
-	}
 
 	current->mm->start_stack =
 		(unsigned long)create_aout_tables((char __user *)bprm->p, bprm);

@@ -67,7 +67,6 @@ int sysctl_overcommit_memory = OVERCOMMIT_GUESS; /* heuristic overcommit */
 int sysctl_overcommit_ratio = 50; /* default is 50% */
 int sysctl_max_map_count = DEFAULT_MAX_MAP_COUNT;
 int sysctl_nr_trim_pages = CONFIG_NOMMU_INITIAL_TRIM_EXCESS;
-int heap_stack_gap = 0;
 
 atomic_long_t mmap_pages_allocated;
 
@@ -740,7 +739,7 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 	struct rb_node *n = mm->mm_rb.rb_node;
 
 	/* check the cache first */
-	vma = mm->mmap_cache;
+	vma = ACCESS_ONCE(mm->mmap_cache);
 	if (vma && vma->vm_start <= addr && vma->vm_end > addr)
 		return vma;
 
@@ -759,15 +758,6 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 	return NULL;
 }
 EXPORT_SYMBOL(find_vma);
-
-/*
- * find a VMA
- * - we don't extend stack VMAs under NOMMU conditions
- */
-struct vm_area_struct *find_extend_vma(struct mm_struct *mm, unsigned long addr)
-{
-	return find_vma(mm, addr);
-}
 
 /*
  * expand a stack to a given address

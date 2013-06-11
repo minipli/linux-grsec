@@ -269,8 +269,13 @@
 /*
  * Configuration information
  */
+#ifdef CONFIG_GRKERNSEC_RANDNET
+#define INPUT_POOL_WORDS 512
+#define OUTPUT_POOL_WORDS 128
+#else
 #define INPUT_POOL_WORDS 128
 #define OUTPUT_POOL_WORDS 32
+#endif
 #define SEC_XFER_SIZE 512
 #define EXTRACT_SIZE 10
 
@@ -310,10 +315,17 @@ static struct poolinfo {
 	int poolwords;
 	int tap1, tap2, tap3, tap4, tap5;
 } poolinfo_table[] = {
+#ifdef CONFIG_GRKERNSEC_RANDNET
+	/* x^512 + x^411 + x^308 + x^208 +x^104 + x + 1 -- 225 */
+	{ 512,	411,	308,	208,	104,	1 },
+	/* x^128 + x^103 + x^76 + x^51 + x^25 + x + 1 -- 105 */
+	{ 128,	103,	76,	51,	25,	1 },
+#else
 	/* x^128 + x^103 + x^76 + x^51 +x^25 + x + 1 -- 105 */
 	{ 128,	103,	76,	51,	25,	1 },
 	/* x^32 + x^26 + x^20 + x^14 + x^7 + x + 1 -- 15 */
 	{ 32,	26,	20,	14,	7,	1 },
+#endif
 #if 0
 	/* x^2048 + x^1638 + x^1231 + x^819 + x^411 + x + 1  -- 115 */
 	{ 2048,	1638,	1231,	819,	411,	1 },
@@ -434,6 +446,7 @@ struct entropy_store {
 	int entropy_count;
 	int entropy_total;
 	unsigned int initialized:1;
+	bool last_data_init;
 	__u8 last_data[EXTRACT_SIZE];
 };
 
@@ -524,8 +537,8 @@ static void __mix_pool_bytes(struct entropy_store *r, const void *in,
 		input_rotate += i ? 7 : 14;
 	}
 
-	ACCESS_ONCE(r->input_rotate) = input_rotate;
-	ACCESS_ONCE(r->add_ptr) = i;
+	ACCESS_ONCE_RW(r->input_rotate) = input_rotate;
+	ACCESS_ONCE_RW(r->add_ptr) = i;
 	smp_wmb();
 
 	if (out)
@@ -840,6 +853,7 @@ static size_t account(struct entropy_store *r, size_t nbytes, int min,
 		      int reserved)
 {
 	unsigned long flags;
+	int wakeup_write = 0;
 
 	/* Hold lock while accounting */
 	spin_lock_irqsave(&r->lock, flags);
@@ -852,25 +866,36 @@ static size_t account(struct entropy_store *r, size_t nbytes, int min,
 	if (r->entropy_count / 8 < min + reserved) {
 		nbytes = 0;
 	} else {
+		int entropy_count, orig;
+retry:
+		entropy_count = orig = ACCESS_ONCE(r->entropy_count);
 		/* If limited, never pull more than available */
-		if (r->limit && nbytes + reserved >= r->entropy_count / 8)
-			nbytes = r->entropy_count/8 - reserved;
+		if (r->limit && nbytes + reserved >= entropy_count / 8)
+			nbytes = entropy_count/8 - reserved;
 
-		if (r->entropy_count / 8 >= nbytes + reserved)
-			r->entropy_count -= nbytes*8;
-		else
-			r->entropy_count = reserved;
-
-		if (r->entropy_count < random_write_wakeup_thresh) {
-			wake_up_interruptible(&random_write_wait);
-			kill_fasync(&fasync, SIGIO, POLL_OUT);
+		if (entropy_count / 8 >= nbytes + reserved) {
+			entropy_count -= nbytes*8;
+			if (cmpxchg(&r->entropy_count, orig, entropy_count) != orig)
+				goto retry;
+		} else {
+			entropy_count = reserved;
+			if (cmpxchg(&r->entropy_count, orig, entropy_count) != orig)
+				goto retry;
 		}
+
+		if (entropy_count < random_write_wakeup_thresh)
+			wakeup_write = 1;
 	}
 
 	DEBUG_ENT("debiting %d entropy credits from %s%s\n",
 		  nbytes * 8, r->name, r->limit ? "" : " (unlimited)");
 
 	spin_unlock_irqrestore(&r->lock, flags);
+
+	if (wakeup_write) {
+		wake_up_interruptible(&random_write_wait);
+		kill_fasync(&fasync, SIGIO, POLL_OUT);
+	}
 
 	return nbytes;
 }
@@ -941,6 +966,21 @@ static ssize_t extract_entropy(struct entropy_store *r, void *buf,
 {
 	ssize_t ret = 0, i;
 	__u8 tmp[EXTRACT_SIZE];
+	unsigned long flags;
+
+	/* if last_data isn't primed, we need EXTRACT_SIZE extra bytes */
+	if (fips_enabled) {
+		spin_lock_irqsave(&r->lock, flags);
+		if (!r->last_data_init) {
+			r->last_data_init = true;
+			spin_unlock_irqrestore(&r->lock, flags);
+			xfer_secondary_pool(r, EXTRACT_SIZE);
+			extract_buf(r, tmp);
+			spin_lock_irqsave(&r->lock, flags);
+			memcpy(r->last_data, tmp, EXTRACT_SIZE);
+		}
+		spin_unlock_irqrestore(&r->lock, flags);
+	}
 
 	xfer_secondary_pool(r, nbytes);
 	nbytes = account(r, nbytes, min, reserved);
@@ -949,8 +989,6 @@ static ssize_t extract_entropy(struct entropy_store *r, void *buf,
 		extract_buf(r, tmp);
 
 		if (fips_enabled) {
-			unsigned long flags;
-
 			spin_lock_irqsave(&r->lock, flags);
 			if (!memcmp(tmp, r->last_data, EXTRACT_SIZE))
 				panic("Hardware RNG duplicated output!\n");
@@ -1015,7 +1053,21 @@ static ssize_t extract_entropy_user(struct entropy_store *r, void __user *buf,
  */
 void get_random_bytes(void *buf, int nbytes)
 {
-	extract_entropy(&nonblocking_pool, buf, nbytes, 0, 0);
+	char *p = buf;
+
+	while (nbytes) {
+		unsigned long v;
+		int chunk = min(nbytes, (int)sizeof(unsigned long));
+		
+		if (!arch_get_random_long(&v))
+			break;
+		
+		memcpy(buf, &v, chunk);
+		p += chunk;
+		nbytes -= chunk;
+	}
+
+	extract_entropy(&nonblocking_pool, p, nbytes, 0, 0);
 }
 EXPORT_SYMBOL(get_random_bytes);
 
@@ -1068,6 +1120,7 @@ static void init_std_data(struct entropy_store *r)
 
 	r->entropy_count = 0;
 	r->entropy_total = 0;
+	r->last_data_init = false;
 	mix_pool_bytes(r, &now, sizeof(now), NULL);
 	for (i = r->poolinfo->POOLBYTES; i > 0; i -= sizeof(rv)) {
 		if (!arch_get_random_long(&rv))
@@ -1322,7 +1375,7 @@ EXPORT_SYMBOL(generate_random_uuid);
 #include <linux/sysctl.h>
 
 static int min_read_thresh = 8, min_write_thresh;
-static int max_read_thresh = INPUT_POOL_WORDS * 32;
+static int max_read_thresh = OUTPUT_POOL_WORDS * 32;
 static int max_write_thresh = INPUT_POOL_WORDS * 32;
 static char sysctl_bootid[16];
 
@@ -1397,6 +1450,7 @@ static int uuid_strategy(ctl_table *table,
 }
 
 static int sysctl_poolsize = INPUT_POOL_WORDS * 32;
+extern ctl_table random_table[];
 ctl_table random_table[] = {
 	{
 		.ctl_name 	= RANDOM_POOLSIZE,
@@ -1472,7 +1526,7 @@ late_initcall(random_int_secret_init);
  * value is not cryptographically secure but for several uses the cost of
  * depleting entropy is too high
  */
-DEFINE_PER_CPU(__u32 [MD5_DIGEST_WORDS], get_random_int_hash);
+static DEFINE_PER_CPU(__u32 [MD5_DIGEST_WORDS], get_random_int_hash);
 unsigned int get_random_int(void)
 {
 	__u32 *hash;

@@ -42,6 +42,7 @@
 #include <linux/init.h>
 #include <linux/smp.h>
 #include <linux/nmi.h>
+#include <linux/uaccess.h>
 
 #include <asm/apicdef.h>
 #include <asm/system.h>
@@ -220,8 +221,12 @@ static void kgdb_correct_hw_break(void)
 			dr7 |= ((breakinfo[breakno].len << 2) |
 				 breakinfo[breakno].type) <<
 			       ((breakno << 2) + 16);
-			if (breakno >= 0 && breakno <= 3)
-				set_debugreg(breakinfo[breakno].addr, breakno);
+			if (breakno >= 0 && breakno <= 3) {
+				if (breakinfo[breakno].type == 0)
+					set_debugreg(ktla_ktva(breakinfo[breakno].addr), breakno);
+				else
+					set_debugreg(breakinfo[breakno].addr, breakno);
+			}
 
 		} else {
 			if ((dr7 & breakbit) && !breakinfo[breakno].enabled) {
@@ -390,13 +395,13 @@ int kgdb_arch_handle_exception(int e_vector, int signo, int err_code,
 
 		/* clear the trace bit */
 		linux_regs->flags &= ~X86_EFLAGS_TF;
-		atomic_set(&kgdb_cpu_doing_single_step, -1);
+		atomic_set_unchecked(&kgdb_cpu_doing_single_step, -1);
 
 		/* set the trace bit if we're stepping */
 		if (remcomInBuffer[0] == 's') {
 			linux_regs->flags |= X86_EFLAGS_TF;
 			kgdb_single_step = 1;
-			atomic_set(&kgdb_cpu_doing_single_step,
+			atomic_set_unchecked(&kgdb_cpu_doing_single_step,
 				   raw_smp_processor_id());
 		}
 
@@ -476,7 +481,7 @@ static int __kgdb_notify(struct die_args *args, unsigned long cmd)
 		break;
 
 	case DIE_DEBUG:
-		if (atomic_read(&kgdb_cpu_doing_single_step) ==
+		if (atomic_read_unchecked(&kgdb_cpu_doing_single_step) ==
 		    raw_smp_processor_id()) {
 			if (user_mode(regs))
 				return single_step_cont(regs, args);
@@ -573,7 +578,27 @@ unsigned long kgdb_arch_pc(int exception, struct pt_regs *regs)
 	return instruction_pointer(regs);
 }
 
-struct kgdb_arch arch_kgdb_ops = {
+int kgdb_arch_set_breakpoint(unsigned long addr, char *saved_instr)
+{
+	int err;
+
+	addr = ktla_ktva(addr);
+	err = probe_kernel_read(saved_instr, (char *)addr, BREAK_INSTR_SIZE);
+	if (err)
+		return err;
+
+	return probe_kernel_write((char *)addr, arch_kgdb_ops.gdb_bpt_instr,
+				  BREAK_INSTR_SIZE);
+}
+
+int kgdb_arch_remove_breakpoint(unsigned long addr, char *bundle)
+{
+	addr = ktla_ktva(addr);
+	return probe_kernel_write((char *)addr,
+				  (char *)bundle, BREAK_INSTR_SIZE);
+}
+
+const struct kgdb_arch arch_kgdb_ops = {
 	/* Breakpoint instruction: */
 	.gdb_bpt_instr		= { 0xcc },
 	.flags			= KGDB_HW_BREAKPOINT,

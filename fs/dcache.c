@@ -45,8 +45,6 @@ EXPORT_SYMBOL(dcache_lock);
 
 static struct kmem_cache *dentry_cache __read_mostly;
 
-#define DNAME_INLINE_LEN (sizeof(struct dentry)-offsetof(struct dentry,d_iname))
-
 /*
  * This is the single most critical data structure when it comes
  * to the dcache: the hashtable for lookups. Somebody should try
@@ -1108,11 +1106,11 @@ struct dentry * d_alloc_root(struct inode * root_inode)
 	return res;
 }
 
-static inline struct hlist_head *d_hash(struct dentry *parent,
-					unsigned long hash)
+static inline struct hlist_head *d_hash(const struct dentry *parent,
+					unsigned int hash)
 {
-	hash += ((unsigned long) parent ^ GOLDEN_RATIO_PRIME) / L1_CACHE_BYTES;
-	hash = hash ^ ((hash ^ GOLDEN_RATIO_PRIME) >> D_HASHBITS);
+	hash += (unsigned long) parent / L1_CACHE_BYTES;
+	hash = hash + (hash >> D_HASHBITS);
 	return dentry_hashtable + (hash & D_HASHMASK);
 }
 
@@ -2319,7 +2317,7 @@ void __init vfs_caches_init(unsigned long mempages)
 	mempages -= reserve;
 
 	names_cachep = kmem_cache_create("names_cache", PATH_MAX, 0,
-			SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
+			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_USERCOPY, NULL);
 
 	dcache_init();
 	inode_init();

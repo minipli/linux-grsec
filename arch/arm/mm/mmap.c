@@ -30,6 +30,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
 	unsigned long start_addr;
+	unsigned long offset = gr_rand_threadstack_offset(mm, filp, flags);
 #ifdef CONFIG_CPU_V6
 	unsigned int cache_type;
 	int do_align = 0, aliasing = 0;
@@ -63,6 +64,10 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	if (len > TASK_SIZE)
 		return -ENOMEM;
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (addr) {
 		if (do_align)
 			addr = COLOUR_ALIGN(addr, pgoff);
@@ -70,15 +75,14 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 			addr = PAGE_ALIGN(addr);
 
 		vma = find_vma(mm, addr);
-		if (TASK_SIZE - len >= addr &&
-		    (!vma || addr + len <= vma->vm_start))
+		if (TASK_SIZE - len >= addr && check_heap_stack_gap(vma, addr, len, offset))
 			return addr;
 	}
 	if (len > mm->cached_hole_size) {
-	        start_addr = addr = mm->free_area_cache;
+		start_addr = addr = mm->free_area_cache;
 	} else {
-	        start_addr = addr = TASK_UNMAPPED_BASE;
-	        mm->cached_hole_size = 0;
+		start_addr = addr = mm->mmap_base;
+		mm->cached_hole_size = 0;
 	}
 
 full_search:
@@ -94,14 +98,14 @@ full_search:
 			 * Start a new search - just in case we missed
 			 * some holes.
 			 */
-			if (start_addr != TASK_UNMAPPED_BASE) {
-				start_addr = addr = TASK_UNMAPPED_BASE;
+			if (start_addr != mm->mmap_base) {
+				start_addr = addr = mm->mmap_base;
 				mm->cached_hole_size = 0;
 				goto full_search;
 			}
 			return -ENOMEM;
 		}
-		if (!vma || addr + len <= vma->vm_start) {
+		if (check_heap_stack_gap(vma, addr, len, offset)) {
 			/*
 			 * Remember the place where we stopped the search:
 			 */
@@ -115,7 +119,6 @@ full_search:
 			addr = COLOUR_ALIGN(addr, pgoff);
 	}
 }
-
 
 /*
  * You really shouldn't be using read() or write() on /dev/mem.  This

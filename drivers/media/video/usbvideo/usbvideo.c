@@ -697,7 +697,7 @@ int usbvideo_register(
 	    __func__, cams, base_size, num_cams);
 
 	/* Copy callbacks, apply defaults for those that are not set */
-	memmove(&cams->cb, cbTbl, sizeof(cams->cb));
+	memmove((void *)&cams->cb, cbTbl, sizeof(cams->cb));
 	if (cams->cb.getFrame == NULL)
 		cams->cb.getFrame = usbvideo_GetFrame;
 	if (cams->cb.disconnect == NULL)

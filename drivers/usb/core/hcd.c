@@ -1373,7 +1373,7 @@ int usb_hcd_submit_urb (struct urb *urb, gfp_t mem_flags)
 	 */
 	usb_get_urb(urb);
 	atomic_inc(&urb->use_count);
-	atomic_inc(&urb->dev->urbnum);
+	atomic_inc_unchecked(&urb->dev->urbnum);
 	usbmon_urb_submit(&hcd->self, urb);
 
 	/* NOTE requirements on root-hub callers (usbfs and the hub
@@ -1401,7 +1401,7 @@ int usb_hcd_submit_urb (struct urb *urb, gfp_t mem_flags)
 		urb->hcpriv = NULL;
 		INIT_LIST_HEAD(&urb->urb_list);
 		atomic_dec(&urb->use_count);
-		atomic_dec(&urb->dev->urbnum);
+		atomic_dec_unchecked(&urb->dev->urbnum);
 		if (atomic_read(&urb->reject))
 			wake_up(&usb_kill_urb_queue);
 		usb_put_urb(urb);
@@ -2216,7 +2216,7 @@ EXPORT_SYMBOL_GPL(usb_hcd_platform_shutdown);
 
 #if defined(CONFIG_USB_MON) || defined(CONFIG_USB_MON_MODULE)
 
-struct usb_mon_operations *mon_ops;
+const struct usb_mon_operations *mon_ops;
 
 /*
  * The registration is unlocked.
@@ -2226,7 +2226,7 @@ struct usb_mon_operations *mon_ops;
  * symbols from usbcore, usbcore gets referenced and cannot be unloaded first.
  */
  
-int usb_mon_register (struct usb_mon_operations *ops)
+int usb_mon_register (const struct usb_mon_operations *ops)
 {
 
 	if (mon_ops)

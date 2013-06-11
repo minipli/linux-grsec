@@ -536,6 +536,8 @@ static struct css_set *find_css_set(
 	struct hlist_head *hhead;
 	struct cg_cgroup_link *link;
 
+	pax_track_stack();
+
 	/* First see if we already have a cgroup group that matches
 	 * the desired set */
 	read_lock(&css_set_lock);
@@ -4122,7 +4124,7 @@ static int cgroup_css_links_read(struct cgroup *cont,
 		struct css_set *cg = link->cg;
 		struct task_struct *task;
 		int count = 0;
-		seq_printf(seq, "css_set %p\n", cg);
+		seq_printf(seq, "css_set %pK\n", cg);
 		list_for_each_entry(task, &cg->tasks, cg_list) {
 			if (count++ > MAX_TASKS_SHOWN_PER_CSS) {
 				seq_puts(seq, "  ...\n");

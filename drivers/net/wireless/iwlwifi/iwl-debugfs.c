@@ -166,7 +166,7 @@ static ssize_t iwl_dbgfs_tx_statistics_write(struct file *file,
 	struct iwl_priv *priv = file->private_data;
 	u32 clear_flag;
 	char buf[8];
-	int buf_size;
+	size_t buf_size;
 
 	memset(buf, 0, sizeof(buf));
 	buf_size = min(count, sizeof(buf) -  1);
@@ -285,7 +285,7 @@ static ssize_t iwl_dbgfs_sram_write(struct file *file,
 {
 	struct iwl_priv *priv = file->private_data;
 	char buf[64];
-	int buf_size;
+	size_t buf_size;
 	u32 offset, len;
 
 	memset(buf, 0, sizeof(buf));
@@ -524,6 +524,8 @@ static ssize_t iwl_dbgfs_status_read(struct file *file,
 	int pos = 0;
 	const size_t bufsz = sizeof(buf);
 
+	pax_track_stack();
+
 	pos += scnprintf(buf + pos, bufsz - pos, "STATUS_HCMD_ACTIVE:\t %d\n",
 		test_bit(STATUS_HCMD_ACTIVE, &priv->status));
 	pos += scnprintf(buf + pos, bufsz - pos, "STATUS_HCMD_SYNC_ACTIVE: %d\n",
@@ -658,6 +660,8 @@ static ssize_t iwl_dbgfs_qos_read(struct file *file, char __user *user_buf,
 	const size_t bufsz = sizeof(buf);
 	ssize_t ret;
 
+	pax_track_stack();
+
 	for (i = 0; i < AC_NUM; i++) {
 		pos += scnprintf(buf + pos, bufsz - pos,
 			"\tcw_min\tcw_max\taifsn\ttxop\n");
@@ -739,7 +743,7 @@ static ssize_t iwl_dbgfs_disable_ht40_write(struct file *file,
 {
 	struct iwl_priv *priv = file->private_data;
 	char buf[8];
-	int buf_size;
+	size_t buf_size;
 	int ht40;
 
 	memset(buf, 0, sizeof(buf));
@@ -782,7 +786,7 @@ static ssize_t iwl_dbgfs_sleep_level_override_write(struct file *file,
 {
 	struct iwl_priv *priv = file->private_data;
 	char buf[8];
-	int buf_size;
+	size_t buf_size;
 	int value;
 
 	memset(buf, 0, sizeof(buf));
@@ -950,7 +954,7 @@ static ssize_t iwl_dbgfs_traffic_log_write(struct file *file,
 {
 	struct iwl_priv *priv = file->private_data;
 	char buf[8];
-	int buf_size;
+	size_t buf_size;
 	int traffic_log;
 
 	memset(buf, 0, sizeof(buf));

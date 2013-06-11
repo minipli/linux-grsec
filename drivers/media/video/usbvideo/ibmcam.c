@@ -3947,7 +3947,7 @@ static struct usb_device_id id_table[] = {
 static int __init ibmcam_init(void)
 {
 	struct usbvideo_cb cbTbl;
-	memset(&cbTbl, 0, sizeof(cbTbl));
+	memset((void *)&cbTbl, 0, sizeof(cbTbl));
 	cbTbl.probe = ibmcam_probe;
 	cbTbl.setupOnOpen = ibmcam_setup_on_open;
 	cbTbl.videoStart = ibmcam_video_start;

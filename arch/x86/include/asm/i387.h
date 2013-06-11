@@ -56,9 +56,11 @@ static inline void tolerant_fwait(void)
 		     _ASM_EXTABLE(1b, 2b));
 }
 
-static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
+static inline int fxrstor_checking(struct i387_fxsave_struct __user *fx)
 {
 	int err;
+
+	fx = (struct i387_fxsave_struct __user *)____m(fx);
 
 	asm volatile("1:  rex64/fxrstor (%[fx])\n\t"
 		     "2:\n"
@@ -104,6 +106,8 @@ static inline void clear_fpu_state(struct task_struct *tsk)
 static inline int fxsave_user(struct i387_fxsave_struct __user *fx)
 {
 	int err;
+
+	fx = (struct i387_fxsave_struct __user *)____m(fx);
 
 	asm volatile("1:  rex64/fxsave (%[fx])\n\t"
 		     "2:\n"
@@ -179,15 +183,15 @@ static inline void tolerant_fwait(void)
 }
 
 /* perform fxrstor iff the processor has extended states, otherwise frstor */
-static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
+static inline int fxrstor_checking(struct i387_fxsave_struct __user *fx)
 {
 	/*
 	 * The "nop" is needed to make the instructions the same
 	 * length.
 	 */
 	alternative_input(
-		"nop ; frstor %1",
-		"fxrstor %1",
+		__copyuser_seg" frstor %1; nop",
+		__copyuser_seg" fxrstor %1",
 		X86_FEATURE_FXSR,
 		"m" (*fx));
 
@@ -195,13 +199,8 @@ static inline int fxrstor_checking(struct i387_fxsave_struct *fx)
 }
 
 /* We need a safe address that is cheap to find and that is already
-   in L1 during context switch. The best choices are unfortunately
-   different for UP and SMP */
-#ifdef CONFIG_SMP
-#define safe_address (__per_cpu_offset[0])
-#else
-#define safe_address (kstat_cpu(0).cpustat.user)
-#endif
+   in L1 during context switch. */
+#define safe_address (init_tss[raw_smp_processor_id()].x86_tss.sp0)
 
 /*
  * These must be called with preempt disabled
@@ -258,8 +257,16 @@ static inline int restore_fpu_checking(struct task_struct *tsk)
 {
 	if (task_thread_info(tsk)->status & TS_XSAVE)
 		return xrstor_checking(&tsk->thread.xstate->xsave);
-	else
-		return fxrstor_checking(&tsk->thread.xstate->fxsave);
+	else {
+		int ret;
+		mm_segment_t fs;
+
+		fs = get_fs();
+		set_fs(KERNEL_DS);
+		ret = fxrstor_checking(&tsk->thread.xstate->fxsave);
+		set_fs(fs);
+		return ret;
+	}
 }
 
 /*
@@ -291,7 +298,7 @@ static inline void kernel_fpu_begin(void)
 	struct thread_info *me = current_thread_info();
 	preempt_disable();
 	if (me->status & TS_USEDFPU)
-		__save_init_fpu(me->task);
+		__save_init_fpu(current);
 	else
 		clts();
 }

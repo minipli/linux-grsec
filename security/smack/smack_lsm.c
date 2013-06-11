@@ -157,12 +157,12 @@ static int smack_ptrace_traceme(struct task_struct *ptp)
  *
  * Returns 0 on success, error code otherwise.
  */
-static int smack_syslog(int type)
+static int smack_syslog(int type, bool from_file)
 {
 	int rc;
 	char *sp = current_security();
 
-	rc = cap_syslog(type);
+	rc = cap_syslog(type, from_file);
 	if (rc != 0)
 		return rc;
 
@@ -3073,7 +3073,7 @@ static int smack_inode_getsecctx(struct inode *inode, void **ctx, u32 *ctxlen)
 	return 0;
 }
 
-struct security_operations smack_ops = {
+struct security_operations smack_ops __read_only = {
 	.name =				"smack",
 
 	.ptrace_access_check =		smack_ptrace_access_check,

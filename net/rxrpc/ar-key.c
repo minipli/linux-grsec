@@ -88,11 +88,11 @@ static int rxrpc_instantiate_xdr_rxkad(struct key *key, const __be32 *xdr,
 		return ret;
 
 	plen -= sizeof(*token);
-	token = kmalloc(sizeof(*token), GFP_KERNEL);
+	token = kzalloc(sizeof(*token), GFP_KERNEL);
 	if (!token)
 		return -ENOMEM;
 
-	token->kad = kmalloc(plen, GFP_KERNEL);
+	token->kad = kzalloc(plen, GFP_KERNEL);
 	if (!token->kad) {
 		kfree(token);
 		return -ENOMEM;
@@ -212,7 +212,7 @@ static int rxrpc_krb5_decode_principal(struct krb5_principal *princ,
 	if (toklen <= (n_parts + 1) * 4)
 		return -EINVAL;
 
-	princ->name_parts = kcalloc(sizeof(char *), n_parts, GFP_KERNEL);
+	princ->name_parts = kcalloc(n_parts, sizeof(char *), GFP_KERNEL);
 	if (!princ->name_parts)
 		return -ENOMEM;
 
@@ -336,7 +336,7 @@ static int rxrpc_krb5_decode_tagged_array(struct krb5_tagged_data **_td,
 
 		_debug("n_elem %d", n_elem);
 
-		td = kcalloc(sizeof(struct krb5_tagged_data), n_elem,
+		td = kcalloc(n_elem, sizeof(struct krb5_tagged_data),
 			     GFP_KERNEL);
 		if (!td)
 			return -ENOMEM;
@@ -730,10 +730,10 @@ static int rxrpc_instantiate(struct key *key, const void *data, size_t datalen)
 		goto error;
 
 	ret = -ENOMEM;
-	token = kmalloc(sizeof(*token), GFP_KERNEL);
+	token = kzalloc(sizeof(*token), GFP_KERNEL);
 	if (!token)
 		goto error;
-	token->kad = kmalloc(plen, GFP_KERNEL);
+	token->kad = kzalloc(plen, GFP_KERNEL);
 	if (!token->kad)
 		goto error_free;
 

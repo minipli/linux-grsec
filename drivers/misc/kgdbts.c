@@ -118,7 +118,7 @@
 	} while (0)
 #define MAX_CONFIG_LEN		40
 
-static struct kgdb_io kgdbts_io_ops;
+static const struct kgdb_io kgdbts_io_ops;
 static char get_buf[BUFMAX];
 static int get_buf_cnt;
 static char put_buf[BUFMAX];
@@ -740,7 +740,7 @@ static void run_plant_and_detach_test(int is_early)
 	char before[BREAK_INSTR_SIZE];
 	char after[BREAK_INSTR_SIZE];
 
-	probe_kernel_read(before, (char *)kgdbts_break_test,
+	probe_kernel_read(before, ktla_ktva((char *)kgdbts_break_test),
 	  BREAK_INSTR_SIZE);
 	init_simple_test();
 	ts.tst = plant_and_detach_test;
@@ -748,7 +748,7 @@ static void run_plant_and_detach_test(int is_early)
 	/* Activate test with initial breakpoint */
 	if (!is_early)
 		kgdb_breakpoint();
-	probe_kernel_read(after, (char *)kgdbts_break_test,
+	probe_kernel_read(after, ktla_ktva((char *)kgdbts_break_test),
 	  BREAK_INSTR_SIZE);
 	if (memcmp(before, after, BREAK_INSTR_SIZE)) {
 		printk(KERN_CRIT "kgdbts: ERROR kgdb corrupted memory\n");
@@ -1102,7 +1102,7 @@ static void kgdbts_post_exp_handler(void)
 		module_put(THIS_MODULE);
 }
 
-static struct kgdb_io kgdbts_io_ops = {
+static const struct kgdb_io kgdbts_io_ops = {
 	.name			= "kgdbts",
 	.read_char		= kgdbts_get_char,
 	.write_char		= kgdbts_put_char,

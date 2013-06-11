@@ -76,6 +76,11 @@ static inline int arch_get_random_int(unsigned int *v)
 }
 #endif
 
+static inline unsigned long pax_get_random_long(void)
+{
+	return random32() + (sizeof(long) > 4 ? (unsigned long)random32() << 32 : 0);
+}
+
 #endif /* __KERNEL___ */
 
 #endif /* _LINUX_RANDOM_H */

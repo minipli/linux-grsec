@@ -50,10 +50,7 @@ static void dump_mem(const char *, const char *, unsigned long, unsigned long);
 void dump_backtrace_entry(unsigned long where, unsigned long from, unsigned long frame)
 {
 #ifdef CONFIG_KALLSYMS
-	char sym1[KSYM_SYMBOL_LEN], sym2[KSYM_SYMBOL_LEN];
-	sprint_symbol(sym1, where);
-	sprint_symbol(sym2, from);
-	printk("[<%08lx>] (%s) from [<%08lx>] (%s)\n", where, sym1, from, sym2);
+	printk("[<%08lx>] (%pA) from [<%08lx>] (%pA)\n", where, (void *)where, from, (void *)from);
 #else
 	printk("Function entered at [<%08lx>] from [<%08lx>]\n", where, from);
 #endif
@@ -247,6 +244,8 @@ static void __die(const char *str, int err, struct thread_info *thread, struct p
 
 DEFINE_SPINLOCK(die_lock);
 
+extern void gr_handle_kernel_exploit(void);
+
 /*
  * This function is protected against re-entrancy.
  */
@@ -270,6 +269,8 @@ NORET_TYPE void die(const char *str, struct pt_regs *regs, int err)
 
 	if (panic_on_oops)
 		panic("Fatal exception");
+
+	gr_handle_kernel_exploit();
 
 	do_exit(SIGSEGV);
 }

@@ -71,8 +71,6 @@ EXPORT_SYMBOL_GPL(xen_start_info);
 
 struct shared_info xen_dummy_shared_info;
 
-void *xen_initial_gdt;
-
 /*
  * Point at some empty memory to start with. We map the real shared_info
  * page as soon as fixmap is up and running.
@@ -336,8 +334,7 @@ static void xen_load_gdt(const struct desc_ptr *dtr)
 {
 	unsigned long va = dtr->address;
 	unsigned int size = dtr->size + 1;
-	unsigned pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-	unsigned long frames[pages];
+	unsigned long frames[(GDT_SIZE + PAGE_SIZE - 1) / PAGE_SIZE];
 	int f;
 
 	/*
@@ -345,7 +342,7 @@ static void xen_load_gdt(const struct desc_ptr *dtr)
 	 * 8-byte entries, or 16 4k pages..
 	 */
 
-	BUG_ON(size > 65536);
+	BUG_ON(size > GDT_SIZE);
 	BUG_ON(va & ~PAGE_MASK);
 
 	for (f = 0; va < dtr->address + size; va += PAGE_SIZE, f++) {
@@ -385,8 +382,7 @@ static __init void xen_load_gdt_boot(const struct desc_ptr *dtr)
 {
 	unsigned long va = dtr->address;
 	unsigned int size = dtr->size + 1;
-	unsigned pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-	unsigned long frames[pages];
+	unsigned long frames[65536 / PAGE_SIZE];
 	int f;
 
 	/*
@@ -548,7 +544,7 @@ static void xen_write_idt_entry(gate_desc *dt, int entrynum, const gate_desc *g)
 
 	preempt_disable();
 
-	start = __get_cpu_var(idt_desc).address;
+	start = (unsigned long)__get_cpu_var(idt_desc).address;
 	end = start + __get_cpu_var(idt_desc).size + 1;
 
 	xen_mc_flush();
@@ -1012,25 +1008,25 @@ static const struct pv_apic_ops xen_apic_ops __initdata = {
 #endif
 };
 
-static void xen_reboot(int reason)
+static __noreturn void xen_reboot(int reason)
 {
 	struct sched_shutdown r = { .reason = reason };
 
-	if (HYPERVISOR_sched_op(SCHEDOP_shutdown, &r))
-		BUG();
+	HYPERVISOR_sched_op(SCHEDOP_shutdown, &r);
+	BUG();
 }
 
-static void xen_restart(char *msg)
+static __noreturn void xen_restart(char *msg)
 {
 	xen_reboot(SHUTDOWN_reboot);
 }
 
-static void xen_emergency_restart(void)
+static __noreturn void xen_emergency_restart(void)
 {
 	xen_reboot(SHUTDOWN_reboot);
 }
 
-static void xen_machine_halt(void)
+static __noreturn void xen_machine_halt(void)
 {
 	xen_reboot(SHUTDOWN_poweroff);
 }
@@ -1078,10 +1074,10 @@ asmlinkage void __init xen_start_kernel(void)
 
 	/* Install Xen paravirt ops */
 	pv_info = xen_info;
-	pv_init_ops = xen_init_ops;
-	pv_time_ops = xen_time_ops;
-	pv_cpu_ops = xen_cpu_ops;
-	pv_apic_ops = xen_apic_ops;
+	memcpy((void *)&pv_init_ops, &xen_init_ops, sizeof pv_init_ops);
+	memcpy((void *)&pv_time_ops, &xen_time_ops, sizeof pv_time_ops);
+	memcpy((void *)&pv_cpu_ops, &xen_cpu_ops, sizeof pv_cpu_ops);
+	memcpy((void *)&pv_apic_ops, &xen_apic_ops, sizeof pv_apic_ops);
 
 	x86_init.resources.memory_setup = xen_memory_setup;
 	x86_init.oem.arch_setup = xen_arch_setup;
@@ -1114,9 +1110,20 @@ asmlinkage void __init xen_start_kernel(void)
 	 */
 	__userpte_alloc_gfp &= ~__GFP_HIGHMEM;
 
-#ifdef CONFIG_X86_64
 	/* Work out if we support NX */
-	check_efer();
+#if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
+	if ((cpuid_eax(0x80000000) & 0xffff0000) == 0x80000000 &&
+	    (cpuid_edx(0x80000001) & (1U << (X86_FEATURE_NX & 31)))) {
+		unsigned l, h;
+
+#ifdef CONFIG_X86_PAE
+		nx_enabled = 1;
+#endif
+		__supported_pte_mask |= _PAGE_NX;
+		rdmsr(MSR_EFER, l, h);
+		l |= EFER_NX;
+		wrmsr(MSR_EFER, l, h);
+	}
 #endif
 
 	xen_setup_features();
@@ -1147,13 +1154,6 @@ asmlinkage void __init xen_start_kernel(void)
 	}
 
 	machine_ops = xen_machine_ops;
-
-	/*
-	 * The only reliable way to retain the initial address of the
-	 * percpu gdt_page is to remember it here, so we can go and
-	 * mark it RW later, when the initial percpu area is freed.
-	 */
-	xen_initial_gdt = &per_cpu(gdt_page, 0);
 
 	xen_smp_init();
 

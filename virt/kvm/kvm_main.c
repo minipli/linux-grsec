@@ -81,7 +81,12 @@ static cpumask_var_t cpus_hardware_enabled;
 struct kmem_cache *kvm_vcpu_cache;
 EXPORT_SYMBOL_GPL(kvm_vcpu_cache);
 
-static __read_mostly struct preempt_ops kvm_preempt_ops;
+static void kvm_sched_in(struct preempt_notifier *pn, int cpu);
+static void kvm_sched_out(struct preempt_notifier *pn, struct task_struct *next);
+static struct preempt_ops kvm_preempt_ops = {
+	.sched_in = kvm_sched_in,
+	.sched_out = kvm_sched_out,
+};
 
 struct dentry *kvm_debugfs_dir;
 
@@ -1823,7 +1828,7 @@ static int kvm_vcpu_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static struct file_operations kvm_vcpu_fops = {
+static file_operations_no_const kvm_vcpu_fops __read_only = {
 	.release        = kvm_vcpu_release,
 	.unlocked_ioctl = kvm_vcpu_ioctl,
 	.compat_ioctl   = kvm_vcpu_ioctl,
@@ -2423,7 +2428,7 @@ static int kvm_vm_mmap(struct file *file, struct vm_area_struct *vma)
 	return 0;
 }
 
-static struct file_operations kvm_vm_fops = {
+static file_operations_no_const kvm_vm_fops __read_only = {
 	.release        = kvm_vm_release,
 	.unlocked_ioctl = kvm_vm_ioctl,
 	.compat_ioctl   = kvm_vm_ioctl,
@@ -2510,7 +2515,7 @@ out:
 	return r;
 }
 
-static struct file_operations kvm_chardev_ops = {
+static file_operations_no_const kvm_chardev_ops __read_only = {
 	.unlocked_ioctl = kvm_dev_ioctl,
 	.compat_ioctl   = kvm_dev_ioctl,
 };
@@ -2573,7 +2578,7 @@ asmlinkage void kvm_handle_fault_on_reboot(void)
 	if (kvm_rebooting)
 		/* spin while reset goes on */
 		while (true)
-			;
+			cpu_relax();
 	/* Fault while not rebooting.  We want the trace. */
 	BUG();
 }
@@ -2793,7 +2798,7 @@ static void kvm_sched_out(struct preempt_notifier *pn,
 	kvm_arch_vcpu_put(vcpu);
 }
 
-int kvm_init(void *opaque, unsigned int vcpu_size,
+int kvm_init(const void *opaque, unsigned int vcpu_size,
 		  struct module *module)
 {
 	int r;
@@ -2846,24 +2851,23 @@ int kvm_init(void *opaque, unsigned int vcpu_size,
 	/* A kmem cache lets us meet the alignment requirements of fx_save. */
 	kvm_vcpu_cache = kmem_cache_create("kvm_vcpu", vcpu_size,
 					   __alignof__(struct kvm_vcpu),
-					   0, NULL);
+					   SLAB_USERCOPY, NULL);
 	if (!kvm_vcpu_cache) {
 		r = -ENOMEM;
 		goto out_free_5;
 	}
 
+	pax_open_kernel();
 	kvm_chardev_ops.owner = module;
 	kvm_vm_fops.owner = module;
 	kvm_vcpu_fops.owner = module;
+	pax_close_kernel();
 
 	r = misc_register(&kvm_dev);
 	if (r) {
 		printk(KERN_ERR "kvm: misc device register failed\n");
 		goto out_free;
 	}
-
-	kvm_preempt_ops.sched_in = kvm_sched_in;
-	kvm_preempt_ops.sched_out = kvm_sched_out;
 
 	kvm_init_debug();
 

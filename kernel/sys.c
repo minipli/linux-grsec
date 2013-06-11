@@ -133,6 +133,12 @@ static int set_one_prio(struct task_struct *p, int niceval, int error)
 		error = -EACCES;
 		goto out;
 	}
+
+	if (gr_handle_chroot_setpriority(p, niceval)) {
+		error = -EACCES;
+		goto out;
+	}
+
 	no_nice = security_task_setnice(p, niceval);
 	if (no_nice) {
 		error = no_nice;
@@ -190,10 +196,10 @@ SYSCALL_DEFINE3(setpriority, int, which, int, who, int, niceval)
 				 !(user = find_user(who)))
 				goto out_unlock;	/* No processes for this user */
 
-			do_each_thread(g, p)
+			do_each_thread(g, p) {
 				if (__task_cred(p)->uid == who)
 					error = set_one_prio(p, niceval, error);
-			while_each_thread(g, p);
+			} while_each_thread(g, p);
 			if (who != cred->uid)
 				free_uid(user);		/* For find_user() */
 			break;
@@ -253,13 +259,13 @@ SYSCALL_DEFINE2(getpriority, int, which, int, who)
 				 !(user = find_user(who)))
 				goto out_unlock;	/* No processes for this user */
 
-			do_each_thread(g, p)
+			do_each_thread(g, p) {
 				if (__task_cred(p)->uid == who) {
 					niceval = 20 - task_nice(p);
 					if (niceval > retval)
 						retval = niceval;
 				}
-			while_each_thread(g, p);
+			} while_each_thread(g, p);
 			if (who != cred->uid)
 				free_uid(user);		/* for find_user() */
 			break;
@@ -510,6 +516,9 @@ SYSCALL_DEFINE2(setregid, gid_t, rgid, gid_t, egid)
 			goto error;
 	}
 
+	if (gr_check_group_change(new->gid, new->egid, -1))
+		goto error;
+
 	if (rgid != (gid_t) -1 ||
 	    (egid != (gid_t) -1 && egid != old->gid))
 		new->sgid = new->egid;
@@ -543,6 +552,10 @@ SYSCALL_DEFINE1(setgid, gid_t, gid)
 		goto error;
 
 	retval = -EPERM;
+
+	if (gr_check_group_change(gid, gid, gid))
+		goto error;
+
 	if (capable(CAP_SETGID))
 		new->gid = new->egid = new->sgid = new->fsgid = gid;
 	else if (gid == old->gid || gid == old->sgid)
@@ -560,7 +573,7 @@ error:
 /*
  * change the user struct in a credentials set to match the new UID
  */
-static int set_user(struct cred *new)
+int set_user(struct cred *new)
 {
 	struct user_struct *new_user;
 
@@ -568,12 +581,19 @@ static int set_user(struct cred *new)
 	if (!new_user)
 		return -EAGAIN;
 
+	/*
+	 * We don't fail in case of NPROC limit excess here because too many
+	 * poorly written programs don't check set*uid() return code, assuming
+	 * it never fails if called by root.  We may still enforce NPROC limit
+	 * for programs doing set*uid()+execve() by harmlessly deferring the
+	 * failure to the execve() stage.
+	 */
 	if (atomic_read(&new_user->processes) >=
 				current->signal->rlim[RLIMIT_NPROC].rlim_cur &&
-			new_user != INIT_USER) {
-		free_uid(new_user);
-		return -EAGAIN;
-	}
+			new_user != INIT_USER)
+		current->flags |= PF_NPROC_EXCEEDED;
+	else
+		current->flags &= ~PF_NPROC_EXCEEDED;
 
 	free_uid(new->user);
 	new->user = new_user;
@@ -628,6 +648,9 @@ SYSCALL_DEFINE2(setreuid, uid_t, ruid, uid_t, euid)
 			goto error;
 	}
 
+	if (gr_check_user_change(new->uid, new->euid, -1))
+		goto error;
+
 	if (new->uid != old->uid) {
 		retval = set_user(new);
 		if (retval < 0)
@@ -676,6 +699,12 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
 		goto error;
 
 	retval = -EPERM;
+
+	if (gr_check_crash_uid(uid))
+		goto error;
+	if (gr_check_user_change(uid, uid, uid))
+		goto error;
+
 	if (capable(CAP_SETUID)) {
 		new->suid = new->uid = uid;
 		if (uid != old->uid) {
@@ -732,6 +761,9 @@ SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)
 		    suid != old->euid  && suid != old->suid)
 			goto error;
 	}
+
+	if (gr_check_user_change(ruid, euid, -1))
+		goto error;
 
 	if (ruid != (uid_t) -1) {
 		new->uid = ruid;
@@ -801,6 +833,9 @@ SYSCALL_DEFINE3(setresgid, gid_t, rgid, gid_t, egid, gid_t, sgid)
 			goto error;
 	}
 
+	if (gr_check_group_change(rgid, egid, -1))
+		goto error;
+
 	if (rgid != (gid_t) -1)
 		new->gid = rgid;
 	if (egid != (gid_t) -1)
@@ -854,6 +889,9 @@ SYSCALL_DEFINE1(setfsuid, uid_t, uid)
 	    uid == old->suid || uid == old->fsuid ||
 	    capable(CAP_SETUID)) {
 		if (uid != old_fsuid) {
+			if (gr_check_user_change(-1, -1, uid))
+				goto error;
+
 			new->fsuid = uid;
 			if (security_task_fix_setuid(new, old, LSM_SETID_FS) == 0)
 				goto change_okay;
@@ -890,6 +928,9 @@ SYSCALL_DEFINE1(setfsgid, gid_t, gid)
 	if (gid == old->gid  || gid == old->egid  ||
 	    gid == old->sgid || gid == old->fsgid ||
 	    capable(CAP_SETGID)) {
+		if (gr_check_group_change(-1, -1, gid))
+			goto error;
+
 		if (gid != old_fsgid) {
 			new->fsgid = gid;
 			goto change_okay;
@@ -1274,6 +1315,14 @@ SYSCALL_DEFINE2(setrlimit, unsigned int, resource, struct rlimit __user *, rlim)
 	if (resource != RLIMIT_CPU)
 		goto out;
 
+	/* Handle the case where a fork and setuid occur and then RLIMIT_NPROC
+	   is changed to a lower value.  Since tasks can be created by the same
+	   user in between this limit change and an execve by this task, force
+	   a recheck only for this task by setting PF_NPROC_EXCEEDED
+	*/
+	if (resource == RLIMIT_NPROC && current->real_cred->user != INIT_USER)
+		current->flags |= PF_NPROC_EXCEEDED;
+
 	/*
 	 * RLIMIT_CPU handling.   Note that the kernel fails to return an error
 	 * code if it rejected the user's attempt to set RLIMIT_CPU.  This is a
@@ -1283,7 +1332,7 @@ SYSCALL_DEFINE2(setrlimit, unsigned int, resource, struct rlimit __user *, rlim)
 	if (new_rlim.rlim_cur == RLIM_INFINITY)
 		goto out;
 
-	update_rlimit_cpu(new_rlim.rlim_cur);
+	update_rlimit_cpu(current, new_rlim.rlim_cur);
 out:
 	return 0;
 }
@@ -1455,7 +1504,7 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			error = get_dumpable(me->mm);
 			break;
 		case PR_SET_DUMPABLE:
-			if (arg2 < 0 || arg2 > 1) {
+			if (arg2 > 1) {
 				error = -EINVAL;
 				break;
 			}

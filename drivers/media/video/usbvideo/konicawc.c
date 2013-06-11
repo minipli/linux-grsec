@@ -225,7 +225,7 @@ static void konicawc_register_input(struct konicawc *cam, struct usb_device *dev
 	int error;
 
 	usb_make_path(dev, cam->input_physname, sizeof(cam->input_physname));
-	strncat(cam->input_physname, "/input0", sizeof(cam->input_physname));
+	strlcat(cam->input_physname, "/input0", sizeof(cam->input_physname));
 
 	cam->input = input_dev = input_allocate_device();
 	if (!input_dev) {
@@ -935,7 +935,7 @@ static int __init konicawc_init(void)
 	struct usbvideo_cb cbTbl;
 	printk(KERN_INFO KBUILD_MODNAME ": " DRIVER_VERSION ":"
 	       DRIVER_DESC "\n");
-	memset(&cbTbl, 0, sizeof(cbTbl));
+	memset((void * )&cbTbl, 0, sizeof(cbTbl));
 	cbTbl.probe = konicawc_probe;
 	cbTbl.setupOnOpen = konicawc_setup_on_open;
 	cbTbl.processData = konicawc_process_isoc;
