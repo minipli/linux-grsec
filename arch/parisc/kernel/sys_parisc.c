@@ -33,9 +33,11 @@
 #include <linux/utsname.h>
 #include <linux/personality.h>
 
-static unsigned long get_unshared_area(unsigned long addr, unsigned long len)
+static unsigned long get_unshared_area(struct file *filp, unsigned long addr, unsigned long len,
+					unsigned long flags)
 {
 	struct vm_unmapped_area_info info;
+	unsigned long offset = gr_rand_threadstack_offset(current->mm, filp, flags);
 
 	info.flags = 0;
 	info.length = len;
@@ -43,6 +45,7 @@ static unsigned long get_unshared_area(unsigned long addr, unsigned long len)
 	info.high_limit = TASK_SIZE;
 	info.align_mask = 0;
 	info.align_offset = 0;
+	info.threadstack_offset = offset;
 	return vm_unmapped_area(&info);
 }
 
@@ -61,10 +64,11 @@ static int get_offset(struct address_space *mapping)
 	return (unsigned long) mapping >> 8;
 }
 
-static unsigned long get_shared_area(struct address_space *mapping,
-		unsigned long addr, unsigned long len, unsigned long pgoff)
+static unsigned long get_shared_area(struct file *filp, struct address_space *mapping,
+		unsigned long addr, unsigned long len, unsigned long pgoff, unsigned long flags)
 {
 	struct vm_unmapped_area_info info;
+	unsigned long offset = gr_rand_threadstack_offset(current->mm, filp, flags);
 
 	info.flags = 0;
 	info.length = len;
@@ -72,6 +76,7 @@ static unsigned long get_shared_area(struct address_space *mapping,
 	info.high_limit = TASK_SIZE;
 	info.align_mask = PAGE_MASK & (SHMLBA - 1);
 	info.align_offset = (get_offset(mapping) + pgoff) << PAGE_SHIFT;
+	info.threadstack_offset = offset;
 	return vm_unmapped_area(&info);
 }
 
@@ -86,15 +91,22 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr,
 			return -EINVAL;
 		return addr;
 	}
-	if (!addr)
+	if (!addr) {
 		addr = TASK_UNMAPPED_BASE;
 
+#ifdef CONFIG_PAX_RANDMMAP
+		if (current->mm->pax_flags & MF_PAX_RANDMMAP)
+			addr += current->mm->delta_mmap;
+#endif
+
+	}
+
 	if (filp) {
-		addr = get_shared_area(filp->f_mapping, addr, len, pgoff);
+		addr = get_shared_area(filp, filp->f_mapping, addr, len, pgoff, flags);
 	} else if(flags & MAP_SHARED) {
-		addr = get_shared_area(NULL, addr, len, pgoff);
+		addr = get_shared_area(filp, NULL, addr, len, pgoff, flags);
 	} else {
-		addr = get_unshared_area(addr, len);
+		addr = get_unshared_area(filp, addr, len, flags);
 	}
 	return addr;
 }

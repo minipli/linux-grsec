@@ -420,7 +420,7 @@ static void ah4_err(struct sk_buff *skb, u32 info)
 		return;
 
 	if (icmp_hdr(skb)->type == ICMP_DEST_UNREACH) {
-		atomic_inc(&flow_cache_genid);
+		atomic_inc_unchecked(&flow_cache_genid);
 		rt_genid_bump(net);
 
 		ipv4_update_pmtu(skb, net, info, 0, 0, IPPROTO_AH, 0);

@@ -240,7 +240,7 @@ int ecryptfs_read_lower(char *data, loff_t offset, size_t size,
 		return -EIO;
 	fs_save = get_fs();
 	set_fs(get_ds());
-	rc = vfs_read(lower_file, data, size, &offset);
+	rc = vfs_read(lower_file, (char __force_user *)data, size, &offset);
 	set_fs(fs_save);
 	return rc;
 }

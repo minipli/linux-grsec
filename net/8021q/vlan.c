@@ -114,6 +114,13 @@ void unregister_vlan_dev(struct net_device *dev, struct list_head *head)
 	if (vlan_id)
 		vlan_vid_del(real_dev, vlan_id);
 
+	/* Take it out of our own structures, but be sure to interlock with
+	 * HW accelerating devices or SW vlan input packet processing if
+	 * VLAN is not 0 (leave it there for 802.1p).
+	 */
+	if (vlan_id)
+		vlan_vid_del(real_dev, vlan_id);
+
 	/* Get rid of the vlan's reference to real_dev */
 	dev_put(real_dev);
 }
@@ -496,7 +503,7 @@ out:
 	return NOTIFY_DONE;
 }
 
-static struct notifier_block vlan_notifier_block __read_mostly = {
+static struct notifier_block vlan_notifier_block = {
 	.notifier_call = vlan_device_event,
 };
 
@@ -571,8 +578,7 @@ static int vlan_ioctl_handler(struct net *net, void __user *arg)
 		err = -EPERM;
 		if (!ns_capable(net->user_ns, CAP_NET_ADMIN))
 			break;
-		if ((args.u.name_type >= 0) &&
-		    (args.u.name_type < VLAN_NAME_TYPE_HIGHEST)) {
+		if (args.u.name_type < VLAN_NAME_TYPE_HIGHEST) {
 			struct vlan_net *vn;
 
 			vn = net_generic(net, vlan_net_id);

@@ -306,7 +306,7 @@ struct kmem_list3 {
  * Need this for bootstrapping a per node allocator.
  */
 #define NUM_INIT_LISTS (3 * MAX_NUMNODES)
-static struct kmem_list3 __initdata initkmem_list3[NUM_INIT_LISTS];
+static struct kmem_list3 initkmem_list3[NUM_INIT_LISTS];
 #define	CACHE_CACHE 0
 #define	SIZE_AC MAX_NUMNODES
 #define	SIZE_L3 (2 * MAX_NUMNODES)
@@ -407,10 +407,10 @@ static void kmem_list3_init(struct kmem_list3 *parent)
 		if ((x)->max_freeable < i)				\
 			(x)->max_freeable = i;				\
 	} while (0)
-#define STATS_INC_ALLOCHIT(x)	atomic_inc(&(x)->allochit)
-#define STATS_INC_ALLOCMISS(x)	atomic_inc(&(x)->allocmiss)
-#define STATS_INC_FREEHIT(x)	atomic_inc(&(x)->freehit)
-#define STATS_INC_FREEMISS(x)	atomic_inc(&(x)->freemiss)
+#define STATS_INC_ALLOCHIT(x)	atomic_inc_unchecked(&(x)->allochit)
+#define STATS_INC_ALLOCMISS(x)	atomic_inc_unchecked(&(x)->allocmiss)
+#define STATS_INC_FREEHIT(x)	atomic_inc_unchecked(&(x)->freehit)
+#define STATS_INC_FREEMISS(x)	atomic_inc_unchecked(&(x)->freemiss)
 #else
 #define	STATS_INC_ACTIVE(x)	do { } while (0)
 #define	STATS_DEC_ACTIVE(x)	do { } while (0)
@@ -518,7 +518,7 @@ static inline void *index_to_obj(struct kmem_cache *cache, struct slab *slab,
  *   reciprocal_divide(offset, cache->reciprocal_buffer_size)
  */
 static inline unsigned int obj_to_index(const struct kmem_cache *cache,
-					const struct slab *slab, void *obj)
+					const struct slab *slab, const void *obj)
 {
 	u32 offset = (obj - slab->s_mem);
 	return reciprocal_divide(offset, cache->reciprocal_buffer_size);
@@ -539,12 +539,13 @@ EXPORT_SYMBOL(malloc_sizes);
 struct cache_names {
 	char *name;
 	char *name_dma;
+	char *name_usercopy;
 };
 
 static struct cache_names __initdata cache_names[] = {
-#define CACHE(x) { .name = "size-" #x, .name_dma = "size-" #x "(DMA)" },
+#define CACHE(x) { .name = "size-" #x, .name_dma = "size-" #x "(DMA)", .name_usercopy = "size-" #x "(USERCOPY)" },
 #include <linux/kmalloc_sizes.h>
-	{NULL,}
+	{NULL}
 #undef CACHE
 };
 
@@ -729,6 +730,12 @@ static inline struct kmem_cache *__find_general_cachep(size_t size,
 	if (unlikely(gfpflags & GFP_DMA))
 		return csizep->cs_dmacachep;
 #endif
+
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+	if (unlikely(gfpflags & GFP_USERCOPY))
+		return csizep->cs_usercopycachep;
+#endif
+
 	return csizep->cs_cachep;
 }
 
@@ -1482,7 +1489,7 @@ static int __cpuinit cpuup_callback(struct notifier_block *nfb,
 	return notifier_from_errno(err);
 }
 
-static struct notifier_block __cpuinitdata cpucache_notifier = {
+static struct notifier_block cpucache_notifier = {
 	&cpuup_callback, NULL, 0
 };
 
@@ -1667,12 +1674,12 @@ void __init kmem_cache_init(void)
 	 */
 
 	sizes[INDEX_AC].cs_cachep = create_kmalloc_cache(names[INDEX_AC].name,
-					sizes[INDEX_AC].cs_size, ARCH_KMALLOC_FLAGS);
+					sizes[INDEX_AC].cs_size, ARCH_KMALLOC_FLAGS|SLAB_USERCOPY);
 
 	if (INDEX_AC != INDEX_L3)
 		sizes[INDEX_L3].cs_cachep =
 			create_kmalloc_cache(names[INDEX_L3].name,
-				sizes[INDEX_L3].cs_size, ARCH_KMALLOC_FLAGS);
+				sizes[INDEX_L3].cs_size, ARCH_KMALLOC_FLAGS|SLAB_USERCOPY);
 
 	slab_early_init = 0;
 
@@ -1686,13 +1693,20 @@ void __init kmem_cache_init(void)
 		 */
 		if (!sizes->cs_cachep)
 			sizes->cs_cachep = create_kmalloc_cache(names->name,
-					sizes->cs_size, ARCH_KMALLOC_FLAGS);
+					sizes->cs_size, ARCH_KMALLOC_FLAGS|SLAB_USERCOPY);
 
 #ifdef CONFIG_ZONE_DMA
 		sizes->cs_dmacachep = create_kmalloc_cache(
 			names->name_dma, sizes->cs_size,
 			SLAB_CACHE_DMA|ARCH_KMALLOC_FLAGS);
 #endif
+
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+		sizes->cs_usercopycachep = create_kmalloc_cache(
+			names->name_usercopy, sizes->cs_size,
+			ARCH_KMALLOC_FLAGS|SLAB_USERCOPY);
+#endif
+
 		sizes++;
 		names++;
 	}
@@ -3924,6 +3938,7 @@ void kfree(const void *objp)
 
 	if (unlikely(ZERO_OR_NULL_PTR(objp)))
 		return;
+	VM_BUG_ON(!virt_addr_valid(objp));
 	local_irq_save(flags);
 	kfree_debugcheck(objp);
 	c = virt_to_cache(objp);
@@ -4365,10 +4380,10 @@ void slabinfo_show_stats(struct seq_file *m, struct kmem_cache *cachep)
 	}
 	/* cpu stats */
 	{
-		unsigned long allochit = atomic_read(&cachep->allochit);
-		unsigned long allocmiss = atomic_read(&cachep->allocmiss);
-		unsigned long freehit = atomic_read(&cachep->freehit);
-		unsigned long freemiss = atomic_read(&cachep->freemiss);
+		unsigned long allochit = atomic_read_unchecked(&cachep->allochit);
+		unsigned long allocmiss = atomic_read_unchecked(&cachep->allocmiss);
+		unsigned long freehit = atomic_read_unchecked(&cachep->freehit);
+		unsigned long freemiss = atomic_read_unchecked(&cachep->freemiss);
 
 		seq_printf(m, " : cpustat %6lu %6lu %6lu %6lu",
 			   allochit, allocmiss, freehit, freemiss);
@@ -4600,11 +4615,69 @@ static const struct file_operations proc_slabstats_operations = {
 static int __init slab_proc_init(void)
 {
 #ifdef CONFIG_DEBUG_SLAB_LEAK
-	proc_create("slab_allocators", 0, NULL, &proc_slabstats_operations);
+	proc_create("slab_allocators", S_IRUSR, NULL, &proc_slabstats_operations);
 #endif
 	return 0;
 }
 module_init(slab_proc_init);
+#endif
+
+bool is_usercopy_object(const void *ptr)
+{
+	struct page *page;
+	struct kmem_cache *cachep;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		return false;
+
+	if (!slab_is_available())
+		return false;
+
+	if (!virt_addr_valid(ptr))
+		return false;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page))
+		return false;
+
+	cachep = page->slab_cache;
+	return cachep->flags & SLAB_USERCOPY;
+}
+
+#ifdef CONFIG_PAX_USERCOPY
+const char *check_heap_object(const void *ptr, unsigned long n)
+{
+	struct page *page;
+	struct kmem_cache *cachep;
+	struct slab *slabp;
+	unsigned int objnr;
+	unsigned long offset;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		return "<null>";
+
+	if (!virt_addr_valid(ptr))
+		return NULL;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page))
+		return NULL;
+
+	cachep = page->slab_cache;
+	if (!(cachep->flags & SLAB_USERCOPY))
+		return cachep->name;
+
+	slabp = page->slab_page;
+	objnr = obj_to_index(cachep, slabp, ptr);
+	BUG_ON(objnr >= cachep->num);
+	offset = ptr - index_to_obj(cachep, slabp, objnr) - obj_offset(cachep);
+	if (offset <= cachep->object_size && n <= cachep->object_size - offset)
+		return NULL;
+
+	return cachep->name;
+}
 #endif
 
 /**
