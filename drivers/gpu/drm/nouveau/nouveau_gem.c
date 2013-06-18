@@ -322,7 +322,7 @@ validate_init(struct nouveau_channel *chan, struct drm_file *file_priv,
 	int ret, i;
 	struct nouveau_bo *res_bo = NULL;
 
-	sequence = atomic_add_return(1, &drm->ttm.validate_sequence);
+	sequence = atomic_add_return_unchecked(1, &drm->ttm.validate_sequence);
 retry:
 	if (++trycnt > 100000) {
 		NV_ERROR(cli, "%s failed and gave up.\n", __func__);
@@ -359,7 +359,7 @@ retry:
 		if (ret) {
 			validate_fini(op, NULL);
 			if (unlikely(ret == -EAGAIN)) {
-				sequence = atomic_add_return(1, &drm->ttm.validate_sequence);
+				sequence = atomic_add_return_unchecked(1, &drm->ttm.validate_sequence);
 				ret = ttm_bo_reserve_slowpath(&nvbo->bo, true,
 							      sequence);
 				if (!ret)

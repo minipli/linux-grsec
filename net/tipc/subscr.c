@@ -96,7 +96,7 @@ static void subscr_send_event(struct tipc_subscription *sub,
 {
 	struct iovec msg_sect;
 
-	msg_sect.iov_base = (void *)&sub->evt;
+	msg_sect.iov_base = (void __force_user *)&sub->evt;
 	msg_sect.iov_len = sizeof(struct tipc_event);
 
 	sub->evt.event = htohl(event, sub->swap);

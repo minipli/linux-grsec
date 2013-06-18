@@ -84,7 +84,7 @@ static void __init free_hash(void)
 	}
 }
 
-static long __init do_utime(char *filename, time_t mtime)
+static long __init do_utime(char __force_user *filename, time_t mtime)
 {
 	struct timespec t[2];
 
@@ -119,7 +119,7 @@ static void __init dir_utime(void)
 	struct dir_entry *de, *tmp;
 	list_for_each_entry_safe(de, tmp, &dir_list, list) {
 		list_del(&de->list);
-		do_utime(de->name, de->mtime);
+		do_utime((char __force_user *)de->name, de->mtime);
 		kfree(de->name);
 		kfree(de);
 	}
@@ -281,7 +281,7 @@ static int __init maybe_link(void)
 	if (nlink >= 2) {
 		char *old = find_link(major, minor, ino, mode, collected);
 		if (old)
-			return (sys_link(old, collected) < 0) ? -1 : 1;
+			return (sys_link((char __force_user *)old, (char __force_user *)collected) < 0) ? -1 : 1;
 	}
 	return 0;
 }
@@ -290,11 +290,11 @@ static void __init clean_path(char *path, umode_t mode)
 {
 	struct stat st;
 
-	if (!sys_newlstat(path, &st) && (st.st_mode^mode) & S_IFMT) {
+	if (!sys_newlstat((char __force_user *)path, (struct stat __force_user *)&st) && (st.st_mode^mode) & S_IFMT) {
 		if (S_ISDIR(st.st_mode))
-			sys_rmdir(path);
+			sys_rmdir((char __force_user *)path);
 		else
-			sys_unlink(path);
+			sys_unlink((char __force_user *)path);
 	}
 }
 
@@ -315,7 +315,7 @@ static int __init do_name(void)
 			int openflags = O_WRONLY|O_CREAT;
 			if (ml != 1)
 				openflags |= O_TRUNC;
-			wfd = sys_open(collected, openflags, mode);
+			wfd = sys_open((char __force_user *)collected, openflags, mode);
 
 			if (wfd >= 0) {
 				sys_fchown(wfd, uid, gid);
@@ -327,17 +327,17 @@ static int __init do_name(void)
 			}
 		}
 	} else if (S_ISDIR(mode)) {
-		sys_mkdir(collected, mode);
-		sys_chown(collected, uid, gid);
-		sys_chmod(collected, mode);
+		sys_mkdir((char __force_user *)collected, mode);
+		sys_chown((char __force_user *)collected, uid, gid);
+		sys_chmod((char __force_user *)collected, mode);
 		dir_add(collected, mtime);
 	} else if (S_ISBLK(mode) || S_ISCHR(mode) ||
 		   S_ISFIFO(mode) || S_ISSOCK(mode)) {
 		if (maybe_link() == 0) {
-			sys_mknod(collected, mode, rdev);
-			sys_chown(collected, uid, gid);
-			sys_chmod(collected, mode);
-			do_utime(collected, mtime);
+			sys_mknod((char __force_user *)collected, mode, rdev);
+			sys_chown((char __force_user *)collected, uid, gid);
+			sys_chmod((char __force_user *)collected, mode);
+			do_utime((char __force_user *)collected, mtime);
 		}
 	}
 	return 0;
@@ -346,15 +346,15 @@ static int __init do_name(void)
 static int __init do_copy(void)
 {
 	if (count >= body_len) {
-		sys_write(wfd, victim, body_len);
+		sys_write(wfd, (char __force_user *)victim, body_len);
 		sys_close(wfd);
-		do_utime(vcollected, mtime);
+		do_utime((char __force_user *)vcollected, mtime);
 		kfree(vcollected);
 		eat(body_len);
 		state = SkipIt;
 		return 0;
 	} else {
-		sys_write(wfd, victim, count);
+		sys_write(wfd, (char __force_user *)victim, count);
 		body_len -= count;
 		eat(count);
 		return 1;
@@ -365,9 +365,9 @@ static int __init do_symlink(void)
 {
 	collected[N_ALIGN(name_len) + body_len] = '\0';
 	clean_path(collected, 0);
-	sys_symlink(collected + N_ALIGN(name_len), collected);
-	sys_lchown(collected, uid, gid);
-	do_utime(collected, mtime);
+	sys_symlink((char __force_user *)collected + N_ALIGN(name_len), (char __force_user *)collected);
+	sys_lchown((char __force_user *)collected, uid, gid);
+	do_utime((char __force_user *)collected, mtime);
 	state = SkipIt;
 	next_state = Reset;
 	return 0;

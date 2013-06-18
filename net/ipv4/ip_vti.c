@@ -47,7 +47,7 @@
 #define HASH_SIZE  16
 #define HASH(addr) (((__force u32)addr^((__force u32)addr>>4))&(HASH_SIZE-1))
 
-static struct rtnl_link_ops vti_link_ops __read_mostly;
+static struct rtnl_link_ops vti_link_ops;
 
 static int vti_net_id __read_mostly;
 struct vti_net {
@@ -399,8 +399,7 @@ static netdev_tx_t vti_tunnel_xmit(struct sk_buff *skb, struct net_device *dev)
 			tunnel->err_count = 0;
 	}
 
-	IPCB(skb)->flags &= ~(IPSKB_XFRM_TUNNEL_SIZE | IPSKB_XFRM_TRANSFORMED |
-			      IPSKB_REROUTED);
+	memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
 	skb_dst_drop(skb);
 	skb_dst_set(skb, &rt->dst);
 	nf_reset(skb);
@@ -886,7 +885,7 @@ static const struct nla_policy vti_policy[IFLA_VTI_MAX + 1] = {
 	[IFLA_VTI_REMOTE]	= { .len = FIELD_SIZEOF(struct iphdr, daddr) },
 };
 
-static struct rtnl_link_ops vti_link_ops __read_mostly = {
+static struct rtnl_link_ops vti_link_ops = {
 	.kind		= "vti",
 	.maxtype	= IFLA_VTI_MAX,
 	.policy		= vti_policy,
