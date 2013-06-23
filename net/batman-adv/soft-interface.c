@@ -252,7 +252,7 @@ static int batadv_interface_tx(struct sk_buff *skb,
 		       primary_if->net_dev->dev_addr, ETH_ALEN);
 
 		/* set broadcast sequence number */
-		seqno = atomic_inc_return(&bat_priv->bcast_seqno);
+		seqno = atomic_inc_return_unchecked(&bat_priv->bcast_seqno);
 		bcast_packet->seqno = htonl(seqno);
 
 		batadv_add_bcast_packet_to_list(bat_priv, skb, brd_delay);
@@ -527,7 +527,7 @@ struct net_device *batadv_softif_create(const char *name)
 	atomic_set(&bat_priv->batman_queue_left, BATADV_BATMAN_QUEUE_LEN);
 
 	atomic_set(&bat_priv->mesh_state, BATADV_MESH_INACTIVE);
-	atomic_set(&bat_priv->bcast_seqno, 1);
+	atomic_set_unchecked(&bat_priv->bcast_seqno, 1);
 	atomic_set(&bat_priv->tt.vn, 0);
 	atomic_set(&bat_priv->tt.local_changes, 0);
 	atomic_set(&bat_priv->tt.ogm_append_cnt, 0);
