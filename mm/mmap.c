@@ -1768,7 +1768,7 @@ unsigned long skip_heap_stack_gap(const struct vm_area_struct *vma, unsigned lon
 	return -ENOMEM;
 }
 
-unsigned long unmapped_area(struct vm_unmapped_area_info *info)
+unsigned long unmapped_area(const struct vm_unmapped_area_info *info)
 {
 	/*
 	 * We implement the search by looking for an rbtree node that
@@ -1821,7 +1821,18 @@ check_current:
 		/* Check if current node has a suitable gap */
 		if (gap_start > high_limit)
 			return -ENOMEM;
-		if (gap_end >= low_limit && gap_end - gap_start >= length)
+		if (vma->vm_prev && (vma->vm_prev->vm_flags & VM_GROWSUP)) {
+			if (high_limit - gap_start < sysctl_heap_stack_gap)
+				return -ENOMEM;
+			gap_start += sysctl_heap_stack_gap;
+		}
+		if (vma->vm_flags & VM_GROWSDOWN) {
+			if (gap_end >= sysctl_heap_stack_gap)
+				gap_end -= sysctl_heap_stack_gap;
+			else
+				gap_end = gap_start;
+		}
+		if (gap_end >= low_limit && gap_end > gap_start && gap_end - gap_start >= length)
 			goto found;
 
 		/* Visit right subtree if it looks promising */
@@ -1870,7 +1881,7 @@ found:
 	return gap_start;
 }
 
-unsigned long unmapped_area_topdown(struct vm_unmapped_area_info *info)
+unsigned long unmapped_area_topdown(const struct vm_unmapped_area_info *info)
 {
 	struct mm_struct *mm = current->mm;
 	struct vm_area_struct *vma;
@@ -1924,7 +1935,18 @@ check_current:
 		gap_end = vma->vm_start;
 		if (gap_end < low_limit)
 			return -ENOMEM;
-		if (gap_start <= high_limit && gap_end - gap_start >= length)
+		if (vma->vm_prev && (vma->vm_prev->vm_flags & VM_GROWSUP)) {
+			if (high_limit - gap_start < sysctl_heap_stack_gap)
+				return -ENOMEM;
+			gap_start += sysctl_heap_stack_gap;
+		}
+		if (vma->vm_flags & VM_GROWSDOWN) {
+			if (gap_end >= sysctl_heap_stack_gap)
+				gap_end -= sysctl_heap_stack_gap;
+			else
+				gap_end = gap_start;
+		}
+		if (gap_start <= high_limit && gap_end > gap_start && gap_end - gap_start >= length)
 			goto found;
 
 		/* Visit left subtree if it looks promising */
