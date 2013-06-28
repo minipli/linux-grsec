@@ -1219,6 +1219,9 @@ static int do_umount(struct mount *mnt, int flags)
 		if (!(sb->s_flags & MS_RDONLY))
 			retval = do_remount_sb(sb, MS_RDONLY, NULL, 0);
 		up_write(&sb->s_umount);
+
+		gr_log_remount(mnt->mnt_devname, retval);
+
 		return retval;
 	}
 
@@ -1238,6 +1241,9 @@ static int do_umount(struct mount *mnt, int flags)
 	br_write_unlock(&vfsmount_lock);
 	up_write(&namespace_sem);
 	release_mounts(&umount_list);
+
+	gr_log_unmount(mnt->mnt_devname, retval);
+
 	return retval;
 }
 
@@ -1257,7 +1263,7 @@ static inline bool may_mount(void)
  * unixes. Our API is identical to OSF/1 to avoid making a mess of AMD
  */
 
-SYSCALL_DEFINE2(umount, char __user *, name, int, flags)
+SYSCALL_DEFINE2(umount, const char __user *, name, int, flags)
 {
 	struct path path;
 	struct mount *mnt;
@@ -1297,7 +1303,7 @@ out:
 /*
  *	The 2.0 compatible umount. No flags.
  */
-SYSCALL_DEFINE1(oldumount, char __user *, name)
+SYSCALL_DEFINE1(oldumount, const char __user *, name)
 {
 	return sys_umount(name, 0);
 }
@@ -2267,6 +2273,16 @@ long do_mount(const char *dev_name, const char *dir_name,
 		   MS_NOATIME | MS_NODIRATIME | MS_RELATIME| MS_KERNMOUNT |
 		   MS_STRICTATIME);
 
+	if (gr_handle_rofs_mount(path.dentry, path.mnt, mnt_flags)) {
+		retval = -EPERM;
+		goto dput_out;
+	}
+
+	if (gr_handle_chroot_mount(path.dentry, path.mnt, dev_name)) {
+		retval = -EPERM;
+		goto dput_out;
+	}
+
 	if (flags & MS_REMOUNT)
 		retval = do_remount(&path, flags & ~MS_REMOUNT, mnt_flags,
 				    data_page);
@@ -2281,6 +2297,9 @@ long do_mount(const char *dev_name, const char *dir_name,
 				      dev_name, data_page);
 dput_out:
 	path_put(&path);
+
+	gr_log_mount(dev_name, dir_name, retval);
+
 	return retval;
 }
 
@@ -2454,8 +2473,8 @@ struct dentry *mount_subtree(struct vfsmount *mnt, const char *name)
 }
 EXPORT_SYMBOL(mount_subtree);
 
-SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
-		char __user *, type, unsigned long, flags, void __user *, data)
+SYSCALL_DEFINE5(mount, const char __user *, dev_name, const char __user *, dir_name,
+		const char __user *, type, unsigned long, flags, void __user *, data)
 {
 	int ret;
 	char *kernel_type;
@@ -2566,6 +2585,11 @@ SYSCALL_DEFINE2(pivot_root, const char __user *, new_root,
 	error = security_sb_pivotroot(&old, &new);
 	if (error)
 		goto out2;
+
+	if (gr_handle_chroot_pivot()) {
+		error = -EPERM;
+		goto out2;
+	}
 
 	get_fs_root(current->fs, &root);
 	error = lock_mount(&old);
@@ -2815,7 +2839,7 @@ static int mntns_install(struct nsproxy *nsproxy, void *ns)
 	    !nsown_capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
-	if (fs->users != 1)
+	if (atomic_read(&fs->users) != 1)
 		return -EINVAL;
 
 	get_mnt_ns(mnt_ns);

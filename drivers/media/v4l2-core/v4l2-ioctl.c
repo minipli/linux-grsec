@@ -236,7 +236,7 @@ static void v4l_print_format(const void *arg, bool write_only)
 	const struct v4l2_vbi_format *vbi;
 	const struct v4l2_sliced_vbi_format *sliced;
 	const struct v4l2_window *win;
-	const struct v4l2_clip *clip;
+	const struct v4l2_clip __user *pclip;
 	unsigned i;
 
 	pr_cont("type=%s", prt_names(p->type, v4l2_type_names));
@@ -284,12 +284,16 @@ static void v4l_print_format(const void *arg, bool write_only)
 			win->w.left, win->w.top,
 			prt_names(win->field, v4l2_field_names),
 			win->chromakey, win->bitmap, win->global_alpha);
-		clip = win->clips;
+		pclip = win->clips;
 		for (i = 0; i < win->clipcount; i++) {
+			struct v4l2_clip clip;
+
+			if (copy_from_user(&clip, pclip, sizeof clip))
+				break;
 			printk(KERN_DEBUG "clip %u: wxh=%dx%d, x,y=%d,%d\n",
-					i, clip->c.width, clip->c.height,
-					clip->c.left, clip->c.top);
-			clip = clip->next;
+					i, clip.c.width, clip.c.height,
+					clip.c.left, clip.c.top);
+			pclip = clip.next;
 		}
 		break;
 	case V4L2_BUF_TYPE_VBI_CAPTURE:
@@ -1923,7 +1927,8 @@ struct v4l2_ioctl_info {
 				struct file *file, void *fh, void *p);
 	} u;
 	void (*debug)(const void *arg, bool write_only);
-};
+} __do_const;
+typedef struct v4l2_ioctl_info __no_const v4l2_ioctl_info_no_const;
 
 /* This control needs a priority check */
 #define INFO_FL_PRIO	(1 << 0)
@@ -2108,7 +2113,7 @@ static long __video_do_ioctl(struct file *file,
 	struct video_device *vfd = video_devdata(file);
 	const struct v4l2_ioctl_ops *ops = vfd->ioctl_ops;
 	bool write_only = false;
-	struct v4l2_ioctl_info default_info;
+	v4l2_ioctl_info_no_const default_info;
 	const struct v4l2_ioctl_info *info;
 	void *fh = file->private_data;
 	struct v4l2_fh *vfh = NULL;
@@ -2193,7 +2198,7 @@ done:
 }
 
 static int check_array_args(unsigned int cmd, void *parg, size_t *array_size,
-			    void * __user *user_ptr, void ***kernel_ptr)
+			    void __user **user_ptr, void ***kernel_ptr)
 {
 	int ret = 0;
 
@@ -2209,7 +2214,7 @@ static int check_array_args(unsigned int cmd, void *parg, size_t *array_size,
 				ret = -EINVAL;
 				break;
 			}
-			*user_ptr = (void __user *)buf->m.planes;
+			*user_ptr = (void __force_user *)buf->m.planes;
 			*kernel_ptr = (void *)&buf->m.planes;
 			*array_size = sizeof(struct v4l2_plane) * buf->length;
 			ret = 1;
@@ -2244,7 +2249,7 @@ static int check_array_args(unsigned int cmd, void *parg, size_t *array_size,
 				ret = -EINVAL;
 				break;
 			}
-			*user_ptr = (void __user *)ctrls->controls;
+			*user_ptr = (void __force_user *)ctrls->controls;
 			*kernel_ptr = (void *)&ctrls->controls;
 			*array_size = sizeof(struct v4l2_ext_control)
 				    * ctrls->count;

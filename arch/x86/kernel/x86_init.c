@@ -85,7 +85,7 @@ struct x86_init_ops x86_init __initdata = {
 	},
 };
 
-struct x86_cpuinit_ops x86_cpuinit __cpuinitdata = {
+struct x86_cpuinit_ops x86_cpuinit __cpuinitconst = {
 	.early_percpu_clock_init	= x86_init_noop,
 	.setup_percpu_clockev		= setup_secondary_APIC_clock,
 };
@@ -93,7 +93,7 @@ struct x86_cpuinit_ops x86_cpuinit __cpuinitdata = {
 static void default_nmi_init(void) { };
 static int default_i8042_detect(void) { return 1; };
 
-struct x86_platform_ops x86_platform = {
+struct x86_platform_ops x86_platform __read_only = {
 	.calibrate_tsc			= native_calibrate_tsc,
 	.get_wallclock			= mach_get_cmos_time,
 	.set_wallclock			= mach_set_rtc_mmss,
@@ -107,7 +107,7 @@ struct x86_platform_ops x86_platform = {
 };
 
 EXPORT_SYMBOL_GPL(x86_platform);
-struct x86_msi_ops x86_msi = {
+struct x86_msi_ops x86_msi __read_only = {
 	.setup_msi_irqs		= native_setup_msi_irqs,
 	.compose_msi_msg	= native_compose_msi_msg,
 	.teardown_msi_irq	= native_teardown_msi_irq,
@@ -116,7 +116,7 @@ struct x86_msi_ops x86_msi = {
 	.setup_hpet_msi		= default_setup_hpet_msi,
 };
 
-struct x86_io_apic_ops x86_io_apic_ops = {
+struct x86_io_apic_ops x86_io_apic_ops __read_only = {
 	.init			= native_io_apic_init_mappings,
 	.read			= native_io_apic_read,
 	.write			= native_io_apic_write,
