@@ -118,6 +118,7 @@ static int fill_event_metadata(struct fsnotify_group *group,
 	metadata->event_len = FAN_EVENT_METADATA_LEN;
 	metadata->metadata_len = FAN_EVENT_METADATA_LEN;
 	metadata->vers = FANOTIFY_METADATA_VERSION;
+	metadata->reserved = 0;
 	metadata->mask = event->mask & FAN_ALL_OUTGOING_EVENTS;
 	metadata->pid = pid_vnr(event->tgid);
 	if (unlikely(event->mask & FAN_Q_OVERFLOW))
@@ -276,7 +277,8 @@ static ssize_t copy_event_to_user(struct fsnotify_group *group,
 		goto out_close_fd;
 
 	ret = -EFAULT;
-	if (copy_to_user(buf, &fanotify_event_metadata,
+	if (fanotify_event_metadata.event_len > sizeof fanotify_event_metadata ||
+	    copy_to_user(buf, &fanotify_event_metadata,
 			 fanotify_event_metadata.event_len))
 		goto out_kill_access_response;
 

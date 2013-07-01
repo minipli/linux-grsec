@@ -64,7 +64,7 @@ static void free_modprobe_argv(struct subprocess_info *info)
 	kfree(info->argv);
 }
 
-static int call_modprobe(char *module_name, int wait)
+static int call_modprobe(char *module_name, char *module_param, int wait)
 {
 	static char *envp[] = {
 		"HOME=/",
@@ -85,7 +85,8 @@ static int call_modprobe(char *module_name, int wait)
 	argv[1] = "-q";
 	argv[2] = "--";
 	argv[3] = module_name;	/* check free_modprobe_argv() */
-	argv[4] = NULL;
+	argv[4] = module_param;
+	argv[5] = NULL;
 
 	return call_usermodehelper_fns(modprobe_path, argv, envp,
 		wait | UMH_KILLABLE, NULL, free_modprobe_argv, NULL);
@@ -110,9 +111,8 @@ out:
  * If module auto-loading support is disabled then this function
  * becomes a no-operation.
  */
-int __request_module(bool wait, const char *fmt, ...)
+static int ____request_module(bool wait, char *module_param, const char *fmt, va_list ap)
 {
-	va_list args;
 	char module_name[MODULE_NAME_LEN];
 	unsigned int max_modprobes;
 	int ret;
@@ -120,15 +120,27 @@ int __request_module(bool wait, const char *fmt, ...)
 #define MAX_KMOD_CONCURRENT 50	/* Completely arbitrary value - KAO */
 	static int kmod_loop_msg;
 
-	va_start(args, fmt);
-	ret = vsnprintf(module_name, MODULE_NAME_LEN, fmt, args);
-	va_end(args);
+	ret = vsnprintf(module_name, MODULE_NAME_LEN, fmt, ap);
 	if (ret >= MODULE_NAME_LEN)
 		return -ENAMETOOLONG;
 
 	ret = security_kernel_module_request(module_name);
 	if (ret)
 		return ret;
+
+#ifdef CONFIG_GRKERNSEC_MODHARDEN
+	if (!current_uid()) {
+		/* hack to workaround consolekit/udisks stupidity */
+		read_lock(&tasklist_lock);
+		if (!strcmp(current->comm, "mount") &&
+		    current->real_parent && !strncmp(current->real_parent->comm, "udisk", 5)) {
+			read_unlock(&tasklist_lock);
+			printk(KERN_ALERT "grsec: denied attempt to auto-load fs module %.64s by udisks\n", module_name);
+			return -EPERM;
+		}
+		read_unlock(&tasklist_lock);
+	}
+#endif
 
 	/* If modprobe needs a service that is in a module, we get a recursive
 	 * loop.  Limit the number of running kmod threads to max_threads/2 or
@@ -158,11 +170,52 @@ int __request_module(bool wait, const char *fmt, ...)
 
 	trace_module_request(module_name, wait, _RET_IP_);
 
-	ret = call_modprobe(module_name, wait ? UMH_WAIT_PROC : UMH_WAIT_EXEC);
+	ret = call_modprobe(module_name, module_param, wait ? UMH_WAIT_PROC : UMH_WAIT_EXEC);
 
 	atomic_dec(&kmod_concurrent);
 	return ret;
 }
+
+int ___request_module(bool wait, char *module_param, const char *fmt, ...)
+{
+	va_list args;
+	int ret;
+
+	va_start(args, fmt);
+	ret = ____request_module(wait, module_param, fmt, args);
+	va_end(args);
+
+	return ret;
+}
+
+int __request_module(bool wait, const char *fmt, ...)
+{
+	va_list args;
+	int ret;
+
+#ifdef CONFIG_GRKERNSEC_MODHARDEN
+	if (current_uid()) {
+		char module_param[MODULE_NAME_LEN];
+
+		memset(module_param, 0, sizeof(module_param));
+
+		snprintf(module_param, sizeof(module_param) - 1, "grsec_modharden_normal%u_", current_uid());
+
+		va_start(args, fmt);
+		ret = ____request_module(wait, module_param, fmt, args);
+		va_end(args);
+
+		return ret;
+	}
+#endif
+
+	va_start(args, fmt);
+	ret = ____request_module(wait, NULL, fmt, args);
+	va_end(args);
+
+	return ret;
+}
+
 EXPORT_SYMBOL(__request_module);
 #endif /* CONFIG_MODULES */
 
@@ -265,7 +318,7 @@ static int wait_for_helper(void *data)
 		 *
 		 * Thus the __user pointer cast is valid here.
 		 */
-		sys_wait4(pid, (int __user *)&ret, 0, NULL);
+		sys_wait4(pid, (int __force_user *)&ret, 0, NULL);
 
 		/*
 		 * If ret is 0, either ____call_usermodehelper failed and the
@@ -512,7 +565,7 @@ EXPORT_SYMBOL(call_usermodehelper_exec);
 static int proc_cap_handler(struct ctl_table *table, int write,
 			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table t;
+	ctl_table_no_const t;
 	unsigned long cap_array[_KERNEL_CAPABILITY_U32S];
 	kernel_cap_t new_cap;
 	int err, i;

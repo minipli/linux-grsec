@@ -1324,7 +1324,7 @@ static bool ldm_frag_add (const u8 *data, int size, struct list_head *frags)
 			goto found;
 	}
 
-	f = kmalloc (sizeof (*f) + size*num, GFP_KERNEL);
+	f = kmalloc (size*num + sizeof (*f), GFP_KERNEL);
 	if (!f) {
 		ldm_crit ("Out of memory.");
 		return false;
