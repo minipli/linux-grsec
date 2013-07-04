@@ -333,8 +333,8 @@ struct perf_event {
 
 	enum perf_event_active_state	state;
 	unsigned int			attach_state;
-	local64_t			count;
-	atomic64_t			child_count;
+	local64_t			count; /* PaX: fix it one day */
+	atomic64_unchecked_t		child_count;
 
 	/*
 	 * These are the total time in nanoseconds that the event
@@ -385,8 +385,8 @@ struct perf_event {
 	 * These accumulate total time (in nanoseconds) that children
 	 * events have been enabled and running, respectively.
 	 */
-	atomic64_t			child_total_time_enabled;
-	atomic64_t			child_total_time_running;
+	atomic64_unchecked_t		child_total_time_enabled;
+	atomic64_unchecked_t		child_total_time_running;
 
 	/*
 	 * Protect attach/detach and child_list:
@@ -811,7 +811,7 @@ static inline void perf_restore_debug_store(void)			{ }
  */
 #define perf_cpu_notifier(fn)						\
 do {									\
-	static struct notifier_block fn##_nb __cpuinitdata =		\
+	static struct notifier_block fn##_nb =				\
 		{ .notifier_call = fn, .priority = CPU_PRI_PERF };	\
 	unsigned long cpu = smp_processor_id();				\
 	unsigned long flags;						\
@@ -830,7 +830,7 @@ do {									\
 struct perf_pmu_events_attr {
 	struct device_attribute attr;
 	u64 id;
-};
+} __do_const;
 
 #define PMU_EVENT_ATTR(_name, _var, _id, _show)				\
 static struct perf_pmu_events_attr _var = {				\

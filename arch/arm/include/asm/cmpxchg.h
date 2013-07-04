@@ -102,6 +102,8 @@ static inline unsigned long __xchg(unsigned long x, volatile void *ptr, int size
 
 #define xchg(ptr,x) \
 	((__typeof__(*(ptr)))__xchg((unsigned long)(x),(ptr),sizeof(*(ptr))))
+#define xchg_unchecked(ptr,x) \
+	((__typeof__(*(ptr)))__xchg((unsigned long)(x),(ptr),sizeof(*(ptr))))
 
 #include <asm-generic/cmpxchg-local.h>
 

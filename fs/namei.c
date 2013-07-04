@@ -820,7 +820,7 @@ follow_link(struct path *link, struct nameidata *nd, void **p)
 {
 	struct dentry *dentry = link->dentry;
 	int error;
-	char *s;
+	const char *s;
 
 	BUG_ON(nd->flags & LOOKUP_RCU);
 
@@ -1686,7 +1686,7 @@ EXPORT_SYMBOL(full_name_hash);
 static inline unsigned long hash_name(const char *name, unsigned int *hashp)
 {
 	unsigned long a, b, adata, bdata, mask, hash, len;
-	const struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;
+	static const struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;
 
 	hash = a = 0;
 	len = -sizeof(unsigned long);
@@ -3934,6 +3934,8 @@ SYSCALL_DEFINE2(rename, const char __user *, oldname, const char __user *, newna
 
 int vfs_readlink(struct dentry *dentry, char __user *buffer, int buflen, const char *link)
 {
+	char tmpbuf[64];
+	const char *newlink;
 	int len;
 
 	len = PTR_ERR(link);
@@ -3943,7 +3945,14 @@ int vfs_readlink(struct dentry *dentry, char __user *buffer, int buflen, const c
 	len = strlen(link);
 	if (len > (unsigned) buflen)
 		len = buflen;
-	if (copy_to_user(buffer, link, len))
+
+	if (len < sizeof(tmpbuf)) {
+		memcpy(tmpbuf, link, len);
+		newlink = tmpbuf;
+	} else
+		newlink = link;
+
+	if (copy_to_user(buffer, newlink, len))
 		len = -EFAULT;
 out:
 	return len;
