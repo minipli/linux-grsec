@@ -1147,7 +1147,7 @@ arch_get_unmapped_area_1(unsigned long addr, unsigned long len,
 		/* At this point:  (!vma || addr < vma->vm_end). */
 		if (limit - len < addr)
 			return -ENOMEM;
-		if (check_heap_stack_gap(vma, addr, len))
+		if (check_heap_stack_gap(vma, &addr, len))
 			return addr;
 		addr = vma->vm_end;
 		vma = vma->vm_next;

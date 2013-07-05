@@ -67,7 +67,7 @@ full_search:
 			}
 			return -ENOMEM;
 		}
-		if (likely(check_heap_stack_gap(vma, addr, len))) {
+		if (likely(check_heap_stack_gap(vma, &addr, len))) {
 			/*
 			 * Remember the place where we stopped the search:
 			 */
@@ -105,10 +105,11 @@ hugetlb_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 
 	/* make sure it can fit in the remaining address space */
 	if (likely(addr > len)) {
-		vma = find_vma(mm, addr-len);
-		if (check_heap_stack_gap(vma, addr - len, len)) {
+		addr -= len;
+		vma = find_vma(mm, addr);
+		if (check_heap_stack_gap(vma, &addr, len)) {
 			/* remember the address as a hint for next time */
-			return (mm->free_area_cache = addr-len);
+			return (mm->free_area_cache = addr);
 		}
 	}
 
@@ -125,7 +126,7 @@ hugetlb_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 		 * return with success:
 		 */
 		vma = find_vma(mm, addr);
-		if (likely(check_heap_stack_gap(vma, addr, len))) {
+		if (likely(check_heap_stack_gap(vma, &addr, len))) {
 			/* remember the address as a hint for next time */
 			return (mm->free_area_cache = addr);
 		}
@@ -182,7 +183,7 @@ hugetlb_get_unmapped_area(struct file *file, unsigned long addr,
 	if (addr) {
 		addr = ALIGN(addr, HPAGE_SIZE);
 		vma = find_vma(mm, addr);
-		if (task_size - len >= addr && check_heap_stack_gap(vma, addr, len))
+		if (task_size - len >= addr && check_heap_stack_gap(vma, &addr, len))
 			return addr;
 	}
 	if (mm->get_unmapped_area == arch_get_unmapped_area)

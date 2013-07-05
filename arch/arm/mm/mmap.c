@@ -65,7 +65,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 			addr = PAGE_ALIGN(addr);
 
 		vma = find_vma(mm, addr);
-		if (TASK_SIZE - len >= addr && check_heap_stack_gap(vma, addr, len))
+		if (TASK_SIZE - len >= addr && check_heap_stack_gap(vma, &addr, len))
 			return addr;
 	}
 	if (len > mm->cached_hole_size) {
@@ -104,7 +104,7 @@ full_search:
 			}
 			return -ENOMEM;
 		}
-		if (check_heap_stack_gap(vma, addr, len)) {
+		if (check_heap_stack_gap(vma, &addr, len)) {
 			/*
 			 * Remember the place where we stopped the search:
 			 */
