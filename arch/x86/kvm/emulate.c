@@ -329,6 +329,7 @@ static void invalidate_registers(struct x86_emulate_ctxt *ctxt)
 
 #define ____emulate_2op(ctxt, _op, _x, _y, _suffix, _dsttype)	\
 	do {								\
+		unsigned long _tmp;					\
 		__asm__ __volatile__ (					\
 			_PRE_EFLAGS("0", "4", "2")			\
 			_op _suffix " %"_x"3,%1; "			\
@@ -343,8 +344,6 @@ static void invalidate_registers(struct x86_emulate_ctxt *ctxt)
 /* Raw emulation: instruction has two explicit operands. */
 #define __emulate_2op_nobyte(ctxt,_op,_wx,_wy,_lx,_ly,_qx,_qy)		\
 	do {								\
-		unsigned long _tmp;					\
-									\
 		switch ((ctxt)->dst.bytes) {				\
 		case 2:							\
 			____emulate_2op(ctxt,_op,_wx,_wy,"w",u16);	\
@@ -360,7 +359,6 @@ static void invalidate_registers(struct x86_emulate_ctxt *ctxt)
 
 #define __emulate_2op(ctxt,_op,_bx,_by,_wx,_wy,_lx,_ly,_qx,_qy)		     \
 	do {								     \
-		unsigned long _tmp;					     \
 		switch ((ctxt)->dst.bytes) {				     \
 		case 1:							     \
 			____emulate_2op(ctxt,_op,_bx,_by,"b",u8);	     \

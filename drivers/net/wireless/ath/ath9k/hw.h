@@ -652,7 +652,7 @@ struct ath_hw_private_ops {
 
 	/* ANI */
 	void (*ani_cache_ini_regs)(struct ath_hw *ah);
-};
+} __no_const;
 
 /**
  * struct ath_spec_scan - parameters for Atheros spectral scan
@@ -721,7 +721,7 @@ struct ath_hw_ops {
 				     struct ath_spec_scan *param);
 	void (*spectral_scan_trigger)(struct ath_hw *ah);
 	void (*spectral_scan_wait)(struct ath_hw *ah);
-};
+} __no_const;
 
 struct ath_nf_limits {
 	s16 max;
