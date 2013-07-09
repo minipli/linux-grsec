@@ -1751,7 +1751,7 @@ bool check_heap_stack_gap(const struct vm_area_struct *vma, unsigned long addr, 
 		return sysctl_heap_stack_gap <= vma->vm_start - addr - len;
 #ifdef CONFIG_STACK_GROWSUP
 	else if (vma->vm_prev && (vma->vm_prev->vm_flags & VM_GROWSUP))
-		return addr - vma->vm_prev->vm_end <= sysctl_heap_stack_gap;
+		return addr - vma->vm_prev->vm_end >= sysctl_heap_stack_gap;
 #endif
 
 	return true;
