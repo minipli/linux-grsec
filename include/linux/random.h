@@ -32,6 +32,11 @@ void prandom_seed(u32 seed);
 u32 prandom_u32_state(struct rnd_state *);
 void prandom_bytes_state(struct rnd_state *state, void *buf, int nbytes);
 
+static inline unsigned long pax_get_random_long(void)
+{
+	return prandom_u32() + (sizeof(long) > 4 ? (unsigned long)prandom_u32() << 32 : 0);
+}
+
 /*
  * Handle minimum values for seeds
  */
