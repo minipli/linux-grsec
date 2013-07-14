@@ -843,7 +843,7 @@ static void ping_format_sock(struct sock *sp, struct seq_file *f,
 		from_kuid_munged(seq_user_ns(f), sock_i_uid(sp)),
 		0, sock_i_ino(sp),
 		atomic_read(&sp->sk_refcnt), sp,
-		atomic_read(&sp->sk_drops), len);
+		atomic_read_unchecked(&sp->sk_drops), len);
 }
 
 static int ping_seq_show(struct seq_file *seq, void *v)

@@ -51,7 +51,7 @@
 struct batadv_hard_iface_bat_iv {
 	unsigned char *ogm_buff;
 	int ogm_buff_len;
-	atomic_t ogm_seqno;
+	atomic_unchecked_t ogm_seqno;
 };
 
 /**
@@ -75,7 +75,7 @@ struct batadv_hard_iface {
 	int16_t if_num;
 	char if_status;
 	struct net_device *net_dev;
-	atomic_t frag_seqno;
+	atomic_unchecked_t frag_seqno;
 	struct kobject *hardif_obj;
 	atomic_t refcount;
 	struct packet_type batman_adv_ptype;
@@ -558,7 +558,7 @@ struct batadv_priv {
 #ifdef CONFIG_BATMAN_ADV_DEBUG
 	atomic_t log_level;
 #endif
-	atomic_t bcast_seqno;
+	atomic_unchecked_t bcast_seqno;
 	atomic_t bcast_queue_left;
 	atomic_t batman_queue_left;
 	char num_ifaces;
