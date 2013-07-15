@@ -252,7 +252,7 @@ int drm_getstats(struct drm_device *dev, void *data,
 			stats->data[i].value =
 			    (file_priv->master->lock.hw_lock ? file_priv->master->lock.hw_lock->lock : 0);
 		else
-			stats->data[i].value = atomic_read(&dev->counts[i]);
+			stats->data[i].value = atomic_read_unchecked(&dev->counts[i]);
 		stats->data[i].type = dev->types[i];
 	}
 

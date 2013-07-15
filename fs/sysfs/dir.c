@@ -40,7 +40,7 @@ static DEFINE_IDA(sysfs_ino_ida);
  *
  *	Returns 31 bit hash of ns + name (so it fits in an off_t )
  */
-static unsigned int sysfs_name_hash(const void *ns, const char *name)
+static unsigned int sysfs_name_hash(const void *ns, const unsigned char *name)
 {
 	unsigned long hash = init_name_hash();
 	unsigned int len = strlen(name);

@@ -324,19 +324,19 @@ static struct ctl_table xfrm6_policy_table[] = {
 
 static int __net_init xfrm6_net_init(struct net *net)
 {
-	struct ctl_table *table;
+	ctl_table_no_const *table = NULL;
 	struct ctl_table_header *hdr;
 
-	table = xfrm6_policy_table;
 	if (!net_eq(net, &init_net)) {
-		table = kmemdup(table, sizeof(xfrm6_policy_table), GFP_KERNEL);
+		table = kmemdup(xfrm6_policy_table, sizeof(xfrm6_policy_table), GFP_KERNEL);
 		if (!table)
 			goto err_alloc;
 
 		table[0].data = &net->xfrm.xfrm6_dst_ops.gc_thresh;
-	}
+		hdr = register_net_sysctl(net, "net/ipv6", table);
+	} else
+		hdr = register_net_sysctl(net, "net/ipv6", xfrm6_policy_table);
 
-	hdr = register_net_sysctl(net, "net/ipv6", table);
 	if (!hdr)
 		goto err_reg;
 
@@ -344,8 +344,7 @@ static int __net_init xfrm6_net_init(struct net *net)
 	return 0;
 
 err_reg:
-	if (!net_eq(net, &init_net))
-		kfree(table);
+	kfree(table);
 err_alloc:
 	return -ENOMEM;
 }
