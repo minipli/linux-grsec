@@ -528,6 +528,10 @@ static inline int audit_arch(void)
 	return arch;
 }
 
+#ifdef CONFIG_GRKERNSEC_SETXID
+extern void gr_delayed_cred_worker(void);
+#endif
+
 /*
  * Notification of system call entry/exit
  * - triggered by current->work.syscall_trace
@@ -536,6 +540,11 @@ asmlinkage void syscall_trace_enter(struct pt_regs *regs)
 {
 	/* do the secure computing check first */
 	secure_computing_strict(regs->regs[2]);
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
 
 	if (!(current->ptrace & PT_PTRACED))
 		goto out;
