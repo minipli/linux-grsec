@@ -1750,6 +1750,8 @@ SYSCALL_DEFINE3(getpeername, int, fd, struct sockaddr __user *, usockaddr,
  *	the protocol.
  */
 
+asmlinkage long sys_sendto(int, void *, size_t, unsigned, struct sockaddr *, int);
+
 SYSCALL_DEFINE6(sendto, int, fd, void __user *, buff, size_t, len,
 		unsigned int, flags, struct sockaddr __user *, addr,
 		int, addr_len)
@@ -2023,7 +2025,7 @@ static int ___sys_sendmsg(struct socket *sock, struct msghdr __user *msg,
 		 * checking falls down on this.
 		 */
 		if (copy_from_user(ctl_buf,
-				   (void __user __force *)msg_sys->msg_control,
+				   (void __force_user *)msg_sys->msg_control,
 				   ctl_len))
 			goto out_freectl;
 		msg_sys->msg_control = ctl_buf;
@@ -2202,7 +2204,7 @@ static int ___sys_recvmsg(struct socket *sock, struct msghdr __user *msg,
 	 *      kernel msghdr to use the kernel address space)
 	 */
 
-	uaddr = (__force void __user *)msg_sys->msg_name;
+	uaddr = (void __force_user *)msg_sys->msg_name;
 	uaddr_len = COMPAT_NAMELEN(msg);
 	if (MSG_CMSG_COMPAT & flags) {
 		err = verify_compat_iovec(msg_sys, iov, &addr, VERIFY_WRITE);
@@ -2955,7 +2957,7 @@ static int bond_ioctl(struct net *net, unsigned int cmd,
 		old_fs = get_fs();
 		set_fs(KERNEL_DS);
 		err = dev_ioctl(net, cmd,
-				(struct ifreq __user __force *) &kifr);
+				(struct ifreq __force_user *) &kifr);
 		set_fs(old_fs);
 
 		return err;
@@ -3064,7 +3066,7 @@ static int compat_sioc_ifmap(struct net *net, unsigned int cmd,
 
 	old_fs = get_fs();
 	set_fs(KERNEL_DS);
-	err = dev_ioctl(net, cmd, (void  __user __force *)&ifr);
+	err = dev_ioctl(net, cmd, (void  __force_user *)&ifr);
 	set_fs(old_fs);
 
 	if (cmd == SIOCGIFMAP && !err) {
@@ -3169,7 +3171,7 @@ static int routing_ioctl(struct net *net, struct socket *sock,
 		ret |= __get_user(rtdev, &(ur4->rt_dev));
 		if (rtdev) {
 			ret |= copy_from_user(devname, compat_ptr(rtdev), 15);
-			r4.rt_dev = (char __user __force *)devname;
+			r4.rt_dev = (char __force_user *)devname;
 			devname[15] = 0;
 		} else
 			r4.rt_dev = NULL;
@@ -3395,8 +3397,8 @@ int kernel_getsockopt(struct socket *sock, int level, int optname,
 	int __user *uoptlen;
 	int err;
 
-	uoptval = (char __user __force *) optval;
-	uoptlen = (int __user __force *) optlen;
+	uoptval = (char __force_user *) optval;
+	uoptlen = (int __force_user *) optlen;
 
 	set_fs(KERNEL_DS);
 	if (level == SOL_SOCKET)
@@ -3416,7 +3418,7 @@ int kernel_setsockopt(struct socket *sock, int level, int optname,
 	char __user *uoptval;
 	int err;
 
-	uoptval = (char __user __force *) optval;
+	uoptval = (char __force_user *) optval;
 
 	set_fs(KERNEL_DS);
 	if (level == SOL_SOCKET)

@@ -306,7 +306,7 @@ module_exit(drm_core_exit);
 /**
  * Copy and IOCTL return string to user space
  */
-static int drm_copy_field(char *buf, size_t *buf_len, const char *value)
+static int drm_copy_field(char __user *buf, size_t *buf_len, const char *value)
 {
 	int len;
 
@@ -376,7 +376,7 @@ long drm_ioctl(struct file *filp,
 	struct drm_file *file_priv = filp->private_data;
 	struct drm_device *dev;
 	const struct drm_ioctl_desc *ioctl = NULL;
-	drm_ioctl_t *func;
+	drm_ioctl_no_const_t func;
 	unsigned int nr = DRM_IOCTL_NR(cmd);
 	int retcode = -EINVAL;
 	char stack_kdata[128];
@@ -389,7 +389,7 @@ long drm_ioctl(struct file *filp,
 		return -ENODEV;
 
 	atomic_inc(&dev->ioctl_count);
-	atomic_inc(&dev->counts[_DRM_STAT_IOCTLS]);
+	atomic_inc_unchecked(&dev->counts[_DRM_STAT_IOCTLS]);
 	++file_priv->ioctl_count;
 
 	if ((nr >= DRM_CORE_IOCTL_COUNT) &&

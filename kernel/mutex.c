@@ -134,7 +134,7 @@ void mspin_lock(struct mspin_node **lock, struct mspin_node *node)
 		node->locked = 1;
 		return;
 	}
-	ACCESS_ONCE(prev->next) = node;
+	ACCESS_ONCE_RW(prev->next) = node;
 	smp_wmb();
 	/* Wait until the lock holder passes the lock down */
 	while (!ACCESS_ONCE(node->locked))
@@ -155,7 +155,7 @@ static void mspin_unlock(struct mspin_node **lock, struct mspin_node *node)
 		while (!(next = ACCESS_ONCE(node->next)))
 			arch_mutex_cpu_relax();
 	}
-	ACCESS_ONCE(next->locked) = 1;
+	ACCESS_ONCE_RW(next->locked) = 1;
 	smp_wmb();
 }
 
@@ -341,7 +341,7 @@ slowpath:
 	spin_lock_mutex(&lock->wait_lock, flags);
 
 	debug_mutex_lock_common(lock, &waiter);
-	debug_mutex_add_waiter(lock, &waiter, task_thread_info(task));
+	debug_mutex_add_waiter(lock, &waiter, task);
 
 	/* add waiting tasks to the end of the waitqueue (FIFO): */
 	list_add_tail(&waiter.list, &lock->wait_list);
@@ -371,8 +371,7 @@ slowpath:
 		 * TASK_UNINTERRUPTIBLE case.)
 		 */
 		if (unlikely(signal_pending_state(state, task))) {
-			mutex_remove_waiter(lock, &waiter,
-					    task_thread_info(task));
+			mutex_remove_waiter(lock, &waiter, task);
 			mutex_release(&lock->dep_map, 1, ip);
 			spin_unlock_mutex(&lock->wait_lock, flags);
 
@@ -391,7 +390,7 @@ slowpath:
 done:
 	lock_acquired(&lock->dep_map, ip);
 	/* got the lock - rejoice! */
-	mutex_remove_waiter(lock, &waiter, current_thread_info());
+	mutex_remove_waiter(lock, &waiter, task);
 	mutex_set_owner(lock);
 
 	/* set it to 0 if there are no waiters left: */
