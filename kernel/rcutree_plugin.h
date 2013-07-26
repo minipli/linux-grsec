@@ -903,7 +903,7 @@ void synchronize_rcu_expedited(void)
 
 	/* Clean up and exit. */
 	smp_mb(); /* ensure expedited GP seen before counter increment. */
-	ACCESS_ONCE(sync_rcu_preempt_exp_count)++;
+	ACCESS_ONCE_RW(sync_rcu_preempt_exp_count)++;
 unlock_mb_ret:
 	mutex_unlock(&sync_rcu_preempt_exp_mutex);
 mb_ret:
@@ -1451,7 +1451,7 @@ static void rcu_boost_kthread_setaffinity(struct rcu_node *rnp, int outgoingcpu)
 	free_cpumask_var(cm);
 }
 
-static struct smp_hotplug_thread rcu_cpu_thread_spec = {
+static struct smp_hotplug_thread rcu_cpu_thread_spec __read_only = {
 	.store			= &rcu_cpu_kthread_task,
 	.thread_should_run	= rcu_cpu_kthread_should_run,
 	.thread_fn		= rcu_cpu_kthread,
@@ -1916,7 +1916,7 @@ static void print_cpu_stall_info(struct rcu_state *rsp, int cpu)
 	print_cpu_stall_fast_no_hz(fast_no_hz, cpu);
 	printk(KERN_ERR "\t%d: (%lu %s) idle=%03x/%llx/%d softirq=%u/%u %s\n",
 	       cpu, ticks_value, ticks_title,
-	       atomic_read(&rdtp->dynticks) & 0xfff,
+	       atomic_read_unchecked(&rdtp->dynticks) & 0xfff,
 	       rdtp->dynticks_nesting, rdtp->dynticks_nmi_nesting,
 	       rdp->softirq_snap, kstat_softirqs_cpu(RCU_SOFTIRQ, cpu),
 	       fast_no_hz);
@@ -2079,7 +2079,7 @@ static void __call_rcu_nocb_enqueue(struct rcu_data *rdp,
 
 	/* Enqueue the callback on the nocb list and update counts. */
 	old_rhpp = xchg(&rdp->nocb_tail, rhtp);
-	ACCESS_ONCE(*old_rhpp) = rhp;
+	ACCESS_ONCE_RW(*old_rhpp) = rhp;
 	atomic_long_add(rhcount, &rdp->nocb_q_count);
 	atomic_long_add(rhcount_lazy, &rdp->nocb_q_count_lazy);
 
@@ -2219,12 +2219,12 @@ static int rcu_nocb_kthread(void *arg)
 		 * Extract queued callbacks, update counts, and wait
 		 * for a grace period to elapse.
 		 */
-		ACCESS_ONCE(rdp->nocb_head) = NULL;
+		ACCESS_ONCE_RW(rdp->nocb_head) = NULL;
 		tail = xchg(&rdp->nocb_tail, &rdp->nocb_head);
 		c = atomic_long_xchg(&rdp->nocb_q_count, 0);
 		cl = atomic_long_xchg(&rdp->nocb_q_count_lazy, 0);
-		ACCESS_ONCE(rdp->nocb_p_count) += c;
-		ACCESS_ONCE(rdp->nocb_p_count_lazy) += cl;
+		ACCESS_ONCE_RW(rdp->nocb_p_count) += c;
+		ACCESS_ONCE_RW(rdp->nocb_p_count_lazy) += cl;
 		rcu_nocb_wait_gp(rdp);
 
 		/* Each pass through the following loop invokes a callback. */
@@ -2246,8 +2246,8 @@ static int rcu_nocb_kthread(void *arg)
 			list = next;
 		}
 		trace_rcu_batch_end(rdp->rsp->name, c, !!list, 0, 0, 1);
-		ACCESS_ONCE(rdp->nocb_p_count) -= c;
-		ACCESS_ONCE(rdp->nocb_p_count_lazy) -= cl;
+		ACCESS_ONCE_RW(rdp->nocb_p_count) -= c;
+		ACCESS_ONCE_RW(rdp->nocb_p_count_lazy) -= cl;
 		rdp->n_nocbs_invoked += c;
 	}
 	return 0;
@@ -2274,7 +2274,7 @@ static void __init rcu_spawn_nocb_kthreads(struct rcu_state *rsp)
 		t = kthread_run(rcu_nocb_kthread, rdp,
 				"rcuo%c/%d", rsp->abbr, cpu);
 		BUG_ON(IS_ERR(t));
-		ACCESS_ONCE(rdp->nocb_kthread) = t;
+		ACCESS_ONCE_RW(rdp->nocb_kthread) = t;
 	}
 }
 

@@ -653,7 +653,7 @@ struct se_device {
 	spinlock_t		stats_lock;
 	/* Active commands on this virtual SE device */
 	atomic_t		simple_cmds;
-	atomic_t		dev_ordered_id;
+	atomic_unchecked_t	dev_ordered_id;
 	atomic_t		dev_ordered_sync;
 	atomic_t		dev_qf_count;
 	int			export_count;
