@@ -264,7 +264,7 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	struct pt_regs *childregs;
 	struct task_struct *me = current;
 
-	childregs = task_stack_page(p) + THREAD_SIZE - sizeof(struct pt_regs) - 16;
+	childregs = task_stack_page(p) + THREAD_SIZE - sizeof(struct pt_regs) - 8;
 	*childregs = *regs;
 
 	childregs->ax = 0;
