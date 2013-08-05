@@ -12,7 +12,7 @@
 typedef unsigned long kernel_ulong_t;
 #endif
 
-#define PCI_ANY_ID (~0)
+#define PCI_ANY_ID ((__u16)~0)
 
 struct pci_device_id {
 	__u32 vendor, device;		/* Vendor and device ID or PCI_ANY_ID*/
@@ -131,7 +131,7 @@ struct usb_device_id {
 #define USB_DEVICE_ID_MATCH_INT_SUBCLASS	0x0100
 #define USB_DEVICE_ID_MATCH_INT_PROTOCOL	0x0200
 
-#define HID_ANY_ID				(~0)
+#define HID_ANY_ID				(~0U)
 
 struct hid_device_id {
 	__u16 bus;
@@ -479,7 +479,7 @@ struct dmi_system_id {
 	const char *ident;
 	struct dmi_strmatch matches[4];
 	void *driver_data;
-};
+} __do_const;
 /*
  * struct dmi_device_id appears during expansion of
  * "MODULE_DEVICE_TABLE(dmi, x)". Compiler doesn't look inside it
