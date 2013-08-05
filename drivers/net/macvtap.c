@@ -532,8 +532,10 @@ static int zerocopy_sg_from_iovec(struct sk_buff *skb, const struct iovec *from,
 			return -EMSGSIZE;
 		num_pages = get_user_pages_fast(base, size, 0, &page[i]);
 		if (num_pages != size) {
-			for (i = 0; i < num_pages; i++)
-				put_page(page[i]);
+			int j;
+
+			for (j = 0; j < num_pages; j++)
+				put_page(page[i + j]);
 			return -EFAULT;
 		}
 		truesize = size * PAGE_SIZE;
@@ -1067,7 +1069,7 @@ static int macvtap_device_event(struct notifier_block *unused,
 	return NOTIFY_DONE;
 }
 
-static struct notifier_block macvtap_notifier_block __read_mostly = {
+static struct notifier_block macvtap_notifier_block = {
 	.notifier_call	= macvtap_device_event,
 };
 
