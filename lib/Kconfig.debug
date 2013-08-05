@@ -549,7 +549,7 @@ config DEBUG_MUTEXES
 
 config DEBUG_LOCK_ALLOC
 	bool "Lock debugging: detect incorrect freeing of live locks"
-	depends on DEBUG_KERNEL && TRACE_IRQFLAGS_SUPPORT && STACKTRACE_SUPPORT && LOCKDEP_SUPPORT
+	depends on DEBUG_KERNEL && TRACE_IRQFLAGS_SUPPORT && STACKTRACE_SUPPORT && LOCKDEP_SUPPORT && !PAX_CONSTIFY_PLUGIN
 	select DEBUG_SPINLOCK
 	select DEBUG_MUTEXES
 	select LOCKDEP
@@ -563,7 +563,7 @@ config DEBUG_LOCK_ALLOC
 
 config PROVE_LOCKING
 	bool "Lock debugging: prove locking correctness"
-	depends on DEBUG_KERNEL && TRACE_IRQFLAGS_SUPPORT && STACKTRACE_SUPPORT && LOCKDEP_SUPPORT
+	depends on DEBUG_KERNEL && TRACE_IRQFLAGS_SUPPORT && STACKTRACE_SUPPORT && LOCKDEP_SUPPORT && !PAX_CONSTIFY_PLUGIN
 	select LOCKDEP
 	select DEBUG_SPINLOCK
 	select DEBUG_MUTEXES
@@ -614,7 +614,7 @@ config LOCKDEP
 
 config LOCK_STAT
 	bool "Lock usage statistics"
-	depends on DEBUG_KERNEL && TRACE_IRQFLAGS_SUPPORT && STACKTRACE_SUPPORT && LOCKDEP_SUPPORT
+	depends on DEBUG_KERNEL && TRACE_IRQFLAGS_SUPPORT && STACKTRACE_SUPPORT && LOCKDEP_SUPPORT && !PAX_CONSTIFY_PLUGIN
 	select LOCKDEP
 	select DEBUG_SPINLOCK
 	select DEBUG_MUTEXES
@@ -1282,6 +1282,7 @@ config LATENCYTOP
 	depends on DEBUG_KERNEL
 	depends on STACKTRACE_SUPPORT
 	depends on PROC_FS
+	depends on !GRKERNSEC_HIDESYM
 	select FRAME_POINTER if !MIPS && !PPC && !S390 && !MICROBLAZE && !ARM_UNWIND
 	select KALLSYMS
 	select KALLSYMS_ALL
@@ -1298,7 +1299,7 @@ config ARCH_HAS_DEBUG_STRICT_USER_COPY_CHECKS
 config DEBUG_STRICT_USER_COPY_CHECKS
 	bool "Strict user copy size checks"
 	depends on ARCH_HAS_DEBUG_STRICT_USER_COPY_CHECKS
-	depends on DEBUG_KERNEL && !TRACE_BRANCH_PROFILING
+	depends on DEBUG_KERNEL && !TRACE_BRANCH_PROFILING && !PAX_SIZE_OVERFLOW
 	help
 	  Enabling this option turns a certain set of sanity checks for user
 	  copy operations into compile time failures.
@@ -1328,7 +1329,7 @@ config INTERVAL_TREE_TEST
 
 config PROVIDE_OHCI1394_DMA_INIT
 	bool "Remote debugging over FireWire early on boot"
-	depends on PCI && X86
+	depends on PCI && X86 && !GRKERNSEC
 	help
 	  If you want to debug problems which hang or crash the kernel early
 	  on boot and the crashing machine has a FireWire port, you can use
@@ -1357,7 +1358,7 @@ config PROVIDE_OHCI1394_DMA_INIT
 
 config FIREWIRE_OHCI_REMOTE_DMA
 	bool "Remote debugging over FireWire with firewire-ohci"
-	depends on FIREWIRE_OHCI
+	depends on FIREWIRE_OHCI && !GRKERNSEC
 	help
 	  This option lets you use the FireWire bus for remote debugging
 	  with help of the firewire-ohci driver. It enables unfiltered

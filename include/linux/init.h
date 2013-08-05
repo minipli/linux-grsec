@@ -39,9 +39,36 @@
  * Also note, that this data cannot be "const".
  */
 
+#ifdef MODULE
+#define add_init_latent_entropy
+#define add_devinit_latent_entropy
+#define add_cpuinit_latent_entropy
+#define add_meminit_latent_entropy
+#else
+#define add_init_latent_entropy __latent_entropy
+
+#ifdef CONFIG_HOTPLUG
+#define add_devinit_latent_entropy
+#else
+#define add_devinit_latent_entropy __latent_entropy
+#endif
+
+#ifdef CONFIG_HOTPLUG_CPU
+#define add_cpuinit_latent_entropy
+#else
+#define add_cpuinit_latent_entropy __latent_entropy
+#endif
+
+#ifdef CONFIG_MEMORY_HOTPLUG
+#define add_meminit_latent_entropy
+#else
+#define add_meminit_latent_entropy __latent_entropy
+#endif
+#endif
+
 /* These are for everybody (although not all archs will actually
    discard it in modules) */
-#define __init		__section(.init.text) __cold notrace
+#define __init		__section(.init.text) __cold notrace add_init_latent_entropy
 #define __initdata	__section(.init.data)
 #define __initconst	__constsection(.init.rodata)
 #define __exitdata	__section(.exit.data)
@@ -94,7 +121,7 @@
 #define __exit          __section(.exit.text) __exitused __cold notrace
 
 /* Used for HOTPLUG_CPU */
-#define __cpuinit        __section(.cpuinit.text) __cold notrace
+#define __cpuinit        __section(.cpuinit.text) __cold notrace add_cpuinit_latent_entropy
 #define __cpuinitdata    __section(.cpuinit.data)
 #define __cpuinitconst   __constsection(.cpuinit.rodata)
 #define __cpuexit        __section(.cpuexit.text) __exitused __cold notrace
@@ -102,7 +129,7 @@
 #define __cpuexitconst   __constsection(.cpuexit.rodata)
 
 /* Used for MEMORY_HOTPLUG */
-#define __meminit        __section(.meminit.text) __cold notrace
+#define __meminit        __section(.meminit.text) __cold notrace add_meminit_latent_entropy
 #define __meminitdata    __section(.meminit.data)
 #define __meminitconst   __constsection(.meminit.rodata)
 #define __memexit        __section(.memexit.text) __exitused __cold notrace
