@@ -151,7 +151,7 @@ int copy_thread(unsigned long clone_flags, unsigned long sp,
 	struct pt_regs *childregs;
 	struct task_struct *me = current;
 
-	p->thread.sp0 = (unsigned long)task_stack_page(p) + THREAD_SIZE - 8;
+	p->thread.sp0 = (unsigned long)task_stack_page(p) + THREAD_SIZE - 16;
 	childregs = task_pt_regs(p);
 	p->thread.sp = (unsigned long) childregs;
 	p->thread.usersp = me->thread.usersp;
