@@ -16,6 +16,7 @@
 #include <linux/string.h>
 #include <linux/fs.h>
 #include <linux/file.h>
+#include <linux/security.h>
 #include <linux/stat.h>
 #include <linux/fcntl.h>
 #include <linux/ptrace.h>
@@ -86,6 +87,8 @@ static int aout_core_dump(struct coredump_params *cprm)
 #endif
 #       define START_STACK(u)   ((void __user *)u.start_stack)
 
+	memset(&dump, 0, sizeof(dump));
+
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 	has_dumped = 1;
@@ -97,10 +100,12 @@ static int aout_core_dump(struct coredump_params *cprm)
 
 /* If the size of the dump file exceeds the rlimit, then see what would happen
    if we wrote the stack, but not the data area.  */
+	gr_learn_resource(current, RLIMIT_CORE, (dump.u_dsize + dump.u_ssize+1) * PAGE_SIZE, 1);
 	if ((dump.u_dsize + dump.u_ssize+1) * PAGE_SIZE > cprm->limit)
 		dump.u_dsize = 0;
 
 /* Make sure we have enough room to write the stack and data areas. */
+	gr_learn_resource(current, RLIMIT_CORE, (dump.u_ssize + 1) * PAGE_SIZE, 1);
 	if ((dump.u_ssize + 1) * PAGE_SIZE > cprm->limit)
 		dump.u_ssize = 0;
 
@@ -234,6 +239,8 @@ static int load_aout_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 	rlim = rlimit(RLIMIT_DATA);
 	if (rlim >= RLIM_INFINITY)
 		rlim = ~0;
+
+	gr_learn_resource(current, RLIMIT_DATA, ex.a_data + ex.a_bss, 1);
 	if (ex.a_data + ex.a_bss > rlim)
 		return -ENOMEM;
 
@@ -259,8 +266,36 @@ static int load_aout_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 	current->mm->free_area_cache = current->mm->mmap_base;
 	current->mm->cached_hole_size = 0;
 
+	retval = setup_arg_pages(bprm, STACK_TOP, EXSTACK_DEFAULT);
+	if (retval < 0) {
+		/* Someone check-me: is this error path enough? */
+		send_sig(SIGKILL, current, 0);
+		return retval;
+	}
+
 	install_exec_creds(bprm);
  	current->flags &= ~PF_FORKNOEXEC;
+
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+	current->mm->pax_flags = 0UL;
+#endif
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	if (!(N_FLAGS(ex) & F_PAX_PAGEEXEC)) {
+		current->mm->pax_flags |= MF_PAX_PAGEEXEC;
+
+#ifdef CONFIG_PAX_EMUTRAMP
+		if (N_FLAGS(ex) & F_PAX_EMUTRAMP)
+			current->mm->pax_flags |= MF_PAX_EMUTRAMP;
+#endif
+
+#ifdef CONFIG_PAX_MPROTECT
+		if (!(N_FLAGS(ex) & F_PAX_MPROTECT))
+			current->mm->pax_flags |= MF_PAX_MPROTECT;
+#endif
+
+	}
+#endif
 
 	if (N_MAGIC(ex) == OMAGIC) {
 		unsigned long text_addr, map_size;
@@ -334,7 +369,7 @@ static int load_aout_binary(struct linux_binprm * bprm, struct pt_regs * regs)
 
 		down_write(&current->mm->mmap_sem);
  		error = do_mmap(bprm->file, N_DATADDR(ex), ex.a_data,
-				PROT_READ | PROT_WRITE | PROT_EXEC,
+				PROT_READ | PROT_WRITE,
 				MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE | MAP_EXECUTABLE,
 				fd_offset + ex.a_text);
 		up_write(&current->mm->mmap_sem);
@@ -349,13 +384,6 @@ beyond_if:
 	retval = set_brk(current->mm->start_brk, current->mm->brk);
 	if (retval < 0) {
 		send_sig(SIGKILL, current, 0);
-		return retval;
-	}
-
-	retval = setup_arg_pages(bprm, STACK_TOP, EXSTACK_DEFAULT);
-	if (retval < 0) { 
-		/* Someone check-me: is this error path enough? */ 
-		send_sig(SIGKILL, current, 0); 
 		return retval;
 	}
 

@@ -105,12 +105,12 @@ struct fc_exch_mgr {
 	 * all together if not used XXX
 	 */
 	struct {
-		atomic_t no_free_exch;
-		atomic_t no_free_exch_xid;
-		atomic_t xid_not_found;
-		atomic_t xid_busy;
-		atomic_t seq_not_found;
-		atomic_t non_bls_resp;
+		atomic_unchecked_t no_free_exch;
+		atomic_unchecked_t no_free_exch_xid;
+		atomic_unchecked_t xid_not_found;
+		atomic_unchecked_t xid_busy;
+		atomic_unchecked_t seq_not_found;
+		atomic_unchecked_t non_bls_resp;
 	} stats;
 };
 
@@ -719,7 +719,7 @@ static struct fc_exch *fc_exch_em_alloc(struct fc_lport *lport,
 	/* allocate memory for exchange */
 	ep = mempool_alloc(mp->ep_pool, GFP_ATOMIC);
 	if (!ep) {
-		atomic_inc(&mp->stats.no_free_exch);
+		atomic_inc_unchecked(&mp->stats.no_free_exch);
 		goto out;
 	}
 	memset(ep, 0, sizeof(*ep));
@@ -780,7 +780,7 @@ out:
 	return ep;
 err:
 	spin_unlock_bh(&pool->lock);
-	atomic_inc(&mp->stats.no_free_exch_xid);
+	atomic_inc_unchecked(&mp->stats.no_free_exch_xid);
 	mempool_free(ep, mp->ep_pool);
 	return NULL;
 }
@@ -923,7 +923,7 @@ static enum fc_pf_rjt_reason fc_seq_lookup_recip(struct fc_lport *lport,
 		xid = ntohs(fh->fh_ox_id);	/* we originated exch */
 		ep = fc_exch_find(mp, xid);
 		if (!ep) {
-			atomic_inc(&mp->stats.xid_not_found);
+			atomic_inc_unchecked(&mp->stats.xid_not_found);
 			reject = FC_RJT_OX_ID;
 			goto out;
 		}
@@ -953,7 +953,7 @@ static enum fc_pf_rjt_reason fc_seq_lookup_recip(struct fc_lport *lport,
 		ep = fc_exch_find(mp, xid);
 		if ((f_ctl & FC_FC_FIRST_SEQ) && fc_sof_is_init(fr_sof(fp))) {
 			if (ep) {
-				atomic_inc(&mp->stats.xid_busy);
+				atomic_inc_unchecked(&mp->stats.xid_busy);
 				reject = FC_RJT_RX_ID;
 				goto rel;
 			}
@@ -964,7 +964,7 @@ static enum fc_pf_rjt_reason fc_seq_lookup_recip(struct fc_lport *lport,
 			}
 			xid = ep->xid;	/* get our XID */
 		} else if (!ep) {
-			atomic_inc(&mp->stats.xid_not_found);
+			atomic_inc_unchecked(&mp->stats.xid_not_found);
 			reject = FC_RJT_RX_ID;	/* XID not found */
 			goto out;
 		}
@@ -981,7 +981,7 @@ static enum fc_pf_rjt_reason fc_seq_lookup_recip(struct fc_lport *lport,
 	} else {
 		sp = &ep->seq;
 		if (sp->id != fh->fh_seq_id) {
-			atomic_inc(&mp->stats.seq_not_found);
+			atomic_inc_unchecked(&mp->stats.seq_not_found);
 			if (f_ctl & FC_FC_END_SEQ) {
 				/*
 				 * Update sequence_id based on incoming last
@@ -1431,22 +1431,22 @@ static void fc_exch_recv_seq_resp(struct fc_exch_mgr *mp, struct fc_frame *fp)
 
 	ep = fc_exch_find(mp, ntohs(fh->fh_ox_id));
 	if (!ep) {
-		atomic_inc(&mp->stats.xid_not_found);
+		atomic_inc_unchecked(&mp->stats.xid_not_found);
 		goto out;
 	}
 	if (ep->esb_stat & ESB_ST_COMPLETE) {
-		atomic_inc(&mp->stats.xid_not_found);
+		atomic_inc_unchecked(&mp->stats.xid_not_found);
 		goto rel;
 	}
 	if (ep->rxid == FC_XID_UNKNOWN)
 		ep->rxid = ntohs(fh->fh_rx_id);
 	if (ep->sid != 0 && ep->sid != ntoh24(fh->fh_d_id)) {
-		atomic_inc(&mp->stats.xid_not_found);
+		atomic_inc_unchecked(&mp->stats.xid_not_found);
 		goto rel;
 	}
 	if (ep->did != ntoh24(fh->fh_s_id) &&
 	    ep->did != FC_FID_FLOGI) {
-		atomic_inc(&mp->stats.xid_not_found);
+		atomic_inc_unchecked(&mp->stats.xid_not_found);
 		goto rel;
 	}
 	sof = fr_sof(fp);
@@ -1455,7 +1455,7 @@ static void fc_exch_recv_seq_resp(struct fc_exch_mgr *mp, struct fc_frame *fp)
 		sp->ssb_stat |= SSB_ST_RESP;
 		sp->id = fh->fh_seq_id;
 	} else if (sp->id != fh->fh_seq_id) {
-		atomic_inc(&mp->stats.seq_not_found);
+		atomic_inc_unchecked(&mp->stats.seq_not_found);
 		goto rel;
 	}
 
@@ -1519,9 +1519,9 @@ static void fc_exch_recv_resp(struct fc_exch_mgr *mp, struct fc_frame *fp)
 	sp = fc_seq_lookup_orig(mp, fp);	/* doesn't hold sequence */
 
 	if (!sp)
-		atomic_inc(&mp->stats.xid_not_found);
+		atomic_inc_unchecked(&mp->stats.xid_not_found);
 	else
-		atomic_inc(&mp->stats.non_bls_resp);
+		atomic_inc_unchecked(&mp->stats.non_bls_resp);
 
 	fc_frame_free(fp);
 }
