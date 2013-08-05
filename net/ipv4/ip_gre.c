@@ -115,7 +115,7 @@ static bool log_ecn_error = true;
 module_param(log_ecn_error, bool, 0644);
 MODULE_PARM_DESC(log_ecn_error, "Log packets received with corrupted ECN");
 
-static struct rtnl_link_ops ipgre_link_ops __read_mostly;
+static struct rtnl_link_ops ipgre_link_ops;
 static int ipgre_tunnel_init(struct net_device *dev);
 
 static int ipgre_net_id __read_mostly;
@@ -503,10 +503,11 @@ static int ipgre_tunnel_ioctl(struct net_device *dev,
 
 	if (copy_from_user(&p, ifr->ifr_ifru.ifru_data, sizeof(p)))
 		return -EFAULT;
-	if (p.iph.version != 4 || p.iph.protocol != IPPROTO_GRE ||
-	    p.iph.ihl != 5 || (p.iph.frag_off&htons(~IP_DF)) ||
-	    ((p.i_flags|p.o_flags)&(GRE_VERSION|GRE_ROUTING))) {
-		return -EINVAL;
+	if (cmd == SIOCADDTUNNEL || cmd == SIOCCHGTUNNEL) {
+		if (p.iph.version != 4 || p.iph.protocol != IPPROTO_GRE ||
+		    p.iph.ihl != 5 || (p.iph.frag_off&htons(~IP_DF)) ||
+		    ((p.i_flags|p.o_flags)&(GRE_VERSION|GRE_ROUTING)))
+			return -EINVAL;
 	}
 	p.i_flags = gre_flags_to_tnl_flags(p.i_flags);
 	p.o_flags = gre_flags_to_tnl_flags(p.o_flags);
@@ -918,7 +919,7 @@ static const struct nla_policy ipgre_policy[IFLA_GRE_MAX + 1] = {
 	[IFLA_GRE_PMTUDISC]	= { .type = NLA_U8 },
 };
 
-static struct rtnl_link_ops ipgre_link_ops __read_mostly = {
+static struct rtnl_link_ops ipgre_link_ops = {
 	.kind		= "gre",
 	.maxtype	= IFLA_GRE_MAX,
 	.policy		= ipgre_policy,
@@ -932,7 +933,7 @@ static struct rtnl_link_ops ipgre_link_ops __read_mostly = {
 	.fill_info	= ipgre_fill_info,
 };
 
-static struct rtnl_link_ops ipgre_tap_ops __read_mostly = {
+static struct rtnl_link_ops ipgre_tap_ops = {
 	.kind		= "gretap",
 	.maxtype	= IFLA_GRE_MAX,
 	.policy		= ipgre_policy,
