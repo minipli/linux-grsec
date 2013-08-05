@@ -901,11 +901,11 @@ extern unsigned long thread_saved_pc(struct task_struct *tsk);
 #define STACK_TOP_MAX		TASK_SIZE_MAX
 
 #define INIT_THREAD  { \
-	.sp0 = (unsigned long)&init_stack + sizeof(init_stack) - 16 \
+	.sp0 = (unsigned long)&init_stack + sizeof(init_stack) - 8 \
 }
 
 #define INIT_TSS  { \
-	.x86_tss.sp0 = (unsigned long)&init_stack + sizeof(init_stack) - 16 \
+	.x86_tss.sp0 = (unsigned long)&init_stack + sizeof(init_stack) - 8 \
 }
 
 /*
