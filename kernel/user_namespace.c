@@ -105,6 +105,7 @@ int create_user_ns(struct cred *new)
 int unshare_userns(unsigned long unshare_flags, struct cred **new_cred)
 {
 	struct cred *cred;
+	int err;
 
 	if (!(unshare_flags & CLONE_NEWUSER))
 		return 0;
@@ -113,8 +114,12 @@ int unshare_userns(unsigned long unshare_flags, struct cred **new_cred)
 	if (!cred)
 		return -ENOMEM;
 
-	*new_cred = cred;
-	return create_user_ns(cred);
+	err = create_user_ns(cred);
+	if (err)
+		put_cred(cred);
+	else
+		*new_cred = cred;
+	return err;
 }
 
 void free_user_ns(struct user_namespace *ns)
@@ -853,7 +858,7 @@ static int userns_install(struct nsproxy *nsproxy, void *ns)
 	if (atomic_read(&current->mm->mm_users) > 1)
 		return -EINVAL;
 
-	if (current->fs->users != 1)
+	if (atomic_read(&current->fs->users) != 1)
 		return -EINVAL;
 
 	if (!ns_capable(user_ns, CAP_SYS_ADMIN))

@@ -376,7 +376,7 @@ int free_memtype(u64 start, u64 end)
 
 	if (!entry) {
 		printk(KERN_INFO "%s:%d freeing invalid memtype [mem %#010Lx-%#010Lx]\n",
-		       current->comm, current->pid, start, end - 1);
+			current->comm, task_pid_nr(current), start, end - 1);
 		return -EINVAL;
 	}
 
@@ -506,8 +506,8 @@ static inline int range_is_allowed(unsigned long pfn, unsigned long size)
 
 	while (cursor < to) {
 		if (!devmem_is_allowed(pfn)) {
-			printk(KERN_INFO "Program %s tried to access /dev/mem between [mem %#010Lx-%#010Lx]\n",
-				current->comm, from, to - 1);
+			printk(KERN_INFO "Program %s tried to access /dev/mem between [mem %#010Lx-%#010Lx] (%#010Lx)\n",
+				current->comm, from, to - 1, cursor);
 			return 0;
 		}
 		cursor += PAGE_SIZE;
@@ -577,7 +577,7 @@ int kernel_map_sync_memtype(u64 base, unsigned long size, unsigned long flags)
 	if (ioremap_change_attr((unsigned long)__va(base), id_sz, flags) < 0) {
 		printk(KERN_INFO "%s:%d ioremap_change_attr failed %s "
 			"for [mem %#010Lx-%#010Lx]\n",
-			current->comm, current->pid,
+			current->comm, task_pid_nr(current),
 			cattr_name(flags),
 			base, (unsigned long long)(base + size-1));
 		return -EINVAL;
@@ -612,7 +612,7 @@ static int reserve_pfn_range(u64 paddr, unsigned long size, pgprot_t *vma_prot,
 		flags = lookup_memtype(paddr);
 		if (want_flags != flags) {
 			printk(KERN_WARNING "%s:%d map pfn RAM range req %s for [mem %#010Lx-%#010Lx], got %s\n",
-				current->comm, current->pid,
+				current->comm, task_pid_nr(current),
 				cattr_name(want_flags),
 				(unsigned long long)paddr,
 				(unsigned long long)(paddr + size - 1),
@@ -634,7 +634,7 @@ static int reserve_pfn_range(u64 paddr, unsigned long size, pgprot_t *vma_prot,
 			free_memtype(paddr, paddr + size);
 			printk(KERN_ERR "%s:%d map pfn expected mapping type %s"
 				" for [mem %#010Lx-%#010Lx], got %s\n",
-				current->comm, current->pid,
+				current->comm, task_pid_nr(current),
 				cattr_name(want_flags),
 				(unsigned long long)paddr,
 				(unsigned long long)(paddr + size - 1),
