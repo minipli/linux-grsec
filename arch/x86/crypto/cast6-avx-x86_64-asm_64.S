@@ -24,6 +24,7 @@
  */
 
 #include <linux/linkage.h>
+#include <asm/alternative-asm.h>
 #include "glue_helper-asm-avx.S"
 
 .file "cast6-avx-x86_64-asm_64.S"
@@ -295,6 +296,7 @@ __cast6_enc_blk8:
 	outunpack_blocks(RA1, RB1, RC1, RD1, RTMP, RX, RKRF, RKM);
 	outunpack_blocks(RA2, RB2, RC2, RD2, RTMP, RX, RKRF, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 ENDPROC(__cast6_enc_blk8)
 
@@ -340,6 +342,7 @@ __cast6_dec_blk8:
 	outunpack_blocks(RA1, RB1, RC1, RD1, RTMP, RX, RKRF, RKM);
 	outunpack_blocks(RA2, RB2, RC2, RD2, RTMP, RX, RKRF, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 ENDPROC(__cast6_dec_blk8)
 
@@ -358,6 +361,7 @@ ENTRY(cast6_ecb_enc_8way)
 
 	store_8way(%r11, RA1, RB1, RC1, RD1, RA2, RB2, RC2, RD2);
 
+	pax_force_retaddr
 	ret;
 ENDPROC(cast6_ecb_enc_8way)
 
@@ -376,6 +380,7 @@ ENTRY(cast6_ecb_dec_8way)
 
 	store_8way(%r11, RA1, RB1, RC1, RD1, RA2, RB2, RC2, RD2);
 
+	pax_force_retaddr
 	ret;
 ENDPROC(cast6_ecb_dec_8way)
 
@@ -399,6 +404,7 @@ ENTRY(cast6_cbc_dec_8way)
 
 	popq %r12;
 
+	pax_force_retaddr
 	ret;
 ENDPROC(cast6_cbc_dec_8way)
 
@@ -424,6 +430,7 @@ ENTRY(cast6_ctr_8way)
 
 	popq %r12;
 
+	pax_force_retaddr
 	ret;
 ENDPROC(cast6_ctr_8way)
 
@@ -446,6 +453,7 @@ ENTRY(cast6_xts_enc_8way)
 	/* dst <= regs xor IVs(in dst) */
 	store_xts_8way(%r11, RA1, RB1, RC1, RD1, RA2, RB2, RC2, RD2);
 
+	pax_force_retaddr
 	ret;
 ENDPROC(cast6_xts_enc_8way)
 
@@ -468,5 +476,6 @@ ENTRY(cast6_xts_dec_8way)
 	/* dst <= regs xor IVs(in dst) */
 	store_xts_8way(%r11, RA1, RB1, RC1, RD1, RA2, RB2, RC2, RD2);
 
+	pax_force_retaddr
 	ret;
 ENDPROC(cast6_xts_dec_8way)
