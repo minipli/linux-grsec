@@ -937,11 +937,11 @@ extern unsigned long thread_saved_pc(struct task_struct *tsk);
 #define STACK_TOP_MAX		TASK_SIZE_MAX
 
 #define INIT_THREAD  { \
-	.sp0 = (unsigned long)&init_stack + sizeof(init_stack) - 8 \
+	.sp0 = (unsigned long)&init_stack + sizeof(init_stack) - 16 \
 }
 
 #define INIT_TSS  { \
-	.x86_tss.sp0 = (unsigned long)&init_stack + sizeof(init_stack) - 8 \
+	.x86_tss.sp0 = (unsigned long)&init_stack + sizeof(init_stack) - 16 \
 }
 
 /*
@@ -979,7 +979,8 @@ extern int set_tsc_mode(unsigned int val);
 extern int amd_get_nb_id(int cpu);
 
 struct aperfmperf {
-	u64 aperf, mperf;
+	u64 aperf __intentional_overflow(0);
+	u64 mperf __intentional_overflow(0);
 };
 
 static inline void get_aperfmperf(struct aperfmperf *am)
