@@ -1891,7 +1891,9 @@ void pax_report_refcount_overflow(struct pt_regs *regs)
 	printk(KERN_ERR "PAX: refcount overflow detected in: %s:%d, uid/euid: %u/%u\n", current->comm, task_pid_nr(current),
 			from_kuid_munged(&init_user_ns, current_uid()), from_kuid_munged(&init_user_ns, current_euid()));
 	print_symbol(KERN_ERR "PAX: refcount overflow occured at: %s\n", instruction_pointer(regs));
+	preempt_disable();
 	show_regs(regs);
+	preempt_enable();
 	force_sig_info(SIGKILL, SEND_SIG_FORCED, current);
 }
 #endif

@@ -583,6 +583,11 @@ config PAX_MEMORY_UDEREF
 	  VMs running on CPUs without hardware virtualization support (i.e.,
 	  the majority of IA-32 CPUs) will likely experience the slowdown.
 
+	  On X86_64 the kernel will make use of PCID support when available
+	  (Intel's Westmere, Sandy Bridge, etc) for better security (default)
+	  or performance impact.  Pass pax_weakuderef on the kernel command
+	  line to choose the latter.
+
 config PAX_REFCOUNT
 	bool "Prevent various kernel object reference counter overflows"
 	depends on (ARM && (CPU_V6 || CPU_V6K || CPU_V7)) || SPARC64 || X86
