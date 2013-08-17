@@ -76,7 +76,7 @@ static inline void __native_flush_tlb_single(unsigned long addr)
 		unsigned int cpu = raw_get_cpu();
 
 		if (static_cpu_has(X86_FEATURE_INVPCID)) {
-			unsigned long descriptor[2] = {PCID_USER, addr};
+			unsigned long descriptor[2];
 			descriptor[0] = PCID_USER;
 			descriptor[1] = addr;
 			asm volatile(__ASM_INVPCID : : "d"(&descriptor), "a"(INVPCID_SINGLE_ADDRESS) : "memory");
