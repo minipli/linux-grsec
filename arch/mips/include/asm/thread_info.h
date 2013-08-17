@@ -115,6 +115,8 @@ static inline struct thread_info *current_thread_info(void)
 #define TIF_32BIT_ADDR		23	/* 32-bit address space (o32/n32) */
 #define TIF_FPUBOUND		24	/* thread bound to FPU-full CPU set */
 #define TIF_LOAD_WATCH		25	/* If set, load watch registers */
+/* li takes a 32bit immediate */
+#define TIF_GRSEC_SETXID	29	/* update credentials on syscall entry/exit */
 #define TIF_SYSCALL_TRACE	31	/* syscall trace active */
 
 #define _TIF_SYSCALL_TRACE	(1<<TIF_SYSCALL_TRACE)
@@ -130,15 +132,18 @@ static inline struct thread_info *current_thread_info(void)
 #define _TIF_32BIT_ADDR		(1<<TIF_32BIT_ADDR)
 #define _TIF_FPUBOUND		(1<<TIF_FPUBOUND)
 #define _TIF_LOAD_WATCH		(1<<TIF_LOAD_WATCH)
+#define _TIF_GRSEC_SETXID	(1<<TIF_GRSEC_SETXID)
+
+#define _TIF_SYSCALL_WORK	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | _TIF_GRSEC_SETXID)
 
 /* work to do in syscall_trace_leave() */
-#define _TIF_WORK_SYSCALL_EXIT	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT)
+#define _TIF_WORK_SYSCALL_EXIT	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | _TIF_GRSEC_SETXID)
 
 /* work to do on interrupt/exception return */
 #define _TIF_WORK_MASK		\
 	(_TIF_SIGPENDING | _TIF_NEED_RESCHED | _TIF_NOTIFY_RESUME)
 /* work to do on any return to u-space */
-#define _TIF_ALLWORK_MASK	(_TIF_WORK_MASK | _TIF_WORK_SYSCALL_EXIT)
+#define _TIF_ALLWORK_MASK	(_TIF_WORK_MASK | _TIF_WORK_SYSCALL_EXIT | _TIF_GRSEC_SETXID)
 
 #endif /* __KERNEL__ */
 
