@@ -160,7 +160,7 @@ static int aio_setup_ring(struct kioctx *ctx)
 	size += sizeof(struct io_event) * nr_events;
 	nr_pages = (size + PAGE_SIZE-1) >> PAGE_SHIFT;
 
-	if (nr_pages < 0)
+	if (nr_pages <= 0)
 		return -EINVAL;
 
 	nr_events = (PAGE_SIZE * nr_pages - sizeof(struct aio_ring)) / sizeof(struct io_event);
@@ -950,6 +950,7 @@ static ssize_t aio_rw_vect_retry(struct kiocb *iocb, int rw, aio_rw_op *rw_op)
 static ssize_t aio_setup_vectored_rw(int rw, struct kiocb *kiocb, bool compat)
 {
 	ssize_t ret;
+	struct iovec iovstack;
 
 	kiocb->ki_nr_segs = kiocb->ki_nbytes;
 
@@ -957,16 +958,21 @@ static ssize_t aio_setup_vectored_rw(int rw, struct kiocb *kiocb, bool compat)
 	if (compat)
 		ret = compat_rw_copy_check_uvector(rw,
 				(struct compat_iovec __user *)kiocb->ki_buf,
-				kiocb->ki_nr_segs, 1, &kiocb->ki_inline_vec,
+				kiocb->ki_nr_segs, 1, &iovstack,
 				&kiocb->ki_iovec);
 	else
 #endif
 		ret = rw_copy_check_uvector(rw,
 				(struct iovec __user *)kiocb->ki_buf,
-				kiocb->ki_nr_segs, 1, &kiocb->ki_inline_vec,
+				kiocb->ki_nr_segs, 1, &iovstack,
 				&kiocb->ki_iovec);
 	if (ret < 0)
 		return ret;
+
+	if (kiocb->ki_iovec == &iovstack) {
+		kiocb->ki_inline_vec = iovstack;
+		kiocb->ki_iovec = &kiocb->ki_inline_vec;
+	}
 
 	/* ki_nbytes now reflect bytes instead of segs */
 	kiocb->ki_nbytes = ret;
