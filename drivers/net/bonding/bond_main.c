@@ -4870,7 +4870,7 @@ static unsigned int bond_get_num_tx_queues(void)
 	return tx_queues;
 }
 
-static struct rtnl_link_ops bond_link_ops __read_mostly = {
+static struct rtnl_link_ops bond_link_ops = {
 	.kind			= "bond",
 	.priv_size		= sizeof(struct bonding),
 	.setup			= bond_setup,
@@ -4995,8 +4995,8 @@ static void __exit bonding_exit(void)
 
 	bond_destroy_debugfs();
 
-	rtnl_link_unregister(&bond_link_ops);
 	unregister_pernet_subsys(&bond_net_ops);
+	rtnl_link_unregister(&bond_link_ops);
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
 	/*

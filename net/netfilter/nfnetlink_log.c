@@ -82,7 +82,7 @@ static int nfnl_log_net_id __read_mostly;
 struct nfnl_log_net {
 	spinlock_t instances_lock;
 	struct hlist_head instance_table[INSTANCE_BUCKETS];
-	atomic_t global_seq;
+	atomic_unchecked_t global_seq;
 };
 
 static struct nfnl_log_net *nfnl_log_pernet(struct net *net)
@@ -419,6 +419,7 @@ __build_packet_message(struct nfnl_log_net *log,
 	nfmsg->version = NFNETLINK_V0;
 	nfmsg->res_id = htons(inst->group_num);
 
+	memset(&pmsg, 0, sizeof(pmsg));
 	pmsg.hw_protocol	= skb->protocol;
 	pmsg.hook		= hooknum;
 
@@ -498,7 +499,10 @@ __build_packet_message(struct nfnl_log_net *log,
 	if (indev && skb->dev &&
 	    skb->mac_header != skb->network_header) {
 		struct nfulnl_msg_packet_hw phw;
-		int len = dev_parse_header(skb, phw.hw_addr);
+		int len;
+
+		memset(&phw, 0, sizeof(phw));
+		len = dev_parse_header(skb, phw.hw_addr);
 		if (len > 0) {
 			phw.hw_addrlen = htons(len);
 			if (nla_put(inst->skb, NFULA_HWADDR, sizeof(phw), &phw))
@@ -559,7 +563,7 @@ __build_packet_message(struct nfnl_log_net *log,
 	/* global sequence number */
 	if ((inst->flags & NFULNL_CFG_F_SEQ_GLOBAL) &&
 	    nla_put_be32(inst->skb, NFULA_SEQ_GLOBAL,
-			 htonl(atomic_inc_return(&log->global_seq))))
+			 htonl(atomic_inc_return_unchecked(&log->global_seq))))
 		goto nla_put_failure;
 
 	if (data_len) {
