@@ -91,7 +91,10 @@ void set_fiq_handler(void *start, unsigned int length)
 #endif
 	unsigned offset = FIQ_OFFSET;
 
+	pax_open_kernel();
 	memcpy(base + offset, start, length);
+	pax_close_kernel();
+
 	flush_icache_range(0xffff0000 + offset, 0xffff0000 + offset + length);
 	if (!vectors_high())
 		flush_icache_range(offset, offset + length);
