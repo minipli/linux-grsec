@@ -33,7 +33,10 @@
  *
  * Atomically reads the value of @v.
  */
-#define atomic_read(v)		(*(volatile int *)&(v)->counter)
+static inline int atomic_read(const atomic_t *v)
+{
+	return (*(volatile const int *) &v->counter);
+}
 
 /*
  * atomic_set - set atomic variable
@@ -42,7 +45,10 @@
  *
  * Atomically sets the value of @v to @i.
  */
-#define atomic_set(v, i)		((v)->counter = (i))
+static inline void atomic_set(atomic_t *v, int i)
+{
+	v->counter = i;
+}
 
 /*
  * atomic_add - add integer to atomic variable
@@ -51,7 +57,7 @@
  *
  * Atomically adds @i to @v.
  */
-static __inline__ void atomic_add(int i, atomic_t * v)
+static __inline__ void atomic_add(int i, atomic_t *v)
 {
 	if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		int temp;
@@ -94,7 +100,7 @@ static __inline__ void atomic_add(int i, atomic_t * v)
  *
  * Atomically subtracts @i from @v.
  */
-static __inline__ void atomic_sub(int i, atomic_t * v)
+static __inline__ void atomic_sub(int i, atomic_t *v)
 {
 	if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		int temp;
@@ -133,7 +139,7 @@ static __inline__ void atomic_sub(int i, atomic_t * v)
 /*
  * Same as above, but return the result value
  */
-static __inline__ int atomic_add_return(int i, atomic_t * v)
+static __inline__ int atomic_add_return(int i, atomic_t *v)
 {
 	int result;
 
@@ -182,7 +188,7 @@ static __inline__ int atomic_add_return(int i, atomic_t * v)
 	return result;
 }
 
-static __inline__ int atomic_sub_return(int i, atomic_t * v)
+static __inline__ int atomic_sub_return(int i, atomic_t *v)
 {
 	int result;
 
@@ -242,7 +248,7 @@ static __inline__ int atomic_sub_return(int i, atomic_t * v)
  * Atomically test @v and subtract @i if @v is greater or equal than @i.
  * The function returns the old value of @v minus @i.
  */
-static __inline__ int atomic_sub_if_positive(int i, atomic_t * v)
+static __inline__ int atomic_sub_if_positive(int i, atomic_t *v)
 {
 	int result;
 
@@ -299,8 +305,15 @@ static __inline__ int atomic_sub_if_positive(int i, atomic_t * v)
 	return result;
 }
 
-#define atomic_cmpxchg(v, o, n) (cmpxchg(&((v)->counter), (o), (n)))
-#define atomic_xchg(v, new) (xchg(&((v)->counter), (new)))
+static inline int atomic_cmpxchg(atomic_t *v, int old, int new)
+{
+	return cmpxchg(&v->counter, old, new);
+}
+
+static inline int atomic_xchg(atomic_t *v, int new)
+{
+	return xchg(&v->counter, new);
+}
 
 /**
  * __atomic_add_unless - add unless the number is a given value
@@ -402,14 +415,20 @@ static __inline__ int __atomic_add_unless(atomic_t *v, int a, int u)
  * @v: pointer of type atomic64_t
  *
  */
-#define atomic64_read(v)	(*(volatile long *)&(v)->counter)
+static inline long atomic64_read(const atomic64_t *v)
+{
+	return (*(volatile const long *) &v->counter);
+}
 
 /*
  * atomic64_set - set atomic variable
  * @v: pointer of type atomic64_t
  * @i: required value
  */
-#define atomic64_set(v, i)	((v)->counter = (i))
+static inline void atomic64_set(atomic64_t *v, long i)
+{
+	v->counter = i;
+}
 
 /*
  * atomic64_add - add integer to atomic variable
@@ -418,7 +437,7 @@ static __inline__ int __atomic_add_unless(atomic_t *v, int a, int u)
  *
  * Atomically adds @i to @v.
  */
-static __inline__ void atomic64_add(long i, atomic64_t * v)
+static __inline__ void atomic64_add(long i, atomic64_t *v)
 {
 	if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		long temp;
@@ -461,7 +480,7 @@ static __inline__ void atomic64_add(long i, atomic64_t * v)
  *
  * Atomically subtracts @i from @v.
  */
-static __inline__ void atomic64_sub(long i, atomic64_t * v)
+static __inline__ void atomic64_sub(long i, atomic64_t *v)
 {
 	if (kernel_uses_llsc && R10000_LLSC_WAR) {
 		long temp;
@@ -500,7 +519,7 @@ static __inline__ void atomic64_sub(long i, atomic64_t * v)
 /*
  * Same as above, but return the result value
  */
-static __inline__ long atomic64_add_return(long i, atomic64_t * v)
+static __inline__ long atomic64_add_return(long i, atomic64_t *v)
 {
 	long result;
 
@@ -550,7 +569,7 @@ static __inline__ long atomic64_add_return(long i, atomic64_t * v)
 	return result;
 }
 
-static __inline__ long atomic64_sub_return(long i, atomic64_t * v)
+static __inline__ long atomic64_sub_return(long i, atomic64_t *v)
 {
 	long result;
 
@@ -609,7 +628,7 @@ static __inline__ long atomic64_sub_return(long i, atomic64_t * v)
  * Atomically test @v and subtract @i if @v is greater or equal than @i.
  * The function returns the old value of @v minus @i.
  */
-static __inline__ long atomic64_sub_if_positive(long i, atomic64_t * v)
+static __inline__ long atomic64_sub_if_positive(long i, atomic64_t *v)
 {
 	long result;
 
@@ -666,9 +685,15 @@ static __inline__ long atomic64_sub_if_positive(long i, atomic64_t * v)
 	return result;
 }
 
-#define atomic64_cmpxchg(v, o, n) \
-	((__typeof__((v)->counter))cmpxchg(&((v)->counter), (o), (n)))
-#define atomic64_xchg(v, new) (xchg(&((v)->counter), (new)))
+static inline long atomic64_cmpxchg(atomic64_t *v, long old, long new)
+{
+	return cmpxchg(&v->counter, old, new);
+}
+
+static inline long atomic64_xchg(atomic64_t *v, long new)
+{
+	return xchg(&v->counter, new);
+}
 
 /**
  * atomic64_add_unless - add unless the number is a given value

@@ -631,18 +631,19 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 {
 	const struct fsr_info *inf = ifsr_info + fsr_fs(ifsr);
 	struct siginfo info;
+	unsigned int *pc = (unsigned int *)instruction_pointer(regs);
 
 	if (user_mode(regs)) {
 		unsigned long sigpage = current->mm->context.sigpage;
 
-		if (sigpage <= addr && addr < sigpage + 7*4) {
-			if (addr < sigpage + 3*4)
+		if (sigpage <= pc && pc < sigpage + 7*4) {
+			if (pc < sigpage + 3*4)
 				sys_sigreturn(regs);
 			else
 				sys_rt_sigreturn(regs);
 			return;
 		}
-		if (addr == 0xffff0fe0UL) {
+		if (pc == 0xffff0fe0UL) {
 			/*
 			 * PaX: __kuser_get_tls emulation
 			 */
@@ -658,7 +659,7 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 				current->comm, task_pid_nr(current),
 				from_kuid_munged(&init_user_ns, current_uid()),
 				from_kuid_munged(&init_user_ns, current_euid()),
-				addr >= TASK_SIZE ? "non-executable kernel" : "userland", addr);
+				pc >= TASK_SIZE ? "non-executable kernel" : "userland", pc);
 		goto die;
 	}
 #endif
@@ -667,7 +668,7 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 	if (fsr_fs(ifsr) == FAULT_CODE_DEBUG) {
 		unsigned int bkpt;
 
-		if (!probe_kernel_address((unsigned int *)addr, bkpt) && bkpt == 0xe12f1073) {
+		if (!probe_kernel_address(pc, bkpt) && cpu_to_le32(bkpt) == 0xe12f1073) {
 			current->thread.error_code = ifsr;
 			current->thread.trap_no = 0;
 			pax_report_refcount_overflow(regs);
