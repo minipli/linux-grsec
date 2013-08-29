@@ -631,7 +631,7 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 {
 	const struct fsr_info *inf = ifsr_info + fsr_fs(ifsr);
 	struct siginfo info;
-	unsigned int *pc = (unsigned int *)instruction_pointer(regs);
+	unsigned long pc = instruction_pointer(regs);
 
 	if (user_mode(regs)) {
 		unsigned long sigpage = current->mm->context.sigpage;

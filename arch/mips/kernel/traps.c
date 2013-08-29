@@ -679,9 +679,7 @@ asmlinkage void do_ov(struct pt_regs *regs)
 
 #ifdef CONFIG_PAX_REFCOUNT
 		if (fixup_exception(regs)) {
-			preempt_disable();
 			pax_report_refcount_overflow(regs);
-			preempt_enable();
 			return;
 		}
 #endif
