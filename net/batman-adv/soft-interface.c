@@ -180,6 +180,9 @@ static int batadv_interface_tx(struct sk_buff *skb,
 	if (batadv_bla_tx(bat_priv, skb, vid))
 		goto dropped;
 
+	/* skb->data might have been reallocated by batadv_bla_tx() */
+	ethhdr = (struct ethhdr *)skb->data;
+
 	/* Register the client MAC in the transtable */
 	if (!is_multicast_ether_addr(ethhdr->h_source))
 		batadv_tt_local_add(soft_iface, ethhdr->h_source, skb->skb_iif);
@@ -220,6 +223,10 @@ static int batadv_interface_tx(struct sk_buff *skb,
 		default:
 			break;
 		}
+
+		/* reminder: ethhdr might have become unusable from here on
+		 * (batadv_gw_is_dhcp_target() might have reallocated skb data)
+		 */
 	}
 
 	/* ethernet packet should be broadcasted */
@@ -253,7 +260,7 @@ static int batadv_interface_tx(struct sk_buff *skb,
 		       primary_if->net_dev->dev_addr, ETH_ALEN);
 
 		/* set broadcast sequence number */
-		seqno = atomic_inc_return(&bat_priv->bcast_seqno);
+		seqno = atomic_inc_return_unchecked(&bat_priv->bcast_seqno);
 		bcast_packet->seqno = htonl(seqno);
 
 		batadv_add_bcast_packet_to_list(bat_priv, skb, brd_delay);
@@ -266,7 +273,7 @@ static int batadv_interface_tx(struct sk_buff *skb,
 	/* unicast packet */
 	} else {
 		if (atomic_read(&bat_priv->gw_mode) != BATADV_GW_MODE_OFF) {
-			ret = batadv_gw_out_of_range(bat_priv, skb, ethhdr);
+			ret = batadv_gw_out_of_range(bat_priv, skb);
 			if (ret)
 				goto dropped;
 		}
@@ -472,7 +479,7 @@ static int batadv_softif_init_late(struct net_device *dev)
 	atomic_set(&bat_priv->batman_queue_left, BATADV_BATMAN_QUEUE_LEN);
 
 	atomic_set(&bat_priv->mesh_state, BATADV_MESH_INACTIVE);
-	atomic_set(&bat_priv->bcast_seqno, 1);
+	atomic_set_unchecked(&bat_priv->bcast_seqno, 1);
 	atomic_set(&bat_priv->tt.vn, 0);
 	atomic_set(&bat_priv->tt.local_changes, 0);
 	atomic_set(&bat_priv->tt.ogm_append_cnt, 0);

@@ -16,6 +16,7 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/file.h>
+#include <linux/security.h>
 #include <linux/fdtable.h>
 #include <linux/bitops.h>
 #include <linux/interrupt.h>
@@ -828,6 +829,7 @@ int replace_fd(unsigned fd, struct file *file, unsigned flags)
 	if (!file)
 		return __close_fd(files, fd);
 
+	gr_learn_resource(current, RLIMIT_NOFILE, fd, 0);
 	if (fd >= rlimit(RLIMIT_NOFILE))
 		return -EBADF;
 
@@ -854,6 +856,7 @@ SYSCALL_DEFINE3(dup3, unsigned int, oldfd, unsigned int, newfd, int, flags)
 	if (unlikely(oldfd == newfd))
 		return -EINVAL;
 
+	gr_learn_resource(current, RLIMIT_NOFILE, newfd, 0);
 	if (newfd >= rlimit(RLIMIT_NOFILE))
 		return -EBADF;
 
@@ -909,6 +912,7 @@ SYSCALL_DEFINE1(dup, unsigned int, fildes)
 int f_dupfd(unsigned int from, struct file *file, unsigned flags)
 {
 	int err;
+	gr_learn_resource(current, RLIMIT_NOFILE, from, 0);
 	if (from >= rlimit(RLIMIT_NOFILE))
 		return -EINVAL;
 	err = alloc_fd(from, flags);

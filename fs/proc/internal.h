@@ -155,6 +155,9 @@ extern int proc_pid_status(struct seq_file *, struct pid_namespace *,
 			   struct pid *, struct task_struct *);
 extern int proc_pid_statm(struct seq_file *, struct pid_namespace *,
 			  struct pid *, struct task_struct *);
+#ifdef CONFIG_GRKERNSEC_PROC_IPADDR
+extern int proc_pid_ipaddr(struct task_struct *task, char *buffer);
+#endif
 
 /*
  * base.c
