@@ -148,8 +148,6 @@ static int pkt_type_offset(void)
 /* Note : for security reasons, bpf code will follow a randomly
  * sized amount of int3 instructions
  */
-u8 *bpf_binary_header;
-
 static u8 *bpf_alloc_binary(unsigned int proglen,
 						  u8 **image_ptr)
 {
@@ -775,6 +773,7 @@ void bpf_jit_free(struct sk_filter *fp)
 {
 	if (fp->bpf_func != sk_run_filter) {
 		unsigned long addr = (unsigned long)fp->bpf_func & PAGE_MASK;
+		set_memory_rw(addr, 1);
 		module_free_exec(NULL, (void *)addr);
 	}
 }
