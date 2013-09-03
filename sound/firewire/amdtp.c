@@ -389,7 +389,7 @@ static void queue_out_packet(struct amdtp_out_stream *s, unsigned int cycle)
 		ptr = s->pcm_buffer_pointer + data_blocks;
 		if (ptr >= pcm->runtime->buffer_size)
 			ptr -= pcm->runtime->buffer_size;
-		ACCESS_ONCE(s->pcm_buffer_pointer) = ptr;
+		ACCESS_ONCE_RW(s->pcm_buffer_pointer) = ptr;
 
 		s->pcm_period_pointer += data_blocks;
 		if (s->pcm_period_pointer >= pcm->runtime->period_size) {
@@ -557,7 +557,7 @@ EXPORT_SYMBOL(amdtp_out_stream_pcm_pointer);
  */
 void amdtp_out_stream_update(struct amdtp_out_stream *s)
 {
-	ACCESS_ONCE(s->source_node_id_field) =
+	ACCESS_ONCE_RW(s->source_node_id_field) =
 		(fw_parent_device(s->unit)->card->node_id & 0x3f) << 24;
 }
 EXPORT_SYMBOL(amdtp_out_stream_update);
