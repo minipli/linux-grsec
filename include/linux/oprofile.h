@@ -139,9 +139,9 @@ int oprofilefs_create_ulong(struct super_block * sb, struct dentry * root,
 int oprofilefs_create_ro_ulong(struct super_block * sb, struct dentry * root,
 	char const * name, ulong * val);
  
-/** Create a file for read-only access to an atomic_t. */
+/** Create a file for read-only access to an atomic_unchecked_t. */
 int oprofilefs_create_ro_atomic(struct super_block * sb, struct dentry * root,
-	char const * name, atomic_t * val);
+	char const * name, atomic_unchecked_t * val);
  
 /** create a directory */
 struct dentry * oprofilefs_mkdir(struct super_block * sb, struct dentry * root,

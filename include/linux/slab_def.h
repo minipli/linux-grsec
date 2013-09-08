@@ -50,7 +50,7 @@ struct kmem_cache {
 /* 4) cache creation/removal */
 	const char *name;
 	struct list_head list;
-	int refcount;
+	atomic_t refcount;
 	int object_size;
 	int align;
 
@@ -66,10 +66,14 @@ struct kmem_cache {
 	unsigned long node_allocs;
 	unsigned long node_frees;
 	unsigned long node_overflow;
-	atomic_t allochit;
-	atomic_t allocmiss;
-	atomic_t freehit;
-	atomic_t freemiss;
+	atomic_unchecked_t allochit;
+	atomic_unchecked_t allocmiss;
+	atomic_unchecked_t freehit;
+	atomic_unchecked_t freemiss;
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	atomic_unchecked_t sanitized;
+	atomic_unchecked_t not_sanitized;
+#endif
 
 	/*
 	 * If debugging is enabled, then the allocator can add additional
@@ -103,7 +107,7 @@ struct kmem_cache {
 };
 
 void *kmem_cache_alloc(struct kmem_cache *, gfp_t);
-void *__kmalloc(size_t size, gfp_t flags);
+void *__kmalloc(size_t size, gfp_t flags) __size_overflow(1);
 
 #ifdef CONFIG_TRACING
 extern void *kmem_cache_alloc_trace(struct kmem_cache *, gfp_t, size_t);
@@ -136,6 +140,13 @@ static __always_inline void *kmalloc(size_t size, gfp_t flags)
 			cachep = kmalloc_dma_caches[i];
 		else
 #endif
+
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+		if (flags & GFP_USERCOPY)
+			cachep = kmalloc_usercopy_caches[i];
+		else
+#endif
+
 			cachep = kmalloc_caches[i];
 
 		ret = kmem_cache_alloc_trace(cachep, flags, size);
@@ -146,7 +157,7 @@ static __always_inline void *kmalloc(size_t size, gfp_t flags)
 }
 
 #ifdef CONFIG_NUMA
-extern void *__kmalloc_node(size_t size, gfp_t flags, int node);
+extern void *__kmalloc_node(size_t size, gfp_t flags, int node) __size_overflow(1);
 extern void *kmem_cache_alloc_node(struct kmem_cache *, gfp_t flags, int node);
 
 #ifdef CONFIG_TRACING
@@ -185,6 +196,13 @@ static __always_inline void *kmalloc_node(size_t size, gfp_t flags, int node)
 			cachep = kmalloc_dma_caches[i];
 		else
 #endif
+
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+		if (flags & GFP_USERCOPY)
+			cachep = kmalloc_usercopy_caches[i];
+		else
+#endif
+
 			cachep = kmalloc_caches[i];
 
 		return kmem_cache_alloc_node_trace(cachep, flags, node, size);
