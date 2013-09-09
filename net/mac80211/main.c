@@ -181,7 +181,7 @@ int ieee80211_hw_config(struct ieee80211_local *local, u32 changed)
 		changed &= ~(IEEE80211_CONF_CHANGE_CHANNEL |
 			     IEEE80211_CONF_CHANGE_POWER);
 
-	if (changed && local->open_count) {
+	if (changed && local_read(&local->open_count)) {
 		ret = drv_config(local, changed);
 		/*
 		 * Goal:
@@ -921,7 +921,7 @@ int ieee80211_register_hw(struct ieee80211_hw *hw)
 		hw->queues = IEEE80211_MAX_QUEUES;
 
 	local->workqueue =
-		alloc_ordered_workqueue(wiphy_name(local->hw.wiphy), 0);
+		alloc_ordered_workqueue("%s", 0, wiphy_name(local->hw.wiphy));
 	if (!local->workqueue) {
 		result = -ENOMEM;
 		goto fail_workqueue;

@@ -54,7 +54,7 @@ static __inline__ int scm_check_creds(struct ucred *creds)
 		return -EINVAL;
 
 	if ((creds->pid == task_tgid_vnr(current) ||
-	     ns_capable(current->nsproxy->pid_ns->user_ns, CAP_SYS_ADMIN)) &&
+	     ns_capable(task_active_pid_ns(current)->user_ns, CAP_SYS_ADMIN)) &&
 	    ((uid_eq(uid, cred->uid)   || uid_eq(uid, cred->euid) ||
 	      uid_eq(uid, cred->suid)) || nsown_capable(CAP_SETUID)) &&
 	    ((gid_eq(gid, cred->gid)   || gid_eq(gid, cred->egid) ||
@@ -210,7 +210,7 @@ EXPORT_SYMBOL(__scm_send);
 int put_cmsg(struct msghdr * msg, int level, int type, int len, void *data)
 {
 	struct cmsghdr __user *cm
-		= (__force struct cmsghdr __user *)msg->msg_control;
+		= (struct cmsghdr __force_user *)msg->msg_control;
 	struct cmsghdr cmhdr;
 	int cmlen = CMSG_LEN(len);
 	int err;
@@ -233,7 +233,7 @@ int put_cmsg(struct msghdr * msg, int level, int type, int len, void *data)
 	err = -EFAULT;
 	if (copy_to_user(cm, &cmhdr, sizeof cmhdr))
 		goto out;
-	if (copy_to_user(CMSG_DATA(cm), data, cmlen - sizeof(struct cmsghdr)))
+	if (copy_to_user((void __force_user *)CMSG_DATA((void __force_kernel *)cm), data, cmlen - sizeof(struct cmsghdr)))
 		goto out;
 	cmlen = CMSG_SPACE(len);
 	if (msg->msg_controllen < cmlen)
@@ -249,7 +249,7 @@ EXPORT_SYMBOL(put_cmsg);
 void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 {
 	struct cmsghdr __user *cm
-		= (__force struct cmsghdr __user*)msg->msg_control;
+		= (struct cmsghdr __force_user *)msg->msg_control;
 
 	int fdmax = 0;
 	int fdnum = scm->fp->count;
@@ -269,7 +269,7 @@ void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 	if (fdnum < fdmax)
 		fdmax = fdnum;
 
-	for (i=0, cmfptr=(__force int __user *)CMSG_DATA(cm); i<fdmax;
+	for (i=0, cmfptr=(int __force_user *)CMSG_DATA((void __force_kernel *)cm); i<fdmax;
 	     i++, cmfptr++)
 	{
 		struct socket *sock;
