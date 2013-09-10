@@ -91,7 +91,7 @@ ENTRY(startup_32)
 	notl	%eax
 	andl	%eax, %ebx
 #else
-	movl	$LOAD_PHYSICAL_ADDR, %ebx
+	movl	$____LOAD_PHYSICAL_ADDR, %ebx
 #endif
 
 	/* Target address to relocate to for decompression */
@@ -233,7 +233,7 @@ ENTRY(startup_64)
 	notq	%rax
 	andq	%rax, %rbp
 #else
-	movq	$LOAD_PHYSICAL_ADDR, %rbp
+	movq	$____LOAD_PHYSICAL_ADDR, %rbp
 #endif
 
 	/* Target address to relocate to for decompression */

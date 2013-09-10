@@ -1281,7 +1281,7 @@ static inline size_t ntfs_copy_from_user(struct page **pages,
 	char *addr;
 	size_t total = 0;
 	unsigned len;
-	int left;
+	unsigned left;
 
 	do {
 		len = PAGE_CACHE_SIZE - ofs;
@@ -2229,6 +2229,6 @@ const struct inode_operations ntfs_file_inode_ops = {
 #endif /* NTFS_RW */
 };
 
-const struct file_operations ntfs_empty_file_ops = {};
+const struct file_operations ntfs_empty_file_ops __read_only;
 
-const struct inode_operations ntfs_empty_inode_ops = {};
+const struct inode_operations ntfs_empty_inode_ops __read_only;

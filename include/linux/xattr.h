@@ -57,6 +57,11 @@
 #define XATTR_POSIX_ACL_DEFAULT  "posix_acl_default"
 #define XATTR_NAME_POSIX_ACL_DEFAULT XATTR_SYSTEM_PREFIX XATTR_POSIX_ACL_DEFAULT
 
+/* User namespace */
+#define XATTR_PAX_PREFIX XATTR_USER_PREFIX "pax."
+#define XATTR_PAX_FLAGS_SUFFIX "flags"
+#define XATTR_NAME_PAX_FLAGS XATTR_PAX_PREFIX XATTR_PAX_FLAGS_SUFFIX
+
 #ifdef  __KERNEL__
 
 #include <linux/types.h>
@@ -73,7 +78,7 @@ struct xattr_handler {
 		   size_t size, int handler_flags);
 	int (*set)(struct dentry *dentry, const char *name, const void *buffer,
 		   size_t size, int flags, int handler_flags);
-};
+} __do_const;
 
 struct xattr {
 	char *name;
@@ -82,6 +87,9 @@ struct xattr {
 };
 
 ssize_t xattr_getsecurity(struct inode *, const char *, void *, size_t);
+#ifdef CONFIG_PAX_XATTR_PAX_FLAGS
+ssize_t pax_getxattr(struct dentry *, void *, size_t);
+#endif
 ssize_t vfs_getxattr(struct dentry *, const char *, void *, size_t);
 ssize_t vfs_listxattr(struct dentry *d, char *list, size_t size);
 int __vfs_setxattr_noperm(struct dentry *, const char *, const void *, size_t, int);
