@@ -156,6 +156,7 @@ static struct inode *mqueue_get_inode(struct super_block *sb,
 		mq_bytes = (mq_msg_tblsz +
 			(info->attr.mq_maxmsg * info->attr.mq_msgsize));
 
+		gr_learn_resource(current, RLIMIT_MSGQUEUE, u->mq_bytes + mq_bytes, 1);
 		spin_lock(&mq_lock);
 		if (u->mq_bytes + mq_bytes < u->mq_bytes ||
 		    u->mq_bytes + mq_bytes > task_rlimit(p, RLIMIT_MSGQUEUE)) {

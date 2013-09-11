@@ -913,12 +913,10 @@ retry:
 	if (ifp->flags & IFA_F_OPTIMISTIC)
 		addr_flags |= IFA_F_OPTIMISTIC;
 
-	ift = !max_addresses ||
-	      ipv6_count_addresses(idev) < max_addresses ?
-		ipv6_add_addr(idev, &addr, tmp_plen,
-			      ipv6_addr_type(&addr)&IPV6_ADDR_SCOPE_MASK,
-			      addr_flags) : NULL;
-	if (!ift || IS_ERR(ift)) {
+	ift = ipv6_add_addr(idev, &addr, tmp_plen,
+			    ipv6_addr_type(&addr)&IPV6_ADDR_SCOPE_MASK,
+			    addr_flags);
+	if (IS_ERR(ift)) {
 		in6_ifa_put(ifp);
 		in6_dev_put(idev);
 		printk(KERN_INFO
@@ -2159,7 +2157,7 @@ int addrconf_set_dstaddr(struct net *net, void __user *arg)
 		p.iph.ihl = 5;
 		p.iph.protocol = IPPROTO_IPV6;
 		p.iph.ttl = 64;
-		ifr.ifr_ifru.ifru_data = (__force void __user *)&p;
+		ifr.ifr_ifru.ifru_data = (void __force_user *)&p;
 
 		if (ops->ndo_do_ioctl) {
 			mm_segment_t oldfs = get_fs();

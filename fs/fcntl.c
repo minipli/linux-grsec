@@ -224,6 +224,11 @@ int __f_setown(struct file *filp, struct pid *pid, enum pid_type type,
 	if (err)
 		return err;
 
+	if (gr_handle_chroot_fowner(pid, type))
+		return -ENOENT;
+	if (gr_check_protected_task_fowner(pid, type))
+		return -EACCES;
+
 	f_modown(filp, pid, type, force);
 	return 0;
 }
@@ -266,7 +271,7 @@ pid_t f_getown(struct file *filp)
 
 static int f_setown_ex(struct file *filp, unsigned long arg)
 {
-	struct f_owner_ex * __user owner_p = (void * __user)arg;
+	struct f_owner_ex __user *owner_p = (void __user *)arg;
 	struct f_owner_ex owner;
 	struct pid *pid;
 	int type;
@@ -306,7 +311,7 @@ static int f_setown_ex(struct file *filp, unsigned long arg)
 
 static int f_getown_ex(struct file *filp, unsigned long arg)
 {
-	struct f_owner_ex * __user owner_p = (void * __user)arg;
+	struct f_owner_ex __user *owner_p = (void __user *)arg;
 	struct f_owner_ex owner;
 	int ret = 0;
 
@@ -348,6 +353,7 @@ static long do_fcntl(int fd, unsigned int cmd, unsigned long arg,
 	switch (cmd) {
 	case F_DUPFD:
 	case F_DUPFD_CLOEXEC:
+		gr_learn_resource(current, RLIMIT_NOFILE, arg, 0);
 		if (arg >= rlimit(RLIMIT_NOFILE))
 			break;
 		err = alloc_fd(arg, cmd == F_DUPFD_CLOEXEC ? O_CLOEXEC : 0);
