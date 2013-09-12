@@ -41,23 +41,9 @@
 
 #ifdef MODULE
 #define add_init_latent_entropy
-#define add_devinit_latent_entropy
-#define add_cpuinit_latent_entropy
 #define add_meminit_latent_entropy
 #else
 #define add_init_latent_entropy __latent_entropy
-
-#ifdef CONFIG_HOTPLUG
-#define add_devinit_latent_entropy
-#else
-#define add_devinit_latent_entropy __latent_entropy
-#endif
-
-#ifdef CONFIG_HOTPLUG_CPU
-#define add_cpuinit_latent_entropy
-#else
-#define add_cpuinit_latent_entropy __latent_entropy
-#endif
 
 #ifdef CONFIG_MEMORY_HOTPLUG
 #define add_meminit_latent_entropy

@@ -5978,7 +5978,9 @@ int selinux_disable(void)
 	selinux_disabled = 1;
 	selinux_enabled = 0;
 
-	reset_security_ops();
+	pax_open_kernel();
+	security_ops = &default_security_ops;
+	pax_close_kernel();
 
 	/* Try to destroy the avc node cache */
 	avc_disable();
