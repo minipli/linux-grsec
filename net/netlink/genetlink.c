@@ -310,18 +310,20 @@ int genl_register_ops(struct genl_family *family, struct genl_ops *ops)
 		goto errout;
 	}
 
+	pax_open_kernel();
 	if (ops->dumpit)
-		ops->flags |= GENL_CMD_CAP_DUMP;
+		*(unsigned int *)&ops->flags |= GENL_CMD_CAP_DUMP;
 	if (ops->doit)
-		ops->flags |= GENL_CMD_CAP_DO;
+		*(unsigned int *)&ops->flags |= GENL_CMD_CAP_DO;
 	if (ops->policy)
-		ops->flags |= GENL_CMD_CAP_HASPOL;
+		*(unsigned int *)&ops->flags |= GENL_CMD_CAP_HASPOL;
+	pax_close_kernel();
 
 	genl_lock_all();
-	list_add_tail(&ops->ops_list, &family->ops_list);
+	pax_list_add_tail((struct list_head *)&ops->ops_list, &family->ops_list);
 	genl_unlock_all();
 
-	genl_ctrl_event(CTRL_CMD_NEWOPS, ops);
+	genl_ctrl_event(CTRL_CMD_NEWOPS, (void *)ops);
 	err = 0;
 errout:
 	return err;
@@ -351,9 +353,9 @@ int genl_unregister_ops(struct genl_family *family, struct genl_ops *ops)
 	genl_lock_all();
 	list_for_each_entry(rc, &family->ops_list, ops_list) {
 		if (rc == ops) {
-			list_del(&ops->ops_list);
+			pax_list_del((struct list_head *)&ops->ops_list);
 			genl_unlock_all();
-			genl_ctrl_event(CTRL_CMD_DELOPS, ops);
+			genl_ctrl_event(CTRL_CMD_DELOPS, (void *)ops);
 			return 0;
 		}
 	}
@@ -832,6 +834,10 @@ static int ctrl_dumpfamily(struct sk_buff *skb, struct netlink_callback *cb)
 	struct net *net = sock_net(skb->sk);
 	int chains_to_skip = cb->args[0];
 	int fams_to_skip = cb->args[1];
+	bool need_locking = chains_to_skip || fams_to_skip;
+
+	if (need_locking)
+		genl_lock();
 
 	for (i = chains_to_skip; i < GENL_FAM_TAB_SIZE; i++) {
 		n = 0;
@@ -852,6 +858,9 @@ static int ctrl_dumpfamily(struct sk_buff *skb, struct netlink_callback *cb)
 errout:
 	cb->args[0] = i;
 	cb->args[1] = n;
+
+	if (need_locking)
+		genl_unlock();
 
 	return skb->len;
 }

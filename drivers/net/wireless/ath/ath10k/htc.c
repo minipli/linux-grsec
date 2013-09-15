@@ -963,7 +963,7 @@ void ath10k_htc_stop(struct ath10k_htc *htc)
 struct ath10k_htc *ath10k_htc_create(struct ath10k *ar,
 				     struct ath10k_htc_ops *htc_ops)
 {
-	struct ath10k_hif_cb htc_callbacks;
+	ath10k_hif_cb_no_const htc_callbacks;
 	struct ath10k_htc_ep *ep = NULL;
 	struct ath10k_htc *htc = NULL;
 

@@ -507,7 +507,7 @@ EXPORT_SYMBOL(ath10k_core_destroy);
 
 int ath10k_core_register(struct ath10k *ar)
 {
-	struct ath10k_htc_ops htc_ops;
+	ath10k_htc_ops_no_const htc_ops;
 	struct bmi_target_info target_info;
 	int status;
 

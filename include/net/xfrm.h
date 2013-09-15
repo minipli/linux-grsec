@@ -305,7 +305,7 @@ struct xfrm_policy_afinfo {
 					    struct net_device *dev,
 					    const struct flowi *fl);
 	struct dst_entry	*(*blackhole_route)(struct net *net, struct dst_entry *orig);
-};
+} __do_const;
 
 extern int xfrm_policy_register_afinfo(struct xfrm_policy_afinfo *afinfo);
 extern int xfrm_policy_unregister_afinfo(struct xfrm_policy_afinfo *afinfo);
@@ -342,7 +342,7 @@ struct xfrm_state_afinfo {
 	int			(*transport_finish)(struct sk_buff *skb,
 						    int async);
 	void			(*local_error)(struct sk_buff *skb, u32 mtu);
-};
+} __do_const;
 
 extern int xfrm_state_register_afinfo(struct xfrm_state_afinfo *afinfo);
 extern int xfrm_state_unregister_afinfo(struct xfrm_state_afinfo *afinfo);
@@ -427,7 +427,7 @@ struct xfrm_mode {
 	struct module *owner;
 	unsigned int encap;
 	int flags;
-};
+} __do_const;
 
 /* Flags for xfrm_mode. */
 enum {
@@ -524,7 +524,7 @@ struct xfrm_policy {
 	struct timer_list	timer;
 
 	struct flow_cache_object flo;
-	atomic_t		genid;
+	atomic_unchecked_t	genid;
 	u32			priority;
 	u32			index;
 	struct xfrm_mark	mark;
