@@ -264,19 +264,18 @@ static struct ctl_table xfrm4_policy_table[] = {
 
 static int __net_init xfrm4_net_init(struct net *net)
 {
-	struct ctl_table *table;
+	ctl_table_no_const *table = NULL;
 	struct ctl_table_header *hdr;
 
-	table = xfrm4_policy_table;
 	if (!net_eq(net, &init_net)) {
-		table = kmemdup(table, sizeof(xfrm4_policy_table), GFP_KERNEL);
+		table = kmemdup(xfrm4_policy_table, sizeof(xfrm4_policy_table), GFP_KERNEL);
 		if (!table)
 			goto err_alloc;
 
 		table[0].data = &net->xfrm.xfrm4_dst_ops.gc_thresh;
-	}
-
-	hdr = register_net_sysctl(net, "net/ipv4", table);
+		hdr = register_net_sysctl(net, "net/ipv4", table);
+	} else
+		hdr = register_net_sysctl(net, "net/ipv4", xfrm4_policy_table);
 	if (!hdr)
 		goto err_reg;
 
@@ -284,8 +283,7 @@ static int __net_init xfrm4_net_init(struct net *net)
 	return 0;
 
 err_reg:
-	if (!net_eq(net, &init_net))
-		kfree(table);
+	kfree(table);
 err_alloc:
 	return -ENOMEM;
 }
