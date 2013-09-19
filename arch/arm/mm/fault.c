@@ -649,7 +649,7 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 			/*
 			 * PaX: __kuser_get_tls emulation
 			 */
-			regs->ARM_r0 = current_thread_info()->tp_value;
+			regs->ARM_r0 = current_thread_info()->tp_value[0];
 			regs->ARM_pc = regs->ARM_lr;
 			return;
 		}
