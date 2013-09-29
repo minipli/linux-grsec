@@ -221,6 +221,6 @@ extern struct flow_cache_object *flow_cache_lookup(
 
 extern void flow_cache_flush(void);
 extern void flow_cache_flush_deferred(void);
-extern atomic_t flow_cache_genid;
+extern atomic_unchecked_t flow_cache_genid;
 
 #endif
