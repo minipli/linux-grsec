@@ -24,6 +24,7 @@
  */
 
 #include <linux/linkage.h>
+#include <asm/alternative-asm.h>
 
 .file "cast5-avx-x86_64-asm_64.S"
 
@@ -281,6 +282,7 @@ __cast5_enc_blk16:
 	outunpack_blocks(RR3, RL3, RTMP, RX, RKM);
 	outunpack_blocks(RR4, RL4, RTMP, RX, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 ENDPROC(__cast5_enc_blk16)
 
@@ -352,6 +354,7 @@ __cast5_dec_blk16:
 	outunpack_blocks(RR3, RL3, RTMP, RX, RKM);
 	outunpack_blocks(RR4, RL4, RTMP, RX, RKM);
 
+	pax_force_retaddr 0, 1
 	ret;
 
 .L__skip_dec:
@@ -388,6 +391,7 @@ ENTRY(cast5_ecb_enc_16way)
 	vmovdqu RR4, (6*4*4)(%r11);
 	vmovdqu RL4, (7*4*4)(%r11);
 
+	pax_force_retaddr
 	ret;
 ENDPROC(cast5_ecb_enc_16way)
 
@@ -420,6 +424,7 @@ ENTRY(cast5_ecb_dec_16way)
 	vmovdqu RR4, (6*4*4)(%r11);
 	vmovdqu RL4, (7*4*4)(%r11);
 
+	pax_force_retaddr
 	ret;
 ENDPROC(cast5_ecb_dec_16way)
 
@@ -469,6 +474,7 @@ ENTRY(cast5_cbc_dec_16way)
 
 	popq %r12;
 
+	pax_force_retaddr
 	ret;
 ENDPROC(cast5_cbc_dec_16way)
 
@@ -542,5 +548,6 @@ ENTRY(cast5_ctr_16way)
 
 	popq %r12;
 
+	pax_force_retaddr
 	ret;
 ENDPROC(cast5_ctr_16way)

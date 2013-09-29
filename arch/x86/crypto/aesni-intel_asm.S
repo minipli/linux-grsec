@@ -31,6 +31,7 @@
 
 #include <linux/linkage.h>
 #include <asm/inst.h>
+#include <asm/alternative-asm.h>
 
 #ifdef __x86_64__
 .data
@@ -1441,6 +1442,7 @@ _return_T_done_decrypt:
 	pop	%r14
 	pop	%r13
 	pop	%r12
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_gcm_dec)
 
@@ -1705,6 +1707,7 @@ _return_T_done_encrypt:
 	pop	%r14
 	pop	%r13
 	pop	%r12
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_gcm_enc)
 
@@ -1722,6 +1725,7 @@ _key_expansion_256a:
 	pxor %xmm1, %xmm0
 	movaps %xmm0, (TKEYP)
 	add $0x10, TKEYP
+	pax_force_retaddr_bts
 	ret
 ENDPROC(_key_expansion_128)
 ENDPROC(_key_expansion_256a)
@@ -1748,6 +1752,7 @@ _key_expansion_192a:
 	shufps $0b01001110, %xmm2, %xmm1
 	movaps %xmm1, 0x10(TKEYP)
 	add $0x20, TKEYP
+	pax_force_retaddr_bts
 	ret
 ENDPROC(_key_expansion_192a)
 
@@ -1768,6 +1773,7 @@ _key_expansion_192b:
 
 	movaps %xmm0, (TKEYP)
 	add $0x10, TKEYP
+	pax_force_retaddr_bts
 	ret
 ENDPROC(_key_expansion_192b)
 
@@ -1781,6 +1787,7 @@ _key_expansion_256b:
 	pxor %xmm1, %xmm2
 	movaps %xmm2, (TKEYP)
 	add $0x10, TKEYP
+	pax_force_retaddr_bts
 	ret
 ENDPROC(_key_expansion_256b)
 
@@ -1894,6 +1901,7 @@ ENTRY(aesni_set_key)
 #ifndef __x86_64__
 	popl KEYP
 #endif
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_set_key)
 
@@ -1916,6 +1924,7 @@ ENTRY(aesni_enc)
 	popl KLEN
 	popl KEYP
 #endif
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_enc)
 
@@ -1974,6 +1983,7 @@ _aesni_enc1:
 	AESENC KEY STATE
 	movaps 0x70(TKEYP), KEY
 	AESENCLAST KEY STATE
+	pax_force_retaddr_bts
 	ret
 ENDPROC(_aesni_enc1)
 
@@ -2083,6 +2093,7 @@ _aesni_enc4:
 	AESENCLAST KEY STATE2
 	AESENCLAST KEY STATE3
 	AESENCLAST KEY STATE4
+	pax_force_retaddr_bts
 	ret
 ENDPROC(_aesni_enc4)
 
@@ -2106,6 +2117,7 @@ ENTRY(aesni_dec)
 	popl KLEN
 	popl KEYP
 #endif
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_dec)
 
@@ -2164,6 +2176,7 @@ _aesni_dec1:
 	AESDEC KEY STATE
 	movaps 0x70(TKEYP), KEY
 	AESDECLAST KEY STATE
+	pax_force_retaddr_bts
 	ret
 ENDPROC(_aesni_dec1)
 
@@ -2273,6 +2286,7 @@ _aesni_dec4:
 	AESDECLAST KEY STATE2
 	AESDECLAST KEY STATE3
 	AESDECLAST KEY STATE4
+	pax_force_retaddr_bts
 	ret
 ENDPROC(_aesni_dec4)
 
@@ -2331,6 +2345,7 @@ ENTRY(aesni_ecb_enc)
 	popl KEYP
 	popl LEN
 #endif
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_ecb_enc)
 
@@ -2390,6 +2405,7 @@ ENTRY(aesni_ecb_dec)
 	popl KEYP
 	popl LEN
 #endif
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_ecb_dec)
 
@@ -2432,6 +2448,7 @@ ENTRY(aesni_cbc_enc)
 	popl LEN
 	popl IVP
 #endif
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_cbc_enc)
 
@@ -2523,6 +2540,7 @@ ENTRY(aesni_cbc_dec)
 	popl LEN
 	popl IVP
 #endif
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_cbc_dec)
 
@@ -2550,6 +2568,7 @@ _aesni_inc_init:
 	mov $1, TCTR_LOW
 	MOVQ_R64_XMM TCTR_LOW INC
 	MOVQ_R64_XMM CTR TCTR_LOW
+	pax_force_retaddr_bts
 	ret
 ENDPROC(_aesni_inc_init)
 
@@ -2579,6 +2598,7 @@ _aesni_inc:
 .Linc_low:
 	movaps CTR, IV
 	PSHUFB_XMM BSWAP_MASK IV
+	pax_force_retaddr_bts
 	ret
 ENDPROC(_aesni_inc)
 
@@ -2640,6 +2660,7 @@ ENTRY(aesni_ctr_enc)
 .Lctr_enc_ret:
 	movups IV, (IVP)
 .Lctr_enc_just_ret:
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_ctr_enc)
 
@@ -2766,6 +2787,7 @@ ENTRY(aesni_xts_crypt8)
 	pxor INC, STATE4
 	movdqu STATE4, 0x70(OUTP)
 
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(aesni_xts_crypt8)
 
