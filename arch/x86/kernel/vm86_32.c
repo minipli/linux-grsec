@@ -44,6 +44,7 @@
 #include <linux/ptrace.h>
 #include <linux/audit.h>
 #include <linux/stddef.h>
+#include <linux/grsecurity.h>
 
 #include <asm/uaccess.h>
 #include <asm/io.h>
@@ -150,7 +151,7 @@ struct pt_regs *save_v86_state(struct kernel_vm86_regs *regs)
 		do_exit(SIGSEGV);
 	}
 
-	tss = &per_cpu(init_tss, get_cpu());
+	tss = init_tss + get_cpu();
 	current->thread.sp0 = current->thread.saved_sp0;
 	current->thread.sysenter_cs = __KERNEL_CS;
 	load_sp0(tss, &current->thread);
@@ -214,6 +215,14 @@ SYSCALL_DEFINE1(vm86old, struct vm86_struct __user *, v86)
 
 	if (tsk->thread.saved_sp0)
 		return -EPERM;
+
+#ifdef CONFIG_GRKERNSEC_VM86
+	if (!capable(CAP_SYS_RAWIO)) {
+		gr_handle_vm86();
+		return -EPERM;
+	}
+#endif
+
 	tmp = copy_vm86_regs_from_user(&info.regs, &v86->regs,
 				       offsetof(struct kernel_vm86_struct, vm86plus) -
 				       sizeof(info.regs));
@@ -237,6 +246,13 @@ SYSCALL_DEFINE2(vm86, unsigned long, cmd, unsigned long, arg)
 	struct task_struct *tsk;
 	int tmp;
 	struct vm86plus_struct __user *v86;
+
+#ifdef CONFIG_GRKERNSEC_VM86
+	if (!capable(CAP_SYS_RAWIO)) {
+		gr_handle_vm86();
+		return -EPERM;
+	}
+#endif
 
 	tsk = current;
 	switch (cmd) {
@@ -318,7 +334,7 @@ static void do_sys_vm86(struct kernel_vm86_struct *info, struct task_struct *tsk
 	tsk->thread.saved_fs = info->regs32->fs;
 	tsk->thread.saved_gs = get_user_gs(info->regs32);
 
-	tss = &per_cpu(init_tss, get_cpu());
+	tss = init_tss + get_cpu();
 	tsk->thread.sp0 = (unsigned long) &info->VM86_TSS_ESP0;
 	if (cpu_has_sep)
 		tsk->thread.sysenter_cs = 0;
@@ -525,7 +541,7 @@ static void do_int(struct kernel_vm86_regs *regs, int i,
 		goto cannot_handle;
 	if (i == 0x21 && is_revectored(AH(regs), &KVM86->int21_revectored))
 		goto cannot_handle;
-	intr_ptr = (unsigned long __user *) (i << 2);
+	intr_ptr = (__force unsigned long __user *) (i << 2);
 	if (get_user(segoffs, intr_ptr))
 		goto cannot_handle;
 	if ((segoffs >> 16) == BIOSSEG)
