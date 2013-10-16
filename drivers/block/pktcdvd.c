@@ -84,7 +84,7 @@
 #define MAX_SPEED 0xffff
 
 #define ZONE(sector, pd) (((sector) + (pd)->offset) & \
-			~(sector_t)((pd)->settings.size - 1))
+			~(sector_t)((pd)->settings.size - 1UL))
 
 static DEFINE_MUTEX(pktcdvd_mutex);
 static struct pktcdvd_device *pkt_devs[MAX_WRITERS];

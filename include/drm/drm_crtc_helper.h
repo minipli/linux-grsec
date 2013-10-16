@@ -109,7 +109,7 @@ struct drm_encoder_helper_funcs {
 					    struct drm_connector *connector);
 	/* disable encoder when not in use - more explicit than dpms off */
 	void (*disable)(struct drm_encoder *encoder);
-};
+} __no_const;
 
 /**
  * drm_connector_helper_funcs - helper operations for connectors

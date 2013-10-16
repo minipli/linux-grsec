@@ -80,7 +80,7 @@ struct kmem_cache {
 	struct kmem_cache_order_objects max;
 	struct kmem_cache_order_objects min;
 	gfp_t allocflags;	/* gfp flags to use on each alloc */
-	int refcount;		/* Refcount for slab cache destroy */
+	atomic_t refcount;	/* Refcount for slab cache destroy */
 	void (*ctor)(void *);
 	int inuse;		/* Offset to metadata */
 	int align;		/* Alignment */
@@ -105,7 +105,7 @@ struct kmem_cache {
 };
 
 void *kmem_cache_alloc(struct kmem_cache *, gfp_t);
-void *__kmalloc(size_t size, gfp_t flags);
+void *__kmalloc(size_t size, gfp_t flags) __alloc_size(1) __size_overflow(1);
 
 static __always_inline void *
 kmalloc_order(size_t size, gfp_t flags, unsigned int order)
@@ -149,7 +149,7 @@ kmalloc_order_trace(size_t size, gfp_t flags, unsigned int order)
 }
 #endif
 
-static __always_inline void *kmalloc_large(size_t size, gfp_t flags)
+static __always_inline __size_overflow(1) void *kmalloc_large(size_t size, gfp_t flags)
 {
 	unsigned int order = get_order(size);
 	return kmalloc_order_trace(size, flags, order);
@@ -175,7 +175,7 @@ static __always_inline void *kmalloc(size_t size, gfp_t flags)
 }
 
 #ifdef CONFIG_NUMA
-void *__kmalloc_node(size_t size, gfp_t flags, int node);
+void *__kmalloc_node(size_t size, gfp_t flags, int node) __size_overflow(1);
 void *kmem_cache_alloc_node(struct kmem_cache *, gfp_t flags, int node);
 
 #ifdef CONFIG_TRACING
