@@ -150,6 +150,9 @@ int dcache_readdir(struct file *file, struct dir_context *ctx)
 
 	for (p = q->next; p != &dentry->d_subdirs; p = p->next) {
 		struct dentry *next = list_entry(p, struct dentry, d_u.d_child);
+		char d_name[sizeof(next->d_iname)];
+		const unsigned char *name;
+
 		spin_lock_nested(&next->d_lock, DENTRY_D_LOCK_NESTED);
 		if (!simple_positive(next)) {
 			spin_unlock(&next->d_lock);
@@ -158,7 +161,12 @@ int dcache_readdir(struct file *file, struct dir_context *ctx)
 
 		spin_unlock(&next->d_lock);
 		spin_unlock(&dentry->d_lock);
-		if (!dir_emit(ctx, next->d_name.name, next->d_name.len,
+		name = next->d_name.name;
+		if (name == next->d_iname) {
+			memcpy(d_name, name, next->d_name.len);
+			name = d_name;
+		}
+		if (!dir_emit(ctx, name, next->d_name.len,
 			      next->d_inode->i_ino, dt_type(next->d_inode)))
 			return 0;
 		spin_lock(&dentry->d_lock);
