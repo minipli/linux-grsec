@@ -600,8 +600,8 @@ int ip6_find_1stfragopt(struct sk_buff *skb, u8 **nexthdr)
 
 void ipv6_select_ident(struct frag_hdr *fhdr, struct rt6_info *rt)
 {
-	static atomic_t ipv6_fragmentation_id;
-	int old, new;
+	static atomic_unchecked_t ipv6_fragmentation_id;
+	int id;
 
 	if (rt && !(rt->dst.flags & DST_NOPEER)) {
 		struct inet_peer *peer;
@@ -614,13 +614,10 @@ void ipv6_select_ident(struct frag_hdr *fhdr, struct rt6_info *rt)
 			return;
 		}
 	}
-	do {
-		old = atomic_read(&ipv6_fragmentation_id);
-		new = old + 1;
-		if (!new)
-			new = 1;
-	} while (atomic_cmpxchg(&ipv6_fragmentation_id, old, new) != old);
-	fhdr->identification = htonl(new);
+	id = atomic_inc_return_unchecked(&ipv6_fragmentation_id);
+	if (!id)
+		id = atomic_inc_return_unchecked(&ipv6_fragmentation_id);
+	fhdr->identification = htonl(id);
 }
 
 int ip6_fragment(struct sk_buff *skb, int (*output)(struct sk_buff *))
@@ -1342,7 +1339,7 @@ int ip6_append_data(struct sock *sk, int getfrag(void *from, char *to,
 	skb = skb_peek_tail(&sk->sk_write_queue);
 	cork->length += length;
 	if (((length > mtu) ||
-	     (skb && skb_is_gso(skb))) &&
+	     (skb && skb_has_frags(skb))) &&
 	    (sk->sk_protocol == IPPROTO_UDP) &&
 	    (rt->dst.dev->features & NETIF_F_UFO)) {
 		err = ip6_ufo_append_data(sk, getfrag, from, length,

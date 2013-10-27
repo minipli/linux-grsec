@@ -164,8 +164,6 @@ static int esp6_output(struct xfrm_state *x, struct sk_buff *skb)
 	struct esp_data *esp = x->data;
 
 	/* skb is pure payload to encrypt */
-	err = -ENOMEM;
-
 	aead = esp->aead;
 	alen = crypto_aead_authsize(aead);
 
@@ -200,8 +198,10 @@ static int esp6_output(struct xfrm_state *x, struct sk_buff *skb)
 	}
 
 	tmp = esp_alloc_tmp(aead, nfrags + sglists, seqhilen);
-	if (!tmp)
+	if (!tmp) {
+		err = -ENOMEM;
 		goto error;
+	}
 
 	seqhi = esp_tmp_seqhi(tmp);
 	iv = esp_tmp_iv(aead, tmp, seqhilen);
@@ -419,7 +419,7 @@ static u32 esp6_get_mtu(struct xfrm_state *x, int mtu)
 		net_adj = 0;
 
 	return ((mtu - x->props.header_len - crypto_aead_authsize(esp->aead) -
-		 net_adj) & ~(align - 1)) + (net_adj - 2);
+		 net_adj) & ~(align - 1)) + net_adj - 2;
 }
 
 static void esp6_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
