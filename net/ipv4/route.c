@@ -313,7 +313,7 @@ static inline unsigned int rt_hash(__be32 daddr, __be32 saddr, int idx,
 
 static inline int rt_genid(struct net *net)
 {
-	return atomic_read(&net->ipv4.rt_genid);
+	return atomic_read_unchecked(&net->ipv4.rt_genid);
 }
 
 #ifdef CONFIG_PROC_FS
@@ -641,7 +641,7 @@ static void __net_exit ip_rt_do_proc_exit(struct net *net)
 #endif
 }
 
-static struct pernet_operations ip_rt_proc_ops __net_initdata =  {
+static struct pernet_operations ip_rt_proc_ops __net_initconst =  {
 	.init = ip_rt_do_proc_init,
 	.exit = ip_rt_do_proc_exit,
 };
@@ -937,7 +937,7 @@ static void rt_cache_invalidate(struct net *net)
 	unsigned char shuffle;
 
 	get_random_bytes(&shuffle, sizeof(shuffle));
-	atomic_add(shuffle + 1U, &net->ipv4.rt_genid);
+	atomic_add_unchecked(shuffle + 1U, &net->ipv4.rt_genid);
 	redirect_genid++;
 	inetpeer_invalidate_tree(AF_INET);
 }
@@ -3023,7 +3023,7 @@ static int rt_fill_info(struct net *net,
 	error = rt->dst.error;
 	if (peer) {
 		inet_peer_refcheck(rt->peer);
-		id = atomic_read(&peer->ip_id_count) & 0xffff;
+		id = atomic_read_unchecked(&peer->ip_id_count) & 0xffff;
 		if (peer->tcp_ts_stamp) {
 			ts = peer->tcp_ts;
 			tsage = get_seconds() - peer->tcp_ts_stamp;
@@ -3222,7 +3222,7 @@ static int ipv4_sysctl_rtcache_flush(ctl_table *__ctl, int write,
 {
 	if (write) {
 		int flush_delay;
-		ctl_table ctl;
+		ctl_table_no_const ctl;
 		struct net *net;
 
 		memcpy(&ctl, __ctl, sizeof(ctl));
@@ -3371,6 +3371,7 @@ static struct ctl_table ipv4_route_flush_table[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0200,
 		.proc_handler	= ipv4_sysctl_rtcache_flush,
+		.extra1		= &init_net,
 	},
 	{ },
 };
@@ -3384,25 +3385,23 @@ static __net_initdata struct ctl_path ipv4_route_path[] = {
 
 static __net_init int sysctl_route_net_init(struct net *net)
 {
-	struct ctl_table *tbl;
+	ctl_table_no_const *tbl = NULL;
 
-	tbl = ipv4_route_flush_table;
 	if (!net_eq(net, &init_net)) {
-		tbl = kmemdup(tbl, sizeof(ipv4_route_flush_table), GFP_KERNEL);
+		tbl = kmemdup(ipv4_route_flush_table, sizeof(ipv4_route_flush_table), GFP_KERNEL);
 		if (tbl == NULL)
 			goto err_dup;
-	}
-	tbl[0].extra1 = net;
 
-	net->ipv4.route_hdr =
-		register_net_sysctl_table(net, ipv4_route_path, tbl);
+		net->ipv4.route_hdr = register_net_sysctl_table(net, ipv4_route_path, tbl);
+	} else
+		net->ipv4.route_hdr = register_net_sysctl_table(net, ipv4_route_path, ipv4_route_flush_table);
+
 	if (net->ipv4.route_hdr == NULL)
 		goto err_reg;
 	return 0;
 
 err_reg:
-	if (tbl != ipv4_route_flush_table)
-		kfree(tbl);
+	kfree(tbl);
 err_dup:
 	return -ENOMEM;
 }
@@ -3417,7 +3416,7 @@ static __net_exit void sysctl_route_net_exit(struct net *net)
 	kfree(tbl);
 }
 
-static __net_initdata struct pernet_operations sysctl_route_ops = {
+static __net_initconst struct pernet_operations sysctl_route_ops = {
 	.init = sysctl_route_net_init,
 	.exit = sysctl_route_net_exit,
 };
@@ -3432,7 +3431,7 @@ static __net_init int rt_genid_init(struct net *net)
 	return 0;
 }
 
-static __net_initdata struct pernet_operations rt_genid_ops = {
+static __net_initconst struct pernet_operations rt_genid_ops = {
 	.init = rt_genid_init,
 };
 
