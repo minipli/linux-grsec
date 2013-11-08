@@ -120,14 +120,16 @@ cifs_read_super(struct super_block *sb)
 {
 	struct inode *inode;
 	struct cifs_sb_info *cifs_sb;
+	struct cifs_tcon *tcon;
 	int rc = 0;
 
 	cifs_sb = CIFS_SB(sb);
+	tcon = cifs_sb_master_tcon(cifs_sb);
 
 	if (cifs_sb->mnt_cifs_flags & CIFS_MOUNT_POSIXACL)
 		sb->s_flags |= MS_POSIXACL;
 
-	if (cifs_sb_master_tcon(cifs_sb)->ses->capabilities & CAP_LARGE_FILES)
+	if (tcon->ses->capabilities & tcon->ses->server->vals->cap_large_files)
 		sb->s_maxbytes = MAX_LFS_FILESIZE;
 	else
 		sb->s_maxbytes = MAX_NON_LFS;
@@ -147,7 +149,7 @@ cifs_read_super(struct super_block *sb)
 		goto out_no_root;
 	}
 
-	if (cifs_sb_master_tcon(cifs_sb)->nocase)
+	if (tcon->nocase)
 		sb->s_d_op = &cifs_ci_dentry_ops;
 	else
 		sb->s_d_op = &cifs_dentry_ops;
@@ -1037,7 +1039,7 @@ cifs_init_request_bufs(void)
 */
 	cifs_req_cachep = kmem_cache_create("cifs_request",
 					    CIFSMaxBufSize + max_hdr_size, 0,
-					    SLAB_HWCACHE_ALIGN, NULL);
+					    SLAB_HWCACHE_ALIGN | SLAB_USERCOPY, NULL);
 	if (cifs_req_cachep == NULL)
 		return -ENOMEM;
 
@@ -1064,7 +1066,7 @@ cifs_init_request_bufs(void)
 	efficient to alloc 1 per page off the slab compared to 17K (5page)
 	alloc of large cifs buffers even when page debugging is on */
 	cifs_sm_req_cachep = kmem_cache_create("cifs_small_rq",
-			MAX_CIFS_SMALL_BUFFER_SIZE, 0, SLAB_HWCACHE_ALIGN,
+			MAX_CIFS_SMALL_BUFFER_SIZE, 0, SLAB_HWCACHE_ALIGN | SLAB_USERCOPY,
 			NULL);
 	if (cifs_sm_req_cachep == NULL) {
 		mempool_destroy(cifs_req_poolp);
@@ -1149,8 +1151,8 @@ init_cifs(void)
 	atomic_set(&bufAllocCount, 0);
 	atomic_set(&smBufAllocCount, 0);
 #ifdef CONFIG_CIFS_STATS2
-	atomic_set(&totBufAllocCount, 0);
-	atomic_set(&totSmBufAllocCount, 0);
+	atomic_set_unchecked(&totBufAllocCount, 0);
+	atomic_set_unchecked(&totSmBufAllocCount, 0);
 #endif /* CONFIG_CIFS_STATS2 */
 
 	atomic_set(&midCount, 0);
