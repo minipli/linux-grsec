@@ -332,9 +332,10 @@ static void xfrm_policy_kill(struct xfrm_policy *policy)
 {
 	policy->walk.dead = 1;
 
-	atomic_inc(&policy->genid);
+	atomic_inc_unchecked(&policy->genid);
 
-	del_timer(&policy->polq.hold_timer);
+	if (del_timer(&policy->polq.hold_timer))
+		xfrm_pol_put(policy);
 	xfrm_queue_purge(&policy->polq.hold_queue);
 
 	if (del_timer(&policy->timer))
@@ -589,7 +590,8 @@ static void xfrm_policy_requeue(struct xfrm_policy *old,
 
 	spin_lock_bh(&pq->hold_queue.lock);
 	skb_queue_splice_init(&pq->hold_queue, &list);
-	del_timer(&pq->hold_timer);
+	if (del_timer(&pq->hold_timer))
+		xfrm_pol_put(old);
 	spin_unlock_bh(&pq->hold_queue.lock);
 
 	if (skb_queue_empty(&list))
@@ -600,7 +602,8 @@ static void xfrm_policy_requeue(struct xfrm_policy *old,
 	spin_lock_bh(&pq->hold_queue.lock);
 	skb_queue_splice(&list, &pq->hold_queue);
 	pq->timeout = XFRM_QUEUE_TMO_MIN;
-	mod_timer(&pq->hold_timer, jiffies);
+	if (!mod_timer(&pq->hold_timer, jiffies))
+		xfrm_pol_hold(new);
 	spin_unlock_bh(&pq->hold_queue.lock);
 }
 
@@ -657,7 +660,7 @@ int xfrm_policy_insert(int dir, struct xfrm_policy *policy, int excl)
 		hlist_add_head(&policy->bydst, chain);
 	xfrm_pol_hold(policy);
 	net->xfrm.policy_count[dir]++;
-	atomic_inc(&flow_cache_genid);
+	atomic_inc_unchecked(&flow_cache_genid);
 	rt_genid_bump(net);
 	if (delpol) {
 		xfrm_policy_requeue(delpol, policy);
@@ -1627,7 +1630,7 @@ free_dst:
 	goto out;
 }
 
-static int inline
+static inline int
 xfrm_dst_alloc_copy(void **target, const void *src, int size)
 {
 	if (!*target) {
@@ -1639,7 +1642,7 @@ xfrm_dst_alloc_copy(void **target, const void *src, int size)
 	return 0;
 }
 
-static int inline
+static inline int
 xfrm_dst_update_parent(struct dst_entry *dst, const struct xfrm_selector *sel)
 {
 #ifdef CONFIG_XFRM_SUB_POLICY
@@ -1651,7 +1654,7 @@ xfrm_dst_update_parent(struct dst_entry *dst, const struct xfrm_selector *sel)
 #endif
 }
 
-static int inline
+static inline int
 xfrm_dst_update_origin(struct dst_entry *dst, const struct flowi *fl)
 {
 #ifdef CONFIG_XFRM_SUB_POLICY
@@ -1745,7 +1748,7 @@ xfrm_resolve_and_create_bundle(struct xfrm_policy **pols, int num_pols,
 
 	xdst->num_pols = num_pols;
 	memcpy(xdst->pols, pols, sizeof(struct xfrm_policy*) * num_pols);
-	xdst->policy_genid = atomic_read(&pols[0]->genid);
+	xdst->policy_genid = atomic_read_unchecked(&pols[0]->genid);
 
 	return xdst;
 }
@@ -1763,6 +1766,10 @@ static void xfrm_policy_queue_process(unsigned long arg)
 
 	spin_lock(&pq->hold_queue.lock);
 	skb = skb_peek(&pq->hold_queue);
+	if (!skb) {
+		spin_unlock(&pq->hold_queue.lock);
+		goto out;
+	}
 	dst = skb_dst(skb);
 	sk = skb->sk;
 	xfrm_decode_session(skb, &fl, dst->ops->family);
@@ -1781,8 +1788,9 @@ static void xfrm_policy_queue_process(unsigned long arg)
 			goto purge_queue;
 
 		pq->timeout = pq->timeout << 1;
-		mod_timer(&pq->hold_timer, jiffies + pq->timeout);
-		return;
+		if (!mod_timer(&pq->hold_timer, jiffies + pq->timeout))
+			xfrm_pol_hold(pol);
+	goto out;
 	}
 
 	dst_release(dst);
@@ -1813,11 +1821,14 @@ static void xfrm_policy_queue_process(unsigned long arg)
 		err = dst_output(skb);
 	}
 
+out:
+	xfrm_pol_put(pol);
 	return;
 
 purge_queue:
 	pq->timeout = 0;
 	xfrm_queue_purge(&pq->hold_queue);
+	xfrm_pol_put(pol);
 }
 
 static int xdst_queue_output(struct sk_buff *skb)
@@ -1825,7 +1836,8 @@ static int xdst_queue_output(struct sk_buff *skb)
 	unsigned long sched_next;
 	struct dst_entry *dst = skb_dst(skb);
 	struct xfrm_dst *xdst = (struct xfrm_dst *) dst;
-	struct xfrm_policy_queue *pq = &xdst->pols[0]->polq;
+	struct xfrm_policy *pol = xdst->pols[0];
+	struct xfrm_policy_queue *pq = &pol->polq;
 
 	if (pq->hold_queue.qlen > XFRM_MAX_QUEUE_LEN) {
 		kfree_skb(skb);
@@ -1844,10 +1856,12 @@ static int xdst_queue_output(struct sk_buff *skb)
 	if (del_timer(&pq->hold_timer)) {
 		if (time_before(pq->hold_timer.expires, sched_next))
 			sched_next = pq->hold_timer.expires;
+		xfrm_pol_put(pol);
 	}
 
 	__skb_queue_tail(&pq->hold_queue, skb);
-	mod_timer(&pq->hold_timer, sched_next);
+	if (!mod_timer(&pq->hold_timer, sched_next))
+		xfrm_pol_hold(pol);
 
 	spin_unlock_bh(&pq->hold_queue.lock);
 
@@ -2557,11 +2571,12 @@ void xfrm_garbage_collect(struct net *net)
 }
 EXPORT_SYMBOL(xfrm_garbage_collect);
 
-static void xfrm_garbage_collect_deferred(struct net *net)
+void xfrm_garbage_collect_deferred(struct net *net)
 {
 	flow_cache_flush_deferred();
 	__xfrm_garbage_collect(net);
 }
+EXPORT_SYMBOL(xfrm_garbage_collect_deferred);
 
 static void xfrm_init_pmtu(struct dst_entry *dst)
 {
@@ -2611,7 +2626,7 @@ static int xfrm_bundle_ok(struct xfrm_dst *first)
 		if (xdst->xfrm_genid != dst->xfrm->genid)
 			return 0;
 		if (xdst->num_pols > 0 &&
-		    xdst->policy_genid != atomic_read(&xdst->pols[0]->genid))
+		    xdst->policy_genid != atomic_read_unchecked(&xdst->pols[0]->genid))
 			return 0;
 
 		mtu = dst_mtu(dst->child);
@@ -2699,8 +2714,6 @@ int xfrm_policy_register_afinfo(struct xfrm_policy_afinfo *afinfo)
 			dst_ops->link_failure = xfrm_link_failure;
 		if (likely(dst_ops->neigh_lookup == NULL))
 			dst_ops->neigh_lookup = xfrm_neigh_lookup;
-		if (likely(afinfo->garbage_collect == NULL))
-			afinfo->garbage_collect = xfrm_garbage_collect_deferred;
 		rcu_assign_pointer(xfrm_policy_afinfo[afinfo->family], afinfo);
 	}
 	spin_unlock(&xfrm_policy_afinfo_lock);
@@ -2754,7 +2767,6 @@ int xfrm_policy_unregister_afinfo(struct xfrm_policy_afinfo *afinfo)
 		dst_ops->check = NULL;
 		dst_ops->negative_advice = NULL;
 		dst_ops->link_failure = NULL;
-		afinfo->garbage_collect = NULL;
 	}
 	return err;
 }
@@ -3137,7 +3149,7 @@ static int xfrm_policy_migrate(struct xfrm_policy *pol,
 			       sizeof(pol->xfrm_vec[i].saddr));
 			pol->xfrm_vec[i].encap_family = mp->new_family;
 			/* flush bundles */
-			atomic_inc(&pol->genid);
+			atomic_inc_unchecked(&pol->genid);
 		}
 	}
 
