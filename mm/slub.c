@@ -2616,6 +2616,14 @@ static __always_inline void slab_free(struct kmem_cache *s,
 
 	slab_free_hook(s, x);
 
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	if (pax_sanitize_slab && !(s->flags & SLAB_NO_SANITIZE)) {
+		memset(x, PAX_MEMORY_SANITIZE_VALUE, s->object_size);
+		if (s->ctor)
+			s->ctor(x);
+	}
+#endif
+
 redo:
 	/*
 	 * Determine the currently cpus per cpu slab.
@@ -2683,7 +2691,7 @@ static int slub_min_objects;
  * Merge control. If this is set then no merging of slab caches will occur.
  * (Could be removed. This was introduced to pacify the merge skeptics.)
  */
-static int slub_nomerge;
+static int slub_nomerge = 1;
 
 /*
  * Calculate the order of allocation given an slab object size.
@@ -2960,6 +2968,9 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	s->inuse = size;
 
 	if (((flags & (SLAB_DESTROY_BY_RCU | SLAB_POISON)) ||
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+		(pax_sanitize_slab && !(flags & SLAB_NO_SANITIZE)) ||
+#endif
 		s->ctor)) {
 		/*
 		 * Relocate free pointer after the object if it is not
@@ -3305,6 +3316,59 @@ void *__kmalloc_node(size_t size, gfp_t flags, int node)
 EXPORT_SYMBOL(__kmalloc_node);
 #endif
 
+bool is_usercopy_object(const void *ptr)
+{
+	struct page *page;
+	struct kmem_cache *s;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		return false;
+
+	if (!slab_is_available())
+		return false;
+
+	if (!virt_addr_valid(ptr))
+		return false;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page))
+		return false;
+
+	s = page->slab_cache;
+	return s->flags & SLAB_USERCOPY;
+}
+
+#ifdef CONFIG_PAX_USERCOPY
+const char *check_heap_object(const void *ptr, unsigned long n)
+{
+	struct page *page;
+	struct kmem_cache *s;
+	unsigned long offset;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		return "<null>";
+
+	if (!virt_addr_valid(ptr))
+		return NULL;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page))
+		return NULL;
+
+	s = page->slab_cache;
+	if (!(s->flags & SLAB_USERCOPY))
+		return s->name;
+
+	offset = (ptr - page_address(page)) % s->size;
+	if (offset <= s->object_size && n <= s->object_size - offset)
+		return NULL;
+
+	return s->name;
+}
+#endif
+
 size_t ksize(const void *object)
 {
 	struct page *page;
@@ -3333,6 +3397,7 @@ void kfree(const void *x)
 	if (unlikely(ZERO_OR_NULL_PTR(x)))
 		return;
 
+	VM_BUG_ON(!virt_addr_valid(x));
 	page = virt_to_head_page(x);
 	if (unlikely(!PageSlab(page))) {
 		BUG_ON(!PageCompound(page));
@@ -3638,7 +3703,7 @@ static int slab_unmergeable(struct kmem_cache *s)
 	/*
 	 * We may have set a slab to be unmergeable during bootstrap.
 	 */
-	if (s->refcount < 0)
+	if (atomic_read(&s->refcount) < 0)
 		return 1;
 
 	return 0;
@@ -3696,7 +3761,7 @@ __kmem_cache_alias(struct mem_cgroup *memcg, const char *name, size_t size,
 
 	s = find_mergeable(memcg, size, align, flags, name, ctor);
 	if (s) {
-		s->refcount++;
+		atomic_inc(&s->refcount);
 		/*
 		 * Adjust the object sizes so that we clear
 		 * the complete object on kzalloc.
@@ -3705,7 +3770,7 @@ __kmem_cache_alias(struct mem_cgroup *memcg, const char *name, size_t size,
 		s->inuse = max_t(int, s->inuse, ALIGN(size, sizeof(void *)));
 
 		if (sysfs_slab_alias(s, name)) {
-			s->refcount--;
+			atomic_dec(&s->refcount);
 			s = NULL;
 		}
 	}
@@ -4459,7 +4524,7 @@ SLAB_ATTR_RO(ctor);
 
 static ssize_t aliases_show(struct kmem_cache *s, char *buf)
 {
-	return sprintf(buf, "%d\n", s->refcount - 1);
+	return sprintf(buf, "%d\n", atomic_read(&s->refcount) - 1);
 }
 SLAB_ATTR_RO(aliases);
 
@@ -4545,6 +4610,14 @@ static ssize_t cache_dma_show(struct kmem_cache *s, char *buf)
 	return sprintf(buf, "%d\n", !!(s->flags & SLAB_CACHE_DMA));
 }
 SLAB_ATTR_RO(cache_dma);
+#endif
+
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+static ssize_t usercopy_show(struct kmem_cache *s, char *buf)
+{
+	return sprintf(buf, "%d\n", !!(s->flags & SLAB_USERCOPY));
+}
+SLAB_ATTR_RO(usercopy);
 #endif
 
 static ssize_t destroy_by_rcu_show(struct kmem_cache *s, char *buf)
@@ -4881,6 +4954,9 @@ static struct attribute *slab_attrs[] = {
 #ifdef CONFIG_ZONE_DMA
 	&cache_dma_attr.attr,
 #endif
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+	&usercopy_attr.attr,
+#endif
 #ifdef CONFIG_NUMA
 	&remote_node_defrag_ratio_attr.attr,
 #endif
@@ -5136,7 +5212,7 @@ static int sysfs_slab_add(struct kmem_cache *s)
 	}
 
 	s->kobj.kset = slab_kset;
-	err = kobject_init_and_add(&s->kobj, &slab_ktype, NULL, name);
+	err = kobject_init_and_add(&s->kobj, &slab_ktype, NULL, "%s", name);
 	if (err) {
 		kobject_put(&s->kobj);
 		return err;

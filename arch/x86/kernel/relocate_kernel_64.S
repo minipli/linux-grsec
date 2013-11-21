@@ -11,6 +11,7 @@
 #include <asm/kexec.h>
 #include <asm/processor-flags.h>
 #include <asm/pgtable_types.h>
+#include <asm/alternative-asm.h>
 
 /*
  * Must be relocatable PIC code callable as a C function
@@ -96,8 +97,7 @@ relocate_kernel:
 
 	/* jump to identity mapped page */
 	addq	$(identity_mapped - relocate_kernel), %r8
-	pushq	%r8
-	ret
+	jmp	*%r8
 
 identity_mapped:
 	/* set return address to 0 if not preserving context */
@@ -167,6 +167,7 @@ identity_mapped:
 	xorl	%r14d, %r14d
 	xorl	%r15d, %r15d
 
+	pax_force_retaddr 0, 1
 	ret
 
 1:

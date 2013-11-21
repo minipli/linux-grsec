@@ -8,7 +8,11 @@
 #include <asm/thread_info.h>
 #include <asm/memory.h>
 #include <asm/page.h>
-	
+
+#ifdef CONFIG_PAX_KERNEXEC
+#include <asm/pgtable.h>
+#endif
+
 #define PROC_INFO							\
 	. = ALIGN(4);							\
 	VMLINUX_SYMBOL(__proc_info_begin) = .;				\
@@ -34,7 +38,7 @@
 #endif
 
 #if (defined(CONFIG_SMP_ON_UP) && !defined(CONFIG_DEBUG_SPINLOCK)) || \
-	defined(CONFIG_GENERIC_BUG)
+	defined(CONFIG_GENERIC_BUG) || defined(CONFIG_PAX_REFCOUNT)
 #define ARM_EXIT_KEEP(x)	x
 #define ARM_EXIT_DISCARD(x)
 #else
@@ -90,6 +94,11 @@ SECTIONS
 		_text = .;
 		HEAD_TEXT
 	}
+
+#ifdef CONFIG_PAX_KERNEXEC
+	. = ALIGN(1<<SECTION_SHIFT);
+#endif
+
 	.text : {			/* Real text segment		*/
 		_stext = .;		/* Text and read-only data	*/
 			__exception_text_start = .;
@@ -111,6 +120,8 @@ SECTIONS
 		*(.got)			/* Global offset table		*/
 			ARM_CPU_KEEP(PROC_INFO)
 	}
+
+	_etext = .;			/* End of text section */
 
 	RO_DATA(PAGE_SIZE)
 
@@ -142,7 +153,9 @@ SECTIONS
 
 	NOTES
 
-	_etext = .;			/* End of text and rodata section */
+#ifdef CONFIG_PAX_KERNEXEC
+	. = ALIGN(1<<SECTION_SHIFT);
+#endif
 
 #ifndef CONFIG_XIP_KERNEL
 	. = ALIGN(PAGE_SIZE);
@@ -220,6 +233,11 @@ SECTIONS
 	. = PAGE_OFFSET + TEXT_OFFSET;
 #else
 	__init_end = .;
+
+#ifdef CONFIG_PAX_KERNEXEC
+	. = ALIGN(1<<SECTION_SHIFT);
+#endif
+
 	. = ALIGN(THREAD_SIZE);
 	__data_loc = .;
 #endif
