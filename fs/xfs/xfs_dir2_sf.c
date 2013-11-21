@@ -848,7 +848,12 @@ xfs_dir2_sf_getdents(
 
 		ino = xfs_dir2_sfe_get_ino(sfp, sfep);
 		ctx->pos = off & 0x7fffffff;
-		if (!dir_emit(ctx, (char *)sfep->name, sfep->namelen,
+		if (dp->i_df.if_u1.if_data == dp->i_df.if_u2.if_inline_data) {
+			char name[sfep->namelen];
+			memcpy(name, sfep->name, sfep->namelen);
+			if (!dir_emit(ctx, name, sfep->namelen, ino, DT_UNKNOWN))
+				return 0;
+		} else if (!dir_emit(ctx, (char *)sfep->name, sfep->namelen,
 			    ino, DT_UNKNOWN))
 			return 0;
 		sfep = xfs_dir2_sf_nextentry(sfp, sfep);
