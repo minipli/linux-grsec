@@ -1359,7 +1359,7 @@ void smtc_soft_dump(void)
 	}
 	smtc_ipi_qdump();
 	printk("%d Recoveries of \"stolen\" FPU\n",
-	       atomic_read(&smtc_fpu_recoveries));
+	       atomic_read_unchecked(&smtc_fpu_recoveries));
 }
 
 

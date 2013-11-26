@@ -118,7 +118,7 @@ u32		audit_sig_sid = 0;
    3) suppressed due to audit_rate_limit
    4) suppressed due to audit_backlog_limit
 */
-static atomic_t    audit_lost = ATOMIC_INIT(0);
+static atomic_unchecked_t    audit_lost = ATOMIC_INIT(0);
 
 /* The netlink socket. */
 static struct sock *audit_sock;
@@ -240,7 +240,7 @@ void audit_log_lost(const char *message)
 	unsigned long		now;
 	int			print;
 
-	atomic_inc(&audit_lost);
+	atomic_inc_unchecked(&audit_lost);
 
 	print = (audit_failure == AUDIT_FAIL_PANIC || !audit_rate_limit);
 
@@ -259,7 +259,7 @@ void audit_log_lost(const char *message)
 			printk(KERN_WARNING
 				"audit: audit_lost=%d audit_rate_limit=%d "
 				"audit_backlog_limit=%d\n",
-				atomic_read(&audit_lost),
+				atomic_read_unchecked(&audit_lost),
 				audit_rate_limit,
 				audit_backlog_limit);
 		audit_panic(message);
@@ -659,18 +659,19 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 
 	switch (msg_type) {
 	case AUDIT_GET:
+		status_set.mask		 = 0;
 		status_set.enabled	 = audit_enabled;
 		status_set.failure	 = audit_failure;
 		status_set.pid		 = audit_pid;
 		status_set.rate_limit	 = audit_rate_limit;
 		status_set.backlog_limit = audit_backlog_limit;
-		status_set.lost		 = atomic_read(&audit_lost);
+		status_set.lost		 = atomic_read_unchecked(&audit_lost);
 		status_set.backlog	 = skb_queue_len(&audit_skb_queue);
 		audit_send_reply(NETLINK_CB(skb).portid, seq, AUDIT_GET, 0, 0,
 				 &status_set, sizeof(status_set));
 		break;
 	case AUDIT_SET:
-		if (nlh->nlmsg_len < sizeof(struct audit_status))
+		if (nlmsg_len(nlh) < sizeof(struct audit_status))
 			return -EINVAL;
 		status_get   = (struct audit_status *)data;
 		if (status_get->mask & AUDIT_STATUS_ENABLED) {
@@ -832,7 +833,7 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 
 		memset(&s, 0, sizeof(s));
 		/* guard against past and future API changes */
-		memcpy(&s, data, min(sizeof(s), (size_t)nlh->nlmsg_len));
+		memcpy(&s, data, min_t(size_t, sizeof(s), nlmsg_len(nlh)));
 		if ((s.enabled != 0 && s.enabled != 1) ||
 		    (s.log_passwd != 0 && s.log_passwd != 1))
 			return -EINVAL;
@@ -1251,7 +1252,7 @@ void audit_log_n_hex(struct audit_buffer *ab, const unsigned char *buf,
 	int i, avail, new_len;
 	unsigned char *ptr;
 	struct sk_buff *skb;
-	static const unsigned char *hex = "0123456789ABCDEF";
+	static const unsigned char hex[] = "0123456789ABCDEF";
 
 	if (!ab)
 		return;
