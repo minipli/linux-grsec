@@ -139,6 +139,12 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 	if (fixup_exception(regs))
 		return;
 
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	if (addr < TASK_SIZE)
+		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to access userland memory at %08lx\n", current->comm, task_pid_nr(current),
+				from_kuid_munged(&init_user_ns, current_uid()), from_kuid_munged(&init_user_ns, current_euid()), addr);
+#endif
+
 #ifdef CONFIG_PAX_KERNEXEC
 	if ((fsr & FSR_WRITE) &&
 	    (((unsigned long)_stext <= addr && addr < init_mm.end_code) ||
@@ -669,12 +675,12 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 			 * PaX: __kuser_cmpxchg emulation
 			 */
 			// TODO
-			long new;
-			int op;
+			//long new;
+			//int op;
 
-			op = FUTEX_OP_SET << 28;
-			new = futex_atomic_op_inuser(op, regs->ARM_r2);
-			regs->ARM_r0 = old != new;
+			//op = FUTEX_OP_SET << 28;
+			//new = futex_atomic_op_inuser(op, regs->ARM_r2);
+			//regs->ARM_r0 = old != new;
 			//regs->ARM_pc = regs->ARM_lr;
 			//return;
 		}

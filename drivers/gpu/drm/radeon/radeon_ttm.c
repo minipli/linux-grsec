@@ -875,7 +875,7 @@ static int radeon_ttm_debugfs_init(struct radeon_device *rdev)
 			.show = &ttm_dma_page_alloc_debugfs,
 		},
 	};
-	unsigned i;
+	unsigned i = RADEON_DEBUGFS_MEM_TYPES + 1;
 
 	pax_open_kernel();
 	*(void **)&radeon_mem_types_list[0].data = rdev->mman.bdev.man[TTM_PL_VRAM].priv;

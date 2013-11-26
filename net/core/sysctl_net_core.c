@@ -199,7 +199,7 @@ static int set_default_qdisc(struct ctl_table *table, int write,
 			     void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	char id[IFNAMSIZ];
-	struct ctl_table tbl = {
+	ctl_table_no_const tbl = {
 		.data = id,
 		.maxlen = IFNAMSIZ,
 	};

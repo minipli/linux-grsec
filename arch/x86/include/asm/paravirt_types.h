@@ -343,7 +343,7 @@ typedef u16 __ticket_t;
 struct pv_lock_ops {
 	struct paravirt_callee_save lock_spinning;
 	void (*unlock_kick)(struct arch_spinlock *lock, __ticket_t ticket);
-} __no_const;
+};
 
 /* This contains all the paravirt structures: we get a convenient
  * number for each function using the offset which we use to indicate
