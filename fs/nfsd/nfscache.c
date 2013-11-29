@@ -259,13 +259,16 @@ nfsd_cache_update(struct svc_rqst *rqstp, int cachetype, __be32 *statp)
 {
 	struct svc_cacherep *rp;
 	struct kvec	*resv = &rqstp->rq_res.head[0], *cachv;
-	int		len;
+	long		len;
 
 	if (!(rp = rqstp->rq_cacherep) || cache_disabled)
 		return;
 
-	len = resv->iov_len - ((char*)statp - (char*)resv->iov_base);
-	len >>= 2;
+	if (statp) {
+		len = (char*)statp - (char*)resv->iov_base;
+		len = resv->iov_len - len;
+		len >>= 2;
+	}
 
 	/* Don't cache excessive amounts of data and XDR failures */
 	if (!statp || len > (256 >> 2)) {

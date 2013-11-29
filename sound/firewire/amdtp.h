@@ -146,7 +146,7 @@ static inline void amdtp_out_stream_pcm_prepare(struct amdtp_out_stream *s)
 static inline void amdtp_out_stream_pcm_trigger(struct amdtp_out_stream *s,
 						struct snd_pcm_substream *pcm)
 {
-	ACCESS_ONCE(s->pcm) = pcm;
+	ACCESS_ONCE_RW(s->pcm) = pcm;
 }
 
 /**

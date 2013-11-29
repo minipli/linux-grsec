@@ -52,8 +52,13 @@ void task_mem(struct seq_file *m, struct mm_struct *mm)
 		"VmExe:\t%8lu kB\n"
 		"VmLib:\t%8lu kB\n"
 		"VmPTE:\t%8lu kB\n"
-		"VmSwap:\t%8lu kB\n",
-		hiwater_vm << (PAGE_SHIFT-10),
+		"VmSwap:\t%8lu kB\n"
+
+#ifdef CONFIG_ARCH_TRACK_EXEC_LIMIT
+		"CsBase:\t%8lx\nCsLim:\t%8lx\n"
+#endif
+
+		,hiwater_vm << (PAGE_SHIFT-10),
 		(total_vm - mm->reserved_vm) << (PAGE_SHIFT-10),
 		mm->locked_vm << (PAGE_SHIFT-10),
 		mm->pinned_vm << (PAGE_SHIFT-10),
@@ -62,7 +67,13 @@ void task_mem(struct seq_file *m, struct mm_struct *mm)
 		data << (PAGE_SHIFT-10),
 		mm->stack_vm << (PAGE_SHIFT-10), text, lib,
 		(PTRS_PER_PTE*sizeof(pte_t)*mm->nr_ptes) >> 10,
-		swap << (PAGE_SHIFT-10));
+		swap << (PAGE_SHIFT-10)
+
+#ifdef CONFIG_ARCH_TRACK_EXEC_LIMIT
+		, mm->context.user_cs_base, mm->context.user_cs_limit
+#endif
+
+	);
 }
 
 unsigned long task_vsize(struct mm_struct *mm)
@@ -227,20 +238,23 @@ static void show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 		pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;
 	}
 
-	/* We don't show the stack guard page in /proc/maps */
 	start = vma->vm_start;
-	if (stack_guard_page_start(vma, start))
-		start += PAGE_SIZE;
 	end = vma->vm_end;
-	if (stack_guard_page_end(vma, end))
-		end -= PAGE_SIZE;
 
 	seq_printf(m, "%08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %n",
 			start,
 			end,
+
+#if 0
+			flags & VM_MAYREAD ? flags & VM_READ ? 'R' : '+' : flags & VM_READ ? 'r' : '-',
+			flags & VM_MAYWRITE ? flags & VM_WRITE ? 'W' : '+' : flags & VM_WRITE ? 'w' : '-',
+			flags & VM_MAYEXEC ? flags & VM_EXEC ? 'X' : '+' : flags & VM_EXEC ? 'x' : '-',
+#else
 			flags & VM_READ ? 'r' : '-',
 			flags & VM_WRITE ? 'w' : '-',
 			flags & VM_EXEC ? 'x' : '-',
+#endif
+
 			flags & VM_MAYSHARE ? 's' : 'p',
 			pgoff,
 			MAJOR(dev), MINOR(dev), ino, &len);
@@ -251,7 +265,7 @@ static void show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 	 */
 	if (file) {
 		pad_len_spaces(m, len);
-		seq_path(m, &file->f_path, "\n");
+		seq_path(m, &file->f_path, "\n\\");
 	} else {
 		const char *name = arch_vma_name(vma);
 		if (!name) {
@@ -259,8 +273,9 @@ static void show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 				if (vma->vm_start <= mm->brk &&
 						vma->vm_end >= mm->start_brk) {
 					name = "[heap]";
-				} else if (vma->vm_start <= mm->start_stack &&
-					   vma->vm_end >= mm->start_stack) {
+				} else if ((vma->vm_flags & (VM_GROWSDOWN | VM_GROWSUP)) ||
+					   (vma->vm_start <= mm->start_stack &&
+					    vma->vm_end >= mm->start_stack)) {
 					name = "[stack]";
 				}
 			} else {
@@ -1045,7 +1060,7 @@ static int show_numa_map(struct seq_file *m, void *v)
 
 	if (file) {
 		seq_printf(m, " file=");
-		seq_path(m, &file->f_path, "\n\t= ");
+		seq_path(m, &file->f_path, "\n\t\\= ");
 	} else if (vma->vm_start <= mm->brk && vma->vm_end >= mm->start_brk) {
 		seq_printf(m, " heap");
 	} else if (vma->vm_start <= mm->start_stack &&
