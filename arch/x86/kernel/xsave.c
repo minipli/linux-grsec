@@ -199,6 +199,7 @@ static inline int save_user_xstate(struct xsave_struct __user *buf)
 {
 	int err;
 
+	buf = (struct xsave_struct __user *)____m(buf);
 	if (use_xsave())
 		err = xsave_user(buf);
 	else if (use_fxsr())
@@ -311,6 +312,7 @@ sanitize_restored_xstate(struct task_struct *tsk,
  */
 static inline int restore_user_xstate(void __user *buf, u64 xbv, int fx_only)
 {
+	buf = (void __user *)____m(buf);
 	if (use_xsave()) {
 		if ((unsigned long)buf % 64 || fx_only) {
 			u64 init_bv = pcntxt_mask & ~XSTATE_FPSSE;
