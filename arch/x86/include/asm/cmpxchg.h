@@ -14,6 +14,8 @@ extern void __cmpxchg_wrong_size(void)
 	__compiletime_error("Bad argument size for cmpxchg");
 extern void __xadd_wrong_size(void)
 	__compiletime_error("Bad argument size for xadd");
+extern void __xadd_check_overflow_wrong_size(void)
+	__compiletime_error("Bad argument size for xadd_check_overflow");
 
 /*
  * Constants for operation sizes. On 32-bit, the 64-bit size it set to
@@ -195,6 +197,34 @@ extern void __xadd_wrong_size(void)
 		__ret;							\
 	})
 
+#define __xadd_check_overflow(ptr, inc, lock)				\
+	({								\
+	        __typeof__ (*(ptr)) __ret = (inc);			\
+		switch (sizeof(*(ptr))) {				\
+		case __X86_CASE_L:					\
+			asm volatile (lock "xaddl %0, %1\n"		\
+				      "jno 0f\n"			\
+				      "mov %0,%1\n"			\
+				      "int $4\n0:\n"			\
+				      _ASM_EXTABLE(0b, 0b)		\
+				      : "+r" (__ret), "+m" (*(ptr))	\
+				      : : "memory", "cc");		\
+			break;						\
+		case __X86_CASE_Q:					\
+			asm volatile (lock "xaddq %q0, %1\n"		\
+				      "jno 0f\n"			\
+				      "mov %0,%1\n"			\
+				      "int $4\n0:\n"			\
+				      _ASM_EXTABLE(0b, 0b)		\
+				      : "+r" (__ret), "+m" (*(ptr))	\
+				      : : "memory", "cc");		\
+			break;						\
+		default:						\
+			__xadd_check_overflow_wrong_size();		\
+		}							\
+		__ret;							\
+	})
+
 /*
  * xadd() adds "inc" to "*ptr" and atomically returns the previous
  * value of "*ptr".
@@ -206,5 +236,7 @@ extern void __xadd_wrong_size(void)
 #define xadd(ptr, inc)		__xadd((ptr), (inc), LOCK_PREFIX)
 #define xadd_sync(ptr, inc)	__xadd((ptr), (inc), "lock; ")
 #define xadd_local(ptr, inc)	__xadd((ptr), (inc), "")
+
+#define xadd_check_overflow(ptr, inc)	__xadd_check_overflow((ptr), (inc), LOCK_PREFIX)
 
 #endif	/* ASM_X86_CMPXCHG_H */

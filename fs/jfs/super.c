@@ -780,6 +780,7 @@ static struct file_system_type jfs_fs_type = {
 	.kill_sb	= kill_block_super,
 	.fs_flags	= FS_REQUIRES_DEV,
 };
+MODULE_ALIAS_FS("jfs");
 
 static void init_once(void *foo)
 {
@@ -802,7 +803,7 @@ static int __init init_jfs_fs(void)
 
 	jfs_inode_cachep =
 	    kmem_cache_create("jfs_ip", sizeof(struct jfs_inode_info), 0,
-			    SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD,
+			    SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD|SLAB_USERCOPY,
 			    init_once);
 	if (jfs_inode_cachep == NULL)
 		return -ENOMEM;

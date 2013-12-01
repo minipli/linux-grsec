@@ -9,6 +9,7 @@
 #include <linux/module.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
+#include <linux/sched.h>
 
 #include <asm/uaccess.h>
 #include <asm/page.h>
@@ -40,6 +41,9 @@ int seq_open(struct file *file, const struct seq_operations *op)
 	memset(p, 0, sizeof(*p));
 	mutex_init(&p->lock);
 	p->op = op;
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	p->exec_id = current->exec_id;
+#endif
 
 	/*
 	 * Wrappers around seq_open(e.g. swaps_open) need to be
@@ -76,7 +80,11 @@ static int traverse(struct seq_file *m, loff_t offset)
 		return 0;
 	}
 	if (!m->buf) {
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		m->buf = kmalloc(m->size = PAGE_SIZE, GFP_KERNEL | GFP_USERCOPY);
+#else
 		m->buf = kmalloc(m->size = PAGE_SIZE, GFP_KERNEL);
+#endif
 		if (!m->buf)
 			return -ENOMEM;
 	}
@@ -116,7 +124,11 @@ static int traverse(struct seq_file *m, loff_t offset)
 Eoverflow:
 	m->op->stop(m, p);
 	kfree(m->buf);
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	m->buf = kmalloc(m->size <<= 1, GFP_KERNEL | GFP_USERCOPY);
+#else
 	m->buf = kmalloc(m->size <<= 1, GFP_KERNEL);
+#endif
 	return !m->buf ? -ENOMEM : -EAGAIN;
 }
 
@@ -132,7 +144,7 @@ Eoverflow:
 ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 {
 	struct seq_file *m = file->private_data;
-	size_t copied = 0;
+	ssize_t copied = 0;
 	loff_t pos;
 	size_t n;
 	void *p;
@@ -169,7 +181,11 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 	m->version = file->f_version;
 	/* grab buffer if we didn't have one */
 	if (!m->buf) {
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		m->buf = kmalloc(m->size = PAGE_SIZE, GFP_KERNEL | GFP_USERCOPY);
+#else
 		m->buf = kmalloc(m->size = PAGE_SIZE, GFP_KERNEL);
+#endif
 		if (!m->buf)
 			goto Enomem;
 	}
@@ -210,7 +226,11 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 			goto Fill;
 		m->op->stop(m, p);
 		kfree(m->buf);
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		m->buf = kmalloc(m->size <<= 1, GFP_KERNEL | GFP_USERCOPY);
+#else
 		m->buf = kmalloc(m->size <<= 1, GFP_KERNEL);
+#endif
 		if (!m->buf)
 			goto Enomem;
 		m->count = 0;
@@ -549,7 +569,7 @@ static void single_stop(struct seq_file *p, void *v)
 int single_open(struct file *file, int (*show)(struct seq_file *, void *),
 		void *data)
 {
-	struct seq_operations *op = kmalloc(sizeof(*op), GFP_KERNEL);
+	seq_operations_no_const *op = kzalloc(sizeof(*op), GFP_KERNEL);
 	int res = -ENOMEM;
 
 	if (op) {

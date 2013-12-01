@@ -158,6 +158,12 @@ static int set_one_prio(struct task_struct *p, int niceval, int error)
 		error = -EACCES;
 		goto out;
 	}
+
+	if (gr_handle_chroot_setpriority(p, niceval)) {
+		error = -EACCES;
+		goto out;
+	}
+
 	no_nice = security_task_setnice(p, niceval);
 	if (no_nice) {
 		error = no_nice;
@@ -597,6 +603,9 @@ SYSCALL_DEFINE2(setregid, gid_t, rgid, gid_t, egid)
 			goto error;
 	}
 
+	if (gr_check_group_change(new->gid, new->egid, -1))
+		goto error;
+
 	if (rgid != (gid_t) -1 ||
 	    (egid != (gid_t) -1 && egid != old->gid))
 		new->sgid = new->egid;
@@ -626,6 +635,10 @@ SYSCALL_DEFINE1(setgid, gid_t, gid)
 	old = current_cred();
 
 	retval = -EPERM;
+
+	if (gr_check_group_change(gid, gid, gid))
+		goto error;
+
 	if (nsown_capable(CAP_SETGID))
 		new->gid = new->egid = new->sgid = new->fsgid = gid;
 	else if (gid == old->gid || gid == old->sgid)
@@ -643,7 +656,7 @@ error:
 /*
  * change the user struct in a credentials set to match the new UID
  */
-static int set_user(struct cred *new)
+int set_user(struct cred *new)
 {
 	struct user_struct *new_user;
 
@@ -713,6 +726,9 @@ SYSCALL_DEFINE2(setreuid, uid_t, ruid, uid_t, euid)
 			goto error;
 	}
 
+	if (gr_check_user_change(new->uid, new->euid, -1))
+		goto error;
+
 	if (new->uid != old->uid) {
 		retval = set_user(new);
 		if (retval < 0)
@@ -757,6 +773,12 @@ SYSCALL_DEFINE1(setuid, uid_t, uid)
 	old = current_cred();
 
 	retval = -EPERM;
+
+	if (gr_check_crash_uid(uid))
+		goto error;
+	if (gr_check_user_change(uid, uid, uid))
+		goto error;
+
 	if (nsown_capable(CAP_SETUID)) {
 		new->suid = new->uid = uid;
 		if (uid != old->uid) {
@@ -810,6 +832,9 @@ SYSCALL_DEFINE3(setresuid, uid_t, ruid, uid_t, euid, uid_t, suid)
 		    suid != old->euid  && suid != old->suid)
 			goto error;
 	}
+
+	if (gr_check_user_change(ruid, euid, -1))
+		goto error;
 
 	if (ruid != (uid_t) -1) {
 		new->uid = ruid;
@@ -875,6 +900,9 @@ SYSCALL_DEFINE3(setresgid, gid_t, rgid, gid_t, egid, gid_t, sgid)
 			goto error;
 	}
 
+	if (gr_check_group_change(rgid, egid, -1))
+		goto error;
+
 	if (rgid != (gid_t) -1)
 		new->gid = rgid;
 	if (egid != (gid_t) -1)
@@ -925,12 +953,16 @@ SYSCALL_DEFINE1(setfsuid, uid_t, uid)
 	    uid == old->suid || uid == old->fsuid ||
 	    nsown_capable(CAP_SETUID)) {
 		if (uid != old_fsuid) {
+			if (gr_check_user_change(-1, -1, uid))
+				goto error;
+
 			new->fsuid = uid;
 			if (security_task_fix_setuid(new, old, LSM_SETID_FS) == 0)
 				goto change_okay;
 		}
 	}
 
+error:
 	abort_creds(new);
 	return old_fsuid;
 
@@ -957,12 +989,16 @@ SYSCALL_DEFINE1(setfsgid, gid_t, gid)
 	if (gid == old->gid  || gid == old->egid  ||
 	    gid == old->sgid || gid == old->fsgid ||
 	    nsown_capable(CAP_SETGID)) {
+		if (gr_check_group_change(-1, -1, gid))
+			goto error;
+
 		if (gid != old_fsgid) {
 			new->fsgid = gid;
 			goto change_okay;
 		}
 	}
 
+error:
 	abort_creds(new);
 	return old_fsgid;
 
@@ -1270,19 +1306,19 @@ SYSCALL_DEFINE1(olduname, struct oldold_utsname __user *, name)
 		return -EFAULT;
 
 	down_read(&uts_sem);
-	error = __copy_to_user(&name->sysname, &utsname()->sysname,
+	error = __copy_to_user(name->sysname, &utsname()->sysname,
 			       __OLD_UTS_LEN);
 	error |= __put_user(0, name->sysname + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->nodename, &utsname()->nodename,
+	error |= __copy_to_user(name->nodename, &utsname()->nodename,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->nodename + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->release, &utsname()->release,
+	error |= __copy_to_user(name->release, &utsname()->release,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->release + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->version, &utsname()->version,
+	error |= __copy_to_user(name->version, &utsname()->version,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->version + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->machine, &utsname()->machine,
+	error |= __copy_to_user(name->machine, &utsname()->machine,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->machine + __OLD_UTS_LEN);
 	up_read(&uts_sem);
@@ -1484,6 +1520,13 @@ int do_prlimit(struct task_struct *tsk, unsigned int resource,
 			 */
 			new_rlim->rlim_cur = 1;
 		}
+		/* Handle the case where a fork and setuid occur and then RLIMIT_NPROC
+		   is changed to a lower value.  Since tasks can be created by the same
+		   user in between this limit change and an execve by this task, force
+		   a recheck only for this task by setting PF_NPROC_EXCEEDED
+		*/
+		if (resource == RLIMIT_NPROC && tsk->real_cred->user != INIT_USER)
+			tsk->flags |= PF_NPROC_EXCEEDED;
 	}
 	if (!retval) {
 		if (old_rlim)
@@ -1747,7 +1790,7 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			error = get_dumpable(me->mm);
 			break;
 		case PR_SET_DUMPABLE:
-			if (arg2 < 0 || arg2 > 1) {
+			if (arg2 > 1) {
 				error = -EINVAL;
 				break;
 			}
@@ -1808,7 +1851,7 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			error = prctl_get_seccomp();
 			break;
 		case PR_SET_SECCOMP:
-			error = prctl_set_seccomp(arg2);
+			error = prctl_set_seccomp(arg2, (char __user *)arg3);
 			break;
 		case PR_GET_TSC:
 			error = GET_TSC_CTL(arg2);
@@ -1868,6 +1911,16 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			else
 				error = PR_MCE_KILL_DEFAULT;
 			break;
+		case PR_SET_NO_NEW_PRIVS:
+			if (arg2 != 1 || arg3 || arg4 || arg5)
+				return -EINVAL;
+
+			current->no_new_privs = 1;
+			break;
+		case PR_GET_NO_NEW_PRIVS:
+			if (arg2 || arg3 || arg4 || arg5)
+				return -EINVAL;
+			return current->no_new_privs ? 1 : 0;
 		default:
 			error = -EINVAL;
 			break;
