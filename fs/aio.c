@@ -280,7 +280,7 @@ static int aio_setup_ring(struct kioctx *ctx)
 	size += sizeof(struct io_event) * nr_events;
 
 	nr_pages = PFN_UP(size);
-	if (nr_pages < 0)
+	if (nr_pages <= 0)
 		return -EINVAL;
 
 	file = anon_inode_getfile_private("[aio]", &aio_ring_fops, ctx, O_RDWR);
