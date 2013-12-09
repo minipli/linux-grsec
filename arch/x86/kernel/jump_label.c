@@ -49,7 +49,7 @@ static void __jump_label_transform(struct jump_entry *entry,
 		 * We are enabling this jump label. If it is not a nop
 		 * then something must have gone wrong.
 		 */
-		if (unlikely(memcmp((void *)entry->code, ideal_nop, 5) != 0))
+		if (unlikely(memcmp((void *)ktla_ktva(entry->code), ideal_nop, 5) != 0))
 			bug_at((void *)entry->code, __LINE__);
 
 		code.jump = 0xe9;
@@ -64,13 +64,13 @@ static void __jump_label_transform(struct jump_entry *entry,
 		 */
 		if (init) {
 			const unsigned char default_nop[] = { STATIC_KEY_INIT_NOP };
-			if (unlikely(memcmp((void *)entry->code, default_nop, 5) != 0))
+			if (unlikely(memcmp((void *)ktla_ktva(entry->code), default_nop, 5) != 0))
 				bug_at((void *)entry->code, __LINE__);
 		} else {
 			code.jump = 0xe9;
 			code.offset = entry->target -
 				(entry->code + JUMP_LABEL_NOP_SIZE);
-			if (unlikely(memcmp((void *)entry->code, &code, 5) != 0))
+			if (unlikely(memcmp((void *)ktla_ktva(entry->code), &code, 5) != 0))
 				bug_at((void *)entry->code, __LINE__);
 		}
 		memcpy(&code, ideal_nops[NOP_ATOMIC5], JUMP_LABEL_NOP_SIZE);

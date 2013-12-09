@@ -135,12 +135,12 @@ enum kprobe_slot_state {
 
 static void *alloc_insn_page(void)
 {
-	return module_alloc(PAGE_SIZE);
+	return module_alloc_exec(PAGE_SIZE);
 }
 
 static void free_insn_page(void *page)
 {
-	module_free(NULL, page);
+	module_free_exec(NULL, page);
 }
 
 struct kprobe_insn_cache kprobe_insn_slots = {
@@ -2066,7 +2066,7 @@ static int __init init_kprobes(void)
 {
 	int i, err = 0;
 	unsigned long offset = 0, size = 0;
-	char *modname, namebuf[128];
+	char *modname, namebuf[KSYM_NAME_LEN];
 	const char *symbol_name;
 	void *addr;
 	struct kprobe_blackpoint *kb;
@@ -2192,7 +2192,7 @@ static int __kprobes show_kprobe_addr(struct seq_file *pi, void *v)
 	const char *sym = NULL;
 	unsigned int i = *(loff_t *) v;
 	unsigned long offset = 0;
-	char *modname, namebuf[128];
+	char *modname, namebuf[KSYM_NAME_LEN];
 
 	head = &kprobe_table[i];
 	preempt_disable();
