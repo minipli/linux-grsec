@@ -5167,6 +5167,7 @@ __vxge_hw_vpath_tim_configure_44093 __vxge_hw_vpath_tim_configure 2 44093 NULL
 xlog_recover_add_to_cont_trans_44102 xlog_recover_add_to_cont_trans 4 44102 NULL
 skb_frag_dma_map_44112 skb_frag_dma_map 0 44112 NULL
 tracing_set_trace_read_44122 tracing_set_trace_read 3 44122 NULL
+hwif_to_node_44127 hwif_to_node 0 44127 NULL
 SyS_process_vm_writev_44129 SyS_process_vm_writev 3-5 44129 NULL
 vmw_gmr_bind_44130 vmw_gmr_bind 3 44130 NULL
 lookup_extent_data_ref_44136 lookup_extent_data_ref 0 44136 NULL
@@ -5212,7 +5213,6 @@ drm_buffer_alloc_44405 drm_buffer_alloc 2 44405 NULL
 osst_do_scsi_44410 osst_do_scsi 4 44410 NULL
 check_user_page_hwpoison_44412 check_user_page_hwpoison 1 44412 NULL
 ieee80211_if_read_rc_rateidx_mcs_mask_5ghz_44423 ieee80211_if_read_rc_rateidx_mcs_mask_5ghz 3 44423 NULL
-prandom_u32_state_44445 prandom_u32_state 0 44445 NULL
 iwl_dbgfs_bf_params_write_44450 iwl_dbgfs_bf_params_write 3 44450 NULL
 write_file_debug_44476 write_file_debug 3 44476 NULL
 btrfs_chunk_item_size_44478 btrfs_chunk_item_size 0-1 44478 NULL
@@ -7315,7 +7315,6 @@ SYSC_setgroups16_62232 SYSC_setgroups16 1 62232 NULL
 nfsd_read_file_62241 nfsd_read_file 6 62241 NULL
 allocate_partition_62245 allocate_partition 4 62245 NULL
 security_file_permission_62278 security_file_permission 0 62278 NULL
-get_random_int_62279 get_random_int 0 62279 NULL
 __qib_get_user_pages_62287 __qib_get_user_pages 1-2 62287 NULL
 il_dbgfs_sram_read_62296 il_dbgfs_sram_read 3 62296 NULL
 sparse_early_usemaps_alloc_pgdat_section_62304 sparse_early_usemaps_alloc_pgdat_section 2 62304 NULL

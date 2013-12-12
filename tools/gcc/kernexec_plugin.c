@@ -381,7 +381,9 @@ static unsigned int execute_kernexec_retaddr(void)
 {
 	rtx insn;
 
-if (stack_realign_drap) inform(DECL_SOURCE_LOCATION(current_function_decl), "drap detected in %s\n", IDENTIFIER_POINTER(DECL_NAME(current_function_decl)));
+//	if (stack_realign_drap)
+//		inform(DECL_SOURCE_LOCATION(current_function_decl), "drap detected in %s\n", IDENTIFIER_POINTER(DECL_NAME(current_function_decl)));
+
 	// 1. find function returns
 	for (insn = get_insns(); insn; insn = NEXT_INSN(insn)) {
 		// rtl match: (jump_insn 41 40 42 2 (return) fptr.c:42 634 {return_internal} (nil))
