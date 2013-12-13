@@ -105,6 +105,8 @@ ftrace_modify_code_direct(unsigned long ip, unsigned const char *old_code,
 {
 	unsigned char replaced[MCOUNT_INSN_SIZE];
 
+	ip = ktla_ktva(ip);
+
 	/*
 	 * Note: Due to modules and __init, code can
 	 *  disappear and change, we need to protect against faulting
@@ -227,7 +229,7 @@ int ftrace_update_ftrace_func(ftrace_func_t func)
 	unsigned char old[MCOUNT_INSN_SIZE], *new;
 	int ret;
 
-	memcpy(old, &ftrace_call, MCOUNT_INSN_SIZE);
+	memcpy(old, (void *)ktla_ktva((unsigned long)ftrace_call), MCOUNT_INSN_SIZE);
 	new = ftrace_call_replace(ip, (unsigned long)func);
 
 	/* See comment above by declaration of modifying_ftrace_code */
@@ -238,7 +240,7 @@ int ftrace_update_ftrace_func(ftrace_func_t func)
 	/* Also update the regs callback function */
 	if (!ret) {
 		ip = (unsigned long)(&ftrace_regs_call);
-		memcpy(old, &ftrace_regs_call, MCOUNT_INSN_SIZE);
+		memcpy(old, ktla_ktva((void *)&ftrace_regs_call), MCOUNT_INSN_SIZE);
 		new = ftrace_call_replace(ip, (unsigned long)func);
 		ret = ftrace_modify_code(ip, old, new);
 	}
@@ -291,7 +293,7 @@ static int ftrace_write(unsigned long ip, const char *val, int size)
 	 * kernel identity mapping to modify code.
 	 */
 	if (within(ip, (unsigned long)_text, (unsigned long)_etext))
-		ip = (unsigned long)__va(__pa_symbol(ip));
+		ip = (unsigned long)__va(__pa_symbol(ktla_ktva(ip)));
 
 	return probe_kernel_write((void *)ip, val, size);
 }
@@ -301,7 +303,7 @@ static int add_break(unsigned long ip, const char *old)
 	unsigned char replaced[MCOUNT_INSN_SIZE];
 	unsigned char brk = BREAKPOINT_INSTRUCTION;
 
-	if (probe_kernel_read(replaced, (void *)ip, MCOUNT_INSN_SIZE))
+	if (probe_kernel_read(replaced, (void *)ktla_ktva(ip), MCOUNT_INSN_SIZE))
 		return -EFAULT;
 
 	/* Make sure it is what we expect it to be */
@@ -649,7 +651,7 @@ ftrace_modify_code(unsigned long ip, unsigned const char *old_code,
 	return ret;
 
  fail_update:
-	probe_kernel_write((void *)ip, &old_code[0], 1);
+	probe_kernel_write((void *)ktla_ktva(ip), &old_code[0], 1);
 	goto out;
 }
 
@@ -681,6 +683,8 @@ static int ftrace_mod_jmp(unsigned long ip,
 			  int old_offset, int new_offset)
 {
 	unsigned char code[MCOUNT_INSN_SIZE];
+
+	ip = ktla_ktva(ip);
 
 	if (probe_kernel_read(code, (void *)ip, MCOUNT_INSN_SIZE))
 		return -EFAULT;

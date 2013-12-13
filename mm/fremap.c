@@ -163,6 +163,11 @@ SYSCALL_DEFINE5(remap_file_pages, unsigned long, start, unsigned long, size,
  retry:
 	vma = find_vma(mm, start);
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (vma && (mm->pax_flags & MF_PAX_SEGMEXEC) && (vma->vm_flags & VM_MAYEXEC))
+		goto out;
+#endif
+
 	/*
 	 * Make sure the vma is shared, that it supports prefaulting,
 	 * and that the remapped range is valid and fully within
@@ -218,6 +223,8 @@ get_write_lock:
 				BUG_ON(addr != start);
 				err = 0;
 			}
+			vm_flags = vma->vm_flags;
+			vma = NULL;
 			goto out;
 		}
 		mutex_lock(&mapping->i_mmap_mutex);
