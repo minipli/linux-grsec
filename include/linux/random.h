@@ -77,12 +77,12 @@ extern const struct file_operations random_fops, urandom_fops;
 unsigned int get_random_int(void);
 unsigned long randomize_range(unsigned long start, unsigned long end, unsigned long len);
 
-u32 random32(void);
+u32 random32(void) __intentional_overflow(-1);
 void srandom32(u32 seed);
 
-u32 prandom32(struct rnd_state *);
+u32 prandom32(struct rnd_state *) __intentional_overflow(-1);
 
-static inline unsigned long pax_get_random_long(void)
+static inline unsigned long __intentional_overflow(-1) pax_get_random_long(void)
 {
 	return random32() + (sizeof(long) > 4 ? (unsigned long)random32() << 32 : 0);
 }
