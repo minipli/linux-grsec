@@ -199,7 +199,7 @@ struct wahc {
 	spinlock_t xfer_list_lock;
 	struct work_struct xfer_enqueue_work;
 	struct work_struct xfer_error_work;
-	atomic_t xfer_id_count;
+	atomic_unchecked_t xfer_id_count;
 };
 
 
@@ -255,7 +255,7 @@ static inline void wa_init(struct wahc *wa)
 	spin_lock_init(&wa->xfer_list_lock);
 	INIT_WORK(&wa->xfer_enqueue_work, wa_urb_enqueue_run);
 	INIT_WORK(&wa->xfer_error_work, wa_process_errored_transfers_run);
-	atomic_set(&wa->xfer_id_count, 1);
+	atomic_set_unchecked(&wa->xfer_id_count, 1);
 }
 
 /**

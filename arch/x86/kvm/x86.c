@@ -1779,8 +1779,8 @@ static int xen_hvm_config(struct kvm_vcpu *vcpu, u64 data)
 {
 	struct kvm *kvm = vcpu->kvm;
 	int lm = is_long_mode(vcpu);
-	u8 *blob_addr = lm ? (u8 *)(long)kvm->arch.xen_hvm_config.blob_addr_64
-		: (u8 *)(long)kvm->arch.xen_hvm_config.blob_addr_32;
+	u8 __user *blob_addr = lm ? (u8 __user *)(long)kvm->arch.xen_hvm_config.blob_addr_64
+		: (u8 __user *)(long)kvm->arch.xen_hvm_config.blob_addr_32;
 	u8 blob_size = lm ? kvm->arch.xen_hvm_config.blob_size_64
 		: kvm->arch.xen_hvm_config.blob_size_32;
 	u32 page_num = data & ~PAGE_MASK;
@@ -2663,6 +2663,8 @@ long kvm_arch_dev_ioctl(struct file *filp,
 		if (n < msr_list.nmsrs)
 			goto out;
 		r = -EFAULT;
+		if (num_msrs_to_save > ARRAY_SIZE(msrs_to_save))
+			goto out;
 		if (copy_to_user(user_msr_list->indices, &msrs_to_save,
 				 num_msrs_to_save * sizeof(u32)))
 			goto out;
@@ -3192,8 +3194,7 @@ long kvm_arch_vcpu_ioctl(struct file *filp,
 		r = -EFAULT;
 		if (copy_from_user(&va, argp, sizeof va))
 			goto out;
-		r = 0;
-		kvm_lapic_set_vapic_addr(vcpu, va.vapic_addr);
+		r = kvm_lapic_set_vapic_addr(vcpu, va.vapic_addr);
 		break;
 	}
 	case KVM_X86_SETUP_MCE: {
@@ -5462,7 +5463,7 @@ static struct notifier_block pvclock_gtod_notifier = {
 };
 #endif
 
-int kvm_arch_init(void *opaque)
+int kvm_arch_init(const void *opaque)
 {
 	int r;
 	struct kvm_x86_ops *ops = opaque;
@@ -5716,36 +5717,6 @@ static void post_kvm_run_save(struct kvm_vcpu *vcpu)
 			kvm_arch_interrupt_allowed(vcpu) &&
 			!kvm_cpu_has_interrupt(vcpu) &&
 			!kvm_event_needs_reinjection(vcpu);
-}
-
-static int vapic_enter(struct kvm_vcpu *vcpu)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-	struct page *page;
-
-	if (!apic || !apic->vapic_addr)
-		return 0;
-
-	page = gfn_to_page(vcpu->kvm, apic->vapic_addr >> PAGE_SHIFT);
-	if (is_error_page(page))
-		return -EFAULT;
-
-	vcpu->arch.apic->vapic_page = page;
-	return 0;
-}
-
-static void vapic_exit(struct kvm_vcpu *vcpu)
-{
-	struct kvm_lapic *apic = vcpu->arch.apic;
-	int idx;
-
-	if (!apic || !apic->vapic_addr)
-		return;
-
-	idx = srcu_read_lock(&vcpu->kvm->srcu);
-	kvm_release_page_dirty(apic->vapic_page);
-	mark_page_dirty(vcpu->kvm, apic->vapic_addr >> PAGE_SHIFT);
-	srcu_read_unlock(&vcpu->kvm->srcu, idx);
 }
 
 static void update_cr8_intercept(struct kvm_vcpu *vcpu)
@@ -6047,11 +6018,6 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 	struct kvm *kvm = vcpu->kvm;
 
 	vcpu->srcu_idx = srcu_read_lock(&kvm->srcu);
-	r = vapic_enter(vcpu);
-	if (r) {
-		srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
-		return r;
-	}
 
 	r = 1;
 	while (r > 0) {
@@ -6109,8 +6075,6 @@ static int __vcpu_run(struct kvm_vcpu *vcpu)
 	}
 
 	srcu_read_unlock(&kvm->srcu, vcpu->srcu_idx);
-
-	vapic_exit(vcpu);
 
 	return r;
 }
