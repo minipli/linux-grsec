@@ -2596,7 +2596,6 @@ bitmap_clear_bits_22227 bitmap_clear_bits 3 22227 &rfcomm_sock_recvmsg_22227
 mem_write_22232 mem_write 3 22232 NULL
 p9_virtio_zc_request_22240 p9_virtio_zc_request 6-5 22240 NULL
 fsnotify_parent_22243 fsnotify_parent 0 22243 NULL
-atomic64_xchg_22246 atomic64_xchg 0 22246 NULL
 compat_process_vm_rw_22254 compat_process_vm_rw 3-5 22254 NULL
 ping_common_sendmsg_22261 ping_common_sendmsg 5 22261 NULL
 add_res_tree_22263 add_res_tree 7 22263 NULL
@@ -3961,7 +3960,6 @@ bin_string_33884 bin_string 3-5 33884 NULL
 get_user_pages_33908 get_user_pages 0-3-4 33908 NULL
 ath6kl_roam_mode_write_33912 ath6kl_roam_mode_write 3 33912 NULL
 queue_logical_block_size_33918 queue_logical_block_size 0 33918 NULL
-atomic64_add_return_33927 atomic64_add_return 0-1 33927 NULL
 sel_read_avc_cache_threshold_33942 sel_read_avc_cache_threshold 3 33942 NULL
 lpfc_idiag_ctlacc_read_33943 lpfc_idiag_ctlacc_read 3 33943 NULL
 read_file_tgt_rx_stats_33944 read_file_tgt_rx_stats 3 33944 NULL nohasharray
@@ -4600,7 +4598,6 @@ _zd_iowrite32v_async_locked_39034 _zd_iowrite32v_async_locked 3 39034 NULL
 do_write_kmem_39051 do_write_kmem 1-3-0 39051 NULL
 gen_pool_create_39064 gen_pool_create 2 39064 NULL
 ext4_init_block_bitmap_39071 ext4_init_block_bitmap 3 39071 NULL
-atomic64_add_negative_39098 atomic64_add_negative 1 39098 NULL
 ReadHFC_39104 ReadHFC 0 39104 NULL
 tomoyo_truncate_39105 tomoyo_truncate 0 39105 NULL
 leb_write_lock_39111 leb_write_lock 0 39111 NULL
