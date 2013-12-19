@@ -468,7 +468,7 @@ ENDPROC(pax_erase_kstack)
 
 .macro TRACE_IRQS_IRETQ offset=ARGOFFSET
 #ifdef CONFIG_TRACE_IRQFLAGS
-	bt   $X86_EFLAGS_IF_BIT,EFLAGS-\offset(%rsp)	/* interrupts off? */
+	bt   $9,EFLAGS-\offset(%rsp)	/* interrupts off? */
 	jnc  1f
 	TRACE_IRQS_ON
 1:
