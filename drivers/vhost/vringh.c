@@ -800,7 +800,7 @@ static inline int getu16_kern(u16 *val, const u16 *p)
 
 static inline int putu16_kern(u16 *p, u16 val)
 {
-	ACCESS_ONCE(*p) = val;
+	ACCESS_ONCE_RW(*p) = val;
 	return 0;
 }
 

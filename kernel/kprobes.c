@@ -31,6 +31,9 @@
  *		<jkenisto@us.ibm.com> and Prasanna S Panchamukhi
  *		<prasanna@in.ibm.com> added function-return probes.
  */
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+#define __INCLUDED_BY_HIDESYM 1
+#endif
 #include <linux/kprobes.h>
 #include <linux/hash.h>
 #include <linux/init.h>
@@ -135,12 +138,12 @@ enum kprobe_slot_state {
 
 static void *alloc_insn_page(void)
 {
-	return module_alloc(PAGE_SIZE);
+	return module_alloc_exec(PAGE_SIZE);
 }
 
 static void free_insn_page(void *page)
 {
-	module_free(NULL, page);
+	module_free_exec(NULL, page);
 }
 
 struct kprobe_insn_cache kprobe_insn_slots = {
@@ -2066,7 +2069,7 @@ static int __init init_kprobes(void)
 {
 	int i, err = 0;
 	unsigned long offset = 0, size = 0;
-	char *modname, namebuf[128];
+	char *modname, namebuf[KSYM_NAME_LEN];
 	const char *symbol_name;
 	void *addr;
 	struct kprobe_blackpoint *kb;
@@ -2151,11 +2154,11 @@ static void __kprobes report_probe(struct seq_file *pi, struct kprobe *p,
 		kprobe_type = "k";
 
 	if (sym)
-		seq_printf(pi, "%p  %s  %s+0x%x  %s ",
+		seq_printf(pi, "%pK  %s  %s+0x%x  %s ",
 			p->addr, kprobe_type, sym, offset,
 			(modname ? modname : " "));
 	else
-		seq_printf(pi, "%p  %s  %p ",
+		seq_printf(pi, "%pK  %s  %pK ",
 			p->addr, kprobe_type, p->addr);
 
 	if (!pp)
@@ -2192,7 +2195,7 @@ static int __kprobes show_kprobe_addr(struct seq_file *pi, void *v)
 	const char *sym = NULL;
 	unsigned int i = *(loff_t *) v;
 	unsigned long offset = 0;
-	char *modname, namebuf[128];
+	char *modname, namebuf[KSYM_NAME_LEN];
 
 	head = &kprobe_table[i];
 	preempt_disable();

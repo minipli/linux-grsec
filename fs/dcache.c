@@ -1570,7 +1570,7 @@ struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
 	 */
 	dentry->d_iname[DNAME_INLINE_LEN-1] = 0;
 	if (name->len > DNAME_INLINE_LEN-1) {
-		dname = kmalloc(name->len + 1, GFP_KERNEL);
+		dname = kmalloc(round_up(name->len + 1, sizeof(unsigned long)), GFP_KERNEL);
 		if (!dname) {
 			kmem_cache_free(dentry_cache, dentry); 
 			return NULL;
@@ -2893,6 +2893,7 @@ static int prepend_path(const struct path *path,
 restart:
 	bptr = *buffer;
 	blen = *buflen;
+	error = 0;
 	dentry = path->dentry;
 	vfsmnt = path->mnt;
 	mnt = real_mount(vfsmnt);
@@ -3432,7 +3433,8 @@ void __init vfs_caches_init(unsigned long mempages)
 	mempages -= reserve;
 
 	names_cachep = kmem_cache_create("names_cache", PATH_MAX, 0,
-			SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
+			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_USERCOPY|
+			SLAB_NO_SANITIZE, NULL);
 
 	dcache_init();
 	inode_init();
