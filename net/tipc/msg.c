@@ -93,7 +93,7 @@ int tipc_msg_build(struct tipc_msg *hdr, struct iovec const *msg_sect,
 	skb_copy_to_linear_data(*buf, hdr, hsz);
 	for (res = 1, cnt = 0; res && (cnt < num_sect); cnt++) {
 		skb_copy_to_linear_data_offset(*buf, pos,
-					       msg_sect[cnt].iov_base,
+					       (const void __force_kernel *)msg_sect[cnt].iov_base,
 					       msg_sect[cnt].iov_len);
 		pos += msg_sect[cnt].iov_len;
 	}
