@@ -153,6 +153,10 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 	struct anon_vma *anon_vma = vma->anon_vma;
 	struct anon_vma_chain *avc;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	struct anon_vma_chain *avc_m = NULL;
+#endif
+
 	might_sleep();
 	if (unlikely(!anon_vma)) {
 		struct mm_struct *mm = vma->vm_mm;
@@ -161,6 +165,12 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 		avc = anon_vma_chain_alloc(GFP_KERNEL);
 		if (!avc)
 			goto out_enomem;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		avc_m = anon_vma_chain_alloc(GFP_KERNEL);
+		if (!avc_m)
+			goto out_enomem_free_avc;
+#endif
 
 		anon_vma = find_mergeable_anon_vma(vma);
 		allocated = NULL;
@@ -175,6 +185,21 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 		/* page_table_lock to protect against threads */
 		spin_lock(&mm->page_table_lock);
 		if (likely(!vma->anon_vma)) {
+
+#ifdef CONFIG_PAX_SEGMEXEC
+			struct vm_area_struct *vma_m = pax_find_mirror_vma(vma);
+
+			if (vma_m) {
+				BUG_ON(vma_m->anon_vma);
+				vma_m->anon_vma = anon_vma;
+				avc_m->anon_vma = anon_vma;
+				avc_m->vma = vma;
+				list_add(&avc_m->same_vma, &vma_m->anon_vma_chain);
+				list_add(&avc_m->same_anon_vma, &anon_vma->head);
+				avc_m = NULL;
+			}
+#endif
+
 			vma->anon_vma = anon_vma;
 			avc->anon_vma = anon_vma;
 			avc->vma = vma;
@@ -188,12 +213,24 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 
 		if (unlikely(allocated))
 			put_anon_vma(allocated);
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if (unlikely(avc_m))
+			anon_vma_chain_free(avc_m);
+#endif
+
 		if (unlikely(avc))
 			anon_vma_chain_free(avc);
 	}
 	return 0;
 
  out_enomem_free_avc:
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (avc_m)
+		anon_vma_chain_free(avc_m);
+#endif
+
 	anon_vma_chain_free(avc);
  out_enomem:
 	return -ENOMEM;
@@ -244,7 +281,7 @@ static void anon_vma_chain_link(struct vm_area_struct *vma,
  * Attach the anon_vmas from src to dst.
  * Returns 0 on success, -ENOMEM on failure.
  */
-int anon_vma_clone(struct vm_area_struct *dst, struct vm_area_struct *src)
+int anon_vma_clone(struct vm_area_struct *dst, const struct vm_area_struct *src)
 {
 	struct anon_vma_chain *avc, *pavc;
 	struct anon_vma *root = NULL;
@@ -277,7 +314,7 @@ int anon_vma_clone(struct vm_area_struct *dst, struct vm_area_struct *src)
  * the corresponding VMA in the parent process is attached to.
  * Returns 0 on success, non-zero on failure.
  */
-int anon_vma_fork(struct vm_area_struct *vma, struct vm_area_struct *pvma)
+int anon_vma_fork(struct vm_area_struct *vma, const struct vm_area_struct *pvma)
 {
 	struct anon_vma_chain *avc;
 	struct anon_vma *anon_vma;
@@ -381,8 +418,10 @@ static void anon_vma_ctor(void *data)
 void __init anon_vma_init(void)
 {
 	anon_vma_cachep = kmem_cache_create("anon_vma", sizeof(struct anon_vma),
-			0, SLAB_DESTROY_BY_RCU|SLAB_PANIC, anon_vma_ctor);
-	anon_vma_chain_cachep = KMEM_CACHE(anon_vma_chain, SLAB_PANIC);
+			0, SLAB_DESTROY_BY_RCU|SLAB_PANIC|SLAB_NO_SANITIZE,
+			anon_vma_ctor);
+	anon_vma_chain_cachep = KMEM_CACHE(anon_vma_chain,
+			SLAB_PANIC|SLAB_NO_SANITIZE);
 }
 
 /*
@@ -581,7 +620,11 @@ pte_t *__page_check_address(struct page *page, struct mm_struct *mm,
 	spinlock_t *ptl;
 
 	if (unlikely(PageHuge(page))) {
+		/* when pud is not present, pte will be NULL */
 		pte = huge_pte_offset(mm, address);
+		if (!pte)
+			return NULL;
+
 		ptl = &mm->page_table_lock;
 		goto check;
 	}

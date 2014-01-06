@@ -26,8 +26,8 @@
 static __initdata char chosen_lsm[SECURITY_NAME_MAX + 1] =
 	CONFIG_DEFAULT_SECURITY;
 
-static struct security_operations *security_ops;
-static struct security_operations default_security_ops = {
+struct security_operations *security_ops __read_only;
+struct security_operations default_security_ops __read_only = {
 	.name	= "default",
 };
 
@@ -64,11 +64,6 @@ int __init security_init(void)
 	do_security_initcalls();
 
 	return 0;
-}
-
-void reset_security_ops(void)
-{
-	security_ops = &default_security_ops;
 }
 
 /* Save user chosen LSM */
@@ -160,6 +155,13 @@ int security_capable(struct user_namespace *ns, const struct cred *cred,
 {
 	return security_ops->capable(current, cred, ns, cap,
 				     SECURITY_CAP_AUDIT);
+}
+
+int security_capable_noaudit(struct user_namespace *ns, const struct cred *cred,
+			     int cap)
+{
+	return security_ops->capable(current, cred, ns, cap,
+				     SECURITY_CAP_NOAUDIT);
 }
 
 int security_real_capable(struct task_struct *tsk, struct user_namespace *ns,

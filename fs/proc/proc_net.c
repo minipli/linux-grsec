@@ -23,6 +23,7 @@
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>
 #include <linux/seq_file.h>
+#include <linux/grsecurity.h>
 
 #include "internal.h"
 
@@ -105,6 +106,17 @@ static struct net *get_proc_task_net(struct inode *dir)
 	struct task_struct *task;
 	struct nsproxy *ns;
 	struct net *net = NULL;
+#if defined(CONFIG_GRKERNSEC_PROC_USER) || defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+	const struct cred *cred = current_cred();
+#endif
+
+#ifdef CONFIG_GRKERNSEC_PROC_USER
+	if (cred->fsuid)
+		return net;
+#elif defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+	if (cred->fsuid && !in_group_p(grsec_proc_gid))
+		return net;
+#endif
 
 	rcu_read_lock();
 	task = pid_task(proc_pid(dir), PIDTYPE_PID);
@@ -228,7 +240,7 @@ static __net_exit void proc_net_ns_exit(struct net *net)
 	kfree(net->proc_net);
 }
 
-static struct pernet_operations __net_initdata proc_net_ns_ops = {
+static struct pernet_operations __net_initconst proc_net_ns_ops = {
 	.init = proc_net_ns_init,
 	.exit = proc_net_ns_exit,
 };

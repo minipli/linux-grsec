@@ -24,8 +24,9 @@
 #define MAX_CONFIG_LEN		40
 
 static struct kgdb_io		kgdboc_io_ops;
+static struct kgdb_io		kgdboc_io_ops_console;
 
-/* -1 = init not run yet, 0 = unconfigured, 1 = configured. */
+/* -1 = init not run yet, 0 = unconfigured, 1/2 = configured. */
 static int configured		= -1;
 
 static char config[MAX_CONFIG_LEN];
@@ -148,6 +149,8 @@ static void cleanup_kgdboc(void)
 	kgdboc_unregister_kbd();
 	if (configured == 1)
 		kgdb_unregister_io_module(&kgdboc_io_ops);
+	else if (configured == 2)
+		kgdb_unregister_io_module(&kgdboc_io_ops_console);
 }
 
 static int configure_kgdboc(void)
@@ -157,13 +160,13 @@ static int configure_kgdboc(void)
 	int err;
 	char *cptr = config;
 	struct console *cons;
+	int is_console = 0;
 
 	err = kgdboc_option_setup(config);
 	if (err || !strlen(config) || isspace(config[0]))
 		goto noconfig;
 
 	err = -ENODEV;
-	kgdboc_io_ops.is_console = 0;
 	kgdb_tty_driver = NULL;
 
 	kgdboc_use_kms = 0;
@@ -184,7 +187,7 @@ static int configure_kgdboc(void)
 		int idx;
 		if (cons->device && cons->device(cons, &idx) == p &&
 		    idx == tty_line) {
-			kgdboc_io_ops.is_console = 1;
+			is_console = 1;
 			break;
 		}
 		cons = cons->next;
@@ -194,11 +197,15 @@ static int configure_kgdboc(void)
 	kgdb_tty_line = tty_line;
 
 do_register:
-	err = kgdb_register_io_module(&kgdboc_io_ops);
+	if (is_console) {
+		err = kgdb_register_io_module(&kgdboc_io_ops_console);
+		configured = 2;
+	} else {
+		err = kgdb_register_io_module(&kgdboc_io_ops);
+		configured = 1;
+	}
 	if (err)
 		goto noconfig;
-
-	configured = 1;
 
 	return 0;
 
@@ -213,7 +220,7 @@ noconfig:
 static int __init init_kgdboc(void)
 {
 	/* Already configured? */
-	if (configured == 1)
+	if (configured >= 1)
 		return 0;
 
 	return configure_kgdboc();
@@ -262,7 +269,7 @@ static int param_set_kgdboc_var(const char *kmessage, struct kernel_param *kp)
 	if (config[len - 1] == '\n')
 		config[len - 1] = '\0';
 
-	if (configured == 1)
+	if (configured >= 1)
 		cleanup_kgdboc();
 
 	/* Go and configure with the new params. */
@@ -300,6 +307,15 @@ static struct kgdb_io kgdboc_io_ops = {
 	.write_char		= kgdboc_put_char,
 	.pre_exception		= kgdboc_pre_exp_handler,
 	.post_exception		= kgdboc_post_exp_handler,
+};
+
+static struct kgdb_io kgdboc_io_ops_console = {
+	.name			= "kgdboc",
+	.read_char		= kgdboc_get_char,
+	.write_char		= kgdboc_put_char,
+	.pre_exception		= kgdboc_pre_exp_handler,
+	.post_exception		= kgdboc_post_exp_handler,
+	.is_console		= 1
 };
 
 #ifdef CONFIG_KGDB_SERIAL_CONSOLE

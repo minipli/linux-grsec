@@ -587,18 +587,16 @@ static ssize_t print_nodes_state(enum node_states state, char *buf)
 {
 	int n;
 
-	n = nodelist_scnprintf(buf, PAGE_SIZE, node_states[state]);
-	if (n > 0 && PAGE_SIZE > n + 1) {
-		*(buf + n++) = '\n';
-		*(buf + n++) = '\0';
-	}
+	n = nodelist_scnprintf(buf, PAGE_SIZE-2, node_states[state]);
+	buf[n++] = '\n';
+	buf[n] = '\0';
 	return n;
 }
 
 struct node_attr {
 	struct sysdev_class_attribute attr;
 	enum node_states state;
-};
+} __do_const;
 
 static ssize_t show_node_state(struct sysdev_class *class,
 			       struct sysdev_class_attribute *attr, char *buf)

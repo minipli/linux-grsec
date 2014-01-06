@@ -241,7 +241,7 @@ do {									\
 
 #define __get_user_asm_byte(x,addr,err)				\
 	__asm__ __volatile__(					\
-	"1:	" T(ldrb) "	%1,[%2],#0\n"			\
+	"1:	" TUSER(ldrb) "	%1,[%2],#0\n"			\
 	"2:\n"							\
 	"	.pushsection .fixup,\"ax\"\n"			\
 	"	.align	2\n"					\
@@ -277,7 +277,7 @@ do {									\
 
 #define __get_user_asm_word(x,addr,err)				\
 	__asm__ __volatile__(					\
-	"1:	" T(ldr) "	%1,[%2],#0\n"			\
+	"1:	" TUSER(ldr) "	%1,[%2],#0\n"			\
 	"2:\n"							\
 	"	.pushsection .fixup,\"ax\"\n"			\
 	"	.align	2\n"					\
@@ -322,7 +322,7 @@ do {									\
 
 #define __put_user_asm_byte(x,__pu_addr,err)			\
 	__asm__ __volatile__(					\
-	"1:	" T(strb) "	%1,[%2],#0\n"			\
+	"1:	" TUSER(strb) "	%1,[%2],#0\n"			\
 	"2:\n"							\
 	"	.pushsection .fixup,\"ax\"\n"			\
 	"	.align	2\n"					\
@@ -355,7 +355,7 @@ do {									\
 
 #define __put_user_asm_word(x,__pu_addr,err)			\
 	__asm__ __volatile__(					\
-	"1:	" T(str) "	%1,[%2],#0\n"			\
+	"1:	" TUSER(str) "	%1,[%2],#0\n"			\
 	"2:\n"							\
 	"	.pushsection .fixup,\"ax\"\n"			\
 	"	.align	2\n"					\
@@ -380,10 +380,10 @@ do {									\
 
 #define __put_user_asm_dword(x,__pu_addr,err)			\
 	__asm__ __volatile__(					\
- ARM(	"1:	" T(str) "	" __reg_oper1 ", [%1], #4\n"	)	\
- ARM(	"2:	" T(str) "	" __reg_oper0 ", [%1]\n"	)	\
- THUMB(	"1:	" T(str) "	" __reg_oper1 ", [%1]\n"	)	\
- THUMB(	"2:	" T(str) "	" __reg_oper0 ", [%1, #4]\n"	)	\
+ ARM(	"1:	" TUSER(str) "	" __reg_oper1 ", [%1], #4\n"	) \
+ ARM(	"2:	" TUSER(str) "	" __reg_oper0 ", [%1]\n"	) \
+ THUMB(	"1:	" TUSER(str) "	" __reg_oper1 ", [%1]\n"	) \
+ THUMB(	"2:	" TUSER(str) "	" __reg_oper0 ", [%1, #4]\n"	) \
 	"3:\n"							\
 	"	.pushsection .fixup,\"ax\"\n"			\
 	"	.align	2\n"					\
@@ -401,8 +401,21 @@ do {									\
 
 
 #ifdef CONFIG_MMU
-extern unsigned long __must_check __copy_from_user(void *to, const void __user *from, unsigned long n);
-extern unsigned long __must_check __copy_to_user(void __user *to, const void *from, unsigned long n);
+extern unsigned long __must_check ___copy_from_user(void *to, const void __user *from, unsigned long n);
+extern unsigned long __must_check ___copy_to_user(void __user *to, const void *from, unsigned long n);
+
+static inline unsigned long __must_check __copy_from_user(void *to, const void __user *from, unsigned long n)
+{
+	check_object_size(to, n, false);
+	return ___copy_from_user(to, from, n);
+}
+
+static inline unsigned long __must_check __copy_to_user(void __user *to, const void *from, unsigned long n)
+{
+	check_object_size(from, n, true);
+	return ___copy_to_user(to, from, n);
+}
+
 extern unsigned long __must_check __copy_to_user_std(void __user *to, const void *from, unsigned long n);
 extern unsigned long __must_check __clear_user(void __user *addr, unsigned long n);
 extern unsigned long __must_check __clear_user_std(void __user *addr, unsigned long n);
@@ -417,6 +430,9 @@ extern unsigned long __must_check __strnlen_user(const char __user *s, long n);
 
 static inline unsigned long __must_check copy_from_user(void *to, const void __user *from, unsigned long n)
 {
+	if ((long)n < 0)
+		return n;
+
 	if (access_ok(VERIFY_READ, from, n))
 		n = __copy_from_user(to, from, n);
 	else /* security hole - plug it */
@@ -426,6 +442,9 @@ static inline unsigned long __must_check copy_from_user(void *to, const void __u
 
 static inline unsigned long __must_check copy_to_user(void __user *to, const void *from, unsigned long n)
 {
+	if ((long)n < 0)
+		return n;
+
 	if (access_ok(VERIFY_WRITE, to, n))
 		n = __copy_to_user(to, from, n);
 	return n;

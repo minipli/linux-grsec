@@ -505,6 +505,10 @@ pci_write_config(struct file* filp, struct kobject *kobj,
 	loff_t init_off = off;
 	u8 *data = (u8*) buf;
 
+#ifdef CONFIG_GRKERNSEC_KMEM
+	return -EPERM;
+#endif
+
 	if (off > dev->cfg_size)
 		return 0;
 	if (off + count > dev->cfg_size) {
@@ -807,6 +811,10 @@ pci_mmap_resource(struct kobject *kobj, struct bin_attribute *attr,
 	resource_size_t start, end;
 	int i;
 
+#ifdef CONFIG_GRKERNSEC_KMEM
+	return -EPERM;
+#endif
+
 	for (i = 0; i < PCI_ROM_RESOURCE; i++)
 		if (res == &pdev->resource[i])
 			break;
@@ -914,6 +922,10 @@ pci_write_resource_io(struct file *filp, struct kobject *kobj,
 		      struct bin_attribute *attr, char *buf,
 		      loff_t off, size_t count)
 {
+#ifdef CONFIG_GRKERNSEC_KMEM
+	return -EPERM;
+#endif
+
 	return pci_resource_io(filp, kobj, attr, buf, off, count, true);
 }
 
@@ -950,7 +962,7 @@ static int pci_create_attr(struct pci_dev *pdev, int num, int write_combine)
 {
 	/* allocate attribute structure, piggyback attribute name */
 	int name_len = write_combine ? 13 : 10;
-	struct bin_attribute *res_attr;
+	bin_attribute_no_const *res_attr;
 	int retval;
 
 	res_attr = kzalloc(sizeof(*res_attr) + name_len, GFP_ATOMIC);
@@ -1135,7 +1147,7 @@ static struct device_attribute reset_attr = __ATTR(reset, 0200, NULL, reset_stor
 static int pci_create_capabilities_sysfs(struct pci_dev *dev)
 {
 	int retval;
-	struct bin_attribute *attr;
+	bin_attribute_no_const *attr;
 
 	/* If the device has VPD, try to expose it in sysfs. */
 	if (dev->vpd) {
@@ -1182,7 +1194,7 @@ int __must_check pci_create_sysfs_dev_files (struct pci_dev *pdev)
 {
 	int retval;
 	int rom_size = 0;
-	struct bin_attribute *attr;
+	bin_attribute_no_const *attr;
 
 	if (!sysfs_initialized)
 		return -EACCES;
