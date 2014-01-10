@@ -599,11 +599,10 @@ static inline int pmd_none_or_trans_huge_or_clear_bad(pmd_t *pmd)
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
 	barrier();
 #endif
-	if (pmd_none(pmdval))
+	if (pmd_none(pmdval) || pmd_trans_huge(pmdval))
 		return 1;
 	if (unlikely(pmd_bad(pmdval))) {
-		if (!pmd_trans_huge(pmdval))
-			pmd_clear_bad(pmd);
+		pmd_clear_bad(pmd);
 		return 1;
 	}
 	return 0;
@@ -736,6 +735,22 @@ static inline pmd_t pmd_mknuma(pmd_t pmd)
 	return pmd;
 }
 #endif /* CONFIG_NUMA_BALANCING */
+
+#ifndef __HAVE_ARCH_PAX_OPEN_KERNEL
+#ifdef CONFIG_PAX_KERNEXEC
+#error KERNEXEC requires pax_open_kernel
+#else
+static inline unsigned long pax_open_kernel(void) { return 0; }
+#endif
+#endif
+
+#ifndef __HAVE_ARCH_PAX_CLOSE_KERNEL
+#ifdef CONFIG_PAX_KERNEXEC
+#error KERNEXEC requires pax_close_kernel
+#else
+static inline unsigned long pax_close_kernel(void) { return 0; }
+#endif
+#endif
 
 #endif /* CONFIG_MMU */
 
