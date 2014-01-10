@@ -19,7 +19,7 @@
 
 struct kmem_cache *fscache_cookie_jar;
 
-static atomic_t fscache_object_debug_id = ATOMIC_INIT(0);
+static atomic_unchecked_t fscache_object_debug_id = ATOMIC_INIT(0);
 
 static int fscache_acquire_non_index_cookie(struct fscache_cookie *cookie);
 static int fscache_alloc_object(struct fscache_cache *cache,
@@ -68,11 +68,11 @@ struct fscache_cookie *__fscache_acquire_cookie(
 	       parent ? (char *) parent->def->name : "<no-parent>",
 	       def->name, netfs_data);
 
-	fscache_stat(&fscache_n_acquires);
+	fscache_stat_unchecked(&fscache_n_acquires);
 
 	/* if there's no parent cookie, then we don't create one here either */
 	if (!parent) {
-		fscache_stat(&fscache_n_acquires_null);
+		fscache_stat_unchecked(&fscache_n_acquires_null);
 		_leave(" [no parent]");
 		return NULL;
 	}
@@ -87,7 +87,7 @@ struct fscache_cookie *__fscache_acquire_cookie(
 	/* allocate and initialise a cookie */
 	cookie = kmem_cache_alloc(fscache_cookie_jar, GFP_KERNEL);
 	if (!cookie) {
-		fscache_stat(&fscache_n_acquires_oom);
+		fscache_stat_unchecked(&fscache_n_acquires_oom);
 		_leave(" [ENOMEM]");
 		return NULL;
 	}
@@ -114,13 +114,13 @@ struct fscache_cookie *__fscache_acquire_cookie(
 
 	switch (cookie->def->type) {
 	case FSCACHE_COOKIE_TYPE_INDEX:
-		fscache_stat(&fscache_n_cookie_index);
+		fscache_stat_unchecked(&fscache_n_cookie_index);
 		break;
 	case FSCACHE_COOKIE_TYPE_DATAFILE:
-		fscache_stat(&fscache_n_cookie_data);
+		fscache_stat_unchecked(&fscache_n_cookie_data);
 		break;
 	default:
-		fscache_stat(&fscache_n_cookie_special);
+		fscache_stat_unchecked(&fscache_n_cookie_special);
 		break;
 	}
 
@@ -131,13 +131,13 @@ struct fscache_cookie *__fscache_acquire_cookie(
 		if (fscache_acquire_non_index_cookie(cookie) < 0) {
 			atomic_dec(&parent->n_children);
 			__fscache_cookie_put(cookie);
-			fscache_stat(&fscache_n_acquires_nobufs);
+			fscache_stat_unchecked(&fscache_n_acquires_nobufs);
 			_leave(" = NULL");
 			return NULL;
 		}
 	}
 
-	fscache_stat(&fscache_n_acquires_ok);
+	fscache_stat_unchecked(&fscache_n_acquires_ok);
 	_leave(" = %p", cookie);
 	return cookie;
 }
@@ -173,7 +173,7 @@ static int fscache_acquire_non_index_cookie(struct fscache_cookie *cookie)
 	cache = fscache_select_cache_for_object(cookie->parent);
 	if (!cache) {
 		up_read(&fscache_addremove_sem);
-		fscache_stat(&fscache_n_acquires_no_cache);
+		fscache_stat_unchecked(&fscache_n_acquires_no_cache);
 		_leave(" = -ENOMEDIUM [no cache]");
 		return -ENOMEDIUM;
 	}
@@ -259,14 +259,14 @@ static int fscache_alloc_object(struct fscache_cache *cache,
 	object = cache->ops->alloc_object(cache, cookie);
 	fscache_stat_d(&fscache_n_cop_alloc_object);
 	if (IS_ERR(object)) {
-		fscache_stat(&fscache_n_object_no_alloc);
+		fscache_stat_unchecked(&fscache_n_object_no_alloc);
 		ret = PTR_ERR(object);
 		goto error;
 	}
 
-	fscache_stat(&fscache_n_object_alloc);
+	fscache_stat_unchecked(&fscache_n_object_alloc);
 
-	object->debug_id = atomic_inc_return(&fscache_object_debug_id);
+	object->debug_id = atomic_inc_return_unchecked(&fscache_object_debug_id);
 
 	_debug("ALLOC OBJ%x: %s {%lx}",
 	       object->debug_id, cookie->def->name, object->events);
@@ -380,7 +380,7 @@ void __fscache_invalidate(struct fscache_cookie *cookie)
 
 	_enter("{%s}", cookie->def->name);
 
-	fscache_stat(&fscache_n_invalidates);
+	fscache_stat_unchecked(&fscache_n_invalidates);
 
 	/* Only permit invalidation of data files.  Invalidating an index will
 	 * require the caller to release all its attachments to the tree rooted
@@ -438,10 +438,10 @@ void __fscache_update_cookie(struct fscache_cookie *cookie)
 {
 	struct fscache_object *object;
 
-	fscache_stat(&fscache_n_updates);
+	fscache_stat_unchecked(&fscache_n_updates);
 
 	if (!cookie) {
-		fscache_stat(&fscache_n_updates_null);
+		fscache_stat_unchecked(&fscache_n_updates_null);
 		_leave(" [no cookie]");
 		return;
 	}
@@ -473,12 +473,12 @@ void __fscache_relinquish_cookie(struct fscache_cookie *cookie, int retire)
 {
 	struct fscache_object *object;
 
-	fscache_stat(&fscache_n_relinquishes);
+	fscache_stat_unchecked(&fscache_n_relinquishes);
 	if (retire)
-		fscache_stat(&fscache_n_relinquishes_retire);
+		fscache_stat_unchecked(&fscache_n_relinquishes_retire);
 
 	if (!cookie) {
-		fscache_stat(&fscache_n_relinquishes_null);
+		fscache_stat_unchecked(&fscache_n_relinquishes_null);
 		_leave(" [no cookie]");
 		return;
 	}
@@ -598,7 +598,7 @@ int __fscache_check_consistency(struct fscache_cookie *cookie)
 	if (test_bit(FSCACHE_IOERROR, &object->cache->flags))
 		goto inconsistent;
 
-	op->debug_id = atomic_inc_return(&fscache_op_debug_id);
+	op->debug_id = atomic_inc_return_unchecked(&fscache_op_debug_id);
 
 	atomic_inc(&cookie->n_active);
 	if (fscache_submit_op(object, op) < 0)
