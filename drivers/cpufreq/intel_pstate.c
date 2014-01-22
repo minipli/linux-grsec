@@ -112,10 +112,10 @@ struct pstate_funcs {
 struct cpu_defaults {
 	struct pstate_adjust_policy pid_policy;
 	struct pstate_funcs funcs;
-};
+} __do_const;
 
 static struct pstate_adjust_policy pid_params;
-static struct pstate_funcs pstate_funcs;
+static struct pstate_funcs *pstate_funcs;
 
 struct perf_limits {
 	int no_turbo;
@@ -462,7 +462,7 @@ static void intel_pstate_set_pstate(struct cpudata *cpu, int pstate)
 
 	cpu->pstate.current_pstate = pstate;
 
-	pstate_funcs.set(pstate);
+	pstate_funcs->set(pstate);
 }
 
 static inline void intel_pstate_pstate_increase(struct cpudata *cpu, int steps)
@@ -484,9 +484,9 @@ static void intel_pstate_get_cpu_pstates(struct cpudata *cpu)
 {
 	sprintf(cpu->name, "Intel 2nd generation core");
 
-	cpu->pstate.min_pstate = pstate_funcs.get_min();
-	cpu->pstate.max_pstate = pstate_funcs.get_max();
-	cpu->pstate.turbo_pstate = pstate_funcs.get_turbo();
+	cpu->pstate.min_pstate = pstate_funcs->get_min();
+	cpu->pstate.max_pstate = pstate_funcs->get_max();
+	cpu->pstate.turbo_pstate = pstate_funcs->get_turbo();
 
 	/*
 	 * goto max pstate so we don't slow up boot if we are built-in if we are
@@ -750,9 +750,9 @@ static int intel_pstate_msrs_not_valid(void)
 	rdmsrl(MSR_IA32_APERF, aperf);
 	rdmsrl(MSR_IA32_MPERF, mperf);
 
-	if (!pstate_funcs.get_max() ||
-		!pstate_funcs.get_min() ||
-		!pstate_funcs.get_turbo())
+	if (!pstate_funcs->get_max() ||
+		!pstate_funcs->get_min() ||
+		!pstate_funcs->get_turbo())
 		return -ENODEV;
 
 	rdmsrl(MSR_IA32_APERF, tmp);
@@ -766,7 +766,7 @@ static int intel_pstate_msrs_not_valid(void)
 	return 0;
 }
 
-static void copy_pid_params(struct pstate_adjust_policy *policy)
+static void copy_pid_params(const struct pstate_adjust_policy *policy)
 {
 	pid_params.sample_rate_ms = policy->sample_rate_ms;
 	pid_params.p_gain_pct = policy->p_gain_pct;
@@ -778,10 +778,7 @@ static void copy_pid_params(struct pstate_adjust_policy *policy)
 
 static void copy_cpu_funcs(struct pstate_funcs *funcs)
 {
-	pstate_funcs.get_max   = funcs->get_max;
-	pstate_funcs.get_min   = funcs->get_min;
-	pstate_funcs.get_turbo = funcs->get_turbo;
-	pstate_funcs.set       = funcs->set;
+	pstate_funcs = funcs;
 }
 
 #if IS_ENABLED(CONFIG_ACPI)
