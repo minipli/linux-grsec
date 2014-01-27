@@ -2,6 +2,7 @@
 #define GCC_COMMON_H_INCLUDED
 
 #include "plugin.h"
+#include "bversion.h"
 #include "plugin-version.h"
 #include "config.h"
 #include "system.h"
@@ -31,8 +32,6 @@
 #include "ggc.h"
 //#include "regs.h"
 #include "timevar.h"
-#include "diagnostic.h"
-//#include "tree-diagnostic.h"
 
 #include "params.h"
 #include "pointer-set.h"
@@ -53,6 +52,7 @@
 #if BUILDING_GCC_VERSION >= 4007
 #include "tree-pretty-print.h"
 #include "gimple-pretty-print.h"
+#include "c-tree.h"
 //#include "alloc-pool.h"
 #endif
 
@@ -60,6 +60,8 @@
 #include "tree-flow.h"
 #endif
 
+#include "diagnostic.h"
+//#include "tree-diagnostic.h"
 #include "tree-dump.h"
 #include "tree-pass.h"
 //#include "df.h"
@@ -94,9 +96,6 @@
 //#include "expr.h" where are you...
 extern rtx emit_move_insn(rtx x, rtx y);
 
-// should come from c-tree.h if only it were installed for gcc 4.5...
-#define C_TYPE_FIELDS_READONLY(TYPE) TREE_LANG_FLAG_1(TYPE)
-
 #define __unused __attribute__((__unused__))
 
 #define DECL_NAME_POINTER(node) IDENTIFIER_POINTER(DECL_NAME(node))
@@ -119,15 +118,61 @@ static inline bool gimple_call_builtin_p(gimple stmt, enum built_in_function cod
 //	print_node(stderr, "pax", fndecl, 4);
 	return DECL_FUNCTION_CODE(fndecl) == code;
 }
+
+static inline bool is_simple_builtin(tree decl)
+{
+	if (decl && DECL_BUILT_IN_CLASS(decl) != BUILT_IN_NORMAL)
+		return false;
+
+	switch (DECL_FUNCTION_CODE(decl)) {
+	/* Builtins that expand to constants. */
+	case BUILT_IN_CONSTANT_P:
+	case BUILT_IN_EXPECT:
+	case BUILT_IN_OBJECT_SIZE:
+	case BUILT_IN_UNREACHABLE:
+	/* Simple register moves or loads from stack. */
+	case BUILT_IN_RETURN_ADDRESS:
+	case BUILT_IN_EXTRACT_RETURN_ADDR:
+	case BUILT_IN_FROB_RETURN_ADDR:
+	case BUILT_IN_RETURN:
+	case BUILT_IN_AGGREGATE_INCOMING_ADDRESS:
+	case BUILT_IN_FRAME_ADDRESS:
+	case BUILT_IN_VA_END:
+	case BUILT_IN_STACK_SAVE:
+	case BUILT_IN_STACK_RESTORE:
+	/* Exception state returns or moves registers around. */
+	case BUILT_IN_EH_FILTER:
+	case BUILT_IN_EH_POINTER:
+	case BUILT_IN_EH_COPY_VALUES:
+	return true;
+
+	default:
+	return false;
+	}
+}
 #endif
 
 #if BUILDING_GCC_VERSION <= 4006
 #define ANY_RETURN_P(rtx) (GET_CODE(rtx) == RETURN)
+#define C_DECL_REGISTER(EXP) DECL_LANG_FLAG_4(EXP)
+
+// should come from c-tree.h if only it were installed for gcc 4.5...
+#define C_TYPE_FIELDS_READONLY(TYPE) TREE_LANG_FLAG_1(TYPE)
 
 #define get_random_seed(noinit) ({						\
 	unsigned HOST_WIDE_INT seed;						\
 	sscanf(get_random_seed(noinit), "%" HOST_WIDE_INT_PRINT "x", &seed);	\
 	seed * seed; })
+
+static inline bool gimple_clobber_p(gimple s)
+{
+	return false;
+}
+
+static inline tree builtin_decl_implicit(enum built_in_function fncode)
+{
+	return implicit_built_in_decls[fncode];
+}
 
 static inline struct cgraph_node *cgraph_get_create_node(tree decl)
 {
@@ -175,6 +220,12 @@ extern void dump_gimple_stmt(pretty_printer *, gimple, int, int);
 
 #if BUILDING_GCC_VERSION <= 4007
 #define FOR_EACH_VARIABLE(node) for (node = varpool_nodes; node; node = node->next)
+
+static inline bool gimple_store_p(gimple gs)
+{
+	tree lhs = gimple_get_lhs(gs);
+	return lhs && !is_gimple_reg(lhs);
+}
 #endif
 
 #if BUILDING_GCC_VERSION >= 4007
@@ -185,6 +236,12 @@ extern void dump_gimple_stmt(pretty_printer *, gimple, int, int);
 #if BUILDING_GCC_VERSION <= 4008
 #define ENTRY_BLOCK_PTR_FOR_FN(FN) ENTRY_BLOCK_PTR_FOR_FUNCTION(FN)
 #define EXIT_BLOCK_PTR_FOR_FN(FN) EXIT_BLOCK_PTR_FOR_FUNCTION(FN)
+
+static inline const char *get_tree_code_name(enum tree_code code)
+{
+	gcc_assert(code < MAX_TREE_CODES);
+	return tree_code_name[code];
+}
 #endif
 
 #if BUILDING_GCC_VERSION == 4008
@@ -196,6 +253,7 @@ extern void dump_gimple_stmt(pretty_printer *, gimple, int, int);
 #if BUILDING_GCC_VERSION >= 4008
 #define add_referenced_var(var)
 #define mark_sym_for_renaming(var)
+#define varpool_mark_needed_node(node)
 #define TODO_dump_func 0
 #define TODO_dump_cgraph 0
 #endif
