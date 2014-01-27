@@ -42,6 +42,6 @@
 	SAVE_ARGS 8
 restore:
 	RESTORE_ARGS 1,8
-	pax_force_retaddr_bts
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC

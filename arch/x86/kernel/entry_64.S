@@ -927,10 +927,52 @@ ENTRY(save_paranoid)
 	js 1f	/* negative -> in kernel */
 	SWAPGS
 	xorl %ebx,%ebx
-1:	pax_force_retaddr_bts
+1:
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	testb $3, CS+8(%rsp)
+	jnz 1f
+	pax_enter_kernel
+	jmp 2f
+1:	pax_enter_kernel_user
+2:
+#else
+	pax_enter_kernel
+#endif
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(save_paranoid)
+
+ENTRY(save_paranoid_nmi)
+	XCPT_FRAME 1 RDI+8
+	cld
+	movq_cfi rdi, RDI+8
+	movq_cfi rsi, RSI+8
+	movq_cfi rdx, RDX+8
+	movq_cfi rcx, RCX+8
+	movq_cfi rax, RAX+8
+	movq_cfi r8, R8+8
+	movq_cfi r9, R9+8
+	movq_cfi r10, R10+8
+	movq_cfi r11, R11+8
+	movq_cfi rbx, RBX+8
+	movq_cfi rbp, RBP+8
+	movq_cfi r12, R12+8
+	movq_cfi r13, R13+8
+	movq_cfi r14, R14+8
+	movq_cfi r15, R15+8
+	movl $1,%ebx
+	movl $MSR_GS_BASE,%ecx
+	rdmsr
+	testl %edx,%edx
+	js 1f	/* negative -> in kernel */
+	SWAPGS
+	xorl %ebx,%ebx
+1:	pax_enter_kernel_nmi
+	pax_force_retaddr
+	ret
+	CFI_ENDPROC
+ENDPROC(save_paranoid_nmi)
 	.popsection
 
 /*
@@ -1646,16 +1688,6 @@ ENTRY(\sym)
 	CFI_ADJUST_CFA_OFFSET ORIG_RAX-R15
 	call error_entry
 	DEFAULT_FRAME 0
-#ifdef CONFIG_PAX_MEMORY_UDEREF
-	testb $3, CS(%rsp)
-	jnz 1f
-	pax_enter_kernel
-	jmp 2f
-1:	pax_enter_kernel_user
-2:
-#else
-	pax_enter_kernel
-#endif
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
 	call \do_sym
@@ -1674,16 +1706,6 @@ ENTRY(\sym)
 	CFI_ADJUST_CFA_OFFSET ORIG_RAX-R15
 	call save_paranoid
 	TRACE_IRQS_OFF
-#ifdef CONFIG_PAX_MEMORY_UDEREF
-	testb $3, CS(%rsp)
-	jnz 1f
-	pax_enter_kernel
-	jmp 2f
-1:	pax_enter_kernel_user
-2:
-#else
-	pax_enter_kernel
-#endif
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
 	call \do_sym
@@ -1703,16 +1725,6 @@ ENTRY(\sym)
 	CFI_ADJUST_CFA_OFFSET ORIG_RAX-R15
 	call save_paranoid
 	TRACE_IRQS_OFF_DEBUG
-#ifdef CONFIG_PAX_MEMORY_UDEREF
-	testb $3, CS(%rsp)
-	jnz 1f
-	pax_enter_kernel
-	jmp 2f
-1:	pax_enter_kernel_user
-2:
-#else
-	pax_enter_kernel
-#endif
 	movq %rsp,%rdi		/* pt_regs pointer */
 	xorl %esi,%esi		/* no error code */
 #ifdef CONFIG_SMP
@@ -1738,16 +1750,6 @@ ENTRY(\sym)
 	CFI_ADJUST_CFA_OFFSET ORIG_RAX-R15
 	call error_entry
 	DEFAULT_FRAME 0
-#ifdef CONFIG_PAX_MEMORY_UDEREF
-	testb $3, CS(%rsp)
-	jnz 1f
-	pax_enter_kernel
-	jmp 2f
-1:	pax_enter_kernel_user
-2:
-#else
-	pax_enter_kernel
-#endif
 	movq %rsp,%rdi			/* pt_regs pointer */
 	movq ORIG_RAX(%rsp),%rsi	/* get error code */
 	movq $-1,ORIG_RAX(%rsp)		/* no syscall to restart */
@@ -1779,16 +1781,6 @@ ENTRY(\sym)
 	call save_paranoid
 	DEFAULT_FRAME 0
 	TRACE_IRQS_OFF
-#ifdef CONFIG_PAX_MEMORY_UDEREF
-	testb $3, CS(%rsp)
-	jnz 1f
-	pax_enter_kernel
-	jmp 2f
-1:	pax_enter_kernel_user
-2:
-#else
-	pax_enter_kernel
-#endif
 	movq %rsp,%rdi			/* pt_regs pointer */
 	movq ORIG_RAX(%rsp),%rsi	/* get error code */
 	movq $-1,ORIG_RAX(%rsp)		/* no syscall to restart */
@@ -2095,8 +2087,18 @@ ENTRY(error_entry)
 error_swapgs:
 	SWAPGS
 error_sti:
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	testb $3, CS+8(%rsp)
+	jnz 1f
+	pax_enter_kernel
+	jmp 2f
+1:	pax_enter_kernel_user
+2:
+#else
+	pax_enter_kernel
+#endif
 	TRACE_IRQS_OFF
-	pax_force_retaddr_bts
+	pax_force_retaddr
 	ret
 
 /*
@@ -2354,13 +2356,13 @@ end_repeat_nmi:
 	subq $ORIG_RAX-R15, %rsp
 	CFI_ADJUST_CFA_OFFSET ORIG_RAX-R15
 	/*
-	 * Use save_paranoid to handle SWAPGS, but no need to use paranoid_exit
+	 * Use save_paranoid_nmi to handle SWAPGS, but no need to use paranoid_exit
 	 * as we should not be calling schedule in NMI context.
 	 * Even with normal interrupts enabled. An NMI should not be
 	 * setting NEED_RESCHED or anything that normal interrupts and
 	 * exceptions might do.
 	 */
-	call save_paranoid
+	call save_paranoid_nmi
 	DEFAULT_FRAME 0
 
 	/*
@@ -2373,8 +2375,6 @@ end_repeat_nmi:
 	 * Use the r13 callee-saved register.
 	 */
 	movq %cr2, %r13
-
-	pax_enter_kernel_nmi
 
 	/* paranoidentry do_nmi, 0; without TRACE_IRQS_OFF */
 	movq %rsp,%rdi
