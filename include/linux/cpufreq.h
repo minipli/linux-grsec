@@ -189,6 +189,7 @@ struct global_attr {
 	ssize_t (*store)(struct kobject *a, struct attribute *b,
 			 const char *c, size_t count);
 };
+typedef struct global_attr __no_const global_attr_no_const;
 
 #define define_one_global_ro(_name)		\
 static struct global_attr _name =		\
@@ -225,7 +226,7 @@ struct cpufreq_driver {
 	int	(*suspend)	(struct cpufreq_policy *policy);
 	int	(*resume)	(struct cpufreq_policy *policy);
 	struct freq_attr	**attr;
-};
+} __do_const;
 
 /* flags */
 #define CPUFREQ_STICKY		(1 << 0)	/* driver isn't removed even if
