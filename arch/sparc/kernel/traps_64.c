@@ -76,7 +76,7 @@ static void dump_tl1_traplog(struct tl1_traplog *p)
 		       i + 1,
 		       p->trapstack[i].tstate, p->trapstack[i].tpc,
 		       p->trapstack[i].tnpc, p->trapstack[i].tt);
-		printk("TRAPLOG: TPC<%pS>\n", (void *) p->trapstack[i].tpc);
+		printk("TRAPLOG: TPC<%pA>\n", (void *) p->trapstack[i].tpc);
 	}
 }
 
@@ -96,6 +96,12 @@ void bad_trap(struct pt_regs *regs, long lvl)
 
 	lvl -= 0x100;
 	if (regs->tstate & TSTATE_PRIV) {
+
+#ifdef CONFIG_PAX_REFCOUNT
+		if (lvl == 6)
+			pax_report_refcount_overflow(regs);
+#endif
+
 		sprintf(buffer, "Kernel bad sw trap %lx", lvl);
 		die_if_kernel(buffer, regs);
 	}
@@ -114,10 +120,15 @@ void bad_trap(struct pt_regs *regs, long lvl)
 void bad_trap_tl1(struct pt_regs *regs, long lvl)
 {
 	char buffer[32];
-	
+
 	if (notify_die(DIE_TRAP_TL1, "bad trap tl1", regs,
 		       0, lvl, SIGTRAP) == NOTIFY_STOP)
 		return;
+
+#ifdef CONFIG_PAX_REFCOUNT
+	if (lvl == 6)
+		pax_report_refcount_overflow(regs);
+#endif
 
 	dump_tl1_traplog((struct tl1_traplog *)(regs + 1));
 
@@ -1142,7 +1153,7 @@ static void cheetah_log_errors(struct pt_regs *regs, struct cheetah_err_info *in
 	       regs->tpc, regs->tnpc, regs->u_regs[UREG_I7], regs->tstate);
 	printk("%s" "ERROR(%d): ",
 	       (recoverable ? KERN_WARNING : KERN_CRIT), smp_processor_id());
-	printk("TPC<%pS>\n", (void *) regs->tpc);
+	printk("TPC<%pA>\n", (void *) regs->tpc);
 	printk("%s" "ERROR(%d): M_SYND(%lx),  E_SYND(%lx)%s%s\n",
 	       (recoverable ? KERN_WARNING : KERN_CRIT), smp_processor_id(),
 	       (afsr & CHAFSR_M_SYNDROME) >> CHAFSR_M_SYNDROME_SHIFT,
@@ -1749,7 +1760,7 @@ void cheetah_plus_parity_error(int type, struct pt_regs *regs)
 		       smp_processor_id(),
 		       (type & 0x1) ? 'I' : 'D',
 		       regs->tpc);
-		printk(KERN_EMERG "TPC<%pS>\n", (void *) regs->tpc);
+		printk(KERN_EMERG "TPC<%pA>\n", (void *) regs->tpc);
 		panic("Irrecoverable Cheetah+ parity error.");
 	}
 
@@ -1757,7 +1768,7 @@ void cheetah_plus_parity_error(int type, struct pt_regs *regs)
 	       smp_processor_id(),
 	       (type & 0x1) ? 'I' : 'D',
 	       regs->tpc);
-	printk(KERN_WARNING "TPC<%pS>\n", (void *) regs->tpc);
+	printk(KERN_WARNING "TPC<%pA>\n", (void *) regs->tpc);
 }
 
 struct sun4v_error_entry {
@@ -1830,8 +1841,8 @@ struct sun4v_error_entry {
 /*0x38*/u64		reserved_5;
 };
 
-static atomic_t sun4v_resum_oflow_cnt = ATOMIC_INIT(0);
-static atomic_t sun4v_nonresum_oflow_cnt = ATOMIC_INIT(0);
+static atomic_unchecked_t sun4v_resum_oflow_cnt = ATOMIC_INIT(0);
+static atomic_unchecked_t sun4v_nonresum_oflow_cnt = ATOMIC_INIT(0);
 
 static const char *sun4v_err_type_to_str(u8 type)
 {
@@ -1923,7 +1934,7 @@ static void sun4v_report_real_raddr(const char *pfx, struct pt_regs *regs)
 }
 
 static void sun4v_log_error(struct pt_regs *regs, struct sun4v_error_entry *ent,
-			    int cpu, const char *pfx, atomic_t *ocnt)
+			    int cpu, const char *pfx, atomic_unchecked_t *ocnt)
 {
 	u64 *raw_ptr = (u64 *) ent;
 	u32 attrs;
@@ -1981,8 +1992,8 @@ static void sun4v_log_error(struct pt_regs *regs, struct sun4v_error_entry *ent,
 
 	show_regs(regs);
 
-	if ((cnt = atomic_read(ocnt)) != 0) {
-		atomic_set(ocnt, 0);
+	if ((cnt = atomic_read_unchecked(ocnt)) != 0) {
+		atomic_set_unchecked(ocnt, 0);
 		wmb();
 		printk("%s: Queue overflowed %d times.\n",
 		       pfx, cnt);
@@ -2036,7 +2047,7 @@ void sun4v_resum_error(struct pt_regs *regs, unsigned long offset)
  */
 void sun4v_resum_overflow(struct pt_regs *regs)
 {
-	atomic_inc(&sun4v_resum_oflow_cnt);
+	atomic_inc_unchecked(&sun4v_resum_oflow_cnt);
 }
 
 /* We run with %pil set to PIL_NORMAL_MAX and PSTATE_IE enabled in %pstate.
@@ -2089,7 +2100,7 @@ void sun4v_nonresum_overflow(struct pt_regs *regs)
 	/* XXX Actually even this can make not that much sense.  Perhaps
 	 * XXX we should just pull the plug and panic directly from here?
 	 */
-	atomic_inc(&sun4v_nonresum_oflow_cnt);
+	atomic_inc_unchecked(&sun4v_nonresum_oflow_cnt);
 }
 
 unsigned long sun4v_err_itlb_vaddr;
@@ -2104,9 +2115,9 @@ void sun4v_itlb_error_report(struct pt_regs *regs, int tl)
 
 	printk(KERN_EMERG "SUN4V-ITLB: Error at TPC[%lx], tl %d\n",
 	       regs->tpc, tl);
-	printk(KERN_EMERG "SUN4V-ITLB: TPC<%pS>\n", (void *) regs->tpc);
+	printk(KERN_EMERG "SUN4V-ITLB: TPC<%pA>\n", (void *) regs->tpc);
 	printk(KERN_EMERG "SUN4V-ITLB: O7[%lx]\n", regs->u_regs[UREG_I7]);
-	printk(KERN_EMERG "SUN4V-ITLB: O7<%pS>\n",
+	printk(KERN_EMERG "SUN4V-ITLB: O7<%pA>\n",
 	       (void *) regs->u_regs[UREG_I7]);
 	printk(KERN_EMERG "SUN4V-ITLB: vaddr[%lx] ctx[%lx] "
 	       "pte[%lx] error[%lx]\n",
@@ -2128,9 +2139,9 @@ void sun4v_dtlb_error_report(struct pt_regs *regs, int tl)
 
 	printk(KERN_EMERG "SUN4V-DTLB: Error at TPC[%lx], tl %d\n",
 	       regs->tpc, tl);
-	printk(KERN_EMERG "SUN4V-DTLB: TPC<%pS>\n", (void *) regs->tpc);
+	printk(KERN_EMERG "SUN4V-DTLB: TPC<%pA>\n", (void *) regs->tpc);
 	printk(KERN_EMERG "SUN4V-DTLB: O7[%lx]\n", regs->u_regs[UREG_I7]);
-	printk(KERN_EMERG "SUN4V-DTLB: O7<%pS>\n",
+	printk(KERN_EMERG "SUN4V-DTLB: O7<%pA>\n",
 	       (void *) regs->u_regs[UREG_I7]);
 	printk(KERN_EMERG "SUN4V-DTLB: vaddr[%lx] ctx[%lx] "
 	       "pte[%lx] error[%lx]\n",
@@ -2336,13 +2347,13 @@ void show_stack(struct task_struct *tsk, unsigned long *_ksp)
 			fp = (unsigned long)sf->fp + STACK_BIAS;
 		}
 
-		printk(" [%016lx] %pS\n", pc, (void *) pc);
+		printk(" [%016lx] %pA\n", pc, (void *) pc);
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
 		if ((pc + 8UL) == (unsigned long) &return_to_handler) {
 			int index = tsk->curr_ret_stack;
 			if (tsk->ret_stack && index >= graph) {
 				pc = tsk->ret_stack[index - graph].ret;
-				printk(" [%016lx] %pS\n", pc, (void *) pc);
+				printk(" [%016lx] %pA\n", pc, (void *) pc);
 				graph++;
 			}
 		}
@@ -2359,6 +2370,8 @@ static inline struct reg_window *kernel_stack_up(struct reg_window *rw)
 
 	return (struct reg_window *) (fp + STACK_BIAS);
 }
+
+extern void gr_handle_kernel_exploit(void);
 
 void die_if_kernel(char *str, struct pt_regs *regs)
 {
@@ -2388,7 +2401,7 @@ void die_if_kernel(char *str, struct pt_regs *regs)
 		while (rw &&
 		       count++ < 30 &&
 		       kstack_valid(tp, (unsigned long) rw)) {
-			printk("Caller[%016lx]: %pS\n", rw->ins[7],
+			printk("Caller[%016lx]: %pA\n", rw->ins[7],
 			       (void *) rw->ins[7]);
 
 			rw = kernel_stack_up(rw);
@@ -2401,8 +2414,10 @@ void die_if_kernel(char *str, struct pt_regs *regs)
 		}
 		user_instruction_dump ((unsigned int __user *) regs->tpc);
 	}
-	if (regs->tstate & TSTATE_PRIV)
+	if (regs->tstate & TSTATE_PRIV) {
+		gr_handle_kernel_exploit();
 		do_exit(SIGKILL);
+	}
 	do_exit(SIGSEGV);
 }
 EXPORT_SYMBOL(die_if_kernel);
