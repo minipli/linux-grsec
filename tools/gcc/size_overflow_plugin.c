@@ -22,7 +22,7 @@
 int plugin_is_GPL_compatible;
 
 static struct plugin_info size_overflow_plugin_info = {
-	.version	= "201401260140",
+	.version	= "20140128",
 	.help		= "no-size-overflow\tturn off size overflow checking\n",
 };
 
@@ -63,7 +63,7 @@ struct visited {
 	struct visited *next;
 	const_tree fndecl;
 	unsigned int num;
-	const_gimple first_stmt;
+	const_tree rhs;
 };
 
 struct next_cgraph_node {
@@ -825,9 +825,9 @@ static gimple overflow_create_phi_node(gimple oldstmt, tree result)
 }
 
 #if BUILDING_GCC_VERSION <= 4007
-static tree create_new_phi_node(VEC(tree, gc) *args, tree ssa_name_var, gimple oldstmt)
+static tree create_new_phi_node(VEC(tree, heap) **args, tree ssa_name_var, gimple oldstmt)
 #else
-static tree create_new_phi_node(vec<tree, va_gc> *args, tree ssa_name_var, gimple oldstmt)
+static tree create_new_phi_node(vec<tree, va_heap, vl_embed> *&args, tree ssa_name_var, gimple oldstmt)
 #endif
 {
 	gimple new_phi;
@@ -836,7 +836,7 @@ static tree create_new_phi_node(vec<tree, va_gc> *args, tree ssa_name_var, gimpl
 	location_t loc = gimple_location(oldstmt);
 
 #if BUILDING_GCC_VERSION <= 4007
-	gcc_assert(!VEC_empty(tree, args));
+	gcc_assert(!VEC_empty(tree, *args));
 #else
 	gcc_assert(!args->is_empty());
 #endif
@@ -846,16 +846,16 @@ static tree create_new_phi_node(vec<tree, va_gc> *args, tree ssa_name_var, gimpl
 	ssa_name_var = SSA_NAME_VAR(result);
 
 #if BUILDING_GCC_VERSION <= 4007
-	FOR_EACH_VEC_ELT(tree, args, i, arg) {
+	FOR_EACH_VEC_ELT(tree, *args, i, arg) {
 #else
-	FOR_EACH_VEC_ELT(*args, i, arg) {
+	FOR_EACH_VEC_SAFE_ELT(args, i, arg) {
 #endif
 		arg = create_new_phi_arg(ssa_name_var, arg, oldstmt, i);
 		add_phi_arg(new_phi, arg, gimple_phi_arg_edge(oldstmt, i), loc);
 	}
 
 #if BUILDING_GCC_VERSION <= 4007
-	VEC_free(tree, gc, args);
+	VEC_free(tree, heap, *args);
 #else
 	vec_free(args);
 #endif
@@ -867,19 +867,14 @@ static tree handle_phi(struct pointer_set_t *visited, struct cgraph_node *caller
 {
 	tree ssa_name_var = NULL_TREE;
 #if BUILDING_GCC_VERSION <= 4007
-	VEC(tree, gc) *args;
+	VEC(tree, heap) *args = NULL;
 #else
-	vec<tree, va_gc> *args;
+	vec<tree, va_heap, vl_embed> *args = NULL;
 #endif
 	gimple oldstmt = get_def_stmt(orig_result);
 	unsigned int i, len = gimple_phi_num_args(oldstmt);
 
 	pointer_set_insert(visited, oldstmt);
-#if BUILDING_GCC_VERSION <= 4007
-	args = VEC_alloc(tree, gc, len);
-#else
-	vec_alloc(args, len);
-#endif
 	for (i = 0; i < len; i++) {
 		tree arg, new_arg;
 
@@ -896,13 +891,17 @@ static tree handle_phi(struct pointer_set_t *visited, struct cgraph_node *caller
 		}
 
 #if BUILDING_GCC_VERSION <= 4007
-		VEC_safe_push(tree, gc, args, new_arg);
+		VEC_safe_push(tree, heap, args, new_arg);
 #else
 		vec_safe_push(args, new_arg);
 #endif
 	}
 
+#if BUILDING_GCC_VERSION <= 4007
+	return create_new_phi_node(&args, ssa_name_var, oldstmt);
+#else
 	return create_new_phi_node(args, ssa_name_var, oldstmt);
+#endif
 }
 
 static tree change_assign_rhs(gimple stmt, const_tree orig_rhs, tree new_rhs)
@@ -2771,6 +2770,7 @@ static void remove_size_overflow_asm(gimple stmt)
 
 	if (gimple_asm_noutputs(stmt) == 0) {
 		gsi = gsi_for_stmt(stmt);
+		ipa_remove_stmt_references(cgraph_get_create_node(current_function_decl), stmt);
 		gsi_remove(&gsi, true);
 		return;
 	}
@@ -2897,7 +2897,7 @@ static struct visited *insert_visited_function(struct visited *head, struct inte
 	new_visited = (struct visited *)xmalloc(sizeof(*new_visited));
 	new_visited->fndecl = cur_node->fndecl;
 	new_visited->num = cur_node->num;
-	new_visited->first_stmt = cur_node->first_stmt;
+	new_visited->rhs = cur_node->node;
 	new_visited->next = NULL;
 
 	if (!head)
@@ -2922,7 +2922,7 @@ static bool is_visited_function(struct visited *head, struct interesting_node *c
 			continue;
 		if (cur_node->num != cur->num)
 			continue;
-		if (cur_node->first_stmt == cur->first_stmt)
+		if (cur_node->node == cur->rhs)
 			return true;
 	}
 	return false;
@@ -3990,8 +3990,8 @@ int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version 
 	bool enable = true;
 	struct register_pass_info insert_size_overflow_asm_pass_info;
 	struct register_pass_info __unused dump_before_pass_info;
-	struct register_pass_info ipa_pass_info;
 	struct register_pass_info __unused dump_after_pass_info;
+	struct register_pass_info ipa_pass_info;
 
 	insert_size_overflow_asm_pass_info.pass				= make_insert_size_overflow_asm_pass();
 	insert_size_overflow_asm_pass_info.reference_pass_name		= "ssa";

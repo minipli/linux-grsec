@@ -242,6 +242,8 @@ static inline const char *get_tree_code_name(enum tree_code code)
 	gcc_assert(code < MAX_TREE_CODES);
 	return tree_code_name[code];
 }
+
+#define ipa_remove_stmt_references(cnode, stmt)
 #endif
 
 #if BUILDING_GCC_VERSION == 4008
