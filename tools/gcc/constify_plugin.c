@@ -21,7 +21,7 @@
 int plugin_is_GPL_compatible;
 
 static struct plugin_info const_plugin_info = {
-	.version	= "201401260725",
+	.version	= "201401270210",
 	.help		= "no-constify\tturn off constification\n",
 };
 
@@ -96,7 +96,7 @@ static bool constified(const_tree node)
 	gcc_assert(TREE_CODE(node) == RECORD_TYPE || TREE_CODE(node) == UNION_TYPE);
 
 	if (lookup_attribute("no_const", TYPE_ATTRIBUTES(node))) {
-		gcc_assert(!TYPE_READONLY(node));
+//		gcc_assert(!TYPE_READONLY(node));
 		return false;
 	}
 
