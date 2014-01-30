@@ -1415,7 +1415,9 @@ call_start(struct rpc_task *task)
 			(RPC_IS_ASYNC(task) ? "async" : "sync"));
 
 	/* Increment call count */
-	task->tk_msg.rpc_proc->p_count++;
+	pax_open_kernel();
+	(*(unsigned int *)&task->tk_msg.rpc_proc->p_count)++;
+	pax_close_kernel();
 	clnt->cl_stats->rpccnt++;
 	task->tk_action = call_reserve;
 }
@@ -1529,9 +1531,13 @@ call_refreshresult(struct rpc_task *task)
 	task->tk_action = call_refresh;
 	switch (status) {
 	case 0:
-		if (rpcauth_uptodatecred(task))
+		if (rpcauth_uptodatecred(task)) {
 			task->tk_action = call_allocate;
-		return;
+			return;
+		}
+		/* Use rate-limiting and a max number of retries if refresh
+		 * had status 0 but failed to update the cred.
+		 */
 	case -ETIMEDOUT:
 		rpc_delay(task, 3*HZ);
 	case -EAGAIN:

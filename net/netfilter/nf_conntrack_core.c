@@ -1605,6 +1605,10 @@ void nf_conntrack_init_end(void)
 #define DYING_NULLS_VAL		((1<<30)+1)
 #define TEMPLATE_NULLS_VAL	((1<<30)+2)
 
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+static atomic_unchecked_t conntrack_cache_id = ATOMIC_INIT(0);
+#endif
+
 int nf_conntrack_init_net(struct net *net)
 {
 	int ret;
@@ -1619,7 +1623,11 @@ int nf_conntrack_init_net(struct net *net)
 		goto err_stat;
 	}
 
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	net->ct.slabname = kasprintf(GFP_KERNEL, "nf_conntrack_%08lx", atomic_inc_return_unchecked(&conntrack_cache_id));
+#else
 	net->ct.slabname = kasprintf(GFP_KERNEL, "nf_conntrack_%p", net);
+#endif
 	if (!net->ct.slabname) {
 		ret = -ENOMEM;
 		goto err_slabname;

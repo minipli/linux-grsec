@@ -253,8 +253,8 @@ static ssize_t copy_event_to_user(struct fsnotify_group *group,
 
 	fd = fanotify_event_metadata.fd;
 	ret = -EFAULT;
-	if (copy_to_user(buf, &fanotify_event_metadata,
-			 fanotify_event_metadata.event_len))
+	if (fanotify_event_metadata.event_len > sizeof fanotify_event_metadata ||
+	    copy_to_user(buf, &fanotify_event_metadata, fanotify_event_metadata.event_len))
 		goto out_close_fd;
 
 	ret = prepare_for_access_response(group, event, fd);
@@ -888,9 +888,9 @@ COMPAT_SYSCALL_DEFINE6(fanotify_mark,
 {
 	return sys_fanotify_mark(fanotify_fd, flags,
 #ifdef __BIG_ENDIAN
-				((__u64)mask1 << 32) | mask0,
-#else
 				((__u64)mask0 << 32) | mask1,
+#else
+				((__u64)mask1 << 32) | mask0,
 #endif
 				 dfd, pathname);
 }
