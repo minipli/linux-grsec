@@ -218,7 +218,7 @@ asmlinkage long sys32_sigreturn(void)
 	if (__get_user(set.sig[0], &frame->sc.oldmask)
 	    || (_COMPAT_NSIG_WORDS > 1
 		&& __copy_from_user((((char *) &set.sig) + 4),
-				    &frame->extramask,
+				    frame->extramask,
 				    sizeof(frame->extramask))))
 		goto badframe;
 
@@ -338,7 +338,7 @@ static void __user *get_sigframe(struct ksignal *ksig, struct pt_regs *regs,
 	sp -= frame_size;
 	/* Align the stack pointer according to the i386 ABI,
 	 * i.e. so that on function entry ((sp + 4) & 15) == 0. */
-	sp = ((sp + 4) & -16ul) - 4;
+	sp = ((sp - 12) & -16ul) - 4;
 	return (void __user *) sp;
 }
 
@@ -386,7 +386,7 @@ int ia32_setup_frame(int sig, struct ksignal *ksig,
 			restorer = VDSO32_SYMBOL(current->mm->context.vdso,
 						 sigreturn);
 		else
-			restorer = &frame->retcode;
+			restorer = frame->retcode;
 	}
 
 	put_user_try {
@@ -396,7 +396,7 @@ int ia32_setup_frame(int sig, struct ksignal *ksig,
 		 * These are actually not used anymore, but left because some
 		 * gdb versions depend on them as a marker.
 		 */
-		put_user_ex(*((u64 *)&code), (u64 __user *)frame->retcode);
+		put_user_ex(*((const u64 *)&code), (u64 __user *)frame->retcode);
 	} put_user_catch(err);
 
 	if (err)
@@ -438,7 +438,7 @@ int ia32_setup_rt_frame(int sig, struct ksignal *ksig,
 		0xb8,
 		__NR_ia32_rt_sigreturn,
 		0x80cd,
-		0,
+		0
 	};
 
 	frame = get_sigframe(ksig, regs, sizeof(*frame), &fpstate);
@@ -461,16 +461,18 @@ int ia32_setup_rt_frame(int sig, struct ksignal *ksig,
 
 		if (ksig->ka.sa.sa_flags & SA_RESTORER)
 			restorer = ksig->ka.sa.sa_restorer;
+		else if (current->mm->context.vdso)
+			/* Return stub is in 32bit vsyscall page */
+			restorer = VDSO32_SYMBOL(current->mm->context.vdso, rt_sigreturn);
 		else
-			restorer = VDSO32_SYMBOL(current->mm->context.vdso,
-						 rt_sigreturn);
+			restorer = frame->retcode;
 		put_user_ex(ptr_to_compat(restorer), &frame->pretcode);
 
 		/*
 		 * Not actually used anymore, but left because some gdb
 		 * versions need it.
 		 */
-		put_user_ex(*((u64 *)&code), (u64 __user *)frame->retcode);
+		put_user_ex(*((const u64 *)&code), (u64 __user *)frame->retcode);
 	} put_user_catch(err);
 
 	err |= copy_siginfo_to_user32(&frame->info, &ksig->info);

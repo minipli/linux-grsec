@@ -360,7 +360,7 @@ enum
 /* map softirq index to softirq name. update 'softirq_to_name' in
  * kernel/softirq.c when adding a new softirq.
  */
-extern char *softirq_to_name[NR_SOFTIRQS];
+extern const char * const softirq_to_name[NR_SOFTIRQS];
 
 /* softirq mask and active fields moved to irq_cpustat_t in
  * asm/hardirq.h to get better cache usage.  KAO
@@ -368,8 +368,8 @@ extern char *softirq_to_name[NR_SOFTIRQS];
 
 struct softirq_action
 {
-	void	(*action)(struct softirq_action *);
-};
+	void	(*action)(void);
+} __no_const;
 
 asmlinkage void do_softirq(void);
 asmlinkage void __do_softirq(void);
@@ -383,7 +383,7 @@ static inline void do_softirq_own_stack(void)
 }
 #endif
 
-extern void open_softirq(int nr, void (*action)(struct softirq_action *));
+extern void open_softirq(int nr, void (*action)(void));
 extern void softirq_init(void);
 extern void __raise_softirq_irqoff(unsigned int nr);
 

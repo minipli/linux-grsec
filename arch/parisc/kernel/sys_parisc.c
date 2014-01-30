@@ -93,8 +93,15 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr,
 			return -EINVAL;
 		return addr;
 	}
-	if (!addr)
+	if (!addr) {
 		addr = TASK_UNMAPPED_BASE;
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (current->mm->pax_flags & MF_PAX_RANDMMAP)
+			addr += current->mm->delta_mmap;
+#endif
+
+	}
 
 	if (filp || (flags & MAP_SHARED))
 		addr = get_shared_area(filp, addr, len, pgoff);

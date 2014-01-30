@@ -45,7 +45,7 @@ static inline void selinux_xfrm_notify_policyload(void)
 {
 	struct net *net;
 
-	atomic_inc(&flow_cache_genid);
+	atomic_inc_unchecked(&flow_cache_genid);
 	rtnl_lock();
 	for_each_net(net)
 		rt_genid_bump_all(net);
