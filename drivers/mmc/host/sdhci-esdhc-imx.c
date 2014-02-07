@@ -1011,9 +1011,12 @@ static int sdhci_esdhc_imx_probe(struct platform_device *pdev)
 		host->quirks2 |= SDHCI_QUIRK2_PRESET_VALUE_BROKEN;
 	}
 
-	if (imx_data->socdata->flags & ESDHC_FLAG_MAN_TUNING)
-		sdhci_esdhc_ops.platform_execute_tuning =
+	if (imx_data->socdata->flags & ESDHC_FLAG_MAN_TUNING) {
+		pax_open_kernel();
+		*(void **)&sdhci_esdhc_ops.platform_execute_tuning =
 					esdhc_executing_tuning;
+		pax_close_kernel();
+	}
 	boarddata = &imx_data->boarddata;
 	if (sdhci_esdhc_imx_probe_dt(pdev, boarddata) < 0) {
 		if (!host->mmc->parent->platform_data) {
