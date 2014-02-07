@@ -66,6 +66,7 @@
 #include <linux/workqueue.h>
 #include <linux/poll.h>
 #include <asm/pgalloc.h>
+#include <asm/local.h>
 #include <drm/drm.h>
 #include <drm/drm_sarea.h>
 #include <drm/drm_vma_manager.h>
@@ -278,10 +279,12 @@ do {										\
  * \param cmd command.
  * \param arg argument.
  */
-typedef int drm_ioctl_t(struct drm_device *dev, void *data,
+typedef int (* const drm_ioctl_t)(struct drm_device *dev, void *data,
+			struct drm_file *file_priv);
+typedef int (* drm_ioctl_no_const_t)(struct drm_device *dev, void *data,
 			struct drm_file *file_priv);
 
-typedef int drm_ioctl_compat_t(struct file *filp, unsigned int cmd,
+typedef int (* const drm_ioctl_compat_t)(struct file *filp, unsigned int cmd,
 			       unsigned long arg);
 
 #define DRM_IOCTL_NR(n)                _IOC_NR(n)
@@ -297,10 +300,10 @@ typedef int drm_ioctl_compat_t(struct file *filp, unsigned int cmd,
 struct drm_ioctl_desc {
 	unsigned int cmd;
 	int flags;
-	drm_ioctl_t *func;
+	drm_ioctl_t func;
 	unsigned int cmd_drv;
 	const char *name;
-};
+} __do_const;
 
 /**
  * Creates a driver or general drm_ioctl_desc array entry for the given
@@ -1013,7 +1016,8 @@ struct drm_info_list {
 	int (*show)(struct seq_file*, void*); /** show callback */
 	u32 driver_features; /**< Required driver features for this entry */
 	void *data;
-};
+} __do_const;
+typedef struct drm_info_list __no_const drm_info_list_no_const;
 
 /**
  * debugfs node structure. This structure represents a debugfs file.
@@ -1097,7 +1101,7 @@ struct drm_device {
 
 	/** \name Usage Counters */
 	/*@{ */
-	int open_count;			/**< Outstanding files open */
+	local_t open_count;		/**< Outstanding files open */
 	atomic_t ioctl_count;		/**< Outstanding IOCTLs pending */
 	atomic_t vma_count;		/**< Outstanding vma areas open */
 	int buf_use;			/**< Buffers in use -- cannot alloc */

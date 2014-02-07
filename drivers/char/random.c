@@ -270,10 +270,17 @@
 /*
  * Configuration information
  */
+#ifdef CONFIG_GRKERNSEC_RANDNET
+#define INPUT_POOL_SHIFT	14
+#define INPUT_POOL_WORDS	(1 << (INPUT_POOL_SHIFT-5))
+#define OUTPUT_POOL_SHIFT	12
+#define OUTPUT_POOL_WORDS	(1 << (OUTPUT_POOL_SHIFT-5))
+#else
 #define INPUT_POOL_SHIFT	12
 #define INPUT_POOL_WORDS	(1 << (INPUT_POOL_SHIFT-5))
 #define OUTPUT_POOL_SHIFT	10
 #define OUTPUT_POOL_WORDS	(1 << (OUTPUT_POOL_SHIFT-5))
+#endif
 #define SEC_XFER_SIZE		512
 #define EXTRACT_SIZE		10
 
@@ -361,12 +368,19 @@ static struct poolinfo {
 #define S(x) ilog2(x)+5, (x), (x)*4, (x)*32, (x) << (ENTROPY_SHIFT+5)
 	int tap1, tap2, tap3, tap4, tap5;
 } poolinfo_table[] = {
+#ifdef CONFIG_GRKERNSEC_RANDNET
+	/* x^512 + x^411 + x^308 + x^208 +x^104 + x + 1 -- 225 */
+	{ S(512),	411,	308,	208,	104,	1 },
+	/* x^128 + x^104 + x^76 + x^51 + x^25 + x + 1 -- 105 */
+	{ S(128),	104,	76,	51,	25,	1 },
+#else
 	/* was: x^128 + x^103 + x^76 + x^51 +x^25 + x + 1 */
 	/* x^128 + x^104 + x^76 + x^51 +x^25 + x + 1 */
 	{ S(128),	104,	76,	51,	25,	1 },
 	/* was: x^32 + x^26 + x^20 + x^14 + x^7 + x + 1 */
 	/* x^32 + x^26 + x^19 + x^14 + x^7 + x + 1 */
 	{ S(32),	26,	19,	14,	7,	1 },
+#endif
 #if 0
 	/* x^2048 + x^1638 + x^1231 + x^819 + x^411 + x + 1  -- 115 */
 	{ S(2048),	1638,	1231,	819,	411,	1 },
@@ -524,8 +538,8 @@ static void _mix_pool_bytes(struct entropy_store *r, const void *in,
 		input_rotate = (input_rotate + (i ? 7 : 14)) & 31;
 	}
 
-	ACCESS_ONCE(r->input_rotate) = input_rotate;
-	ACCESS_ONCE(r->add_ptr) = i;
+	ACCESS_ONCE_RW(r->input_rotate) = input_rotate;
+	ACCESS_ONCE_RW(r->add_ptr) = i;
 	smp_wmb();
 
 	if (out)
@@ -1151,7 +1165,7 @@ static ssize_t extract_entropy_user(struct entropy_store *r, void __user *buf,
 
 		extract_buf(r, tmp);
 		i = min_t(int, nbytes, EXTRACT_SIZE);
-		if (copy_to_user(buf, tmp, i)) {
+		if (i > sizeof(tmp) || copy_to_user(buf, tmp, i)) {
 			ret = -EFAULT;
 			break;
 		}
@@ -1507,7 +1521,7 @@ EXPORT_SYMBOL(generate_random_uuid);
 #include <linux/sysctl.h>
 
 static int min_read_thresh = 8, min_write_thresh;
-static int max_read_thresh = INPUT_POOL_WORDS * 32;
+static int max_read_thresh = OUTPUT_POOL_WORDS * 32;
 static int max_write_thresh = INPUT_POOL_WORDS * 32;
 static char sysctl_bootid[16];
 
@@ -1523,7 +1537,7 @@ static char sysctl_bootid[16];
 static int proc_do_uuid(struct ctl_table *table, int write,
 			void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table fake_table;
+	ctl_table_no_const fake_table;
 	unsigned char buf[64], tmp_uuid[16], *uuid;
 
 	uuid = table->data;
@@ -1553,7 +1567,7 @@ static int proc_do_uuid(struct ctl_table *table, int write,
 static int proc_do_entropy(ctl_table *table, int write,
 			   void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	ctl_table fake_table;
+	ctl_table_no_const fake_table;
 	int entropy_count;
 
 	entropy_count = *(int *)table->data >> ENTROPY_SHIFT;
