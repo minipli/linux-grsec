@@ -258,7 +258,7 @@ struct bfa_ioc_cbfn_s {
 	bfa_ioc_disable_cbfn_t	disable_cbfn;
 	bfa_ioc_hbfail_cbfn_t	hbfail_cbfn;
 	bfa_ioc_reset_cbfn_t	reset_cbfn;
-};
+} __no_const;
 
 /*
  * IOC event notification mechanism.
@@ -352,7 +352,7 @@ struct bfa_ioc_hwif_s {
 	void		(*ioc_set_alt_fwstate)	(struct bfa_ioc_s *ioc,
 					enum bfi_ioc_state fwstate);
 	enum bfi_ioc_state	(*ioc_get_alt_fwstate)	(struct bfa_ioc_s *ioc);
-};
+} __no_const;
 
 /*
  * Queue element to wait for room in request queue. FIFO order is
