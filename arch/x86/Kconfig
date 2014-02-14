@@ -249,7 +249,7 @@ config X86_HT
 
 config X86_32_LAZY_GS
 	def_bool y
-	depends on X86_32 && !CC_STACKPROTECTOR
+	depends on X86_32 && !CC_STACKPROTECTOR && !PAX_MEMORY_UDEREF
 
 config ARCH_HWEIGHT_CFLAGS
 	string
@@ -602,6 +602,7 @@ config SCHED_OMIT_FRAME_POINTER
 
 menuconfig HYPERVISOR_GUEST
 	bool "Linux guest support"
+	depends on !GRKERNSEC_CONFIG_AUTO || GRKERNSEC_CONFIG_VIRT_GUEST
 	---help---
 	  Say Y here to enable options for running Linux under various hyper-
 	  visors. This option enables basic hypervisor detection and platform
@@ -1127,7 +1128,7 @@ choice
 
 config NOHIGHMEM
 	bool "off"
-	depends on !X86_NUMAQ
+	depends on !X86_NUMAQ && !(PAX_PAGEEXEC && PAX_ENABLE_PAE)
 	---help---
 	  Linux can use up to 64 Gigabytes of physical memory on x86 systems.
 	  However, the address space of 32-bit x86 processors is only 4
@@ -1164,7 +1165,7 @@ config NOHIGHMEM
 
 config HIGHMEM4G
 	bool "4GB"
-	depends on !X86_NUMAQ
+	depends on !X86_NUMAQ && !(PAX_PAGEEXEC && PAX_ENABLE_PAE)
 	---help---
 	  Select this if you have a 32-bit processor and between 1 and 4
 	  gigabytes of physical RAM.
@@ -1217,7 +1218,7 @@ config PAGE_OFFSET
 	hex
 	default 0xB0000000 if VMSPLIT_3G_OPT
 	default 0x80000000 if VMSPLIT_2G
-	default 0x78000000 if VMSPLIT_2G_OPT
+	default 0x70000000 if VMSPLIT_2G_OPT
 	default 0x40000000 if VMSPLIT_1G
 	default 0xC0000000
 	depends on X86_32
@@ -1619,6 +1620,7 @@ config SECCOMP
 
 config CC_STACKPROTECTOR
 	bool "Enable -fstack-protector buffer overflow detection"
+	depends on X86_64 || !PAX_MEMORY_UDEREF
 	---help---
 	  This option turns on the -fstack-protector GCC feature. This
 	  feature puts, at the beginning of functions, a canary value on
@@ -1637,6 +1639,7 @@ source kernel/Kconfig.hz
 
 config KEXEC
 	bool "kexec system call"
+	depends on !GRKERNSEC_KMEM
 	---help---
 	  kexec is a system call that implements the ability to shutdown your
 	  current kernel, and to start another kernel.  It is like a reboot
@@ -1738,6 +1741,8 @@ config X86_NEED_RELOCS
 config PHYSICAL_ALIGN
 	hex "Alignment value to which kernel should be aligned"
 	default "0x1000000"
+	range 0x200000 0x1000000 if PAX_KERNEXEC && X86_PAE
+	range 0x400000 0x1000000 if PAX_KERNEXEC && !X86_PAE
 	range 0x2000 0x1000000 if X86_32
 	range 0x200000 0x1000000 if X86_64
 	---help---
@@ -1817,9 +1822,10 @@ config DEBUG_HOTPLUG_CPU0
 	  If unsure, say N.
 
 config COMPAT_VDSO
-	def_bool y
+	def_bool n
 	prompt "Compat VDSO support"
 	depends on X86_32 || IA32_EMULATION
+	depends on !PAX_PAGEEXEC && !PAX_SEGMEXEC && !PAX_KERNEXEC && !PAX_MEMORY_UDEREF
 	---help---
 	  Map the 32-bit VDSO to the predictable old-style address too.
 

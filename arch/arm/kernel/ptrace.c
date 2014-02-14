@@ -929,9 +929,18 @@ static int tracehook_report_syscall(struct pt_regs *regs,
 	return current_thread_info()->syscall;
 }
 
+#ifdef CONFIG_GRKERNSEC_SETXID
+extern void gr_delayed_cred_worker(void);
+#endif
+
 asmlinkage int syscall_trace_enter(struct pt_regs *regs, int scno)
 {
 	current_thread_info()->syscall = scno;
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
 
 	/* Do the secure computing check first; failures should be fast. */
 	if (secure_computing(scno) == -1)
