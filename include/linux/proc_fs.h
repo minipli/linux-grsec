@@ -76,7 +76,7 @@ struct proc_dir_entry {
 	spinlock_t pde_unload_lock; /* proc_fops checks and pde_users bumps */
 	u8 namelen;
 	char name[];
-};
+} __randomize_layout;
 
 enum kcore_type {
 	KCORE_TEXT,
@@ -154,6 +154,19 @@ static inline struct proc_dir_entry *proc_create(const char *name, mode_t mode,
 {
 	return proc_create_data(name, mode, parent, proc_fops, NULL);
 }
+
+static inline struct proc_dir_entry *proc_create_grsec(const char *name, mode_t mode,
+	struct proc_dir_entry *parent, const struct file_operations *proc_fops)
+{
+#ifdef CONFIG_GRKERNSEC_PROC_USER
+	return proc_create_data(name, S_IRUSR, parent, proc_fops, NULL);
+#elif defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+	return proc_create_data(name, S_IRUSR | S_IRGRP, parent, proc_fops, NULL);
+#else
+	return proc_create_data(name, mode, parent, proc_fops, NULL);
+#endif
+}
+	
 
 static inline struct proc_dir_entry *create_proc_read_entry(const char *name,
 	mode_t mode, struct proc_dir_entry *base, 
@@ -247,7 +260,7 @@ struct proc_ns_operations {
 	void *(*get)(struct task_struct *task);
 	void (*put)(void *ns);
 	int (*install)(struct nsproxy *nsproxy, void *ns);
-};
+} __do_const;
 extern const struct proc_ns_operations netns_operations;
 extern const struct proc_ns_operations utsns_operations;
 extern const struct proc_ns_operations ipcns_operations;
@@ -273,7 +286,7 @@ struct proc_inode {
 	void *ns;
 	const struct proc_ns_operations *ns_ops;
 	struct inode vfs_inode;
-};
+} __randomize_layout;
 
 static inline struct proc_inode *PROC_I(const struct inode *inode)
 {

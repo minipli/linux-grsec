@@ -768,6 +768,12 @@ static struct sock *unix_find_other(struct net *net,
 		err = -ECONNREFUSED;
 		if (!S_ISSOCK(inode->i_mode))
 			goto put_fail;
+
+		if (!gr_acl_handle_unix(path.dentry, path.mnt)) {
+			err = -EACCES;
+			goto put_fail;
+		}
+
 		u = unix_find_socket_byinode(inode);
 		if (!u)
 			goto put_fail;
@@ -788,6 +794,13 @@ static struct sock *unix_find_other(struct net *net,
 		if (u) {
 			struct dentry *dentry;
 			dentry = unix_sk(u)->dentry;
+
+			if (!gr_handle_chroot_unix(pid_vnr(u->sk_peer_pid))) {
+				err = -EPERM;
+				sock_put(u);
+				goto fail;
+			}
+
 			if (dentry)
 				touch_atime(unix_sk(u)->mnt, dentry);
 		} else
@@ -872,11 +885,18 @@ static int unix_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 		err = security_path_mknod(&path, dentry, mode, 0);
 		if (err)
 			goto out_mknod_drop_write;
+		if (!gr_acl_handle_mknod(dentry, path.dentry, path.mnt, mode)) {
+			err = -EACCES;
+			goto out_mknod_drop_write;
+		}
 		err = vfs_mknod(path.dentry->d_inode, dentry, mode, 0);
 out_mknod_drop_write:
 		mnt_drop_write(path.mnt);
 		if (err)
 			goto out_mknod_dput;
+
+		gr_handle_create(dentry, path.mnt);
+
 		mutex_unlock(&path.dentry->d_inode->i_mutex);
 		dput(path.dentry);
 		path.dentry = dentry;
@@ -2269,9 +2289,13 @@ static int unix_seq_show(struct seq_file *seq, void *v)
 		seq_puts(seq, "Num       RefCount Protocol Flags    Type St "
 			 "Inode Path\n");
 	else {
-		struct sock *s = v;
+		struct sock *s = v, *peer;
 		struct unix_sock *u = unix_sk(s);
 		unix_state_lock(s);
+		peer = unix_peer(s);
+		unix_state_unlock(s);
+
+		unix_state_double_lock(s, peer);
 
 		seq_printf(seq, "%pK: %08X %08X %08X %04X %02X %5lu",
 			s,
@@ -2298,8 +2322,10 @@ static int unix_seq_show(struct seq_file *seq, void *v)
 			}
 			for ( ; i < len; i++)
 				seq_putc(seq, u->addr->name->sun_path[i]);
-		}
-		unix_state_unlock(s);
+		} else if (peer)
+			seq_printf(seq, " P%lu", sock_i_ino(peer));
+
+		unix_state_double_unlock(s, peer);
 		seq_putc(seq, '\n');
 	}
 

@@ -31,6 +31,7 @@
 	movl %r8d,%ecx
 	rep stosb
 	movq %r9,%rax
+	pax_force_retaddr
 	ret
 .Lmemset_e:
 	.previous
@@ -53,6 +54,7 @@
 	movl %edx,%ecx
 	rep stosb
 	movq %r9,%rax
+	pax_force_retaddr
 	ret
 .Lmemset_e_e:
 	.previous
@@ -121,6 +123,7 @@ ENTRY(__memset)
 
 .Lende:
 	movq	%r10,%rax
+	pax_force_retaddr
 	ret
 
 	CFI_RESTORE_STATE

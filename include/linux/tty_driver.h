@@ -286,7 +286,7 @@ struct tty_operations {
 	void (*poll_put_char)(struct tty_driver *driver, int line, char ch);
 #endif
 	const struct file_operations *proc_fops;
-};
+} __do_const;
 
 struct tty_driver {
 	int	magic;		/* magic number for this structure */
@@ -321,7 +321,7 @@ struct tty_driver {
 
 	const struct tty_operations *ops;
 	struct list_head tty_drivers;
-};
+} __randomize_layout;
 
 extern struct list_head tty_drivers;
 

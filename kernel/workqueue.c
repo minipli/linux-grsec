@@ -3499,7 +3499,7 @@ static int __cpuinit trustee_thread(void *__gcwq)
 		 */
 		worker_flags |= WORKER_REBIND;
 		worker_flags &= ~WORKER_ROGUE;
-		ACCESS_ONCE(worker->flags) = worker_flags;
+		ACCESS_ONCE_RW(worker->flags) = worker_flags;
 
 		/* queue rebind_work, wq doesn't matter, use the default one */
 		if (test_and_set_bit(WORK_STRUCT_PENDING_BIT,

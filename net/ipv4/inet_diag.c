@@ -114,8 +114,14 @@ static int inet_csk_diag_fill(struct sock *sk,
 	r->idiag_retrans = 0;
 
 	r->id.idiag_if = sk->sk_bound_dev_if;
+
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	r->id.idiag_cookie[0] = 0;
+	r->id.idiag_cookie[1] = 0;
+#else
 	r->id.idiag_cookie[0] = (u32)(unsigned long)sk;
 	r->id.idiag_cookie[1] = (u32)(((unsigned long)sk >> 31) >> 1);
+#endif
 
 	r->id.idiag_sport = inet->inet_sport;
 	r->id.idiag_dport = inet->inet_dport;
@@ -215,8 +221,14 @@ static int inet_twsk_diag_fill(struct inet_timewait_sock *tw,
 	r->idiag_retrans      = 0;
 
 	r->id.idiag_if	      = tw->tw_bound_dev_if;
+
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	r->id.idiag_cookie[0] = 0;
+	r->id.idiag_cookie[1] = 0;
+#else
 	r->id.idiag_cookie[0] = (u32)(unsigned long)tw;
 	r->id.idiag_cookie[1] = (u32)(((unsigned long)tw >> 31) >> 1);
+#endif
 
 	r->id.idiag_sport     = tw->tw_sport;
 	r->id.idiag_dport     = tw->tw_dport;
@@ -305,12 +317,14 @@ static int inet_diag_get_exact(struct sk_buff *in_skb,
 	if (sk == NULL)
 		goto unlock;
 
+#ifndef CONFIG_GRKERNSEC_HIDESYM
 	err = -ESTALE;
 	if ((req->id.idiag_cookie[0] != INET_DIAG_NOCOOKIE ||
 	     req->id.idiag_cookie[1] != INET_DIAG_NOCOOKIE) &&
 	    ((u32)(unsigned long)sk != req->id.idiag_cookie[0] ||
 	     (u32)((((unsigned long)sk) >> 31) >> 1) != req->id.idiag_cookie[1]))
 		goto out;
+#endif
 
 	err = -ENOMEM;
 	rep = alloc_skb(NLMSG_SPACE((sizeof(struct inet_diag_msg) +
@@ -600,8 +614,14 @@ static int inet_diag_fill_req(struct sk_buff *skb, struct sock *sk,
 	r->idiag_retrans = req->retrans;
 
 	r->id.idiag_if = sk->sk_bound_dev_if;
+
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	r->id.idiag_cookie[0] = 0;
+	r->id.idiag_cookie[1] = 0;
+#else
 	r->id.idiag_cookie[0] = (u32)(unsigned long)req;
 	r->id.idiag_cookie[1] = (u32)(((unsigned long)req >> 31) >> 1);
+#endif
 
 	tmo = req->expires - jiffies;
 	if (tmo < 0)
