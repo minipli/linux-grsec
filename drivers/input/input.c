@@ -1814,7 +1814,7 @@ static void input_cleanse_bitmasks(struct input_dev *dev)
  */
 int input_register_device(struct input_dev *dev)
 {
-	static atomic_t input_no = ATOMIC_INIT(0);
+	static atomic_unchecked_t input_no = ATOMIC_INIT(0);
 	struct input_handler *handler;
 	const char *path;
 	int error;
@@ -1851,7 +1851,7 @@ int input_register_device(struct input_dev *dev)
 		dev->setkeycode = input_default_setkeycode;
 
 	dev_set_name(&dev->dev, "input%ld",
-		     (unsigned long) atomic_inc_return(&input_no) - 1);
+		     (unsigned long) atomic_inc_return_unchecked(&input_no) - 1);
 
 	error = device_add(&dev->dev);
 	if (error)
