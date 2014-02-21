@@ -629,7 +629,7 @@ int arch_uprobe_exception_notify(struct notifier_block *self, unsigned long val,
 	int ret = NOTIFY_DONE;
 
 	/* We are only interested in userspace traps */
-	if (regs && !user_mode_vm(regs))
+	if (regs && !user_mode(regs))
 		return NOTIFY_DONE;
 
 	switch (val) {
@@ -719,7 +719,7 @@ arch_uretprobe_hijack_return_addr(unsigned long trampoline_vaddr, struct pt_regs
 
 	if (ncopied != rasize) {
 		pr_err("uprobe: return address clobbered: pid=%d, %%sp=%#lx, "
-			"%%ip=%#lx\n", current->pid, regs->sp, regs->ip);
+			"%%ip=%#lx\n", task_pid_nr(current), regs->sp, regs->ip);
 
 		force_sig_info(SIGSEGV, SEND_SIG_FORCED, current);
 	}

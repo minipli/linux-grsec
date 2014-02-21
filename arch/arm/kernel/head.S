@@ -52,7 +52,9 @@
 	.equ	swapper_pg_dir, KERNEL_RAM_VADDR - PG_DIR_SIZE
 
 	.macro	pgtbl, rd, phys
-	add	\rd, \phys, #TEXT_OFFSET - PG_DIR_SIZE
+	mov	\rd, #TEXT_OFFSET
+	sub	\rd, #PG_DIR_SIZE
+	add	\rd, \rd, \phys
 	.endm
 
 /*
@@ -436,7 +438,7 @@ __enable_mmu:
 	mov	r5, #(domain_val(DOMAIN_USER, DOMAIN_MANAGER) | \
 		      domain_val(DOMAIN_KERNEL, DOMAIN_MANAGER) | \
 		      domain_val(DOMAIN_TABLE, DOMAIN_MANAGER) | \
-		      domain_val(DOMAIN_IO, DOMAIN_CLIENT))
+		      domain_val(DOMAIN_IO, DOMAIN_KERNELCLIENT))
 	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
 	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer
 #endif
