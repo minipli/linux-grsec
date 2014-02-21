@@ -771,6 +771,8 @@ do {									       \
 	if (EXT4_FITS_IN_INODE(raw_inode, einode, xtime))		       \
 		(einode)->xtime.tv_sec = 				       \
 			(signed)le32_to_cpu((raw_inode)->xtime);	       \
+	else								       \
+		(einode)->xtime.tv_sec = 0;				       \
 	if (EXT4_FITS_IN_INODE(raw_inode, einode, xtime ## _extra))	       \
 		ext4_decode_extra_time(&(einode)->xtime,		       \
 				       raw_inode->xtime ## _extra);	       \
@@ -1267,19 +1269,19 @@ struct ext4_sb_info {
 	unsigned long s_mb_last_start;
 
 	/* stats for buddy allocator */
-	atomic_t s_bal_reqs;	/* number of reqs with len > 1 */
-	atomic_t s_bal_success;	/* we found long enough chunks */
-	atomic_t s_bal_allocated;	/* in blocks */
-	atomic_t s_bal_ex_scanned;	/* total extents scanned */
-	atomic_t s_bal_goals;	/* goal hits */
-	atomic_t s_bal_breaks;	/* too long searches */
-	atomic_t s_bal_2orders;	/* 2^order hits */
+	atomic_unchecked_t s_bal_reqs;	/* number of reqs with len > 1 */
+	atomic_unchecked_t s_bal_success;	/* we found long enough chunks */
+	atomic_unchecked_t s_bal_allocated;	/* in blocks */
+	atomic_unchecked_t s_bal_ex_scanned;	/* total extents scanned */
+	atomic_unchecked_t s_bal_goals;	/* goal hits */
+	atomic_unchecked_t s_bal_breaks;	/* too long searches */
+	atomic_unchecked_t s_bal_2orders;	/* 2^order hits */
 	spinlock_t s_bal_lock;
 	unsigned long s_mb_buddies_generated;
 	unsigned long long s_mb_generation_time;
-	atomic_t s_mb_lost_chunks;
-	atomic_t s_mb_preallocated;
-	atomic_t s_mb_discarded;
+	atomic_unchecked_t s_mb_lost_chunks;
+	atomic_unchecked_t s_mb_preallocated;
+	atomic_unchecked_t s_mb_discarded;
 	atomic_t s_lock_busy;
 
 	/* locality groups */

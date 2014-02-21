@@ -784,7 +784,7 @@ void radeon_ttm_set_active_vram_size(struct radeon_device *rdev, u64 size)
 	man->size = size >> PAGE_SHIFT;
 }
 
-static struct vm_operations_struct radeon_ttm_vm_ops;
+static vm_operations_struct_no_const radeon_ttm_vm_ops __read_only;
 static const struct vm_operations_struct *ttm_vm_ops = NULL;
 
 static int radeon_ttm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
@@ -825,8 +825,10 @@ int radeon_mmap(struct file *filp, struct vm_area_struct *vma)
 	}
 	if (unlikely(ttm_vm_ops == NULL)) {
 		ttm_vm_ops = vma->vm_ops;
+		pax_open_kernel();
 		radeon_ttm_vm_ops = *ttm_vm_ops;
 		radeon_ttm_vm_ops.fault = &radeon_ttm_fault;
+		pax_close_kernel();
 	}
 	vma->vm_ops = &radeon_ttm_vm_ops;
 	return 0;
@@ -855,38 +857,33 @@ static int radeon_mm_dump_table(struct seq_file *m, void *data)
 static int radeon_ttm_debugfs_init(struct radeon_device *rdev)
 {
 #if defined(CONFIG_DEBUG_FS)
-	static struct drm_info_list radeon_mem_types_list[RADEON_DEBUGFS_MEM_TYPES+2];
-	static char radeon_mem_types_names[RADEON_DEBUGFS_MEM_TYPES+2][32];
-	unsigned i;
+	static struct drm_info_list radeon_mem_types_list[RADEON_DEBUGFS_MEM_TYPES+2] = {
+		{
+			.name = "radeon_vram_mm",
+			.show = &radeon_mm_dump_table,
+		},
+		{
+			.name = "radeon_gtt_mm",
+			.show = &radeon_mm_dump_table,
+		},
+		{
+			.name = "ttm_page_pool",
+			.show = &ttm_page_alloc_debugfs,
+		},
+		{
+			.name = "ttm_dma_page_pool",
+			.show = &ttm_dma_page_alloc_debugfs,
+		},
+	};
+	unsigned i = RADEON_DEBUGFS_MEM_TYPES + 1;
 
-	for (i = 0; i < RADEON_DEBUGFS_MEM_TYPES; i++) {
-		if (i == 0)
-			sprintf(radeon_mem_types_names[i], "radeon_vram_mm");
-		else
-			sprintf(radeon_mem_types_names[i], "radeon_gtt_mm");
-		radeon_mem_types_list[i].name = radeon_mem_types_names[i];
-		radeon_mem_types_list[i].show = &radeon_mm_dump_table;
-		radeon_mem_types_list[i].driver_features = 0;
-		if (i == 0)
-			radeon_mem_types_list[i].data = rdev->mman.bdev.man[TTM_PL_VRAM].priv;
-		else
-			radeon_mem_types_list[i].data = rdev->mman.bdev.man[TTM_PL_TT].priv;
-
-	}
-	/* Add ttm page pool to debugfs */
-	sprintf(radeon_mem_types_names[i], "ttm_page_pool");
-	radeon_mem_types_list[i].name = radeon_mem_types_names[i];
-	radeon_mem_types_list[i].show = &ttm_page_alloc_debugfs;
-	radeon_mem_types_list[i].driver_features = 0;
-	radeon_mem_types_list[i++].data = NULL;
+	pax_open_kernel();
+	*(void **)&radeon_mem_types_list[0].data = rdev->mman.bdev.man[TTM_PL_VRAM].priv;
+	*(void **)&radeon_mem_types_list[1].data = rdev->mman.bdev.man[TTM_PL_TT].priv;
+	pax_close_kernel();
 #ifdef CONFIG_SWIOTLB
-	if (swiotlb_nr_tbl()) {
-		sprintf(radeon_mem_types_names[i], "ttm_dma_page_pool");
-		radeon_mem_types_list[i].name = radeon_mem_types_names[i];
-		radeon_mem_types_list[i].show = &ttm_dma_page_alloc_debugfs;
-		radeon_mem_types_list[i].driver_features = 0;
-		radeon_mem_types_list[i++].data = NULL;
-	}
+	if (swiotlb_nr_tbl())
+		i++;
 #endif
 	return radeon_debugfs_add_files(rdev, radeon_mem_types_list, i);
 
