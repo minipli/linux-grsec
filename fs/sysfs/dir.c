@@ -40,7 +40,7 @@ static DEFINE_IDA(sysfs_ino_ida);
  *
  *	Returns 31 bit hash of ns + name (so it fits in an off_t )
  */
-static unsigned int sysfs_name_hash(const char *name, const void *ns)
+static unsigned int sysfs_name_hash(const unsigned char *name, const void *ns)
 {
 	unsigned long hash = init_name_hash();
 	unsigned int len = strlen(name);
@@ -675,6 +675,18 @@ static int create_dir(struct kobject *kobj, struct sysfs_dirent *parent_sd,
 	struct sysfs_addrm_cxt acxt;
 	struct sysfs_dirent *sd;
 	int rc;
+
+#ifdef CONFIG_GRKERNSEC_SYSFS_RESTRICT
+	const char *parent_name = parent_sd->s_name;
+
+	mode = S_IFDIR | S_IRWXU;
+
+	if ((!strcmp(parent_name, "") && (!strcmp(name, "devices") || !strcmp(name, "fs"))) ||
+	    (!strcmp(parent_name, "devices") && !strcmp(name, "system")) ||
+	    (!strcmp(parent_name, "fs") && (!strcmp(name, "selinux") || !strcmp(name, "fuse") || !strcmp(name, "ecryptfs"))) ||
+	    (!strcmp(parent_name, "system") && !strcmp(name, "cpu")))
+		mode = S_IFDIR | S_IRWXU | S_IRUGO | S_IXUGO;
+#endif
 
 	/* allocate */
 	sd = sysfs_new_dirent(name, mode, SYSFS_DIR);
