@@ -49,6 +49,8 @@ struct thread_info {
 	unsigned long		w_saved;
 
 	struct restart_block	restart_block;
+
+	unsigned long		lowest_stack;
 };
 
 /*
