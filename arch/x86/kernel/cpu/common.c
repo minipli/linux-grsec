@@ -232,7 +232,7 @@ static __always_inline void setup_smap(struct cpuinfo_x86 *c)
 
 	if (cpu_has(c, X86_FEATURE_SMAP)) {
 #ifdef CONFIG_X86_SMAP
- 		set_in_cr4(X86_CR4_SMAP);
+		set_in_cr4(X86_CR4_SMAP);
 #else
 		clear_in_cr4(X86_CR4_SMAP);
 #endif
