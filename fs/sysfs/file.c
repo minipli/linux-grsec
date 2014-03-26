@@ -42,7 +42,7 @@ static DEFINE_MUTEX(sysfs_open_file_mutex);
 
 struct sysfs_open_dirent {
 	atomic_t		refcnt;
-	atomic_t		event;
+	atomic_unchecked_t	event;
 	wait_queue_head_t	poll;
 	struct list_head	files; /* goes through sysfs_open_file.list */
 };
@@ -112,7 +112,7 @@ static int sysfs_seq_show(struct seq_file *sf, void *v)
 		return -ENODEV;
 	}
 
-	of->event = atomic_read(&of->sd->s_attr.open->event);
+	of->event = atomic_read_unchecked(&of->sd->s_attr.open->event);
 
 	/*
 	 * Lookup @ops and invoke show().  Control may reach here via seq
@@ -365,12 +365,12 @@ static int sysfs_bin_page_mkwrite(struct vm_area_struct *vma,
 	return ret;
 }
 
-static int sysfs_bin_access(struct vm_area_struct *vma, unsigned long addr,
-			    void *buf, int len, int write)
+static ssize_t sysfs_bin_access(struct vm_area_struct *vma, unsigned long addr,
+			    void *buf, size_t len, int write)
 {
 	struct file *file = vma->vm_file;
 	struct sysfs_open_file *of = sysfs_of(file);
-	int ret;
+	ssize_t ret;
 
 	if (!of->vm_ops)
 		return -EINVAL;
@@ -564,7 +564,7 @@ static int sysfs_get_open_dirent(struct sysfs_dirent *sd,
 		return -ENOMEM;
 
 	atomic_set(&new_od->refcnt, 0);
-	atomic_set(&new_od->event, 1);
+	atomic_set_unchecked(&new_od->event, 1);
 	init_waitqueue_head(&new_od->poll);
 	INIT_LIST_HEAD(&new_od->files);
 	goto retry;
@@ -768,7 +768,7 @@ static unsigned int sysfs_poll(struct file *filp, poll_table *wait)
 
 	sysfs_put_active(attr_sd);
 
-	if (of->event != atomic_read(&od->event))
+	if (of->event != atomic_read_unchecked(&od->event))
 		goto trigger;
 
 	return DEFAULT_POLLMASK;
@@ -787,7 +787,7 @@ void sysfs_notify_dirent(struct sysfs_dirent *sd)
 	if (!WARN_ON(sysfs_type(sd) != SYSFS_KOBJ_ATTR)) {
 		od = sd->s_attr.open;
 		if (od) {
-			atomic_inc(&od->event);
+			atomic_inc_unchecked(&od->event);
 			wake_up_interruptible(&od->poll);
 		}
 	}

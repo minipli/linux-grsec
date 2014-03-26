@@ -643,7 +643,7 @@ static int vga_switcheroo_runtime_resume(struct device *dev)
 
 /* this version is for the case where the power switch is separate
    to the device being powered down. */
-int vga_switcheroo_init_domain_pm_ops(struct device *dev, struct dev_pm_domain *domain)
+int vga_switcheroo_init_domain_pm_ops(struct device *dev, dev_pm_domain_no_const *domain)
 {
 	/* copy over all the bus versions */
 	if (dev->bus && dev->bus->pm) {
@@ -688,7 +688,7 @@ static int vga_switcheroo_runtime_resume_hdmi_audio(struct device *dev)
 	return ret;
 }
 
-int vga_switcheroo_init_domain_pm_optimus_hdmi_audio(struct device *dev, struct dev_pm_domain *domain)
+int vga_switcheroo_init_domain_pm_optimus_hdmi_audio(struct device *dev, dev_pm_domain_no_const *domain)
 {
 	/* copy over all the bus versions */
 	if (dev->bus && dev->bus->pm) {
