@@ -26,7 +26,7 @@ int plugin_is_GPL_compatible;
 static tree latent_entropy_decl;
 
 static struct plugin_info latent_entropy_plugin_info = {
-	.version	= "201402240545",
+	.version	= "201403042150",
 	.help		= NULL
 };
 
@@ -322,7 +322,8 @@ static unsigned int execute_latent_entropy(void)
 	gsi_insert_after(&gsi, assign, GSI_NEW_STMT);
 	update_stmt(assign);
 //debug_bb(bb);
-	bb = bb->next_bb;
+	gcc_assert(single_succ_p(bb));
+	bb = single_succ(bb);
 
 	// 3. instrument each BB with an operation on the local entropy variable
 	while (bb != EXIT_BLOCK_PTR_FOR_FN(cfun)) {
@@ -332,8 +333,9 @@ static unsigned int execute_latent_entropy(void)
 	};
 
 	// 4. mix local entropy into the global entropy variable
-	perturb_latent_entropy(EXIT_BLOCK_PTR_FOR_FN(cfun)->prev_bb, local_entropy);
-//debug_bb(EXIT_BLOCK_PTR_FOR_FN(cfun)->prev_bb);
+	gcc_assert(single_pred_p(EXIT_BLOCK_PTR_FOR_FN(cfun)));
+	perturb_latent_entropy(single_pred(EXIT_BLOCK_PTR_FOR_FN(cfun)), local_entropy);
+//debug_bb(single_pred(EXIT_BLOCK_PTR_FOR_FN(cfun)));
 	return 0;
 }
 
