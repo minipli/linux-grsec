@@ -26,7 +26,7 @@ int plugin_is_GPL_compatible;
 static tree latent_entropy_decl;
 
 static struct plugin_info latent_entropy_plugin_info = {
-	.version	= "201403042150",
+	.version	= "201403280150",
 	.help		= NULL
 };
 
@@ -198,6 +198,10 @@ static void register_attributes(void *event_data, void *data)
 
 static bool gate_latent_entropy(void)
 {
+	// don't bother with noreturn functions for now
+	if (TREE_THIS_VOLATILE(current_function_decl))
+		return false;
+
 	return lookup_attribute("latent_entropy", DECL_ATTRIBUTES(current_function_decl)) != NULL_TREE;
 }
 
