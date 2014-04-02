@@ -546,7 +546,7 @@ int udpv6_queue_rcv_skb(struct sock * sk, struct sk_buff *skb)
 
 	return 0;
 drop:
-	atomic_inc(&sk->sk_drops);
+	atomic_inc_unchecked(&sk->sk_drops);
 drop_no_sk_drops_inc:
 	UDP6_INC_STATS_BH(sock_net(sk), UDP_MIB_INERRORS, is_udplite);
 	kfree_skb(skb);
@@ -622,7 +622,7 @@ static void flush_stack(struct sock **stack, unsigned int count,
 			continue;
 		}
 drop:
-		atomic_inc(&sk->sk_drops);
+		atomic_inc_unchecked(&sk->sk_drops);
 		UDP6_INC_STATS_BH(sock_net(sk),
 				UDP_MIB_RCVBUFERRORS, IS_UDPLITE(sk));
 		UDP6_INC_STATS_BH(sock_net(sk),
@@ -793,7 +793,7 @@ int __udp6_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 	if (!sock_owned_by_user(sk))
 		udpv6_queue_rcv_skb(sk, skb);
 	else if (sk_add_backlog(sk, skb)) {
-		atomic_inc(&sk->sk_drops);
+		atomic_inc_unchecked(&sk->sk_drops);
 		bh_unlock_sock(sk);
 		sock_put(sk);
 		goto discard;
@@ -1410,7 +1410,7 @@ static void udp6_sock_seq_show(struct seq_file *seq, struct sock *sp, int bucket
 		   sock_i_uid(sp), 0,
 		   sock_i_ino(sp),
 		   atomic_read(&sp->sk_refcnt), sp,
-		   atomic_read(&sp->sk_drops));
+		   atomic_read_unchecked(&sp->sk_drops));
 }
 
 int udp6_seq_show(struct seq_file *seq, void *v)
