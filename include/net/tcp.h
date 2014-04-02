@@ -433,6 +433,25 @@ extern __u32 syncookie_secret[2][16-4+SHA_DIGEST_WORDS];
 extern struct sock *cookie_v4_check(struct sock *sk, struct sk_buff *skb, 
 				    struct ip_options *opt);
 #ifdef CONFIG_SYN_COOKIES
+#include <linux/ktime.h>
+
+/* Syncookies use a monotonic timer which increments every 60 seconds.
+ * This counter is used both as a hash input and partially encoded into
+ * the cookie value.  A cookie is only validated further if the delta
+ * between the current counter value and the encoded one is less than this,
+ * i.e. a sent cookie is valid only at most for 2*60 seconds (or less if
+ * the counter advances immediately after a cookie is generated).
+ */
+#define MAX_SYNCOOKIE_AGE 2
+
+static inline u32 tcp_cookie_time(void)
+{
+	u64 val = get_jiffies_64();
+
+	do_div(val, 60 * HZ);
+	return val;
+}
+
 extern __u32 cookie_v4_init_sequence(struct sock *sk, struct sk_buff *skb, 
 				     __u16 *mss);
 #else
@@ -470,7 +489,7 @@ extern void tcp_retransmit_timer(struct sock *sk);
 extern void tcp_xmit_retransmit_queue(struct sock *);
 extern void tcp_simple_retransmit(struct sock *);
 extern int tcp_trim_head(struct sock *, struct sk_buff *, u32);
-extern int tcp_fragment(struct sock *, struct sk_buff *, u32, unsigned int);
+extern int __intentional_overflow(3) tcp_fragment(struct sock *, struct sk_buff *, u32, unsigned int);
 
 extern void tcp_send_probe0(struct sock *);
 extern void tcp_send_partial(struct sock *);
@@ -633,8 +652,8 @@ struct tcp_skb_cb {
 		struct inet6_skb_parm	h6;
 #endif
 	} header;	/* For incoming frames		*/
-	__u32		seq;		/* Starting sequence number	*/
-	__u32		end_seq;	/* SEQ + FIN + SYN + datalen	*/
+	__u32		seq __intentional_overflow(0);	/* Starting sequence number	*/
+	__u32		end_seq __intentional_overflow(0);	/* SEQ + FIN + SYN + datalen	*/
 	__u32		when;		/* used to compute rtt's	*/
 	__u8		tcp_flags;	/* TCP header flags. (tcp[13])	*/
 	__u8		sacked;		/* State flags for SACK/FACK.	*/
@@ -647,7 +666,7 @@ struct tcp_skb_cb {
 #define TCPCB_EVER_RETRANS	0x80	/* Ever retransmitted frame	*/
 #define TCPCB_RETRANS		(TCPCB_SACKED_RETRANS|TCPCB_EVER_RETRANS)
 
-	__u32		ack_seq;	/* Sequence number ACK'd	*/
+	__u32		ack_seq __intentional_overflow(0);	/* Sequence number ACK'd	*/
 };
 
 #define TCP_SKB_CB(__skb)	((struct tcp_skb_cb *)&((__skb)->cb[0]))

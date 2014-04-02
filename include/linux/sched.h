@@ -101,6 +101,7 @@ struct bio_list;
 struct fs_struct;
 struct perf_event_context;
 struct blk_plug;
+struct linux_binprm;
 
 /*
  * List of flags we want to share for kernel threads,
@@ -355,7 +356,7 @@ extern char __sched_text_start[], __sched_text_end[];
 extern int in_sched_functions(unsigned long addr);
 
 #define	MAX_SCHEDULE_TIMEOUT	LONG_MAX
-extern signed long schedule_timeout(signed long timeout);
+extern signed long schedule_timeout(signed long timeout) __intentional_overflow(-1);
 extern signed long schedule_timeout_interruptible(signed long timeout);
 extern signed long schedule_timeout_killable(signed long timeout);
 extern signed long schedule_timeout_uninterruptible(signed long timeout);
@@ -381,10 +382,23 @@ struct user_namespace;
 #define DEFAULT_MAX_MAP_COUNT	(USHRT_MAX - MAPCOUNT_ELF_CORE_MARGIN)
 
 extern int sysctl_max_map_count;
+extern unsigned long sysctl_heap_stack_gap;
 
 #include <linux/aio.h>
 
 #ifdef CONFIG_MMU
+
+#ifdef CONFIG_GRKERNSEC_RAND_THREADSTACK
+extern unsigned long gr_rand_threadstack_offset(const struct mm_struct *mm, const struct file *filp, unsigned long flags);
+#else
+static inline unsigned long gr_rand_threadstack_offset(const struct mm_struct *mm, const struct file *filp, unsigned long flags)
+{
+	return 0;
+}
+#endif
+
+extern bool check_heap_stack_gap(const struct vm_area_struct *vma, unsigned long *addr, unsigned long len, unsigned long offset);
+extern unsigned long skip_heap_stack_gap(const struct vm_area_struct *vma, unsigned long len, unsigned long offset);
 extern void arch_pick_mmap_layout(struct mm_struct *mm);
 extern unsigned long
 arch_get_unmapped_area(struct file *, unsigned long, unsigned long,
@@ -402,6 +416,11 @@ static inline void arch_pick_mmap_layout(struct mm_struct *mm) {}
 
 extern void set_dumpable(struct mm_struct *mm, int value);
 extern int get_dumpable(struct mm_struct *mm);
+
+/* get/set_dumpable() values */
+#define SUID_DUMPABLE_DISABLED	0
+#define SUID_DUMPABLE_ENABLED	1
+#define SUID_DUMPABLE_SAFE	2
 
 #define SUID_DUMP_DISABLE	0	/* No setuid dumping */
 #define SUID_DUMP_USER		1	/* Dump as user of process */
@@ -634,6 +653,17 @@ struct signal_struct {
 #ifdef CONFIG_TASKSTATS
 	struct taskstats *stats;
 #endif
+
+#ifdef CONFIG_GRKERNSEC
+	u32 curr_ip;
+	u32 saved_ip;
+	u32 gr_saddr;
+	u32 gr_daddr;
+	u16 gr_sport;
+	u16 gr_dport;
+	u8 used_accept:1;
+#endif
+
 #ifdef CONFIG_AUDIT
 	unsigned audit_tty;
 	struct tty_audit_buf *tty_audit_buf;
@@ -657,7 +687,7 @@ struct signal_struct {
 	struct mutex cred_guard_mutex;	/* guard against foreign influences on
 					 * credential calculations
 					 * (notably. ptrace) */
-};
+} __randomize_layout;
 
 /* Context switch must be unlocked if interrupts are to be enabled */
 #ifdef __ARCH_WANT_INTERRUPTS_ON_CTXSW
@@ -715,6 +745,14 @@ struct user_struct {
 	struct key *session_keyring;	/* UID's default session keyring */
 #endif
 
+#ifdef CONFIG_GRKERNSEC_KERN_LOCKOUT
+	unsigned char kernel_banned;
+#endif
+#ifdef CONFIG_GRKERNSEC_BRUTE
+	unsigned char suid_banned;
+	unsigned long suid_ban_expires;
+#endif
+
 	/* Hash table maintenance information */
 	struct hlist_node uidhash_node;
 	uid_t uid;
@@ -723,7 +761,7 @@ struct user_struct {
 #ifdef CONFIG_PERF_EVENTS
 	atomic_long_t locked_vm;
 #endif
-};
+} __randomize_layout;
 
 extern int uids_sysfs_init(void);
 
@@ -1129,7 +1167,7 @@ struct sched_class {
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	void (*task_move_group) (struct task_struct *p, int on_rq);
 #endif
-};
+} __do_const;
 
 struct load_weight {
 	unsigned long weight, inv_weight;
@@ -1306,6 +1344,8 @@ struct task_struct {
 				 * execve */
 	unsigned in_iowait:1;
 
+	/* task may not gain privileges */
+	unsigned no_new_privs:1;
 
 	/* Revert to default priority/policy when forking */
 	unsigned sched_reset_on_fork:1;
@@ -1346,8 +1386,8 @@ struct task_struct {
 	struct list_head thread_group;
 
 	struct completion *vfork_done;		/* for vfork() */
-	int __user *set_child_tid;		/* CLONE_CHILD_SETTID */
-	int __user *clear_child_tid;		/* CLONE_CHILD_CLEARTID */
+	pid_t __user *set_child_tid;		/* CLONE_CHILD_SETTID */
+	pid_t __user *clear_child_tid;		/* CLONE_CHILD_CLEARTID */
 
 	cputime_t utime, stime, utimescaled, stimescaled;
 	cputime_t gtime;
@@ -1362,13 +1402,6 @@ struct task_struct {
 
 	struct task_cputime cputime_expires;
 	struct list_head cpu_timers[3];
-
-/* process credentials */
-	const struct cred __rcu *real_cred; /* objective and real subjective task
-					 * credentials (COW) */
-	const struct cred __rcu *cred;	/* effective (overridable) subjective task
-					 * credentials (COW) */
-	struct cred *replacement_session_keyring; /* for KEYCTL_SESSION_TO_PARENT */
 
 	char comm[TASK_COMM_LEN]; /* executable name excluding path
 				     - access with [gs]et_task_comm (which lock
@@ -1386,8 +1419,16 @@ struct task_struct {
 #endif
 /* CPU-specific state of this task */
 	struct thread_struct thread;
+/* thread_info moved to task_struct */
+#ifdef CONFIG_X86
+	struct thread_info tinfo;
+#endif
 /* filesystem information */
 	struct fs_struct *fs;
+
+	const struct cred __rcu *cred;	/* effective (overridable) subjective task
+					 * credentials (COW) */
+
 /* open file information */
 	struct files_struct *files;
 /* namespaces */
@@ -1410,7 +1451,7 @@ struct task_struct {
 	uid_t loginuid;
 	unsigned int sessionid;
 #endif
-	seccomp_t seccomp;
+	struct seccomp seccomp;
 
 /* Thread group tracking */
    	u32 parent_exec_id;
@@ -1433,6 +1474,11 @@ struct task_struct {
 	/* Deadlock detection and priority inheritance handling */
 	struct rt_mutex_waiter *pi_blocked_on;
 #endif
+
+/* process credentials */
+	const struct cred __rcu *real_cred; /* objective and real subjective task
+					 * credentials (COW) */
+	struct cred *replacement_session_keyring; /* for KEYCTL_SESSION_TO_PARENT */
 
 #ifdef CONFIG_DEBUG_MUTEXES
 	/* mutex deadlock detection */
@@ -1549,6 +1595,30 @@ struct task_struct {
 	unsigned long default_timer_slack_ns;
 
 	struct list_head	*scm_work_list;
+
+#ifdef CONFIG_GRKERNSEC
+	/* grsecurity */
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	u64 exec_id;
+#endif
+#ifdef CONFIG_GRKERNSEC_SETXID
+	const struct cred *delayed_cred;
+#endif
+	struct dentry *gr_chroot_dentry;
+	struct acl_subject_label *acl;
+	struct acl_subject_label *tmpacl;
+	struct acl_role_label *role;
+	struct file *exec_file;
+	unsigned long brute_expires;
+	u16 acl_role_id;
+	u8 inherited;
+	/* is this the task that authenticated to the special role */
+	u8 acl_sp_role;
+	u8 is_writable;
+	u8 brute;
+	u8 gr_is_chrooted;
+#endif
+
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
 	/* Index of current stored address in ret_stack */
 	int curr_ret_stack;
@@ -1581,7 +1651,54 @@ struct task_struct {
 #ifdef CONFIG_HAVE_HW_BREAKPOINT
 	atomic_t ptrace_bp_refcnt;
 #endif
-};
+} __randomize_layout;
+
+#define MF_PAX_PAGEEXEC		0x01000000	/* Paging based non-executable pages */
+#define MF_PAX_EMUTRAMP		0x02000000	/* Emulate trampolines */
+#define MF_PAX_MPROTECT		0x04000000	/* Restrict mprotect() */
+#define MF_PAX_RANDMMAP		0x08000000	/* Randomize mmap() base */
+/*#define MF_PAX_RANDEXEC		0x10000000*/	/* Randomize ET_EXEC base */
+#define MF_PAX_SEGMEXEC		0x20000000	/* Segmentation based non-executable pages */
+
+#ifdef CONFIG_PAX_SOFTMODE
+extern int pax_softmode;
+#endif
+
+extern int pax_check_flags(unsigned long *);
+#define PAX_PARSE_FLAGS_FALLBACK	(~0UL)
+
+/* if tsk != current then task_lock must be held on it */
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+static inline unsigned long pax_get_flags(struct task_struct *tsk)
+{
+	if (likely(tsk->mm))
+		return tsk->mm->pax_flags;
+	else
+		return 0UL;
+}
+
+/* if tsk != current then task_lock must be held on it */
+static inline long pax_set_flags(struct task_struct *tsk, unsigned long flags)
+{
+	if (likely(tsk->mm)) {
+		tsk->mm->pax_flags = flags;
+		return 0;
+	}
+	return -EINVAL;
+}
+#endif
+
+#ifdef CONFIG_PAX_HAVE_ACL_FLAGS
+extern void pax_set_initial_flags(struct linux_binprm *bprm);
+#elif defined(CONFIG_PAX_HOOK_ACL_FLAGS)
+extern void (*pax_set_initial_flags_func)(struct linux_binprm *bprm);
+#endif
+
+struct path;
+extern char *pax_get_path(const struct path *path, char *buf, int buflen);
+extern void pax_report_fault(struct pt_regs *regs, void *pc, void *sp);
+extern void pax_report_insns(struct pt_regs *regs, void *pc, void *sp);
+extern void pax_report_refcount_overflow(struct pt_regs *regs);
 
 /* Future-safe accessor for struct task_struct's cpus_allowed. */
 #define tsk_cpus_allowed(tsk) (&(tsk)->cpus_allowed)
@@ -2098,7 +2215,9 @@ void yield(void);
 extern struct exec_domain	default_exec_domain;
 
 union thread_union {
+#ifndef CONFIG_X86
 	struct thread_info thread_info;
+#endif
 	unsigned long stack[THREAD_SIZE/sizeof(long)];
 };
 
@@ -2131,6 +2250,7 @@ extern struct pid_namespace init_pid_ns;
  */
 
 extern struct task_struct *find_task_by_vpid(pid_t nr);
+extern struct task_struct *find_task_by_vpid_unrestricted(pid_t nr);
 extern struct task_struct *find_task_by_pid_ns(pid_t nr,
 		struct pid_namespace *ns);
 
@@ -2252,6 +2372,12 @@ static inline void mmdrop(struct mm_struct * mm)
 extern void mmput(struct mm_struct *);
 /* Grab a reference to a task's mm, if it is not already going away */
 extern struct mm_struct *get_task_mm(struct task_struct *task);
+/*
+ * Grab a reference to a task's mm, if it is not already going away
+ * and ptrace_may_access with the mode parameter passed to it
+ * succeeds.
+ */
+extern struct mm_struct *mm_access(struct task_struct *task, unsigned int mode);
 /* Remove the current tasks stale references to the old mm_struct */
 extern void mm_release(struct task_struct *, struct mm_struct *);
 /* Allocate a new mm structure and copy contents from tsk->mm */
@@ -2268,9 +2394,8 @@ extern void __cleanup_sighand(struct sighand_struct *);
 extern void exit_itimers(struct signal_struct *);
 extern void flush_itimer_signals(void);
 
-extern NORET_TYPE void do_group_exit(int);
+extern __noreturn void do_group_exit(int);
 
-extern void daemonize(const char *, ...);
 extern int allow_signal(int);
 extern int disallow_signal(int);
 
@@ -2433,9 +2558,9 @@ static inline unsigned long *end_of_stack(struct task_struct *p)
 
 #endif
 
-static inline int object_is_on_stack(void *obj)
+static inline int object_starts_on_stack(void *obj)
 {
-	void *stack = task_stack_page(current);
+	const void *stack = task_stack_page(current);
 
 	return (obj >= stack) && (obj < (stack + THREAD_SIZE));
 }
