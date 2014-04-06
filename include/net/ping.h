@@ -56,7 +56,7 @@ struct ping_iter_state {
 extern struct proto ping_prot;
 extern struct ping_table ping_table;
 #if IS_ENABLED(CONFIG_IPV6)
-extern struct pingv6_ops pingv6_ops;
+extern struct pingv6_ops *pingv6_ops;
 #endif
 
 struct pingfakehdr {
