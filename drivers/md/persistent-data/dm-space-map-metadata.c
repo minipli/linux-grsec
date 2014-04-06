@@ -679,9 +679,7 @@ static int sm_metadata_extend(struct dm_space_map *sm, dm_block_t extra_blocks)
 	 * Flick into a mode where all blocks get allocated in the new area.
 	 */
 	smm->begin = old_len;
-	pax_open_kernel();
 	memcpy((void *)sm, &bootstrap_ops, sizeof(*sm));
-	pax_close_kernel();
 
 	/*
 	 * Extend.
@@ -712,9 +710,7 @@ out:
 	/*
 	 * Switch back to normal behaviour.
 	 */
-	pax_open_kernel();
 	memcpy((void *)sm, &ops, sizeof(*sm));
-	pax_close_kernel();
 	return r;
 }
 
