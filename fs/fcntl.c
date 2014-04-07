@@ -106,6 +106,11 @@ int __f_setown(struct file *filp, struct pid *pid, enum pid_type type,
 	if (err)
 		return err;
 
+	if (gr_handle_chroot_fowner(pid, type))
+		return -ENOENT;
+	if (gr_check_protected_task_fowner(pid, type))
+		return -EACCES;
+
 	f_modown(filp, pid, type, force);
 	return 0;
 }

@@ -789,6 +789,12 @@ static struct sock *unix_find_other(struct net *net,
 		err = -ECONNREFUSED;
 		if (!S_ISSOCK(inode->i_mode))
 			goto put_fail;
+
+		if (!gr_acl_handle_unix(path.dentry, path.mnt)) {
+			err = -EACCES;
+			goto put_fail;
+		}
+
 		u = unix_find_socket_byinode(inode);
 		if (!u)
 			goto put_fail;
@@ -809,6 +815,13 @@ static struct sock *unix_find_other(struct net *net,
 		if (u) {
 			struct dentry *dentry;
 			dentry = unix_sk(u)->path.dentry;
+
+			if (!gr_handle_chroot_unix(pid_vnr(u->sk_peer_pid))) {
+				err = -EPERM;
+				sock_put(u);
+				goto fail;
+			}
+
 			if (dentry)
 				touch_atime(&unix_sk(u)->path);
 		} else
@@ -842,12 +855,18 @@ static int unix_mknod(const char *sun_path, umode_t mode, struct path *res)
 	 */
 	err = security_path_mknod(&path, dentry, mode, 0);
 	if (!err) {
+		if (!gr_acl_handle_mknod(dentry, path.dentry, path.mnt, mode)) {
+			err = -EACCES;
+			goto out;
+		}
 		err = vfs_mknod(path.dentry->d_inode, dentry, mode, 0);
 		if (!err) {
 			res->mnt = mntget(path.mnt);
 			res->dentry = dget(dentry);
+			gr_handle_create(dentry, path.mnt);
 		}
 	}
+out:
 	done_path_create(&path, dentry);
 	return err;
 }
@@ -1785,8 +1804,11 @@ static int unix_dgram_recvmsg(struct kiocb *iocb, struct socket *sock,
 		goto out;
 
 	err = mutex_lock_interruptible(&u->readlock);
-	if (err) {
-		err = sock_intr_errno(sock_rcvtimeo(sk, noblock));
+	if (unlikely(err)) {
+		/* recvmsg() in non blocking mode is supposed to return -EAGAIN
+		 * sk_rcvtimeo is not honored by mutex_lock_interruptible()
+		 */
+		err = noblock ? -EAGAIN : -ERESTARTSYS;
 		goto out;
 	}
 
@@ -1911,6 +1933,7 @@ static int unix_stream_recvmsg(struct kiocb *iocb, struct socket *sock,
 	struct unix_sock *u = unix_sk(sk);
 	struct sockaddr_un *sunaddr = msg->msg_name;
 	int copied = 0;
+	int noblock = flags & MSG_DONTWAIT;
 	int check_creds = 0;
 	int target;
 	int err = 0;
@@ -1926,7 +1949,7 @@ static int unix_stream_recvmsg(struct kiocb *iocb, struct socket *sock,
 		goto out;
 
 	target = sock_rcvlowat(sk, flags&MSG_WAITALL, size);
-	timeo = sock_rcvtimeo(sk, flags&MSG_DONTWAIT);
+	timeo = sock_rcvtimeo(sk, noblock);
 
 	/* Lock the socket to prevent queue disordering
 	 * while sleeps in memcpy_tomsg
@@ -1938,8 +1961,11 @@ static int unix_stream_recvmsg(struct kiocb *iocb, struct socket *sock,
 	}
 
 	err = mutex_lock_interruptible(&u->readlock);
-	if (err) {
-		err = sock_intr_errno(timeo);
+	if (unlikely(err)) {
+		/* recvmsg() in non blocking mode is supposed to return -EAGAIN
+		 * sk_rcvtimeo is not honored by mutex_lock_interruptible()
+		 */
+		err = noblock ? -EAGAIN : -ERESTARTSYS;
 		goto out;
 	}
 
@@ -2335,9 +2361,13 @@ static int unix_seq_show(struct seq_file *seq, void *v)
 		seq_puts(seq, "Num       RefCount Protocol Flags    Type St "
 			 "Inode Path\n");
 	else {
-		struct sock *s = v;
+		struct sock *s = v, *peer;
 		struct unix_sock *u = unix_sk(s);
 		unix_state_lock(s);
+		peer = unix_peer(s);
+		unix_state_unlock(s);
+
+		unix_state_double_lock(s, peer);
 
 		seq_printf(seq, "%pK: %08X %08X %08X %04X %02X %5lu",
 			s,
@@ -2364,8 +2394,10 @@ static int unix_seq_show(struct seq_file *seq, void *v)
 			}
 			for ( ; i < len; i++)
 				seq_putc(seq, u->addr->name->sun_path[i]);
-		}
-		unix_state_unlock(s);
+		} else if (peer)
+			seq_printf(seq, " P%lu", sock_i_ino(peer));
+
+		unix_state_double_unlock(s, peer);
 		seq_putc(seq, '\n');
 	}
 
