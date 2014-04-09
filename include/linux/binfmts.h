@@ -86,8 +86,9 @@ struct linux_binfmt {
 	int (*load_binary)(struct linux_binprm *, struct  pt_regs * regs);
 	int (*load_shlib)(struct file *);
 	int (*core_dump)(struct coredump_params *cprm);
+	void (*handle_mprotect)(struct vm_area_struct *vma, unsigned long newflags);
 	unsigned long min_coredump;	/* minimal dump size */
-};
+} __do_const;
 
 extern int __register_binfmt(struct linux_binfmt *fmt, int insert);
 
