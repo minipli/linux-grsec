@@ -732,7 +732,7 @@ svc_set_num_threads(struct svc_serv *serv, struct svc_pool *pool, int nrservs)
 
 		__module_get(serv->sv_module);
 		task = kthread_create_on_node(serv->sv_function, rqstp,
-					      node, serv->sv_name);
+					      node, "%s", serv->sv_name);
 		if (IS_ERR(task)) {
 			error = PTR_ERR(task);
 			module_put(serv->sv_module);
@@ -1145,7 +1145,9 @@ svc_process_common(struct svc_rqst *rqstp, struct kvec *argv, struct kvec *resv)
 	svc_putnl(resv, RPC_SUCCESS);
 
 	/* Bump per-procedure stats counter */
-	procp->pc_count++;
+	pax_open_kernel();
+	(*(unsigned int *)&procp->pc_count)++;
+	pax_close_kernel();
 
 	/* Initialize storage for argp and resp */
 	memset(rqstp->rq_argp, 0, procp->pc_argsize);

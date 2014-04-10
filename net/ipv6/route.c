@@ -1250,7 +1250,7 @@ int ip6_route_add(struct fib6_config *cfg)
 		goto out;
 	}
 
-	rt = ip6_dst_alloc(&net->ipv6.ip6_dst_ops, NULL, DST_NOCOUNT);
+	rt = ip6_dst_alloc(&net->ipv6.ip6_dst_ops, NULL, (cfg->fc_flags & RTF_ADDRCONF) ? 0 : DST_NOCOUNT);
 
 	if (rt == NULL) {
 		err = -ENOMEM;
@@ -2808,7 +2808,7 @@ ctl_table ipv6_route_table_template[] = {
 
 struct ctl_table * __net_init ipv6_route_sysctl_init(struct net *net)
 {
-	struct ctl_table *table;
+	ctl_table_no_const *table;
 
 	table = kmemdup(ipv6_route_table_template,
 			sizeof(ipv6_route_table_template),

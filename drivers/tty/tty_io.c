@@ -1089,7 +1089,7 @@ static inline ssize_t do_tty_write(
 		cond_resched();
 	}
 	if (written) {
-               struct inode *inode = file->f_path.dentry->d_inode;
+		struct inode *inode = file->f_path.dentry->d_inode;
 		tty_update_time(&inode->i_mtime);
 		ret = written;
 	}
@@ -3250,7 +3250,7 @@ EXPORT_SYMBOL_GPL(get_current_tty);
 
 void tty_default_fops(struct file_operations *fops)
 {
-	*fops = tty_fops;
+	memcpy((void *)fops, &tty_fops, sizeof(tty_fops));
 }
 
 /*
