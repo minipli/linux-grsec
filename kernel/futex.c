@@ -54,6 +54,7 @@
 #include <linux/mount.h>
 #include <linux/pagemap.h>
 #include <linux/syscalls.h>
+#include <linux/ptrace.h>
 #include <linux/signal.h>
 #include <linux/export.h>
 #include <linux/magic.h>
@@ -244,6 +245,11 @@ get_futex_key(u32 __user *uaddr, int fshared, union futex_key *key, int rw)
 	struct mm_struct *mm = current->mm;
 	struct page *page, *page_head;
 	int err, ro = 0;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((mm->pax_flags & MF_PAX_SEGMEXEC) && address >= SEGMEXEC_TASK_SIZE)
+		return -EFAULT;
+#endif
 
 	/*
 	 * The futex address must be "naturally" aligned.
@@ -444,7 +450,7 @@ static int cmpxchg_futex_value_locked(u32 *curval, u32 __user *uaddr,
 
 static int get_futex_value_locked(u32 *dest, u32 __user *from)
 {
-	int ret;
+	unsigned long ret;
 
 	pagefault_disable();
 	ret = __copy_from_user_inatomic(dest, from, sizeof(u32));
@@ -2737,6 +2743,7 @@ static void __init futex_detect_cmpxchg(void)
 {
 #ifndef CONFIG_HAVE_FUTEX_CMPXCHG
 	u32 curval;
+	mm_segment_t oldfs;
 
 	/*
 	 * This will fail and we want it. Some arch implementations do
@@ -2748,8 +2755,11 @@ static void __init futex_detect_cmpxchg(void)
 	 * implementation, the non-functional ones will return
 	 * -ENOSYS.
 	 */
+	oldfs = get_fs();
+	set_fs(USER_DS);
 	if (cmpxchg_futex_value_locked(&curval, NULL, 0, 0) == -EFAULT)
 		futex_cmpxchg_enabled = 1;
+	set_fs(oldfs);
 #endif
 }
 
