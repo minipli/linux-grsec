@@ -118,7 +118,7 @@ preferred_addr:
 	notl	%eax
 	andl    %eax, %ebx
 #else
-	movl	$LOAD_PHYSICAL_ADDR, %ebx
+	movl	$____LOAD_PHYSICAL_ADDR, %ebx
 #endif
 
 	/* Target address to relocate to for decompression */

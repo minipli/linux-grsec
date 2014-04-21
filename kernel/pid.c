@@ -47,7 +47,7 @@ struct pid init_struct_pid = INIT_STRUCT_PID;
 
 int pid_max = PID_MAX_DEFAULT;
 
-#define RESERVED_PIDS		300
+#define RESERVED_PIDS		500
 
 int pid_max_min = RESERVED_PIDS + 1;
 int pid_max_max = PID_MAX_LIMIT;
