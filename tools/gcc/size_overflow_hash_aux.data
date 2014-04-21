@@ -74,7 +74,6 @@ kcopy_do_get_45061 kcopy_do_get 5 45061 NULL
 copyin_45945 copyin 3 45945 NULL
 zil_itx_create_46555 zil_itx_create 2 46555 NULL
 dmu_write_uio_dbuf_48064 dmu_write_uio_dbuf 3 48064 NULL
-blk_rq_pos_48233 blk_rq_pos 0 48233 NULL
 spa_history_write_49650 spa_history_write 3 49650 NULL
 kcopy_copy_pages_to_user_49823 kcopy_copy_pages_to_user 3-4 49823 NULL
 zfs_log_write_50162 zfs_log_write 6-5 50162 NULL
