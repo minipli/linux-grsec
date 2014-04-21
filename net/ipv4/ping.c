@@ -59,7 +59,7 @@ struct ping_table {
 };
 
 static struct ping_table ping_table;
-struct pingv6_ops pingv6_ops;
+struct pingv6_ops *pingv6_ops;
 EXPORT_SYMBOL_GPL(pingv6_ops);
 
 static u16 ping_port_rover;
@@ -255,23 +255,28 @@ int ping_init_sock(struct sock *sk)
 	struct group_info *group_info = get_current_groups();
 	int i, j, count = group_info->ngroups;
 	kgid_t low, high;
+	int ret = 0;
 
 	inet_get_ping_group_range_net(net, &low, &high);
 	if (gid_lte(low, group) && gid_lte(group, high))
-		return 0;
+		goto out_release_group;
 
 	for (i = 0; i < group_info->nblocks; i++) {
 		int cp_count = min_t(int, NGROUPS_PER_BLOCK, count);
 		for (j = 0; j < cp_count; j++) {
 			kgid_t gid = group_info->blocks[i][j];
 			if (gid_lte(low, gid) && gid_lte(gid, high))
-				return 0;
+				goto out_release_group;
 		}
 
 		count -= cp_count;
 	}
 
-	return -EACCES;
+	ret = -EACCES;
+
+out_release_group:
+	put_group_info(group_info);
+	return ret;
 }
 EXPORT_SYMBOL_GPL(ping_init_sock);
 
@@ -341,7 +346,7 @@ static int ping_check_bind_addr(struct sock *sk, struct inet_sock *isk,
 				return -ENODEV;
 			}
 		}
-		has_addr = pingv6_ops.ipv6_chk_addr(net, &addr->sin6_addr, dev,
+		has_addr = pingv6_ops->ipv6_chk_addr(net, &addr->sin6_addr, dev,
 						    scoped);
 		rcu_read_unlock();
 
@@ -549,7 +554,7 @@ void ping_err(struct sk_buff *skb, int offset, u32 info)
 		}
 #if IS_ENABLED(CONFIG_IPV6)
 	} else if (skb->protocol == htons(ETH_P_IPV6)) {
-		harderr = pingv6_ops.icmpv6_err_convert(type, code, &err);
+		harderr = pingv6_ops->icmpv6_err_convert(type, code, &err);
 #endif
 	}
 
@@ -567,7 +572,7 @@ void ping_err(struct sk_buff *skb, int offset, u32 info)
 				      info, (u8 *)icmph);
 #if IS_ENABLED(CONFIG_IPV6)
 		} else if (family == AF_INET6) {
-			pingv6_ops.ipv6_icmp_error(sk, skb, err, 0,
+			pingv6_ops->ipv6_icmp_error(sk, skb, err, 0,
 						   info, (u8 *)icmph);
 #endif
 		}
@@ -837,6 +842,8 @@ int ping_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 {
 	struct inet_sock *isk = inet_sk(sk);
 	int family = sk->sk_family;
+	struct sockaddr_in *sin;
+	struct sockaddr_in6 *sin6;
 	struct sk_buff *skb;
 	int copied, err;
 
@@ -846,12 +853,19 @@ int ping_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 	if (flags & MSG_OOB)
 		goto out;
 
+	if (addr_len) {
+		if (family == AF_INET)
+			*addr_len = sizeof(*sin);
+		else if (family == AF_INET6 && addr_len)
+			*addr_len = sizeof(*sin6);
+	}
+
 	if (flags & MSG_ERRQUEUE) {
 		if (family == AF_INET) {
 			return ip_recv_error(sk, msg, len, addr_len);
 #if IS_ENABLED(CONFIG_IPV6)
 		} else if (family == AF_INET6) {
-			return pingv6_ops.ipv6_recv_error(sk, msg, len,
+			return pingv6_ops->ipv6_recv_error(sk, msg, len,
 							  addr_len);
 #endif
 		}
@@ -883,7 +897,6 @@ int ping_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 			sin->sin_port = 0 /* skb->h.uh->source */;
 			sin->sin_addr.s_addr = ip_hdr(skb)->saddr;
 			memset(sin->sin_zero, 0, sizeof(sin->sin_zero));
-			*addr_len = sizeof(*sin);
 		}
 
 		if (isk->cmsg_flags)
@@ -905,14 +918,13 @@ int ping_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 			sin6->sin6_scope_id =
 				ipv6_iface_scope_id(&sin6->sin6_addr,
 						    IP6CB(skb)->iif);
-			*addr_len = sizeof(*sin6);
 		}
 
 		if (inet6_sk(sk)->rxopt.all)
-			pingv6_ops.ip6_datagram_recv_common_ctl(sk, msg, skb);
+			pingv6_ops->ip6_datagram_recv_common_ctl(sk, msg, skb);
 		if (skb->protocol == htons(ETH_P_IPV6) &&
 		    inet6_sk(sk)->rxopt.all)
-			pingv6_ops.ip6_datagram_recv_specific_ctl(sk, msg, skb);
+			pingv6_ops->ip6_datagram_recv_specific_ctl(sk, msg, skb);
 		else if (skb->protocol == htons(ETH_P_IP) && isk->cmsg_flags)
 			ip_cmsg_recv(msg, skb);
 #endif
@@ -1104,7 +1116,7 @@ static void ping_v4_format_sock(struct sock *sp, struct seq_file *f,
 		from_kuid_munged(seq_user_ns(f), sock_i_uid(sp)),
 		0, sock_i_ino(sp),
 		atomic_read(&sp->sk_refcnt), sp,
-		atomic_read(&sp->sk_drops));
+		atomic_read_unchecked(&sp->sk_drops));
 }
 
 static int ping_v4_seq_show(struct seq_file *seq, void *v)

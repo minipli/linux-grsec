@@ -305,7 +305,7 @@ static int proc_sctp_do_hmac_alg(struct ctl_table *ctl, int write,
 {
 	struct net *net = current->nsproxy->net_ns;
 	char tmp[8];
-	struct ctl_table tbl;
+	ctl_table_no_const tbl;
 	int ret;
 	int changed = 0;
 	char *none = "none";
@@ -352,7 +352,7 @@ static int proc_sctp_do_rto_min(struct ctl_table *ctl, int write,
 {
 	struct net *net = current->nsproxy->net_ns;
 	int new_value;
-	struct ctl_table tbl;
+	ctl_table_no_const tbl;
 	unsigned int min = *(unsigned int *) ctl->extra1;
 	unsigned int max = *(unsigned int *) ctl->extra2;
 	int ret;
@@ -379,7 +379,7 @@ static int proc_sctp_do_rto_max(struct ctl_table *ctl, int write,
 {
 	struct net *net = current->nsproxy->net_ns;
 	int new_value;
-	struct ctl_table tbl;
+	ctl_table_no_const tbl;
 	unsigned int min = *(unsigned int *) ctl->extra1;
 	unsigned int max = *(unsigned int *) ctl->extra2;
 	int ret;
@@ -402,7 +402,7 @@ static int proc_sctp_do_rto_max(struct ctl_table *ctl, int write,
 
 int sctp_sysctl_net_register(struct net *net)
 {
-	struct ctl_table *table = sctp_net_table;
+	ctl_table_no_const *table = NULL;
 
 	if (!net_eq(net, &init_net)) {
 		int i;
@@ -415,7 +415,10 @@ int sctp_sysctl_net_register(struct net *net)
 			table[i].data += (char *)(&net->sctp) - (char *)&init_net.sctp;
 	}
 
-	net->sctp.sysctl_header = register_net_sysctl(net, "net/sctp", table);
+	if (!net_eq(net, &init_net))
+		net->sctp.sysctl_header = register_net_sysctl(net, "net/sctp", table);
+	else
+		net->sctp.sysctl_header = register_net_sysctl(net, "net/sctp", sctp_net_table);
 	return 0;
 }
 

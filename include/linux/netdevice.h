@@ -1146,6 +1146,7 @@ struct net_device_ops {
 							struct net_device *dev,
 							void *priv);
 };
+typedef struct net_device_ops __no_const net_device_ops_no_const;
 
 /*
  *	The DEVICE structure.
@@ -1228,7 +1229,7 @@ struct net_device {
 	int			iflink;
 
 	struct net_device_stats	stats;
-	atomic_long_t		rx_dropped; /* dropped packets by core network
+	atomic_long_unchecked_t	rx_dropped; /* dropped packets by core network
 					     * Do not use this in drivers.
 					     */
 
