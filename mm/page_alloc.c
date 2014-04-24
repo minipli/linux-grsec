@@ -61,6 +61,7 @@
 #include <linux/page-debug-flags.h>
 #include <linux/hugetlb.h>
 #include <linux/sched/rt.h>
+#include <linux/random.h>
 
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
@@ -354,7 +355,7 @@ out:
  * This usage means that zero-order pages may not be compound.
  */
 
-static void free_compound_page(struct page *page)
+void free_compound_page(struct page *page)
 {
 	__free_pages_ok(page, compound_order(page));
 }
@@ -714,6 +715,10 @@ static bool free_pages_prepare(struct page *page, unsigned int order)
 	int i;
 	int bad = 0;
 
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	unsigned long index = 1UL << order;
+#endif
+
 	trace_mm_page_free(page, order);
 	kmemcheck_free_shadow(page, order);
 
@@ -730,6 +735,12 @@ static bool free_pages_prepare(struct page *page, unsigned int order)
 		debug_check_no_obj_freed(page_address(page),
 					   PAGE_SIZE << order);
 	}
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	for (; index; --index)
+		sanitize_highpage(page + index - 1);
+#endif
+
 	arch_free_page(page, order);
 	kernel_map_pages(page, 1 << order, 0);
 
@@ -752,6 +763,20 @@ static void __free_pages_ok(struct page *page, unsigned int order)
 	local_irq_restore(flags);
 }
 
+#ifdef CONFIG_PAX_LATENT_ENTROPY
+bool __meminitdata extra_latent_entropy;
+
+static int __init setup_pax_extra_latent_entropy(char *str)
+{
+	extra_latent_entropy = true;
+	return 0;
+}
+early_param("pax_extra_latent_entropy", setup_pax_extra_latent_entropy);
+
+volatile u64 latent_entropy __latent_entropy;
+EXPORT_SYMBOL(latent_entropy);
+#endif
+
 void __init __free_pages_bootmem(struct page *page, unsigned int order)
 {
 	unsigned int nr_pages = 1 << order;
@@ -766,6 +791,19 @@ void __init __free_pages_bootmem(struct page *page, unsigned int order)
 	}
 	__ClearPageReserved(p);
 	set_page_count(p, 0);
+
+#ifdef CONFIG_PAX_LATENT_ENTROPY
+	if (extra_latent_entropy && !PageHighMem(page) && page_to_pfn(page) < 0x100000) {
+		u64 hash = 0;
+		size_t index, end = PAGE_SIZE * nr_pages / sizeof hash;
+		const u64 *data = lowmem_page_address(page);
+
+		for (index = 0; index < end; index++)
+			hash ^= hash + data[index];
+		latent_entropy ^= hash;
+		add_device_randomness((const void *)&latent_entropy, sizeof(latent_entropy));
+	}
+#endif
 
 	page_zone(page)->managed_pages += nr_pages;
 	set_page_refcounted(page);
@@ -872,8 +910,10 @@ static int prep_new_page(struct page *page, int order, gfp_t gfp_flags)
 	arch_alloc_page(page, order);
 	kernel_map_pages(page, 1 << order, 1);
 
+#ifndef CONFIG_PAX_MEMORY_SANITIZE
 	if (gfp_flags & __GFP_ZERO)
 		prep_zero_page(page, order, gfp_flags);
+#endif
 
 	if (order && (gfp_flags & __GFP_COMP))
 		prep_compound_page(page, order);

@@ -1878,7 +1878,7 @@ void cpufreq_unregister_governor(struct cpufreq_governor *governor)
 #endif
 
 	mutex_lock(&cpufreq_governor_mutex);
-	list_del(&governor->governor_list);
+	pax_list_del(&governor->governor_list);
 	mutex_unlock(&cpufreq_governor_mutex);
 	return;
 }
@@ -2108,7 +2108,7 @@ static int cpufreq_cpu_callback(struct notifier_block *nfb,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block __refdata cpufreq_cpu_notifier = {
+static struct notifier_block cpufreq_cpu_notifier = {
 	.notifier_call = cpufreq_cpu_callback,
 };
 
@@ -2141,8 +2141,11 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 
 	pr_debug("trying to register driver %s\n", driver_data->name);
 
-	if (driver_data->setpolicy)
-		driver_data->flags |= CPUFREQ_CONST_LOOPS;
+	if (driver_data->setpolicy) {
+		pax_open_kernel();
+		*(u8 *)&driver_data->flags |= CPUFREQ_CONST_LOOPS;
+		pax_close_kernel();
+	}
 
 	write_lock_irqsave(&cpufreq_driver_lock, flags);
 	if (cpufreq_driver) {
