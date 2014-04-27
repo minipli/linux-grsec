@@ -76,8 +76,11 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 	if (unlikely(err))
 		return -EFAULT;
 
+	pax_open_userland();
 	__asm__ __volatile__(ASM_STAC "\n"
-			     "1: .byte " REX_PREFIX "0x0f,0xae,0x27\n"
+			     "1:"
+			     __copyuser_seg
+			     ".byte " REX_PREFIX "0x0f,0xae,0x27\n"
 			     "2: " ASM_CLAC "\n"
 			     ".section .fixup,\"ax\"\n"
 			     "3:  movl $-1,%[err]\n"
@@ -87,18 +90,22 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 			     : [err] "=r" (err)
 			     : "D" (buf), "a" (-1), "d" (-1), "0" (0)
 			     : "memory");
+	pax_close_userland();
 	return err;
 }
 
 static inline int xrestore_user(struct xsave_struct __user *buf, u64 mask)
 {
 	int err;
-	struct xsave_struct *xstate = ((__force struct xsave_struct *)buf);
+	struct xsave_struct *xstate = ((__force_kernel struct xsave_struct *)buf);
 	u32 lmask = mask;
 	u32 hmask = mask >> 32;
 
+	pax_open_userland();
 	__asm__ __volatile__(ASM_STAC "\n"
-			     "1: .byte " REX_PREFIX "0x0f,0xae,0x2f\n"
+			     "1:"
+			     __copyuser_seg
+			     ".byte " REX_PREFIX "0x0f,0xae,0x2f\n"
 			     "2: " ASM_CLAC "\n"
 			     ".section .fixup,\"ax\"\n"
 			     "3:  movl $-1,%[err]\n"
@@ -108,6 +115,7 @@ static inline int xrestore_user(struct xsave_struct __user *buf, u64 mask)
 			     : [err] "=r" (err)
 			     : "D" (xstate), "a" (lmask), "d" (hmask), "0" (0)
 			     : "memory");	/* memory required? */
+	pax_close_userland();
 	return err;
 }
 

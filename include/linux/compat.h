@@ -313,7 +313,7 @@ compat_sys_get_robust_list(int pid, compat_uptr_t __user *head_ptr,
 			   compat_size_t __user *len_ptr);
 
 asmlinkage long compat_sys_ipc(u32, int, int, u32, compat_uptr_t, u32);
-asmlinkage long compat_sys_shmat(int shmid, compat_uptr_t shmaddr, int shmflg);
+asmlinkage long compat_sys_shmat(int shmid, compat_uptr_t shmaddr, int shmflg) __intentional_overflow(0);
 asmlinkage long compat_sys_semctl(int semid, int semnum, int cmd, int arg);
 asmlinkage long compat_sys_msgsnd(int msqid, compat_uptr_t msgp,
 		compat_ssize_t msgsz, int msgflg);
@@ -420,7 +420,7 @@ extern int compat_ptrace_request(struct task_struct *child,
 extern long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 			       compat_ulong_t addr, compat_ulong_t data);
 asmlinkage long compat_sys_ptrace(compat_long_t request, compat_long_t pid,
-				  compat_long_t addr, compat_long_t data);
+				  compat_ulong_t addr, compat_ulong_t data);
 
 asmlinkage long compat_sys_lookup_dcookie(u32, u32, char __user *, compat_size_t);
 /*
