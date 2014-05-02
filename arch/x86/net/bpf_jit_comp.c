@@ -11,6 +11,7 @@
 #include <asm/cacheflush.h>
 #include <linux/netdevice.h>
 #include <linux/filter.h>
+#include <linux/random.h>
 
 /*
  * Conventions :
@@ -45,13 +46,84 @@ static inline u8 *emit_code(u8 *ptr, u32 bytes, unsigned int len)
 	return ptr + len;
 }
 
+#ifdef CONFIG_GRKERNSEC_JIT_HARDEN
+#define MAX_INSTR_CODE_SIZE 96
+#else
+#define MAX_INSTR_CODE_SIZE 64
+#endif
+
 #define EMIT(bytes, len)	do { prog = emit_code(prog, bytes, len); } while (0)
 
 #define EMIT1(b1)		EMIT(b1, 1)
 #define EMIT2(b1, b2)		EMIT((b1) + ((b2) << 8), 2)
 #define EMIT3(b1, b2, b3)	EMIT((b1) + ((b2) << 8) + ((b3) << 16), 3)
 #define EMIT4(b1, b2, b3, b4)   EMIT((b1) + ((b2) << 8) + ((b3) << 16) + ((b4) << 24), 4)
+
+#ifdef CONFIG_GRKERNSEC_JIT_HARDEN
+/* original constant will appear in ecx */
+#define DILUTE_CONST_SEQUENCE(_off, _key) 	\
+do {						\
+	/* mov ecx, randkey */			\
+	EMIT1(0xb9);				\
+	EMIT(_key, 4);				\
+	/* xor ecx, randkey ^ off */		\
+	EMIT2(0x81, 0xf1);			\
+	EMIT((_key) ^ (_off), 4);		\
+} while (0)
+
+#define EMIT1_off32(b1, _off)								\
+do { 											\
+	switch (b1) {									\
+		case 0x05: /* add eax, imm32 */						\
+		case 0x2d: /* sub eax, imm32 */						\
+		case 0x25: /* and eax, imm32 */						\
+		case 0x0d: /* or eax, imm32 */						\
+		case 0xb8: /* mov eax, imm32 */						\
+		case 0x3d: /* cmp eax, imm32 */						\
+		case 0xa9: /* test eax, imm32 */					\
+			DILUTE_CONST_SEQUENCE(_off, randkey);				\
+			EMIT2((b1) - 4, 0xc8); /* convert imm instruction to eax, ecx */\
+			break;								\
+		case 0xbb: /* mov ebx, imm32 */						\
+			DILUTE_CONST_SEQUENCE(_off, randkey);				\
+			/* mov ebx, ecx */						\
+			EMIT2(0x89, 0xcb);						\
+			break;								\
+		case 0xbe: /* mov esi, imm32 */						\
+			DILUTE_CONST_SEQUENCE(_off, randkey);				\
+			/* mov esi, ecx	*/						\
+			EMIT2(0x89, 0xce);						\
+			break;								\
+		case 0xe8: /* call rel imm32, always to known funcs */			\
+			EMIT1(b1);							\
+			EMIT(_off, 4);							\
+			break;								\
+		case 0xe9: /* jmp rel imm32 */						\
+			EMIT1(b1);							\
+			EMIT(_off, 4);							\
+			/* prevent fall-through, we're not called if off = 0 */		\
+			EMIT(0xcccccccc, 4);						\
+			EMIT(0xcccccccc, 4);						\
+			break;								\
+		default:								\
+			BUILD_BUG_ON(1);						\
+	}										\
+} while (0)
+
+#define EMIT2_off32(b1, b2, _off) 					\
+do { 									\
+	if ((b1) == 0x69 && (b2) == 0xc0) { /* imul eax, imm32 */	\
+		DILUTE_CONST_SEQUENCE(_off, randkey);			\
+		/* imul eax, ecx */					\
+		EMIT3(0x0f, 0xaf, 0xc1);				\
+	} else {							\
+		BUILD_BUG_ON(1);					\
+	}								\
+} while (0)
+#else
 #define EMIT1_off32(b1, off)	do { EMIT1(b1); EMIT(off, 4);} while (0)
+#define EMIT2_off32(b1, b2, off) do { EMIT2(b1, b2); EMIT(off, 4);} while (0)
+#endif
 
 #define CLEAR_A() EMIT2(0x31, 0xc0) /* xor %eax,%eax */
 #define CLEAR_X() EMIT2(0x31, 0xdb) /* xor %ebx,%ebx */
@@ -86,6 +158,24 @@ do {									\
 #define X86_JBE 0x76
 #define X86_JA  0x77
 
+#ifdef CONFIG_GRKERNSEC_JIT_HARDEN
+#define APPEND_FLOW_VERIFY()	\
+do {				\
+	/* mov ecx, randkey */	\
+	EMIT1(0xb9);		\
+	EMIT(randkey, 4);	\
+	/* cmp ecx, randkey */	\
+	EMIT2(0x81, 0xf9);	\
+	EMIT(randkey, 4);	\
+	/* jz after 8 int 3s */ \
+	EMIT2(0x74, 0x08);	\
+	EMIT(0xcccccccc, 4);	\
+	EMIT(0xcccccccc, 4);	\
+} while (0)
+#else
+#define APPEND_FLOW_VERIFY() do { } while (0)
+#endif
+
 #define EMIT_COND_JMP(op, offset)				\
 do {								\
 	if (is_near(offset))					\
@@ -93,6 +183,7 @@ do {								\
 	else {							\
 		EMIT2(0x0f, op + 0x10);				\
 		EMIT(offset, 4); /* jxx .+off32 */		\
+		APPEND_FLOW_VERIFY();				\
 	}							\
 } while (0)
 
@@ -117,10 +208,14 @@ static inline void bpf_flush_icache(void *start, void *end)
 	set_fs(old_fs);
 }
 
+struct bpf_jit_work {
+	struct work_struct work;
+	void *image;
+};
 
 void bpf_jit_compile(struct sk_filter *fp)
 {
-	u8 temp[64];
+	u8 temp[MAX_INSTR_CODE_SIZE];
 	u8 *prog;
 	unsigned int proglen, oldproglen = 0;
 	int ilen, i;
@@ -133,6 +228,9 @@ void bpf_jit_compile(struct sk_filter *fp)
 	unsigned int *addrs;
 	const struct sock_filter *filter = fp->insns;
 	int flen = fp->len;
+#ifdef CONFIG_GRKERNSEC_JIT_HARDEN
+	unsigned int randkey;
+#endif
 
 	if (!bpf_jit_enable)
 		return;
@@ -141,11 +239,15 @@ void bpf_jit_compile(struct sk_filter *fp)
 	if (addrs == NULL)
 		return;
 
+	fp->work = kmalloc(sizeof(*fp->work), GFP_KERNEL);
+	if (!fp->work)
+		goto out;
+
 	/* Before first pass, make a rough estimation of addrs[]
-	 * each bpf instruction is translated to less than 64 bytes
+	 * each bpf instruction is translated to less than MAX_INSTR_CODE_SIZE bytes
 	 */
 	for (proglen = 0, i = 0; i < flen; i++) {
-		proglen += 64;
+		proglen += MAX_INSTR_CODE_SIZE;
 		addrs[i] = proglen;
 	}
 	cleanup_addr = proglen; /* epilogue address */
@@ -221,6 +323,10 @@ void bpf_jit_compile(struct sk_filter *fp)
 		for (i = 0; i < flen; i++) {
 			unsigned int K = filter[i].k;
 
+#ifdef CONFIG_GRKERNSEC_JIT_HARDEN
+			randkey = prandom_u32();
+#endif
+
 			switch (filter[i].code) {
 			case BPF_S_ALU_ADD_X: /* A += X; */
 				seen |= SEEN_XREG;
@@ -253,10 +359,8 @@ void bpf_jit_compile(struct sk_filter *fp)
 			case BPF_S_ALU_MUL_K: /* A *= K */
 				if (is_imm8(K))
 					EMIT3(0x6b, 0xc0, K); /* imul imm8,%eax,%eax */
-				else {
-					EMIT2(0x69, 0xc0);		/* imul imm32,%eax */
-					EMIT(K, 4);
-				}
+				else
+					EMIT2_off32(0x69, 0xc0, K); /* imul imm32,%eax */
 				break;
 			case BPF_S_ALU_DIV_X: /* A /= X; */
 				seen |= SEEN_XREG;
@@ -276,8 +380,14 @@ void bpf_jit_compile(struct sk_filter *fp)
 				EMIT4(0x31, 0xd2, 0xf7, 0xf3); /* xor %edx,%edx; div %ebx */
 				break;
 			case BPF_S_ALU_DIV_K: /* A = reciprocal_divide(A, K); */
+#ifdef CONFIG_GRKERNSEC_JIT_HARDEN
+				DILUTE_CONST_SEQUENCE(K, randkey);
+				// imul rax, rcx
+				EMIT4(0x48, 0x0f, 0xaf, 0xc1);
+#else
 				EMIT3(0x48, 0x69, 0xc0); /* imul imm32,%rax,%rax */
 				EMIT(K, 4);
+#endif
 				EMIT4(0x48, 0xc1, 0xe8, 0x20); /* shr $0x20,%rax */
 				break;
 			case BPF_S_ALU_AND_X:
@@ -477,7 +587,7 @@ void bpf_jit_compile(struct sk_filter *fp)
 common_load:			seen |= SEEN_DATAREF;
 				if ((int)K < 0) {
 					/* Abort the JIT because __load_pointer() is needed. */
-					goto out;
+					goto error;
 				}
 				t_offset = func - (image + addrs[i]);
 				EMIT1_off32(0xbe, K); /* mov imm32,%esi */
@@ -492,7 +602,7 @@ common_load:			seen |= SEEN_DATAREF;
 			case BPF_S_LDX_B_MSH:
 				if ((int)K < 0) {
 					/* Abort the JIT because __load_pointer() is needed. */
-					goto out;
+					goto error;
 				}
 				seen |= SEEN_DATAREF | SEEN_XREG;
 				t_offset = sk_load_byte_msh - (image + addrs[i]);
@@ -582,17 +692,18 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 				break;
 			default:
 				/* hmm, too complex filter, give up with jit compiler */
-				goto out;
+				goto error;
 			}
 			ilen = prog - temp;
 			if (image) {
 				if (unlikely(proglen + ilen > oldproglen)) {
 					pr_err("bpb_jit_compile fatal error\n");
-					kfree(addrs);
-					module_free(NULL, image);
-					return;
+					module_free_exec(NULL, image);
+					goto error;
 				}
+				pax_open_kernel();
 				memcpy(image + proglen, temp, ilen);
+				pax_close_kernel();
 			}
 			proglen += ilen;
 			addrs[i] = proglen;
@@ -613,11 +724,9 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 			break;
 		}
 		if (proglen == oldproglen) {
-			image = module_alloc(max_t(unsigned int,
-						   proglen,
-						   sizeof(struct work_struct)));
+			image = module_alloc_exec(proglen);
 			if (!image)
-				goto out;
+				goto error;
 		}
 		oldproglen = proglen;
 	}
@@ -633,7 +742,10 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 		bpf_flush_icache(image, image + proglen);
 
 		fp->bpf_func = (void *)image;
-	}
+	} else
+error:
+		kfree(fp->work);
+
 out:
 	kfree(addrs);
 	return;
@@ -641,18 +753,20 @@ out:
 
 static void jit_free_defer(struct work_struct *arg)
 {
-	module_free(NULL, arg);
+	module_free_exec(NULL, ((struct bpf_jit_work *)arg)->image);
+	kfree(arg);
 }
 
 /* run from softirq, we must use a work_struct to call
- * module_free() from process context
+ * module_free_exec() from process context
  */
 void bpf_jit_free(struct sk_filter *fp)
 {
 	if (fp->bpf_func != sk_run_filter) {
-		struct work_struct *work = (struct work_struct *)fp->bpf_func;
+		struct work_struct *work = &fp->work->work;
 
 		INIT_WORK(work, jit_free_defer);
+		fp->work->image = fp->bpf_func;
 		schedule_work(work);
 	}
 }

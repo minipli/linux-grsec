@@ -692,7 +692,7 @@ static int __cpuinit do_boot_cpu(int apicid, int cpu)
 	 */
 	if (c_idle.idle) {
 		c_idle.idle->thread.sp = (unsigned long) (((struct pt_regs *)
-			(THREAD_SIZE +  task_stack_page(c_idle.idle))) - 1);
+			(THREAD_SIZE - 16 + task_stack_page(c_idle.idle))) - 1);
 		init_idle(c_idle.idle, cpu);
 		goto do_rest;
 	}
@@ -709,17 +709,20 @@ static int __cpuinit do_boot_cpu(int apicid, int cpu)
 	set_idle_for_cpu(cpu, c_idle.idle);
 do_rest:
 	per_cpu(current_task, cpu) = c_idle.idle;
+	per_cpu(current_tinfo, cpu) = &c_idle.idle->tinfo;
 #ifdef CONFIG_X86_32
 	/* Stack for startup_32 can be just as for start_secondary onwards */
 	irq_ctx_init(cpu);
 #else
 	clear_tsk_thread_flag(c_idle.idle, TIF_FORK);
 	initial_gs = per_cpu_offset(cpu);
-	per_cpu(kernel_stack, cpu) =
-		(unsigned long)task_stack_page(c_idle.idle) -
-		KERNEL_STACK_OFFSET + THREAD_SIZE;
+	per_cpu(kernel_stack, cpu) = (unsigned long)task_stack_page(c_idle.idle) - 16 + THREAD_SIZE;
 #endif
+
+	pax_open_kernel();
 	early_gdt_descr.address = (unsigned long)get_cpu_gdt_table(cpu);
+	pax_close_kernel();
+
 	initial_code = (unsigned long)start_secondary;
 	stack_start  = c_idle.idle->thread.sp;
 
@@ -860,6 +863,12 @@ int __cpuinit native_cpu_up(unsigned int cpu)
 	mtrr_save_state();
 
 	per_cpu(cpu_state, cpu) = CPU_UP_PREPARE;
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	clone_pgd_range(get_cpu_pgd(cpu) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+#endif
 
 	err = do_boot_cpu(apicid, cpu);
 	if (err) {

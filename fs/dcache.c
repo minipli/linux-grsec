@@ -103,11 +103,11 @@ static unsigned int d_hash_shift __read_mostly;
 
 static struct hlist_bl_head *dentry_hashtable __read_mostly;
 
-static inline struct hlist_bl_head *d_hash(struct dentry *parent,
-					unsigned long hash)
+static inline struct hlist_bl_head *d_hash(const struct dentry *parent,
+					unsigned int hash)
 {
-	hash += ((unsigned long) parent ^ GOLDEN_RATIO_PRIME) / L1_CACHE_BYTES;
-	hash = hash ^ ((hash ^ GOLDEN_RATIO_PRIME) >> D_HASHBITS);
+	hash += (unsigned long) parent / L1_CACHE_BYTES;
+	hash = hash + (hash >> D_HASHBITS);
 	return dentry_hashtable + (hash & D_HASHMASK);
 }
 
@@ -3057,7 +3057,8 @@ void __init vfs_caches_init(unsigned long mempages)
 	mempages -= reserve;
 
 	names_cachep = kmem_cache_create("names_cache", PATH_MAX, 0,
-			SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
+			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_USERCOPY|
+			SLAB_NO_SANITIZE, NULL);
 
 	dcache_init();
 	inode_init();

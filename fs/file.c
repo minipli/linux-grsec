@@ -15,6 +15,7 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/file.h>
+#include <linux/security.h>
 #include <linux/fdtable.h>
 #include <linux/bitops.h>
 #include <linux/interrupt.h>
@@ -199,7 +200,7 @@ out:
  * Return <0 error code on error; 1 on successful completion.
  * The files->file_lock should be held on entry, and will be held on exit.
  */
-static int expand_fdtable(struct files_struct *files, int nr)
+static int expand_fdtable(struct files_struct *files, unsigned int nr)
 	__releases(files->file_lock)
 	__acquires(files->file_lock)
 {
@@ -244,7 +245,7 @@ static int expand_fdtable(struct files_struct *files, int nr)
  * expanded and execution may have blocked.
  * The files->file_lock should be held on entry, and will be held on exit.
  */
-int expand_files(struct files_struct *files, int nr)
+int expand_files(struct files_struct *files, unsigned int nr)
 {
 	struct fdtable *fdt;
 
@@ -254,6 +255,7 @@ int expand_files(struct files_struct *files, int nr)
 	 * N.B. For clone tasks sharing a files structure, this test
 	 * will limit the total number of files that can be opened.
 	 */
+	gr_learn_resource(current, RLIMIT_NOFILE, nr, 0);
 	if (nr >= rlimit(RLIMIT_NOFILE))
 		return -EMFILE;
 
