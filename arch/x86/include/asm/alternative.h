@@ -106,7 +106,7 @@ static inline int alternatives_text_reserved(void *start, void *end)
 	".pushsection .discard,\"aw\",@progbits\n"			\
 	DISCARD_ENTRY(1)						\
 	".popsection\n"							\
-	".pushsection .altinstr_replacement, \"ax\"\n"			\
+	".pushsection .altinstr_replacement, \"a\"\n"			\
 	ALTINSTR_REPLACEMENT(newinstr, feature, 1)			\
 	".popsection"
 
@@ -120,7 +120,7 @@ static inline int alternatives_text_reserved(void *start, void *end)
 	DISCARD_ENTRY(1)						\
 	DISCARD_ENTRY(2)						\
 	".popsection\n"							\
-	".pushsection .altinstr_replacement, \"ax\"\n"			\
+	".pushsection .altinstr_replacement, \"a\"\n"			\
 	ALTINSTR_REPLACEMENT(newinstr1, feature1, 1)			\
 	ALTINSTR_REPLACEMENT(newinstr2, feature2, 2)			\
 	".popsection"

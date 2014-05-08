@@ -23,6 +23,7 @@
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>
 #include <linux/seq_file.h>
+#include <linux/grsecurity.h>
 
 #include "internal.h"
 
@@ -36,6 +37,8 @@ static struct net *get_proc_net(const struct inode *inode)
 	return maybe_get_net(PDE_NET(PDE(inode)));
 }
 
+extern const struct seq_operations dev_seq_ops;
+
 int seq_open_net(struct inode *ino, struct file *f,
 		 const struct seq_operations *ops, int size)
 {
@@ -43,6 +46,10 @@ int seq_open_net(struct inode *ino, struct file *f,
 	struct seq_net_private *p;
 
 	BUG_ON(size < sizeof(*p));
+
+	/* only permit access to /proc/net/dev */
+	if (ops != &dev_seq_ops && gr_proc_is_restricted())
+		return -EACCES;
 
 	net = get_proc_net(ino);
 	if (net == NULL)
@@ -65,6 +72,9 @@ int single_open_net(struct inode *inode, struct file *file,
 {
 	int err;
 	struct net *net;
+
+	if (gr_proc_is_restricted())
+		return -EACCES;
 
 	err = -ENXIO;
 	net = get_proc_net(inode);
