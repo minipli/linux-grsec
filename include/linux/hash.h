@@ -83,7 +83,7 @@ static inline u32 hash32_ptr(const void *ptr)
 struct fast_hash_ops {
 	u32 (*hash)(const void *data, u32 len, u32 seed);
 	u32 (*hash2)(const u32 *data, u32 len, u32 seed);
-};
+} __no_const;
 
 /**
  *	arch_fast_hash - Caclulates a hash over a given buffer that can have
