@@ -47,7 +47,7 @@ static tree get_size_overflow_type(struct visited *visited, const_gimple stmt, c
 		break;
 	case DImode:
 		if (LONG_TYPE_SIZE == GET_MODE_BITSIZE(SImode))
-			new_type = TYPE_UNSIGNED(type) ? unsigned_intDI_type_node : size_overflow_type_DI;
+			new_type = TYPE_UNSIGNED(type) ? unsigned_intDI_type_node : intDI_type_node;
 		else
 			new_type = size_overflow_type_TI;
 		break;
