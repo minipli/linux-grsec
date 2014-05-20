@@ -657,7 +657,7 @@ follow_link(struct path *link, struct nameidata *nd, void **p)
 	*p = dentry->d_inode->i_op->follow_link(dentry, nd);
 	error = PTR_ERR(*p);
 	if (!IS_ERR(*p)) {
-		char *s = nd_get_link(nd);
+		const char *s = nd_get_link(nd);
 		error = 0;
 		if (s)
 			error = __vfs_follow_link(nd, s);
@@ -3242,6 +3242,8 @@ SYSCALL_DEFINE2(rename, const char __user *, oldname, const char __user *, newna
 
 int vfs_readlink(struct dentry *dentry, char __user *buffer, int buflen, const char *link)
 {
+	char tmpbuf[64];
+	const char *newlink;
 	int len;
 
 	len = PTR_ERR(link);
@@ -3251,7 +3253,14 @@ int vfs_readlink(struct dentry *dentry, char __user *buffer, int buflen, const c
 	len = strlen(link);
 	if (len > (unsigned) buflen)
 		len = buflen;
-	if (copy_to_user(buffer, link, len))
+
+	if (len < sizeof(tmpbuf)) {
+		memcpy(tmpbuf, link, len);
+		newlink = tmpbuf;
+	} else
+		newlink = link;
+
+	if (copy_to_user(buffer, newlink, len))
 		len = -EFAULT;
 out:
 	return len;

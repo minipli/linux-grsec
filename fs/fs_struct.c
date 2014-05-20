@@ -109,7 +109,7 @@ void exit_fs(struct task_struct *tsk)
 		spin_lock(&fs->lock);
 		write_seqcount_begin(&fs->seq);
 		tsk->fs = NULL;
-		kill = !--fs->users;
+		kill = !atomic_dec_return(&fs->users);
 		write_seqcount_end(&fs->seq);
 		spin_unlock(&fs->lock);
 		task_unlock(tsk);
@@ -123,7 +123,7 @@ struct fs_struct *copy_fs_struct(struct fs_struct *old)
 	struct fs_struct *fs = kmem_cache_alloc(fs_cachep, GFP_KERNEL);
 	/* We don't need to lock fs - think why ;-) */
 	if (fs) {
-		fs->users = 1;
+		atomic_set(&fs->users, 1);
 		fs->in_exec = 0;
 		spin_lock_init(&fs->lock);
 		seqcount_init(&fs->seq);
@@ -150,7 +150,7 @@ int unshare_fs_struct(void)
 
 	task_lock(current);
 	spin_lock(&fs->lock);
-	kill = !--fs->users;
+	kill = !atomic_dec_return(&fs->users);
 	current->fs = new_fs;
 	spin_unlock(&fs->lock);
 	task_unlock(current);
@@ -170,7 +170,7 @@ EXPORT_SYMBOL(current_umask);
 
 /* to be mentioned only in INIT_TASK */
 struct fs_struct init_fs = {
-	.users		= 1,
+	.users		= ATOMIC_INIT(1),
 	.lock		= __SPIN_LOCK_UNLOCKED(init_fs.lock),
 	.seq		= SEQCNT_ZERO,
 	.umask		= 0022,
@@ -186,12 +186,12 @@ void daemonize_fs_struct(void)
 		task_lock(current);
 
 		spin_lock(&init_fs.lock);
-		init_fs.users++;
+		atomic_inc(&init_fs.users);
 		spin_unlock(&init_fs.lock);
 
 		spin_lock(&fs->lock);
 		current->fs = &init_fs;
-		kill = !--fs->users;
+		kill = !atomic_dec_return(&fs->users);
 		spin_unlock(&fs->lock);
 
 		task_unlock(current);

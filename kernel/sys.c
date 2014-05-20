@@ -1270,19 +1270,19 @@ SYSCALL_DEFINE1(olduname, struct oldold_utsname __user *, name)
 		return -EFAULT;
 
 	down_read(&uts_sem);
-	error = __copy_to_user(&name->sysname, &utsname()->sysname,
+	error = __copy_to_user(name->sysname, &utsname()->sysname,
 			       __OLD_UTS_LEN);
 	error |= __put_user(0, name->sysname + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->nodename, &utsname()->nodename,
+	error |= __copy_to_user(name->nodename, &utsname()->nodename,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->nodename + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->release, &utsname()->release,
+	error |= __copy_to_user(name->release, &utsname()->release,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->release + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->version, &utsname()->version,
+	error |= __copy_to_user(name->version, &utsname()->version,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->version + __OLD_UTS_LEN);
-	error |= __copy_to_user(&name->machine, &utsname()->machine,
+	error |= __copy_to_user(name->machine, &utsname()->machine,
 				__OLD_UTS_LEN);
 	error |= __put_user(0, name->machine + __OLD_UTS_LEN);
 	up_read(&uts_sem);
@@ -1747,7 +1747,7 @@ SYSCALL_DEFINE5(prctl, int, option, unsigned long, arg2, unsigned long, arg3,
 			error = get_dumpable(me->mm);
 			break;
 		case PR_SET_DUMPABLE:
-			if (arg2 < 0 || arg2 > 1) {
+			if (arg2 > 1) {
 				error = -EINVAL;
 				break;
 			}
