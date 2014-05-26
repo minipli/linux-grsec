@@ -49,6 +49,7 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	struct vm_area_struct *vma;
 	unsigned long start_addr;
 	int do_colour_align;
+	unsigned long offset = gr_rand_threadstack_offset(mm, filp, flags);
 
 	if (flags & MAP_FIXED) {
 		/* We do not accept a shared mapping if it would violate
@@ -74,8 +75,7 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr,
 			addr = PAGE_ALIGN(addr);
 
 		vma = find_vma(mm, addr);
-		if (TASK_SIZE - len >= addr &&
-		    (!vma || addr + len <= vma->vm_start))
+		if (TASK_SIZE - len >= addr && check_heap_stack_gap(vma, &addr, len, offset))
 			return addr;
 	}
 
@@ -106,7 +106,7 @@ full_search:
 			}
 			return -ENOMEM;
 		}
-		if (likely(!vma || addr + len <= vma->vm_start)) {
+		if (likely(check_heap_stack_gap(vma, &addr, len, offset))) {
 			/*
 			 * Remember the place where we stopped the search:
 			 */
@@ -131,6 +131,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	struct mm_struct *mm = current->mm;
 	unsigned long addr = addr0;
 	int do_colour_align;
+	unsigned long offset = gr_rand_threadstack_offset(mm, filp, flags);
 
 	if (flags & MAP_FIXED) {
 		/* We do not accept a shared mapping if it would violate
@@ -157,8 +158,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 			addr = PAGE_ALIGN(addr);
 
 		vma = find_vma(mm, addr);
-		if (TASK_SIZE - len >= addr &&
-		    (!vma || addr + len <= vma->vm_start))
+		if (TASK_SIZE - len >= addr && check_heap_stack_gap(vma, &addr, len, offset))
 			return addr;
 	}
 
@@ -178,28 +178,29 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 
 	/* make sure it can fit in the remaining address space */
 	if (likely(addr > len)) {
-		vma = find_vma(mm, addr-len);
-		if (!vma || addr <= vma->vm_start) {
+		addr -= len;
+		vma = find_vma(mm, addr);
+		if (check_heap_stack_gap(vma, &addr, len, offset)) {
 			/* remember the address as a hint for next time */
-			return (mm->free_area_cache = addr-len);
+			return (mm->free_area_cache = addr);
 		}
 	}
 
 	if (unlikely(mm->mmap_base < len))
 		goto bottomup;
 
-	addr = mm->mmap_base-len;
-	if (do_colour_align)
-		addr = COLOUR_ALIGN_DOWN(addr, pgoff);
+	addr = mm->mmap_base - len;
 
 	do {
+		if (do_colour_align)
+			addr = COLOUR_ALIGN_DOWN(addr, pgoff);
 		/*
 		 * Lookup failure means no vma is above this address,
 		 * else if new region fits below vma->vm_start,
 		 * return with success:
 		 */
 		vma = find_vma(mm, addr);
-		if (likely(!vma || addr+len <= vma->vm_start)) {
+		if (likely(check_heap_stack_gap(vma, &addr, len, offset))) {
 			/* remember the address as a hint for next time */
 			return (mm->free_area_cache = addr);
 		}
@@ -209,10 +210,8 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 		        mm->cached_hole_size = vma->vm_start - addr;
 
 		/* try just below the current vma->vm_start */
-		addr = vma->vm_start-len;
-		if (do_colour_align)
-			addr = COLOUR_ALIGN_DOWN(addr, pgoff);
-	} while (likely(len < vma->vm_start));
+		addr = skip_heap_stack_gap(vma, len, offset);
+	} while (!IS_ERR_VALUE(addr));
 
 bottomup:
 	/*

@@ -5050,7 +5050,7 @@ EXPORT_SYMBOL(wait_for_completion_interruptible);
  * The return value is -ERESTARTSYS if interrupted, 0 if timed out,
  * positive (at least 1, or number of jiffies left till timeout) if completed.
  */
-long __sched
+long __sched __intentional_overflow(-1)
 wait_for_completion_interruptible_timeout(struct completion *x,
 					  unsigned long timeout)
 {
@@ -5067,7 +5067,7 @@ EXPORT_SYMBOL(wait_for_completion_interruptible_timeout);
  *
  * The return value is -ERESTARTSYS if interrupted, 0 if completed.
  */
-int __sched wait_for_completion_killable(struct completion *x)
+int __sched __intentional_overflow(-1) wait_for_completion_killable(struct completion *x)
 {
 	long t = wait_for_common(x, MAX_SCHEDULE_TIMEOUT, TASK_KILLABLE);
 	if (t == -ERESTARTSYS)
@@ -5088,7 +5088,7 @@ EXPORT_SYMBOL(wait_for_completion_killable);
  * The return value is -ERESTARTSYS if interrupted, 0 if timed out,
  * positive (at least 1, or number of jiffies left till timeout) if completed.
  */
-long __sched
+long __sched __intentional_overflow(-1)
 wait_for_completion_killable_timeout(struct completion *x,
 				     unsigned long timeout)
 {
@@ -5297,6 +5297,8 @@ int can_nice(const struct task_struct *p, const int nice)
 	/* convert nice value [19,-20] to rlimit style value [1,40] */
 	int nice_rlim = 20 - nice;
 
+	gr_learn_resource(p, RLIMIT_NICE, nice_rlim, 1);
+
 	return (nice_rlim <= task_rlimit(p, RLIMIT_NICE) ||
 		capable(CAP_SYS_NICE));
 }
@@ -5330,7 +5332,8 @@ SYSCALL_DEFINE1(nice, int, increment)
 	if (nice > 19)
 		nice = 19;
 
-	if (increment < 0 && !can_nice(current, nice))
+	if (increment < 0 && (!can_nice(current, nice) ||
+			      gr_handle_chroot_nice()))
 		return -EPERM;
 
 	retval = security_task_setnice(current, nice);
@@ -5487,6 +5490,7 @@ recheck:
 			unsigned long rlim_rtprio =
 					task_rlimit(p, RLIMIT_RTPRIO);
 
+			 gr_learn_resource(p, RLIMIT_RTPRIO, param->sched_priority, 1);
 			/* can't set/change the rt policy */
 			if (policy != p->policy && !rlim_rtprio)
 				return -EPERM;
@@ -6629,7 +6633,7 @@ static void unthrottle_offline_cfs_rqs(struct rq *rq) {}
 
 #if defined(CONFIG_SCHED_DEBUG) && defined(CONFIG_SYSCTL)
 
-static struct ctl_table sd_ctl_dir[] = {
+static ctl_table_no_const sd_ctl_dir[] __read_only = {
 	{
 		.procname	= "sched_domain",
 		.mode		= 0555,
@@ -6646,17 +6650,17 @@ static struct ctl_table sd_ctl_root[] = {
 	{}
 };
 
-static struct ctl_table *sd_alloc_ctl_entry(int n)
+static ctl_table_no_const *sd_alloc_ctl_entry(int n)
 {
-	struct ctl_table *entry =
+	ctl_table_no_const *entry =
 		kcalloc(n, sizeof(struct ctl_table), GFP_KERNEL);
 
 	return entry;
 }
 
-static void sd_free_ctl_entry(struct ctl_table **tablep)
+static void sd_free_ctl_entry(ctl_table_no_const *tablep)
 {
-	struct ctl_table *entry;
+	ctl_table_no_const *entry;
 
 	/*
 	 * In the intermediate directories, both the child directory and
@@ -6664,22 +6668,25 @@ static void sd_free_ctl_entry(struct ctl_table **tablep)
 	 * will always be set. In the lowest directory the names are
 	 * static strings and all have proc handlers.
 	 */
-	for (entry = *tablep; entry->mode; entry++) {
-		if (entry->child)
-			sd_free_ctl_entry(&entry->child);
+	for (entry = tablep; entry->mode; entry++) {
+		if (entry->child) {
+			sd_free_ctl_entry(entry->child);
+			pax_open_kernel();
+			entry->child = NULL;
+			pax_close_kernel();
+		}
 		if (entry->proc_handler == NULL)
 			kfree(entry->procname);
 	}
 
-	kfree(*tablep);
-	*tablep = NULL;
+	kfree(tablep);
 }
 
 static int min_load_idx = 0;
 static int max_load_idx = CPU_LOAD_IDX_MAX-1;
 
 static void
-set_table_entry(struct ctl_table *entry,
+set_table_entry(ctl_table_no_const *entry,
 		const char *procname, void *data, int maxlen,
 		mode_t mode, proc_handler *proc_handler,
 		bool load_idx)
@@ -6699,7 +6706,7 @@ set_table_entry(struct ctl_table *entry,
 static struct ctl_table *
 sd_alloc_ctl_domain_table(struct sched_domain *sd)
 {
-	struct ctl_table *table = sd_alloc_ctl_entry(13);
+	ctl_table_no_const *table = sd_alloc_ctl_entry(13);
 
 	if (table == NULL)
 		return NULL;
@@ -6734,9 +6741,9 @@ sd_alloc_ctl_domain_table(struct sched_domain *sd)
 	return table;
 }
 
-static ctl_table *sd_alloc_ctl_cpu_table(int cpu)
+static ctl_table_no_const *sd_alloc_ctl_cpu_table(int cpu)
 {
-	struct ctl_table *entry, *table;
+	ctl_table_no_const *entry, *table;
 	struct sched_domain *sd;
 	int domain_num = 0, i;
 	char buf[32];
@@ -6763,11 +6770,13 @@ static struct ctl_table_header *sd_sysctl_header;
 static void register_sched_domain_sysctl(void)
 {
 	int i, cpu_num = num_possible_cpus();
-	struct ctl_table *entry = sd_alloc_ctl_entry(cpu_num + 1);
+	ctl_table_no_const *entry = sd_alloc_ctl_entry(cpu_num + 1);
 	char buf[32];
 
 	WARN_ON(sd_ctl_dir[0].child);
+	pax_open_kernel();
 	sd_ctl_dir[0].child = entry;
+	pax_close_kernel();
 
 	if (entry == NULL)
 		return;
@@ -6790,8 +6799,12 @@ static void unregister_sched_domain_sysctl(void)
 	if (sd_sysctl_header)
 		unregister_sysctl_table(sd_sysctl_header);
 	sd_sysctl_header = NULL;
-	if (sd_ctl_dir[0].child)
-		sd_free_ctl_entry(&sd_ctl_dir[0].child);
+	if (sd_ctl_dir[0].child) {
+		sd_free_ctl_entry(sd_ctl_dir[0].child);
+		pax_open_kernel();
+		sd_ctl_dir[0].child = NULL;
+		pax_close_kernel();
+	}
 }
 #else
 static void register_sched_domain_sysctl(void)
@@ -6889,7 +6902,7 @@ migration_call(struct notifier_block *nfb, unsigned long action, void *hcpu)
  * happens before everything else.  This has to be lower priority than
  * the notifier in the perf_event subsystem, though.
  */
-static struct notifier_block __cpuinitdata migration_notifier = {
+static struct notifier_block migration_notifier = {
 	.notifier_call = migration_call,
 	.priority = CPU_PRI_MIGRATION,
 };

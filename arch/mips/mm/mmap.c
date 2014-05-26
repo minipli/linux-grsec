@@ -71,6 +71,7 @@ static unsigned long arch_get_unmapped_area_common(struct file *filp,
 	struct vm_area_struct *vma;
 	unsigned long addr = addr0;
 	int do_color_align;
+	unsigned long offset = gr_rand_threadstack_offset(mm, filp, flags);
 
 	if (unlikely(len > TASK_SIZE))
 		return -ENOMEM;
@@ -95,6 +96,11 @@ static unsigned long arch_get_unmapped_area_common(struct file *filp,
 		do_color_align = 1;
 
 	/* requesting a specific address */
+
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(current->mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (addr) {
 		if (do_color_align)
 			addr = COLOUR_ALIGN(addr, pgoff);
@@ -102,8 +108,7 @@ static unsigned long arch_get_unmapped_area_common(struct file *filp,
 			addr = PAGE_ALIGN(addr);
 
 		vma = find_vma(mm, addr);
-		if (TASK_SIZE - len >= addr &&
-		    (!vma || addr + len <= vma->vm_start))
+		if (TASK_SIZE - len >= addr && check_heap_stack_gap(vma, &addr, len, offset))
 			return addr;
 	}
 
@@ -118,7 +123,7 @@ static unsigned long arch_get_unmapped_area_common(struct file *filp,
 			/* At this point:  (!vma || addr < vma->vm_end). */
 			if (TASK_SIZE - len < addr)
 				return -ENOMEM;
-			if (!vma || addr + len <= vma->vm_start)
+			if (check_heap_stack_gap(vma, &addr, len, offset))
 				return addr;
 			addr = vma->vm_end;
 			if (do_color_align)
@@ -144,10 +149,11 @@ static unsigned long arch_get_unmapped_area_common(struct file *filp,
 
 		/* make sure it can fit in the remaining address space */
 		if (likely(addr > len)) {
-			vma = find_vma(mm, addr - len);
-			if (!vma || addr <= vma->vm_start) {
+			addr -= len;
+			vma = find_vma(mm, addr);
+			if (check_heap_stack_gap(vma, &addr, len, offset)) {
 				/* cache the address as a hint for next time */
-				return mm->free_area_cache = addr - len;
+				return (mm->free_area_cache = addr);
 			}
 		}
 
@@ -155,17 +161,17 @@ static unsigned long arch_get_unmapped_area_common(struct file *filp,
 			goto bottomup;
 
 		addr = mm->mmap_base - len;
-		if (do_color_align)
-			addr = COLOUR_ALIGN_DOWN(addr, pgoff);
 
 		do {
+			if (do_color_align)
+				addr = COLOUR_ALIGN_DOWN(addr, pgoff);
 			/*
 			 * Lookup failure means no vma is above this address,
 			 * else if new region fits below vma->vm_start,
 			 * return with success:
 			 */
 			vma = find_vma(mm, addr);
-			if (likely(!vma || addr + len <= vma->vm_start)) {
+			if (check_heap_stack_gap(vma, &addr, len, offset)) {
 				/* cache the address as a hint for next time */
 				return mm->free_area_cache = addr;
 			}
@@ -175,10 +181,8 @@ static unsigned long arch_get_unmapped_area_common(struct file *filp,
 				mm->cached_hole_size = vma->vm_start - addr;
 
 			/* try just below the current vma->vm_start */
-			addr = vma->vm_start - len;
-			if (do_color_align)
-				addr = COLOUR_ALIGN_DOWN(addr, pgoff);
-		} while (likely(len < vma->vm_start));
+			addr = skip_heap_stack_gap(vma, len, offset);
+		} while (!IS_ERR_VALUE(addr));
 
 bottomup:
 		/*
@@ -223,6 +227,10 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 {
 	unsigned long random_factor = 0UL;
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(current->mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (current->flags & PF_RANDOMIZE) {
 		random_factor = get_random_int();
 		random_factor = random_factor << PAGE_SHIFT;
@@ -234,38 +242,23 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 
 	if (mmap_is_legacy()) {
 		mm->mmap_base = TASK_UNMAPPED_BASE + random_factor;
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (mm->pax_flags & MF_PAX_RANDMMAP)
+			mm->mmap_base += mm->delta_mmap;
+#endif
+
 		mm->get_unmapped_area = arch_get_unmapped_area;
 		mm->unmap_area = arch_unmap_area;
 	} else {
 		mm->mmap_base = mmap_base(random_factor);
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (mm->pax_flags & MF_PAX_RANDMMAP)
+			mm->mmap_base -= mm->delta_mmap + mm->delta_stack;
+#endif
+
 		mm->get_unmapped_area = arch_get_unmapped_area_topdown;
 		mm->unmap_area = arch_unmap_area_topdown;
 	}
-}
-
-static inline unsigned long brk_rnd(void)
-{
-	unsigned long rnd = get_random_int();
-
-	rnd = rnd << PAGE_SHIFT;
-	/* 8MB for 32bit, 256MB for 64bit */
-	if (TASK_IS_32BIT_ADDR)
-		rnd = rnd & 0x7ffffful;
-	else
-		rnd = rnd & 0xffffffful;
-
-	return rnd;
-}
-
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long base = mm->brk;
-	unsigned long ret;
-
-	ret = PAGE_ALIGN(base + brk_rnd());
-
-	if (ret < mm->brk)
-		return mm->brk;
-
-	return ret;
 }

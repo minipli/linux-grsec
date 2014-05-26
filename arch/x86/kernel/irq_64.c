@@ -26,6 +26,8 @@ EXPORT_PER_CPU_SYMBOL(irq_stat);
 DEFINE_PER_CPU(struct pt_regs *, irq_regs);
 EXPORT_PER_CPU_SYMBOL(irq_regs);
 
+extern void gr_handle_kernel_exploit(void);
+
 /*
  * Probabilistic stack overflow check:
  *
@@ -38,7 +40,7 @@ static inline void stack_overflow_check(struct pt_regs *regs)
 #ifdef CONFIG_DEBUG_STACKOVERFLOW
 	u64 curbase = (u64)task_stack_page(current);
 
-	if (user_mode_vm(regs))
+	if (user_mode(regs))
 		return;
 
 	WARN_ONCE(regs->sp >= curbase &&
@@ -48,6 +50,7 @@ static inline void stack_overflow_check(struct pt_regs *regs)
 
 		  "do_IRQ: %s near stack overflow (cur:%Lx,sp:%lx)\n",
 			current->comm, curbase, regs->sp);
+	gr_handle_kernel_exploit();
 #endif
 }
 

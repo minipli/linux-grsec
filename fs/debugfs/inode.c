@@ -145,6 +145,7 @@ static struct file_system_type debug_fs_type = {
 	.mount =	debug_mount,
 	.kill_sb =	kill_litter_super,
 };
+MODULE_ALIAS_FS("debugfs");
 
 static int debugfs_create_by_name(const char *name, mode_t mode,
 				  struct dentry *parent,
@@ -261,7 +262,11 @@ EXPORT_SYMBOL_GPL(debugfs_create_file);
 struct dentry *debugfs_create_dir(const char *name, struct dentry *parent)
 {
 	return debugfs_create_file(name, 
+#ifdef CONFIG_GRKERNSEC_SYSFS_RESTRICT
+				   S_IFDIR | S_IRWXU,
+#else
 				   S_IFDIR | S_IRWXU | S_IRUGO | S_IXUGO,
+#endif
 				   parent, NULL, NULL);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_dir);

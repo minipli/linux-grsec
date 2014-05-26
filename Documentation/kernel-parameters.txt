@@ -859,6 +859,9 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 	gpt		[EFI] Forces disk with valid GPT signature but
 			invalid Protective MBR to be treated as GPT.
 
+	grsec_proc_gid=	[GRKERNSEC_PROC_USERGROUP] Chooses GID to
+			ignore grsecurity's /proc restrictions
+
 	hashdist=	[KNL,NUMA] Large hashes allocated during boot
 			are distributed across NUMA nodes.  Defaults on
 			for 64-bit NUMA, off otherwise.
@@ -1961,6 +1964,22 @@ bytes respectively. Such letter suffixes can also be entirely omitted.
 			Halt all CPUs after the first oops has been printed for
 			the specified number of seconds.  This is to be used if
 			your oopses keep scrolling off the screen.
+
+	pax_nouderef	[X86] disables UDEREF.  Most likely needed under certain
+			virtualization environments that don't cope well with the
+			expand down segment used by UDEREF on X86-32 or the frequent
+			page table updates on X86-64.
+
+	pax_sanitize_slab=
+			0/1 to disable/enable slab object sanitization (enabled by
+			default).
+
+	pax_softmode=	0/1 to disable/enable PaX softmode on boot already.
+
+	pax_extra_latent_entropy
+			Enable a very simple form of latent entropy extraction
+			from the first 4GB of memory as the bootmem allocator
+			passes the memory pages to the buddy allocator.
 
 	pcbit=		[HW,ISDN]
 
