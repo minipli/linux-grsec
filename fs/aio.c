@@ -375,7 +375,7 @@ static int aio_setup_ring(struct kioctx *ctx)
 	size += sizeof(struct io_event) * nr_events;
 
 	nr_pages = PFN_UP(size);
-	if (nr_pages < 0)
+	if (nr_pages <= 0)
 		return -EINVAL;
 
 	file = aio_private_file(ctx, nr_pages);
@@ -1299,10 +1299,8 @@ rw_common:
 						&iovec, compat)
 			: aio_setup_single_vector(req, rw, buf, &nr_segs,
 						  iovec);
-		if (ret)
-			return ret;
-
-		ret = rw_verify_area(rw, file, &req->ki_pos, req->ki_nbytes);
+		if (!ret)
+			ret = rw_verify_area(rw, file, &req->ki_pos, req->ki_nbytes);
 		if (ret < 0) {
 			if (iovec != &inline_vec)
 				kfree(iovec);

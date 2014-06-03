@@ -138,7 +138,7 @@ static int __kprobes nmi_handle(unsigned int type, struct pt_regs *regs, bool b2
 	return handled;
 }
 
-int __register_nmi_handler(unsigned int type, struct nmiaction *action)
+int __register_nmi_handler(unsigned int type, const struct nmiaction *action)
 {
 	struct nmi_desc *desc = nmi_to_desc(type);
 	unsigned long flags;
@@ -162,9 +162,9 @@ int __register_nmi_handler(unsigned int type, struct nmiaction *action)
 	 * event confuses some handlers (kdump uses this flag)
 	 */
 	if (action->flags & NMI_FLAG_FIRST)
-		list_add_rcu(&action->list, &desc->head);
+		pax_list_add_rcu((struct list_head *)&action->list, &desc->head);
 	else
-		list_add_tail_rcu(&action->list, &desc->head);
+		pax_list_add_tail_rcu((struct list_head *)&action->list, &desc->head);
 	
 	spin_unlock_irqrestore(&desc->lock, flags);
 	return 0;
@@ -187,7 +187,7 @@ void unregister_nmi_handler(unsigned int type, const char *name)
 		if (!strcmp(n->name, name)) {
 			WARN(in_nmi(),
 				"Trying to free NMI (%s) from NMI context!\n", n->name);
-			list_del_rcu(&n->list);
+			pax_list_del_rcu((struct list_head *)&n->list);
 			break;
 		}
 	}
@@ -512,6 +512,17 @@ static inline void nmi_nesting_postprocess(void)
 dotraplinkage notrace __kprobes void
 do_nmi(struct pt_regs *regs, long error_code)
 {
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if (!user_mode(regs)) {
+		unsigned long cs = regs->cs & 0xFFFF;
+		unsigned long ip = ktva_ktla(regs->ip);
+
+		if ((cs == __KERNEL_CS || cs == __KERNEXEC_KERNEL_CS) && ip <= (unsigned long)_etext)
+			regs->ip = ip;
+	}
+#endif
+
 	nmi_nesting_preprocess(regs);
 
 	nmi_enter();

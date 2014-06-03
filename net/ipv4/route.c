@@ -233,7 +233,7 @@ static const struct seq_operations rt_cache_seq_ops = {
 
 static int rt_cache_seq_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &rt_cache_seq_ops);
+	return seq_open_restrict(file, &rt_cache_seq_ops);
 }
 
 static const struct file_operations rt_cache_seq_fops = {
@@ -324,7 +324,7 @@ static const struct seq_operations rt_cpu_seq_ops = {
 
 static int rt_cpu_seq_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &rt_cpu_seq_ops);
+	return seq_open_restrict(file, &rt_cpu_seq_ops);
 }
 
 static const struct file_operations rt_cpu_seq_fops = {
@@ -362,7 +362,7 @@ static int rt_acct_proc_show(struct seq_file *m, void *v)
 
 static int rt_acct_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, rt_acct_proc_show, NULL);
+	return single_open_restrict(file, rt_acct_proc_show, NULL);
 }
 
 static const struct file_operations rt_acct_proc_fops = {
@@ -2623,34 +2623,34 @@ static struct ctl_table ipv4_route_flush_table[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0200,
 		.proc_handler	= ipv4_sysctl_rtcache_flush,
+		.extra1		= &init_net,
 	},
 	{ },
 };
 
 static __net_init int sysctl_route_net_init(struct net *net)
 {
-	struct ctl_table *tbl;
+	ctl_table_no_const *tbl = NULL;
 
-	tbl = ipv4_route_flush_table;
 	if (!net_eq(net, &init_net)) {
-		tbl = kmemdup(tbl, sizeof(ipv4_route_flush_table), GFP_KERNEL);
+		tbl = kmemdup(ipv4_route_flush_table, sizeof(ipv4_route_flush_table), GFP_KERNEL);
 		if (tbl == NULL)
 			goto err_dup;
 
 		/* Don't export sysctls to unprivileged users */
 		if (net->user_ns != &init_user_ns)
 			tbl[0].procname = NULL;
-	}
-	tbl[0].extra1 = net;
+		tbl[0].extra1 = net;
+		net->ipv4.route_hdr = register_net_sysctl(net, "net/ipv4/route", tbl);
+	} else
+		net->ipv4.route_hdr = register_net_sysctl(net, "net/ipv4/route", ipv4_route_flush_table);
 
-	net->ipv4.route_hdr = register_net_sysctl(net, "net/ipv4/route", tbl);
 	if (net->ipv4.route_hdr == NULL)
 		goto err_reg;
 	return 0;
 
 err_reg:
-	if (tbl != ipv4_route_flush_table)
-		kfree(tbl);
+	kfree(tbl);
 err_dup:
 	return -ENOMEM;
 }
@@ -2673,8 +2673,8 @@ static __net_initdata struct pernet_operations sysctl_route_ops = {
 
 static __net_init int rt_genid_init(struct net *net)
 {
-	atomic_set(&net->ipv4.rt_genid, 0);
-	atomic_set(&net->fnhe_genid, 0);
+	atomic_set_unchecked(&net->ipv4.rt_genid, 0);
+	atomic_set_unchecked(&net->fnhe_genid, 0);
 	get_random_bytes(&net->ipv4.dev_addr_genid,
 			 sizeof(net->ipv4.dev_addr_genid));
 	return 0;
