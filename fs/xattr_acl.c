@@ -9,7 +9,7 @@
 #include <linux/fs.h>
 #include <linux/posix_acl_xattr.h>
 #include <linux/gfp.h>
-
+#include <linux/grsecurity.h>
 
 /*
  * Convert from extended attribute to in-memory representation.
@@ -17,11 +17,12 @@
 struct posix_acl *
 posix_acl_from_xattr(const void *value, size_t size)
 {
-	posix_acl_xattr_header *header = (posix_acl_xattr_header *)value;
-	posix_acl_xattr_entry *entry = (posix_acl_xattr_entry *)(header+1), *end;
+	const posix_acl_xattr_header *header = (const posix_acl_xattr_header *)value;
+	const posix_acl_xattr_entry *entry = (const posix_acl_xattr_entry *)(header+1), *end;
 	int count;
 	struct posix_acl *acl;
 	struct posix_acl_entry *acl_e;
+	umode_t umask = gr_acl_umask();
 
 	if (!value)
 		return NULL;
@@ -47,14 +48,23 @@ posix_acl_from_xattr(const void *value, size_t size)
 
 		switch(acl_e->e_tag) {
 			case ACL_USER_OBJ:
+				acl_e->e_perm &= ~((umask & S_IRWXU) >> 6);
+				break;
 			case ACL_GROUP_OBJ:
 			case ACL_MASK:
+				acl_e->e_perm &= ~((umask & S_IRWXG) >> 3);
+				break;
 			case ACL_OTHER:
+				acl_e->e_perm &= ~(umask & S_IRWXO);
 				acl_e->e_id = ACL_UNDEFINED_ID;
 				break;
 
 			case ACL_USER:
+				acl_e->e_perm &= ~((umask & S_IRWXU) >> 6);
+				acl_e->e_id = le32_to_cpu(entry->e_id);
+				break;
 			case ACL_GROUP:
+				acl_e->e_perm &= ~((umask & S_IRWXG) >> 3);
 				acl_e->e_id = le32_to_cpu(entry->e_id);
 				break;
 

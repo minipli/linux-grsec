@@ -176,9 +176,17 @@ static struct resource bss_resource = {
 
 #ifdef CONFIG_X86_32
 /* cpu data as detected by the assembly code in head.S */
-struct cpuinfo_x86 new_cpu_data __cpuinitdata = {0, 0, 0, 0, -1, 1, 0, 0, -1};
+struct cpuinfo_x86 new_cpu_data __cpuinitdata = {
+	.wp_works_ok = -1,
+	.hlt_works_ok = 1,
+	.fdiv_bug = -1,
+};
 /* common cpu data for all cpus */
-struct cpuinfo_x86 boot_cpu_data __read_mostly = {0, 0, 0, 0, -1, 1, 0, 0, -1};
+struct cpuinfo_x86 boot_cpu_data __read_mostly = {
+	.wp_works_ok = -1,
+	.hlt_works_ok = 1,
+	.fdiv_bug = -1,
+};
 EXPORT_SYMBOL(boot_cpu_data);
 static void set_mca_bus(int x)
 {
@@ -447,7 +455,7 @@ static void __init parse_setup_data(void)
 
 		switch (data->type) {
 		case SETUP_E820_EXT:
-			parse_e820_ext(data);
+			parse_e820_ext((struct setup_data __force_kernel *)data);
 			break;
 		case SETUP_DTB:
 			add_dtb(pa_data);
@@ -727,7 +735,7 @@ static void __init trim_bios_range(void)
 	 * area (640->1Mb) as ram even though it is not.
 	 * take them out.
 	 */
-	e820_remove_range(BIOS_BEGIN, BIOS_END - BIOS_BEGIN, E820_RAM, 1);
+	e820_remove_range(ISA_START_ADDRESS, ISA_END_ADDRESS - ISA_START_ADDRESS, E820_RAM, 1);
 
 	sanitize_e820_map(e820.map, ARRAY_SIZE(e820.map), &e820.nr_map);
 }
@@ -852,14 +860,14 @@ void __init setup_arch(char **cmdline_p)
 
 	if (!boot_params.hdr.root_flags)
 		root_mountflags &= ~MS_RDONLY;
-	init_mm.start_code = (unsigned long) _text;
-	init_mm.end_code = (unsigned long) _etext;
+	init_mm.start_code = ktla_ktva((unsigned long) _text);
+	init_mm.end_code = ktla_ktva((unsigned long) _etext);
 	init_mm.end_data = (unsigned long) _edata;
 	init_mm.brk = _brk_end;
 
-	code_resource.start = virt_to_phys(_text);
-	code_resource.end = virt_to_phys(_etext)-1;
-	data_resource.start = virt_to_phys(_etext);
+	code_resource.start = virt_to_phys(ktla_ktva(_text));
+	code_resource.end = virt_to_phys(ktla_ktva(_etext))-1;
+	data_resource.start = virt_to_phys(_sdata);
 	data_resource.end = virt_to_phys(_edata)-1;
 	bss_resource.start = virt_to_phys(&__bss_start);
 	bss_resource.end = virt_to_phys(&__bss_stop)-1;

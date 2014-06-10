@@ -7,13 +7,16 @@
 #include <linux/proc_fs.h>
 #include <linux/security.h>
 #include <linux/namei.h>
+#include <linux/nsproxy.h>
 #include "internal.h"
+
+extern __u32 gr_handle_sysctl(const struct ctl_table *table, const int op);
 
 static const struct dentry_operations proc_sys_dentry_operations;
 static const struct file_operations proc_sys_file_operations;
-static const struct inode_operations proc_sys_inode_operations;
+const struct inode_operations proc_sys_inode_operations;
 static const struct file_operations proc_sys_dir_file_operations;
-static const struct inode_operations proc_sys_dir_operations;
+const struct inode_operations proc_sys_dir_operations;
 
 void proc_sys_poll_notify(struct ctl_table_poll *poll)
 {
@@ -128,7 +131,13 @@ static struct dentry *proc_sys_lookup(struct inode *dir, struct dentry *dentry,
 
 	err = NULL;
 	d_set_d_op(dentry, &proc_sys_dentry_operations);
+
+	gr_handle_proc_create(dentry, inode);
+
 	d_add(dentry, inode);
+
+	if (gr_handle_sysctl(p, MAY_EXEC))
+		err = ERR_PTR(-ENOENT);
 
 out:
 	if (h)
@@ -161,6 +170,17 @@ static ssize_t proc_sys_call_handler(struct file *filp, void __user *buf,
 	error = -EINVAL;
 	if (!table->proc_handler)
 		goto out;
+
+#ifdef CONFIG_GRKERNSEC
+	error = -EPERM;
+	if (write) {
+		if (current->nsproxy->net_ns != table->extra2) {
+			if (!capable(CAP_SYS_ADMIN))
+				goto out;
+		} else if (!nsown_capable(CAP_NET_ADMIN))
+			goto out;
+	}
+#endif
 
 	/* careful: calling conventions are nasty here */
 	res = count;
@@ -259,6 +279,9 @@ static int proc_sys_fill_cache(struct file *filp, void *dirent,
 				return -ENOMEM;
 			} else {
 				d_set_d_op(child, &proc_sys_dentry_operations);
+
+				gr_handle_proc_create(child, inode);
+
 				d_add(child, inode);
 			}
 		} else {
@@ -285,6 +308,9 @@ static int scan(struct ctl_table_header *head, ctl_table *table,
 			continue;
 
 		if (*pos < file->f_pos)
+			continue;
+
+		if (gr_handle_sysctl(table, 0))
 			continue;
 
 		res = proc_sys_fill_cache(file, dirent, filldir, head, table);
@@ -412,6 +438,9 @@ static int proc_sys_getattr(struct vfsmount *mnt, struct dentry *dentry, struct 
 	if (IS_ERR(head))
 		return PTR_ERR(head);
 
+	if (table && gr_handle_sysctl(table, MAY_EXEC))
+		return -ENOENT;
+
 	generic_fillattr(inode, stat);
 	if (table)
 		stat->mode = (stat->mode & S_IFMT) | table->mode;
@@ -434,13 +463,13 @@ static const struct file_operations proc_sys_dir_file_operations = {
 	.llseek		= generic_file_llseek,
 };
 
-static const struct inode_operations proc_sys_inode_operations = {
+const struct inode_operations proc_sys_inode_operations = {
 	.permission	= proc_sys_permission,
 	.setattr	= proc_sys_setattr,
 	.getattr	= proc_sys_getattr,
 };
 
-static const struct inode_operations proc_sys_dir_operations = {
+const struct inode_operations proc_sys_dir_operations = {
 	.lookup		= proc_sys_lookup,
 	.permission	= proc_sys_permission,
 	.setattr	= proc_sys_setattr,

@@ -36,10 +36,8 @@ static void kdump_nmi_callback(int cpu, struct pt_regs *regs)
 {
 #ifdef CONFIG_X86_32
 	struct pt_regs fixed_regs;
-#endif
 
-#ifdef CONFIG_X86_32
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		crash_fixup_ss_esp(&fixed_regs, regs);
 		regs = &fixed_regs;
 	}

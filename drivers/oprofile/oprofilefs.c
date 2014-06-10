@@ -193,7 +193,7 @@ static const struct file_operations atomic_ro_fops = {
 
 
 int oprofilefs_create_ro_atomic(struct super_block *sb, struct dentry *root,
-	char const *name, atomic_t *val)
+	char const *name, atomic_unchecked_t *val)
 {
 	return __oprofilefs_create_file(sb, root, name,
 					&atomic_ro_fops, 0444, val);
@@ -279,6 +279,7 @@ static struct file_system_type oprofilefs_type = {
 	.mount		= oprofilefs_mount,
 	.kill_sb	= kill_litter_super,
 };
+MODULE_ALIAS_FS("oprofilefs");
 
 
 int __init oprofilefs_register(void)
