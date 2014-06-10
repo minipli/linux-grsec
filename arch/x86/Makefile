@@ -40,12 +40,12 @@ ifeq ($(CONFIG_X86_32),y)
         KBUILD_CFLAGS += $(cflags-y)
 
         # temporary until string.h is fixed
-        KBUILD_CFLAGS += -ffreestanding
 else
         BITS := 64
         UTS_MACHINE := x86_64
         CHECKFLAGS += -D__x86_64__ -m64
 
+        biarch := $(call cc-option,-m64)
         KBUILD_AFLAGS += -m64
         KBUILD_CFLAGS += -m64
 
@@ -71,6 +71,8 @@ else
         # newer gccs do it by default
         KBUILD_CFLAGS += -maccumulate-outgoing-args
 endif
+
+KBUILD_CFLAGS += -ffreestanding
 
 ifdef CONFIG_CC_STACKPROTECTOR
 	cc_has_sp := $(srctree)/scripts/gcc-x86_$(BITS)-has-stack-protector.sh
@@ -199,3 +201,12 @@ define archhelp
   echo  '                  FDARGS="..."  arguments for the booted kernel'
   echo  '                  FDINITRD=file initrd for the booted kernel'
 endef
+
+define OLD_LD
+
+*** ${VERSION}.${PATCHLEVEL} PaX kernels no longer build correctly with old versions of binutils.
+*** Please upgrade your binutils to 2.18 or newer
+endef
+
+archprepare:
+	$(if $(LDFLAGS_BUILD_ID),,$(error $(OLD_LD)))

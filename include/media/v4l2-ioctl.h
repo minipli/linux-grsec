@@ -275,7 +275,6 @@ struct v4l2_ioctl_ops {
 					bool valid_prio, int cmd, void *arg);
 };
 
-
 /* v4l debugging and diagnostics */
 
 /* Debug bitmask flags to be used on V4L2 */

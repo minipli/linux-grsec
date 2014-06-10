@@ -106,6 +106,12 @@ static void move_ptes(struct vm_area_struct *vma, pmd_t *old_pmd,
 			continue;
 		pte = ptep_get_and_clear(mm, old_addr, old_pte);
 		pte = move_pte(pte, new_vma->vm_page_prot, old_addr, new_addr);
+
+#ifdef CONFIG_ARCH_TRACK_EXEC_LIMIT
+		if (!(__supported_pte_mask & _PAGE_NX) && (new_vma->vm_flags & (VM_PAGEEXEC | VM_EXEC)) == VM_PAGEEXEC)
+			pte = pte_exprotect(pte);
+#endif
+
 		set_pte_at(mm, new_addr, new_pte, pte);
 	}
 
@@ -251,7 +257,6 @@ static unsigned long move_vma(struct vm_area_struct *vma,
 	 * If this were a serious issue, we'd add a flag to do_munmap().
 	 */
 	hiwater_vm = mm->hiwater_vm;
-	mm->total_vm += new_len >> PAGE_SHIFT;
 	vm_stat_account(mm, vma->vm_flags, vma->vm_file, new_len>>PAGE_SHIFT);
 
 	if (do_munmap(mm, old_addr, old_len) < 0) {
@@ -289,6 +294,11 @@ static struct vm_area_struct *vma_to_resize(unsigned long addr,
 
 	if (is_vm_hugetlb_page(vma))
 		goto Einval;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (pax_find_mirror_vma(vma))
+		goto Einval;
+#endif
 
 	/* We can't remap across vm area boundaries */
 	if (old_len > vma->vm_end - addr)
@@ -346,20 +356,25 @@ static unsigned long mremap_to(unsigned long addr,
 	unsigned long ret = -EINVAL;
 	unsigned long charged = 0;
 	unsigned long map_flags;
+	unsigned long pax_task_size = TASK_SIZE;
 
 	if (new_addr & ~PAGE_MASK)
 		goto out;
 
-	if (new_len > TASK_SIZE || new_addr > TASK_SIZE - new_len)
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (mm->pax_flags & MF_PAX_SEGMEXEC)
+		pax_task_size = SEGMEXEC_TASK_SIZE;
+#endif
+
+	pax_task_size -= PAGE_SIZE;
+
+	if (new_len > TASK_SIZE || new_addr > pax_task_size - new_len)
 		goto out;
 
 	/* Check if the location we're moving into overlaps the
 	 * old location at all, and fail if it does.
 	 */
-	if ((new_addr <= addr) && (new_addr+new_len) > addr)
-		goto out;
-
-	if ((addr <= new_addr) && (addr+old_len) > new_addr)
+	if (addr + old_len > new_addr && new_addr + new_len > addr)
 		goto out;
 
 	ret = security_file_mmap(NULL, 0, 0, 0, new_addr, 1);
@@ -431,6 +446,7 @@ unsigned long do_mremap(unsigned long addr,
 	struct vm_area_struct *vma;
 	unsigned long ret = -EINVAL;
 	unsigned long charged = 0;
+	unsigned long pax_task_size = TASK_SIZE;
 
 	if (flags & ~(MREMAP_FIXED | MREMAP_MAYMOVE))
 		goto out;
@@ -447,6 +463,17 @@ unsigned long do_mremap(unsigned long addr,
 	 * a zero new-len is nonsensical.
 	 */
 	if (!new_len)
+		goto out;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (mm->pax_flags & MF_PAX_SEGMEXEC)
+		pax_task_size = SEGMEXEC_TASK_SIZE;
+#endif
+
+	pax_task_size -= PAGE_SIZE;
+
+	if (new_len > pax_task_size || addr > pax_task_size-new_len ||
+	    old_len > pax_task_size || addr > pax_task_size-old_len)
 		goto out;
 
 	if (flags & MREMAP_FIXED) {
@@ -490,7 +517,6 @@ unsigned long do_mremap(unsigned long addr,
 				goto out;
 			}
 
-			mm->total_vm += pages;
 			vm_stat_account(mm, vma->vm_flags, vma->vm_file, pages);
 			if (vma->vm_flags & VM_LOCKED) {
 				mm->locked_vm += pages;
@@ -498,6 +524,7 @@ unsigned long do_mremap(unsigned long addr,
 						   addr + new_len);
 			}
 			ret = addr;
+			track_exec_limit(vma->vm_mm, vma->vm_start, addr + new_len, vma->vm_flags);
 			goto out;
 		}
 	}
@@ -524,7 +551,13 @@ unsigned long do_mremap(unsigned long addr,
 		ret = security_file_mmap(NULL, 0, 0, 0, new_addr, 1);
 		if (ret)
 			goto out;
+
+		map_flags = vma->vm_flags;
 		ret = move_vma(vma, addr, old_len, new_len, new_addr);
+		if (!(ret & ~PAGE_MASK)) {
+			track_exec_limit(current->mm, addr, addr + old_len, 0UL);
+			track_exec_limit(current->mm, new_addr, new_addr + new_len, map_flags);
+		}
 	}
 out:
 	if (ret & ~PAGE_MASK)

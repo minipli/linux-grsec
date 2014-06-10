@@ -11,14 +11,29 @@
 
 #include <linux/gfp.h>
 #include <linux/types.h>
+#include <linux/err.h>
 
 /*
  * Flags to pass to kmem_cache_create().
  * The ones marked DEBUG are only valid if CONFIG_SLAB_DEBUG is set.
  */
 #define SLAB_DEBUG_FREE		0x00000100UL	/* DEBUG: Perform (expensive) checks on free */
+
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+#define SLAB_USERCOPY		0x00000200UL	/* PaX: Allow copying objs to/from userland */
+#else
+#define SLAB_USERCOPY		0x00000000UL
+#endif
+
 #define SLAB_RED_ZONE		0x00000400UL	/* DEBUG: Red zone objs in a cache */
 #define SLAB_POISON		0x00000800UL	/* DEBUG: Poison objects */
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+#define SLAB_NO_SANITIZE	0x00001000UL	/* PaX: Do not sanitize objs on free */
+#else
+#define SLAB_NO_SANITIZE	0x00000000UL
+#endif
+
 #define SLAB_HWCACHE_ALIGN	0x00002000UL	/* Align objs on cache lines */
 #define SLAB_CACHE_DMA		0x00004000UL	/* Use GFP_DMA memory */
 #define SLAB_STORE_USER		0x00010000UL	/* DEBUG: Store the last owner for bug hunting */
@@ -87,10 +102,22 @@
  * ZERO_SIZE_PTR can be passed to kfree though in the same way that NULL can.
  * Both make kfree a no-op.
  */
-#define ZERO_SIZE_PTR ((void *)16)
+#define ZERO_SIZE_PTR				\
+({						\
+	BUILD_BUG_ON(!(MAX_ERRNO & ~PAGE_MASK));\
+	(void *)(-MAX_ERRNO-1L);		\
+})
 
-#define ZERO_OR_NULL_PTR(x) ((unsigned long)(x) <= \
-				(unsigned long)ZERO_SIZE_PTR)
+#define ZERO_OR_NULL_PTR(x) ((unsigned long)(x) - 1 >= (unsigned long)ZERO_SIZE_PTR - 1)
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+#ifdef CONFIG_X86_64
+#define PAX_MEMORY_SANITIZE_VALUE	'\xfe'
+#else
+#define PAX_MEMORY_SANITIZE_VALUE	'\xff'
+#endif
+extern bool pax_sanitize_slab;
+#endif
 
 /*
  * struct kmem_cache related prototypes
@@ -161,6 +188,8 @@ void * __must_check krealloc(const void *, size_t, gfp_t);
 void kfree(const void *);
 void kzfree(const void *);
 size_t ksize(const void *);
+const char *check_heap_object(const void *ptr, unsigned long n);
+bool is_usercopy_object(const void *ptr);
 
 /*
  * Allocator specific definitions. These are mainly used to establish optimized
@@ -240,8 +269,18 @@ size_t ksize(const void *);
  * for general use, and so are not documented here. For a full list of
  * potential flags, always refer to linux/gfp.h.
  */
+
+extern void kmalloc_array_error(void)
+#if defined(CONFIG_GCOV_KERNEL) && defined(CONFIG_PAX_SIZE_OVERFLOW)
+__compiletime_warning("kmalloc_array called with swapped arguments?");
+#else
+__compiletime_error("kmalloc_array called with swapped arguments?");
+#endif
+
 static inline void *kmalloc_array(size_t n, size_t size, gfp_t flags)
 {
+	if (__builtin_constant_p(n) && !__builtin_constant_p(size))
+		kmalloc_array_error();
 	if (size != 0 && n > ULONG_MAX / size)
 		return NULL;
 	return __kmalloc(n * size, flags);
