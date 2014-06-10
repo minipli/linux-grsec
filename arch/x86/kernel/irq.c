@@ -21,7 +21,7 @@
 #define CREATE_TRACE_POINTS
 #include <asm/trace/irq_vectors.h>
 
-atomic_t irq_err_count;
+atomic_unchecked_t irq_err_count;
 
 /* Function pointer for generic interrupt vector handling */
 void (*x86_platform_ipi_callback)(void) = NULL;
@@ -125,9 +125,9 @@ int arch_show_interrupts(struct seq_file *p, int prec)
 		seq_printf(p, "%10u ", per_cpu(mce_poll_count, j));
 	seq_printf(p, "  Machine check polls\n");
 #endif
-	seq_printf(p, "%*s: %10u\n", prec, "ERR", atomic_read(&irq_err_count));
+	seq_printf(p, "%*s: %10u\n", prec, "ERR", atomic_read_unchecked(&irq_err_count));
 #if defined(CONFIG_X86_IO_APIC)
-	seq_printf(p, "%*s: %10u\n", prec, "MIS", atomic_read(&irq_mis_count));
+	seq_printf(p, "%*s: %10u\n", prec, "MIS", atomic_read_unchecked(&irq_mis_count));
 #endif
 	return 0;
 }
@@ -167,7 +167,7 @@ u64 arch_irq_stat_cpu(unsigned int cpu)
 
 u64 arch_irq_stat(void)
 {
-	u64 sum = atomic_read(&irq_err_count);
+	u64 sum = atomic_read_unchecked(&irq_err_count);
 	return sum;
 }
 

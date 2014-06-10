@@ -773,10 +773,10 @@ static int iucv_sock_autobind(struct sock *sk)
 
 	write_lock_bh(&iucv_sk_list.lock);
 
-	sprintf(name, "%08x", atomic_inc_return(&iucv_sk_list.autobind_name));
+	sprintf(name, "%08x", atomic_inc_return_unchecked(&iucv_sk_list.autobind_name));
 	while (__iucv_get_sock_by_name(name)) {
 		sprintf(name, "%08x",
-			atomic_inc_return(&iucv_sk_list.autobind_name));
+			atomic_inc_return_unchecked(&iucv_sk_list.autobind_name));
 	}
 
 	write_unlock_bh(&iucv_sk_list.lock);
@@ -1829,7 +1829,7 @@ static void iucv_callback_txdone(struct iucv_path *path,
 		spin_lock_irqsave(&list->lock, flags);
 
 		while (list_skb != (struct sk_buff *)list) {
-			if (msg->tag != IUCV_SKB_CB(list_skb)->tag) {
+			if (msg->tag == IUCV_SKB_CB(list_skb)->tag) {
 				this = list_skb;
 				break;
 			}
