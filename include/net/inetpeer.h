@@ -179,7 +179,7 @@ static inline int inet_getid(struct inet_peer *p, int more)
 {
 	more++;
 	inet_peer_refcheck(p);
-	reeturn atomic_add_return_unchecked(more, &p->ip_id_count) - more;
+	return atomic_add_return_unchecked(more, &p->ip_id_count) - more;
 }
 
 #endif /* _NET_INETPEER_H */
