@@ -10,7 +10,7 @@
 
 void ipv6_select_ident(struct frag_hdr *fhdr, struct rt6_info *rt)
 {
-	static atomic_t ipv6_fragmentation_id;
+	static atomic_unchecked_t ipv6_fragmentation_id;
 	struct in6_addr addr;
 	int ident;
 
@@ -26,7 +26,7 @@ void ipv6_select_ident(struct frag_hdr *fhdr, struct rt6_info *rt)
 		return;
 	}
 #endif
-	ident = atomic_inc_return(&ipv6_fragmentation_id);
+	ident = atomic_inc_return_unchecked(&ipv6_fragmentation_id);
 
 	addr = rt->rt6i_dst.addr;
 	addr.s6_addr32[0] ^= (__force __be32)ident;
