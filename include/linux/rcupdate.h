@@ -588,7 +588,7 @@ static inline void rcu_preempt_sleep_check(void)
 #define rcu_assign_pointer(p, v) \
 	do { \
 		smp_wmb(); \
-		ACCESS_ONCE(p) = RCU_INITIALIZER(v); \
+		ACCESS_ONCE_RW(p) = RCU_INITIALIZER(v); \
 	} while (0)
 
 
