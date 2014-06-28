@@ -135,12 +135,12 @@ enum kprobe_slot_state {
 
 static void *alloc_insn_page(void)
 {
-	return module_alloc(PAGE_SIZE);
+	return module_alloc_exec(PAGE_SIZE);
 }
 
 static void free_insn_page(void *page)
 {
-	module_free(NULL, page);
+	module_free_exec(NULL, page);
 }
 
 struct kprobe_insn_cache kprobe_insn_slots = {

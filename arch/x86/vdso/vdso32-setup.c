@@ -29,6 +29,7 @@
 #include <asm/fixmap.h>
 #include <asm/hpet.h>
 #include <asm/vvar.h>
+#include <asm/mman.h>
 
 #ifdef CONFIG_COMPAT_VDSO
 #define VDSO_DEFAULT	0
@@ -99,7 +100,7 @@ void syscall32_cpu_init(void)
 void enable_sep_cpu(void)
 {
 	int cpu = get_cpu();
-	struct tss_struct *tss = &per_cpu(init_tss, cpu);
+	struct tss_struct *tss = init_tss + cpu;
 
 	if (!boot_cpu_has(X86_FEATURE_SEP)) {
 		put_cpu();
@@ -167,7 +168,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 
 	down_write(&mm->mmap_sem);
 
-	addr = get_unmapped_area(NULL, 0, vdso32_size + VDSO_OFFSET(VDSO_PREV_PAGES), 0, 0);
+	addr = get_unmapped_area(NULL, 0, vdso32_size + VDSO_OFFSET(VDSO_PREV_PAGES), 0, MAP_EXECUTABLE);
 	if (IS_ERR_VALUE(addr)) {
 		ret = addr;
 		goto up_fail;
@@ -175,7 +176,7 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 
 	addr += VDSO_OFFSET(VDSO_PREV_PAGES);
 
-	current->mm->context.vdso = (void *)addr;
+	current->mm->context.vdso = addr;
 
 	/*
 	 * MAYWRITE to allow gdb to COW and set breakpoints
@@ -224,11 +225,11 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 #endif
 
 	current_thread_info()->sysenter_return =
-		VDSO32_SYMBOL(addr, SYSENTER_RETURN);
+		(void __force_user *)VDSO32_SYMBOL(addr, SYSENTER_RETURN);
 
   up_fail:
 	if (ret)
-		current->mm->context.vdso = NULL;
+		current->mm->context.vdso = 0;
 
 	up_write(&mm->mmap_sem);
 
@@ -282,8 +283,14 @@ __initcall(ia32_binfmt_init);
 
 const char *arch_vma_name(struct vm_area_struct *vma)
 {
-	if (vma->vm_mm && vma->vm_start == (long)vma->vm_mm->context.vdso)
+	if (vma->vm_mm && vma->vm_start == vma->vm_mm->context.vdso)
 		return "[vdso]";
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (vma->vm_mm && vma->vm_mirror && vma->vm_mirror->vm_start == vma->vm_mm->context.vdso)
+		return "[vdso]";
+#endif
+
 	return NULL;
 }
 
