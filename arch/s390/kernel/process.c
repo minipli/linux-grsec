@@ -242,37 +242,3 @@ unsigned long get_wchan(struct task_struct *p)
 	}
 	return 0;
 }
-
-unsigned long arch_align_stack(unsigned long sp)
-{
-	if (!(current->personality & ADDR_NO_RANDOMIZE) && randomize_va_space)
-		sp -= get_random_int() & ~PAGE_MASK;
-	return sp & ~0xf;
-}
-
-static inline unsigned long brk_rnd(void)
-{
-	/* 8MB for 32bit, 1GB for 64bit */
-	if (is_32bit_task())
-		return (get_random_int() & 0x7ffUL) << PAGE_SHIFT;
-	else
-		return (get_random_int() & 0x3ffffUL) << PAGE_SHIFT;
-}
-
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long ret;
-
-	ret = PAGE_ALIGN(mm->brk + brk_rnd());
-	return (ret > mm->brk) ? ret : mm->brk;
-}
-
-unsigned long randomize_et_dyn(unsigned long base)
-{
-	unsigned long ret;
-
-	if (!(current->flags & PF_RANDOMIZE))
-		return base;
-	ret = PAGE_ALIGN(base + brk_rnd());
-	return (ret > base) ? ret : base;
-}
