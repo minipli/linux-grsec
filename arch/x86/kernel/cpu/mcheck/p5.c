@@ -10,6 +10,7 @@
 #include <asm/processor.h>
 #include <asm/mce.h>
 #include <asm/msr.h>
+#include <asm/pgtable.h>
 
 /* By default disabled */
 int mce_p5_enabled __read_mostly;
@@ -48,7 +49,9 @@ void intel_p5_mcheck_init(struct cpuinfo_x86 *c)
 	if (!cpu_has(c, X86_FEATURE_MCE))
 		return;
 
+	pax_open_kernel();
 	machine_check_vector = pentium_machine_check;
+	pax_close_kernel();
 	/* Make sure the vector pointer is visible before we enable MCEs: */
 	wmb();
 
