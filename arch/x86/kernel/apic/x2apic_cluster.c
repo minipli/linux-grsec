@@ -182,7 +182,7 @@ update_clusterinfo(struct notifier_block *nfb, unsigned long action, void *hcpu)
 	return notifier_from_errno(err);
 }
 
-static struct notifier_block __refdata x2apic_cpu_notifier = {
+static struct notifier_block x2apic_cpu_notifier = {
 	.notifier_call = update_clusterinfo,
 };
 
@@ -234,7 +234,7 @@ static void cluster_vector_allocation_domain(int cpu, struct cpumask *retmask,
 		cpumask_and(retmask, mask, per_cpu(cpus_in_cluster, cpu));
 }
 
-static struct apic apic_x2apic_cluster = {
+static struct apic apic_x2apic_cluster __read_only = {
 
 	.name				= "cluster x2apic",
 	.probe				= x2apic_cluster_probe,
