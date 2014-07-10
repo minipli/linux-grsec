@@ -6,12 +6,24 @@
 static inline unsigned long
 ex_insn_addr(const struct exception_table_entry *x)
 {
-	return (unsigned long)&x->insn + x->insn;
+	unsigned long reloc = 0;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	reloc = ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
+	return (unsigned long)&x->insn + x->insn + reloc;
 }
 static inline unsigned long
 ex_fixup_addr(const struct exception_table_entry *x)
 {
-	return (unsigned long)&x->fixup + x->fixup;
+	unsigned long reloc = 0;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	reloc = ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
+	return (unsigned long)&x->fixup + x->fixup + reloc;
 }
 
 int fixup_exception(struct pt_regs *regs)
@@ -20,7 +32,7 @@ int fixup_exception(struct pt_regs *regs)
 	unsigned long new_ip;
 
 #ifdef CONFIG_PNPBIOS
-	if (unlikely(SEGMENT_IS_PNP_CODE(regs->cs))) {
+	if (unlikely(!v8086_mode(regs) && SEGMENT_IS_PNP_CODE(regs->cs))) {
 		extern u32 pnp_bios_fault_eip, pnp_bios_fault_esp;
 		extern u32 pnp_bios_is_utter_crap;
 		pnp_bios_is_utter_crap = 1;
@@ -145,6 +157,13 @@ void sort_extable(struct exception_table_entry *start,
 		i += 4;
 		p->fixup -= i;
 		i += 4;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		BUILD_BUG_ON(!IS_ENABLED(CONFIG_BUILDTIME_EXTABLE_SORT));
+		p->insn -= ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+		p->fixup -= ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
 	}
 }
 

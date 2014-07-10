@@ -99,7 +99,7 @@ ENTRY(xen_iret)
 	pushw %fs
 	movl $(__KERNEL_PERCPU), %eax
 	movl %eax, %fs
-	movl %fs:xen_vcpu, %eax
+	mov PER_CPU_VAR(xen_vcpu), %eax
 	POP_FS
 #else
 	movl %ss:xen_vcpu, %eax
