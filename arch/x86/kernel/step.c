@@ -27,10 +27,10 @@ unsigned long convert_ip_to_linear(struct task_struct *child, struct pt_regs *re
 		struct desc_struct *desc;
 		unsigned long base;
 
-		seg &= ~7UL;
+		seg >>= 3;
 
 		mutex_lock(&child->mm->context.lock);
-		if (unlikely((seg >> 3) >= child->mm->context.size))
+		if (unlikely(seg >= child->mm->context.size))
 			addr = -1L; /* bogus selector, access would fault */
 		else {
 			desc = child->mm->context.ldt + seg;
@@ -42,7 +42,8 @@ unsigned long convert_ip_to_linear(struct task_struct *child, struct pt_regs *re
 			addr += base;
 		}
 		mutex_unlock(&child->mm->context.lock);
-	}
+	} else if (seg == __KERNEL_CS || seg == __KERNEXEC_KERNEL_CS)
+		addr = ktla_ktva(addr);
 
 	return addr;
 }
@@ -52,6 +53,9 @@ static int is_setting_trap_flag(struct task_struct *child, struct pt_regs *regs)
 	int i, copied;
 	unsigned char opcode[15];
 	unsigned long addr = convert_ip_to_linear(child, regs);
+
+	if (addr == -EINVAL)
+		return 0;
 
 	copied = access_process_vm(child, addr, opcode, sizeof(opcode), 0);
 	for (i = 0; i < copied; i++) {
