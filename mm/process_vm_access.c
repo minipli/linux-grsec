@@ -13,6 +13,7 @@
 #include <linux/uio.h>
 #include <linux/sched.h>
 #include <linux/highmem.h>
+#include <linux/security.h>
 #include <linux/ptrace.h>
 #include <linux/slab.h>
 #include <linux/syscalls.h>
@@ -258,19 +259,19 @@ static ssize_t process_vm_rw_core(pid_t pid, const struct iovec *lvec,
 	size_t iov_l_curr_offset = 0;
 	ssize_t iov_len;
 
+	return -ENOSYS; // PaX: until properly audited
+
 	/*
 	 * Work out how many pages of struct pages we're going to need
 	 * when eventually calling get_user_pages
 	 */
 	for (i = 0; i < riovcnt; i++) {
 		iov_len = rvec[i].iov_len;
-		if (iov_len > 0) {
-			nr_pages_iov = ((unsigned long)rvec[i].iov_base
-					+ iov_len)
-				/ PAGE_SIZE - (unsigned long)rvec[i].iov_base
-				/ PAGE_SIZE + 1;
-			nr_pages = max(nr_pages, nr_pages_iov);
-		}
+		if (iov_len <= 0)
+			continue;
+		nr_pages_iov = ((unsigned long)rvec[i].iov_base + iov_len) / PAGE_SIZE -
+				(unsigned long)rvec[i].iov_base / PAGE_SIZE + 1;
+		nr_pages = max(nr_pages, nr_pages_iov);
 	}
 
 	if (nr_pages == 0)
@@ -296,6 +297,11 @@ static ssize_t process_vm_rw_core(pid_t pid, const struct iovec *lvec,
 	if (!task) {
 		rc = -ESRCH;
 		goto free_proc_pages;
+	}
+
+	if (gr_handle_ptrace(task, vm_write ? PTRACE_POKETEXT : PTRACE_ATTACH)) {
+		rc = -EPERM;
+		goto put_task_struct;
 	}
 
 	mm = mm_access(task, PTRACE_MODE_ATTACH);

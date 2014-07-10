@@ -7,9 +7,9 @@
 
 /* duplicated to the one in bootmem.h */
 extern unsigned long max_pfn;
-extern unsigned long phys_base;
+extern const unsigned long phys_base;
 
-static inline unsigned long __phys_addr_nodebug(unsigned long x)
+static inline unsigned long __intentional_overflow(-1) __phys_addr_nodebug(unsigned long x)
 {
 	unsigned long y = x - __START_KERNEL_map;
 

@@ -61,6 +61,11 @@ typedef struct { pteval_t pte; } pte_t;
 #define MODULES_VADDR    (__START_KERNEL_map + KERNEL_IMAGE_SIZE)
 #define MODULES_END      _AC(0xffffffffff000000, UL)
 #define MODULES_LEN   (MODULES_END - MODULES_VADDR)
+#define MODULES_EXEC_VADDR MODULES_VADDR
+#define MODULES_EXEC_END MODULES_END
+
+#define ktla_ktva(addr)		(addr)
+#define ktva_ktla(addr)		(addr)
 
 #define EARLY_DYNAMIC_PAGE_TABLES	64
 

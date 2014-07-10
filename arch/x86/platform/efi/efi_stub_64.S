@@ -7,6 +7,7 @@
  */
 
 #include <linux/linkage.h>
+#include <asm/alternative-asm.h>
 
 #define SAVE_XMM			\
 	mov %rsp, %rax;			\
@@ -77,6 +78,7 @@ ENTRY(efi_call0)
 	RESTORE_PGT
 	addq $32, %rsp
 	RESTORE_XMM
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(efi_call0)
 
@@ -89,6 +91,7 @@ ENTRY(efi_call1)
 	RESTORE_PGT
 	addq $32, %rsp
 	RESTORE_XMM
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(efi_call1)
 
@@ -101,6 +104,7 @@ ENTRY(efi_call2)
 	RESTORE_PGT
 	addq $32, %rsp
 	RESTORE_XMM
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(efi_call2)
 
@@ -114,6 +118,7 @@ ENTRY(efi_call3)
 	RESTORE_PGT
 	addq $32, %rsp
 	RESTORE_XMM
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(efi_call3)
 
@@ -128,6 +133,7 @@ ENTRY(efi_call4)
 	RESTORE_PGT
 	addq $32, %rsp
 	RESTORE_XMM
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(efi_call4)
 
@@ -143,6 +149,7 @@ ENTRY(efi_call5)
 	RESTORE_PGT
 	addq $48, %rsp
 	RESTORE_XMM
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(efi_call5)
 
@@ -161,6 +168,7 @@ ENTRY(efi_call6)
 	RESTORE_PGT
 	addq $48, %rsp
 	RESTORE_XMM
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(efi_call6)
 
