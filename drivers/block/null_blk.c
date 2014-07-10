@@ -382,15 +382,25 @@ static int null_init_hctx(struct blk_mq_hw_ctx *hctx, void *data,
 	return 0;
 }
 
-static struct blk_mq_ops null_mq_ops = {
-	.queue_rq       = null_queue_rq,
-	.map_queue      = blk_mq_map_queue,
+static struct blk_mq_ops null_mq_single_ops = {
+	.queue_rq	= null_queue_rq,
+	.map_queue	= blk_mq_map_queue,
 	.init_hctx	= null_init_hctx,
 	.complete	= null_softirq_done_fn,
+	.alloc_hctx	= blk_mq_alloc_single_hw_queue,
+	.free_hctx	= blk_mq_free_single_hw_queue,
+};
+
+static struct blk_mq_ops null_mq_per_node_ops = {
+	.queue_rq	= null_queue_rq,
+	.map_queue	= blk_mq_map_queue,
+	.init_hctx	= null_init_hctx,
+	.alloc_hctx	= null_alloc_hctx,
+	.free_hctx	= null_free_hctx,
 };
 
 static struct blk_mq_reg null_mq_reg = {
-	.ops		= &null_mq_ops,
+	.ops		= &null_mq_single_ops,
 	.queue_depth	= 64,
 	.cmd_size	= sizeof(struct nullb_cmd),
 	.flags		= BLK_MQ_F_SHOULD_MERGE,
@@ -521,13 +531,8 @@ static int null_add_dev(void)
 		null_mq_reg.queue_depth = hw_queue_depth;
 		null_mq_reg.nr_hw_queues = submit_queues;
 
-		if (use_per_node_hctx) {
-			null_mq_reg.ops->alloc_hctx = null_alloc_hctx;
-			null_mq_reg.ops->free_hctx = null_free_hctx;
-		} else {
-			null_mq_reg.ops->alloc_hctx = blk_mq_alloc_single_hw_queue;
-			null_mq_reg.ops->free_hctx = blk_mq_free_single_hw_queue;
-		}
+		if (use_per_node_hctx)
+			null_mq_reg.ops = &null_mq_per_node_ops;
 
 		nullb->q = blk_mq_init_queue(&null_mq_reg, nullb);
 	} else if (queue_mode == NULL_Q_BIO) {
