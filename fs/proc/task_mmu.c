@@ -11,11 +11,18 @@
 #include <linux/rmap.h>
 #include <linux/swap.h>
 #include <linux/swapops.h>
+#include <linux/grsecurity.h>
 
 #include <asm/elf.h>
 #include <asm/uaccess.h>
 #include <asm/tlbflush.h>
 #include "internal.h"
+
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+#define PAX_RAND_FLAGS(_mm) (_mm != NULL && _mm != current->mm && \
+			     (_mm->pax_flags & MF_PAX_RANDMMAP || \
+			      _mm->pax_flags & MF_PAX_SEGMEXEC))
+#endif
 
 void task_mem(struct seq_file *m, struct mm_struct *mm)
 {
@@ -52,8 +59,13 @@ void task_mem(struct seq_file *m, struct mm_struct *mm)
 		"VmExe:\t%8lu kB\n"
 		"VmLib:\t%8lu kB\n"
 		"VmPTE:\t%8lu kB\n"
-		"VmSwap:\t%8lu kB\n",
-		hiwater_vm << (PAGE_SHIFT-10),
+		"VmSwap:\t%8lu kB\n"
+
+#ifdef CONFIG_ARCH_TRACK_EXEC_LIMIT
+		"CsBase:\t%8lx\nCsLim:\t%8lx\n"
+#endif
+
+		,hiwater_vm << (PAGE_SHIFT-10),
 		(total_vm - mm->reserved_vm) << (PAGE_SHIFT-10),
 		mm->locked_vm << (PAGE_SHIFT-10),
 		mm->pinned_vm << (PAGE_SHIFT-10),
@@ -62,7 +74,19 @@ void task_mem(struct seq_file *m, struct mm_struct *mm)
 		data << (PAGE_SHIFT-10),
 		mm->stack_vm << (PAGE_SHIFT-10), text, lib,
 		(PTRS_PER_PTE*sizeof(pte_t)*mm->nr_ptes) >> 10,
-		swap << (PAGE_SHIFT-10));
+		swap << (PAGE_SHIFT-10)
+
+#ifdef CONFIG_ARCH_TRACK_EXEC_LIMIT
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+		, PAX_RAND_FLAGS(mm) ? 0 : mm->context.user_cs_base
+		, PAX_RAND_FLAGS(mm) ? 0 : mm->context.user_cs_limit
+#else
+		, mm->context.user_cs_base
+		, mm->context.user_cs_limit
+#endif
+#endif
+
+	);
 }
 
 unsigned long task_vsize(struct mm_struct *mm)
@@ -125,7 +149,7 @@ static void *m_start(struct seq_file *m, loff_t *pos)
 	if (!priv->task)
 		return ERR_PTR(-ESRCH);
 
-	mm = mm_for_maps(priv->task);
+	mm = mm_access(priv->task, PTRACE_MODE_READ);
 	if (!mm || IS_ERR(mm))
 		return mm;
 	down_read(&mm->mmap_sem);
@@ -227,13 +251,13 @@ static void show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 		pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;
 	}
 
-	/* We don't show the stack guard page in /proc/maps */
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	start = PAX_RAND_FLAGS(mm) ? 0UL : vma->vm_start;
+	end = PAX_RAND_FLAGS(mm) ? 0UL : vma->vm_end;
+#else
 	start = vma->vm_start;
-	if (stack_guard_page_start(vma, start))
-		start += PAGE_SIZE;
 	end = vma->vm_end;
-	if (stack_guard_page_end(vma, end))
-		end -= PAGE_SIZE;
+#endif
 
 	seq_printf(m, "%08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %n",
 			start,
@@ -242,7 +266,11 @@ static void show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 			flags & VM_WRITE ? 'w' : '-',
 			flags & VM_EXEC ? 'x' : '-',
 			flags & VM_MAYSHARE ? 's' : 'p',
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+			PAX_RAND_FLAGS(mm) ? 0UL : pgoff,
+#else
 			pgoff,
+#endif
 			MAJOR(dev), MINOR(dev), ino, &len);
 
 	/*
@@ -251,7 +279,7 @@ static void show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 	 */
 	if (file) {
 		pad_len_spaces(m, len);
-		seq_path(m, &file->f_path, "\n");
+		seq_path(m, &file->f_path, "\n\\");
 	} else {
 		const char *name = arch_vma_name(vma);
 		if (!name) {
@@ -259,8 +287,9 @@ static void show_map_vma(struct seq_file *m, struct vm_area_struct *vma)
 				if (vma->vm_start <= mm->brk &&
 						vma->vm_end >= mm->start_brk) {
 					name = "[heap]";
-				} else if (vma->vm_start <= mm->start_stack &&
-					   vma->vm_end >= mm->start_stack) {
+				} else if ((vma->vm_flags & (VM_GROWSDOWN | VM_GROWSUP)) ||
+					   (vma->vm_start <= mm->start_stack &&
+					    vma->vm_end >= mm->start_stack)) {
 					name = "[stack]";
 				}
 			} else {
@@ -280,6 +309,13 @@ static int show_map(struct seq_file *m, void *v)
 	struct vm_area_struct *vma = v;
 	struct proc_maps_private *priv = m->private;
 	struct task_struct *task = priv->task;
+
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	if (current->exec_id != m->exec_id) {
+		gr_log_badprocpid("maps");
+		return 0;
+	}
+#endif
 
 	show_map_vma(m, vma);
 
@@ -437,12 +473,23 @@ static int show_smap(struct seq_file *m, void *v)
 		.private = &mss,
 	};
 
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	if (current->exec_id != m->exec_id) {
+		gr_log_badprocpid("smaps");
+		return 0;
+	}
+#endif
 	memset(&mss, 0, sizeof mss);
-	mss.vma = vma;
-	/* mmap_sem is held in m_start */
-	if (vma->vm_mm && !is_vm_hugetlb_page(vma))
-		walk_page_range(vma->vm_start, vma->vm_end, &smaps_walk);
-
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	if (!PAX_RAND_FLAGS(vma->vm_mm)) {
+#endif
+		mss.vma = vma;
+		/* mmap_sem is held in m_start */
+		if (vma->vm_mm && !is_vm_hugetlb_page(vma))
+			walk_page_range(vma->vm_start, vma->vm_end, &smaps_walk);
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	}
+#endif
 	show_map_vma(m, vma);
 
 	seq_printf(m,
@@ -460,7 +507,11 @@ static int show_smap(struct seq_file *m, void *v)
 		   "KernelPageSize: %8lu kB\n"
 		   "MMUPageSize:    %8lu kB\n"
 		   "Locked:         %8lu kB\n",
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+		   PAX_RAND_FLAGS(vma->vm_mm) ? 0UL : (vma->vm_end - vma->vm_start) >> 10,
+#else
 		   (vma->vm_end - vma->vm_start) >> 10,
+#endif
 		   mss.resident >> 10,
 		   (unsigned long)(mss.pss >> (10 + PSS_SHIFT)),
 		   mss.shared_clean  >> 10,
@@ -798,7 +849,7 @@ static ssize_t pagemap_read(struct file *file, char __user *buf,
 	if (!pm.buffer)
 		goto out_task;
 
-	mm = mm_for_maps(task);
+	mm = mm_access(task, PTRACE_MODE_READ);
 	ret = PTR_ERR(mm);
 	if (!mm || IS_ERR(mm))
 		goto out_free;
@@ -1024,6 +1075,13 @@ static int show_numa_map(struct seq_file *m, void *v)
 	int n;
 	char buffer[50];
 
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	if (current->exec_id != m->exec_id) {
+		gr_log_badprocpid("numa_maps");
+		return 0;
+	}
+#endif
+
 	if (!mm)
 		return 0;
 
@@ -1041,11 +1099,15 @@ static int show_numa_map(struct seq_file *m, void *v)
 	mpol_to_str(buffer, sizeof(buffer), pol, 0);
 	mpol_cond_put(pol);
 
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	seq_printf(m, "%08lx %s", PAX_RAND_FLAGS(vma->vm_mm) ? 0UL : vma->vm_start, buffer);
+#else
 	seq_printf(m, "%08lx %s", vma->vm_start, buffer);
+#endif
 
 	if (file) {
 		seq_printf(m, " file=");
-		seq_path(m, &file->f_path, "\n\t= ");
+		seq_path(m, &file->f_path, "\n\t\\= ");
 	} else if (vma->vm_start <= mm->brk && vma->vm_end >= mm->start_brk) {
 		seq_printf(m, " heap");
 	} else if (vma->vm_start <= mm->start_stack &&

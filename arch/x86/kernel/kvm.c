@@ -437,6 +437,7 @@ static void __init paravirt_ops_setup(void)
 		pv_mmu_ops.set_pud = kvm_set_pud;
 #if PAGETABLE_LEVELS == 4
 		pv_mmu_ops.set_pgd = kvm_set_pgd;
+		pv_mmu_ops.set_pgd_batched = kvm_set_pgd;
 #endif
 #endif
 		pv_mmu_ops.flush_tlb_user = kvm_flush_tlb;
@@ -579,7 +580,7 @@ static int __cpuinit kvm_cpu_notify(struct notifier_block *self,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block __cpuinitdata kvm_cpu_notifier = {
+static struct notifier_block kvm_cpu_notifier = {
         .notifier_call  = kvm_cpu_notify,
 };
 #endif

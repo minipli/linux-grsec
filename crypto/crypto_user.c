@@ -26,6 +26,8 @@
 #include <net/net_namespace.h>
 #include "internal.h"
 
+#define null_terminated(x)	(strnlen(x, sizeof(x)) < sizeof(x))
+
 DEFINE_MUTEX(crypto_cfg_mutex);
 
 /* The crypto netlink socket */
@@ -192,7 +194,10 @@ static int crypto_report(struct sk_buff *in_skb, struct nlmsghdr *in_nlh,
 	struct crypto_dump_info info;
 	int err;
 
-	if (!p->cru_driver_name)
+	if (!null_terminated(p->cru_name) || !null_terminated(p->cru_driver_name))
+		return -EINVAL;
+
+	if (!p->cru_driver_name[0])
 		return -EINVAL;
 
 	alg = crypto_alg_match(p, 1);
@@ -256,6 +261,9 @@ static int crypto_update_alg(struct sk_buff *skb, struct nlmsghdr *nlh,
 	struct nlattr *priority = attrs[CRYPTOCFGA_PRIORITY_VAL];
 	LIST_HEAD(list);
 
+	if (!null_terminated(p->cru_name) || !null_terminated(p->cru_driver_name))
+		return -EINVAL;
+
 	if (priority && !strlen(p->cru_driver_name))
 		return -EINVAL;
 
@@ -283,6 +291,9 @@ static int crypto_del_alg(struct sk_buff *skb, struct nlmsghdr *nlh,
 	struct crypto_alg *alg;
 	struct crypto_user_alg *p = nlmsg_data(nlh);
 
+	if (!null_terminated(p->cru_name) || !null_terminated(p->cru_driver_name))
+		return -EINVAL;
+
 	alg = crypto_alg_match(p, 1);
 	if (!alg)
 		return -ENOENT;
@@ -309,6 +320,9 @@ static int crypto_add_alg(struct sk_buff *skb, struct nlmsghdr *nlh,
 	struct crypto_alg *alg;
 	struct crypto_user_alg *p = nlmsg_data(nlh);
 	struct nlattr *priority = attrs[CRYPTOCFGA_PRIORITY_VAL];
+
+	if (!null_terminated(p->cru_name) || !null_terminated(p->cru_driver_name))
+		return -EINVAL;
 
 	if (strlen(p->cru_driver_name))
 		exact = 1;

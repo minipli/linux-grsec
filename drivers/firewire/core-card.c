@@ -512,9 +512,9 @@ void fw_card_initialize(struct fw_card *card,
 			const struct fw_card_driver *driver,
 			struct device *device)
 {
-	static atomic_t index = ATOMIC_INIT(-1);
+	static atomic_unchecked_t index = ATOMIC_INIT(-1);
 
-	card->index = atomic_inc_return(&index);
+	card->index = atomic_inc_return_unchecked(&index);
 	card->driver = driver;
 	card->device = device;
 	card->current_tlabel = 0;
@@ -657,7 +657,7 @@ void fw_card_release(struct kref *kref)
 
 void fw_core_remove_card(struct fw_card *card)
 {
-	struct fw_card_driver dummy_driver = dummy_driver_template;
+	fw_card_driver_no_const dummy_driver = dummy_driver_template;
 
 	card->driver->update_phy_reg(card, 4,
 				     PHY_LINK_ACTIVE | PHY_CONTENDER, 0);

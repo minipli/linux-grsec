@@ -166,7 +166,7 @@ static struct notifier_block xpc_die_notifier = {
 	.notifier_call = xpc_system_die,
 };
 
-struct xpc_arch_operations xpc_arch_ops;
+xpc_arch_operations_no_const xpc_arch_ops;
 
 /*
  * Timer function to enforce the timelimit on the partition disengage.
@@ -1210,7 +1210,7 @@ xpc_system_die(struct notifier_block *nb, unsigned long event, void *_die_args)
 
 		if (((die_args->trapnr == X86_TRAP_MF) ||
 		     (die_args->trapnr == X86_TRAP_XF)) &&
-		    !user_mode_vm(die_args->regs))
+		    !user_mode(die_args->regs))
 			xpc_die_deactivate();
 
 		break;
