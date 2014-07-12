@@ -150,6 +150,54 @@ static int __init set_reset_devices(char *str)
 
 __setup("reset_devices", set_reset_devices);
 
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+unsigned long pax_user_shadow_base __read_only = 1UL << TASK_SIZE_MAX_SHIFT;
+EXPORT_SYMBOL(pax_user_shadow_base);
+extern char pax_enter_kernel_user[];
+extern char pax_exit_kernel_user[];
+extern pgdval_t clone_pgd_mask;
+#endif
+
+#if defined(CONFIG_X86) && defined(CONFIG_PAX_MEMORY_UDEREF)
+static int __init setup_pax_nouderef(char *str)
+{
+#ifdef CONFIG_X86_32
+	unsigned int cpu;
+	struct desc_struct *gdt;
+
+	for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
+		gdt = get_cpu_gdt_table(cpu);
+		gdt[GDT_ENTRY_KERNEL_DS].type = 3;
+		gdt[GDT_ENTRY_KERNEL_DS].limit = 0xf;
+		gdt[GDT_ENTRY_DEFAULT_USER_CS].limit = 0xf;
+		gdt[GDT_ENTRY_DEFAULT_USER_DS].limit = 0xf;
+	}
+	loadsegment(ds, __KERNEL_DS);
+	loadsegment(es, __KERNEL_DS);
+	loadsegment(ss, __KERNEL_DS);
+#else
+	memcpy(pax_enter_kernel_user, (unsigned char []){0xc3}, 1);
+	memcpy(pax_exit_kernel_user, (unsigned char []){0xc3}, 1);
+	clone_pgd_mask = ~(pgdval_t)0UL;
+	pax_user_shadow_base = 0UL;
+#endif
+
+	return 0;
+}
+early_param("pax_nouderef", setup_pax_nouderef);
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+int pax_softmode;
+
+static int __init setup_pax_softmode(char *str)
+{
+	get_option(&str, &pax_softmode);
+	return 1;
+}
+__setup("pax_softmode=", setup_pax_softmode);
+#endif
+
 static const char * argv_init[MAX_INIT_ARGS+2] = { "init", NULL, };
 const char * envp_init[MAX_INIT_ENVS+2] = { "HOME=/", "TERM=linux", NULL, };
 static const char *panic_later, *panic_param;
@@ -679,6 +727,7 @@ int __init_or_module do_one_initcall(initcall_t fn)
 {
 	int count = preempt_count();
 	int ret;
+	const char *msg1 = "", *msg2 = "";
 
 	if (initcall_debug)
 		ret = do_one_initcall_debug(fn);
@@ -691,17 +740,18 @@ int __init_or_module do_one_initcall(initcall_t fn)
 		sprintf(msgbuf, "error code %d ", ret);
 
 	if (preempt_count() != count) {
-		strlcat(msgbuf, "preemption imbalance ", sizeof(msgbuf));
+		msg1 = " preemption imbalance";
 		preempt_count() = count;
 	}
 	if (irqs_disabled()) {
-		strlcat(msgbuf, "disabled interrupts ", sizeof(msgbuf));
+		msg2 = " disabled interrupts";
 		local_irq_enable();
 	}
-	if (msgbuf[0]) {
-		printk("initcall %pF returned with %s\n", fn, msgbuf);
+	if (msgbuf[0] || *msg1 || *msg2) {
+		printk("initcall %pF returned with %s%s%s\n", fn, msgbuf, msg1, msg2);
 	}
 
+	add_latent_entropy();
 	return ret;
 }
 
@@ -823,7 +873,7 @@ static int __init kernel_init(void * unused)
 	do_basic_setup();
 
 	/* Open the /dev/console on the rootfs, this should never fail */
-	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
+	if (sys_open((const char __force_user *) "/dev/console", O_RDWR, 0) < 0)
 		printk(KERN_WARNING "Warning: unable to open an initial console.\n");
 
 	(void) sys_dup(0);
@@ -836,7 +886,7 @@ static int __init kernel_init(void * unused)
 	if (!ramdisk_execute_command)
 		ramdisk_execute_command = "/init";
 
-	if (sys_access((const char __user *) ramdisk_execute_command, 0) != 0) {
+	if (sys_access((const char __force_user *) ramdisk_execute_command, 0) != 0) {
 		ramdisk_execute_command = NULL;
 		prepare_namespace();
 	}

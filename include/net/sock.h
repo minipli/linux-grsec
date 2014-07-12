@@ -278,7 +278,7 @@ struct sock {
 #ifdef CONFIG_RPS
 	__u32			sk_rxhash;
 #endif
-	atomic_t		sk_drops;
+	atomic_unchecked_t	sk_drops;
 	int			sk_rcvbuf;
 
 	struct sk_filter __rcu	*sk_filter;
@@ -1416,7 +1416,7 @@ static inline void sk_nocaps_add(struct sock *sk, int flags)
 }
 
 static inline int skb_do_copy_data_nocache(struct sock *sk, struct sk_buff *skb,
-					   char __user *from, char *to,
+					   char __user *from, unsigned char *to,
 					   int copy, int offset)
 {
 	if (skb->ip_summed == CHECKSUM_NONE) {
@@ -1678,7 +1678,7 @@ static inline void sk_stream_moderate_sndbuf(struct sock *sk)
 	}
 }
 
-struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp);
+struct sk_buff * __intentional_overflow(0) sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp);
 
 static inline struct page *sk_stream_alloc_page(struct sock *sk)
 {

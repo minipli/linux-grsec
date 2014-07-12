@@ -226,7 +226,7 @@ void __putstr(int error, const char *s)
 
 void *memset(void *s, int c, size_t n)
 {
-	int i;
+	size_t i;
 	char *ss = s;
 
 	for (i = 0; i < n; i++)
@@ -282,7 +282,7 @@ static void parse_elf(void *output)
 	Elf32_Ehdr ehdr;
 	Elf32_Phdr *phdrs, *phdr;
 #endif
-	void *dest;
+	void *dest, *prev;
 	int i;
 
 	memcpy(&ehdr, output, sizeof(ehdr));
@@ -310,13 +310,16 @@ static void parse_elf(void *output)
 		case PT_LOAD:
 #ifdef CONFIG_RELOCATABLE
 			dest = output;
-			dest += (phdr->p_paddr - LOAD_PHYSICAL_ADDR);
+			dest += (phdr->p_paddr - ____LOAD_PHYSICAL_ADDR);
 #else
 			dest = (void *)(phdr->p_paddr);
 #endif
 			memcpy(dest,
 			       output + phdr->p_offset,
 			       phdr->p_filesz);
+			if (i)
+				memset(prev, 0xff, dest - prev);
+			prev = dest + phdr->p_filesz;
 			break;
 		default: /* Ignore other PT_* */ break;
 		}
@@ -363,7 +366,7 @@ asmlinkage void decompress_kernel(void *rmode, memptr heap,
 		error("Destination address too large");
 #endif
 #ifndef CONFIG_RELOCATABLE
-	if ((unsigned long)output != LOAD_PHYSICAL_ADDR)
+	if ((unsigned long)output != ____LOAD_PHYSICAL_ADDR)
 		error("Wrong destination address");
 #endif
 
