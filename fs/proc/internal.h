@@ -46,9 +46,10 @@ struct proc_dir_entry {
 	struct completion *pde_unload_completion;
 	struct list_head pde_openers;	/* who did ->open, but not ->release */
 	spinlock_t pde_unload_lock; /* proc_fops checks and pde_users bumps */
+	u8 restricted; /* a directory in /proc/net that should be restricted via GRKERNSEC_PROC */
 	u8 namelen;
 	char name[];
-};
+} __randomize_layout;
 
 union proc_op {
 	int (*proc_get_link)(struct dentry *, struct path *);
@@ -67,7 +68,7 @@ struct proc_inode {
 	struct ctl_table *sysctl_entry;
 	struct proc_ns ns;
 	struct inode vfs_inode;
-};
+} __randomize_layout;
 
 /*
  * General functions
@@ -155,6 +156,9 @@ extern int proc_pid_status(struct seq_file *, struct pid_namespace *,
 			   struct pid *, struct task_struct *);
 extern int proc_pid_statm(struct seq_file *, struct pid_namespace *,
 			  struct pid *, struct task_struct *);
+#ifdef CONFIG_GRKERNSEC_PROC_IPADDR
+extern int proc_pid_ipaddr(struct task_struct *task, char *buffer);
+#endif
 
 /*
  * base.c
@@ -181,9 +185,11 @@ extern bool proc_fill_cache(struct file *, struct dir_context *, const char *, i
 extern spinlock_t proc_subdir_lock;
 
 extern struct dentry *proc_lookup(struct inode *, struct dentry *, unsigned int);
+extern struct dentry *proc_lookup_restrict(struct inode *, struct dentry *, unsigned int);
 extern struct dentry *proc_lookup_de(struct proc_dir_entry *, struct inode *,
 				     struct dentry *);
 extern int proc_readdir(struct file *, struct dir_context *);
+extern int proc_readdir_restrict(struct file *, struct dir_context *);
 extern int proc_readdir_de(struct proc_dir_entry *, struct file *, struct dir_context *);
 
 static inline struct proc_dir_entry *pde_get(struct proc_dir_entry *pde)

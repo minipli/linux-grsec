@@ -71,9 +71,6 @@ ifeq ($(CONFIG_X86_32),y)
         # CPU-specific tuning. Anything which can be shared with UML should go here.
         include $(srctree)/arch/x86/Makefile_32.cpu
         KBUILD_CFLAGS += $(cflags-y)
-
-        # temporary until string.h is fixed
-        KBUILD_CFLAGS += -ffreestanding
 else
         BITS := 64
         UTS_MACHINE := x86_64
@@ -111,6 +108,9 @@ else
         # newer gccs do it by default
         KBUILD_CFLAGS += -maccumulate-outgoing-args
 endif
+
+# temporary until string.h is fixed
+KBUILD_CFLAGS += -ffreestanding
 
 # Make sure compiler does not have buggy stack-protector support.
 ifdef CONFIG_CC_STACKPROTECTOR
@@ -269,3 +269,12 @@ define archhelp
   echo  '                  FDINITRD=file initrd for the booted kernel'
   echo  '  kvmconfig	- Enable additional options for guest kernel support'
 endef
+
+define OLD_LD
+
+*** ${VERSION}.${PATCHLEVEL} PaX kernels no longer build correctly with old versions of binutils.
+*** Please upgrade your binutils to 2.18 or newer
+endef
+
+archprepare:
+	$(if $(LDFLAGS_BUILD_ID),,$(error $(OLD_LD)))
