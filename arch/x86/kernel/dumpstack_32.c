@@ -61,15 +61,14 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
 		bp = stack_frame(task, regs);
 
 	for (;;) {
-		struct thread_info *context;
+		void *stack_start = (void *)((unsigned long)stack & ~(THREAD_SIZE-1));
 		void *end_stack;
 
 		end_stack = is_hardirq_stack(stack, cpu);
 		if (!end_stack)
 			end_stack = is_softirq_stack(stack, cpu);
 
-		context = task_thread_info(task);
-		bp = ops->walk_stack(context, stack, bp, ops, data,
+		bp = ops->walk_stack(task, stack_start, stack, bp, ops, data,
 				     end_stack, &graph);
 
 		/* Stop if not on irq stack */
@@ -123,27 +122,28 @@ void show_regs(struct pt_regs *regs)
 	int i;
 
 	show_regs_print_info(KERN_EMERG);
-	__show_regs(regs, !user_mode_vm(regs));
+	__show_regs(regs, !user_mode(regs));
 
 	/*
 	 * When in-kernel, we also print out the stack and code at the
 	 * time of the fault..
 	 */
-	if (!user_mode_vm(regs)) {
+	if (!user_mode(regs)) {
 		unsigned int code_prologue = code_bytes * 43 / 64;
 		unsigned int code_len = code_bytes;
 		unsigned char c;
 		u8 *ip;
+		unsigned long cs_base = get_desc_base(&get_cpu_gdt_table(0)[(0xffff & regs->cs) >> 3]);
 
 		pr_emerg("Stack:\n");
 		show_stack_log_lvl(NULL, regs, &regs->sp, 0, KERN_EMERG);
 
 		pr_emerg("Code:");
 
-		ip = (u8 *)regs->ip - code_prologue;
+		ip = (u8 *)regs->ip - code_prologue + cs_base;
 		if (ip < (u8 *)PAGE_OFFSET || probe_kernel_address(ip, c)) {
 			/* try starting at IP */
-			ip = (u8 *)regs->ip;
+			ip = (u8 *)regs->ip + cs_base;
 			code_len = code_len - code_prologue + 1;
 		}
 		for (i = 0; i < code_len; i++, ip++) {
@@ -152,7 +152,7 @@ void show_regs(struct pt_regs *regs)
 				pr_cont("  Bad EIP value.");
 				break;
 			}
-			if (ip == (u8 *)regs->ip)
+			if (ip == (u8 *)regs->ip + cs_base)
 				pr_cont(" <%02x>", c);
 			else
 				pr_cont(" %02x", c);
@@ -165,6 +165,7 @@ int is_valid_bugaddr(unsigned long ip)
 {
 	unsigned short ud2;
 
+	ip = ktla_ktva(ip);
 	if (ip < PAGE_OFFSET)
 		return 0;
 	if (probe_kernel_address((unsigned short *)ip, ud2))
@@ -172,3 +173,15 @@ int is_valid_bugaddr(unsigned long ip)
 
 	return ud2 == 0x0b0f;
 }
+
+#if defined(CONFIG_PAX_MEMORY_STACKLEAK) || defined(CONFIG_PAX_USERCOPY)
+void pax_check_alloca(unsigned long size)
+{
+	unsigned long sp = (unsigned long)&sp, stack_left;
+
+	/* all kernel stacks are of the same size */
+	stack_left = sp & (THREAD_SIZE - 1);
+	BUG_ON(stack_left < 256 || size >= stack_left - 256);
+}
+EXPORT_SYMBOL(pax_check_alloca);
+#endif

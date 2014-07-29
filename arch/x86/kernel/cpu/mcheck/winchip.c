@@ -9,6 +9,7 @@
 #include <asm/processor.h>
 #include <asm/mce.h>
 #include <asm/msr.h>
+#include <asm/pgtable.h>
 
 /* Machine check handler for WinChip C6: */
 static void winchip_machine_check(struct pt_regs *regs, long error_code)
@@ -22,7 +23,9 @@ void winchip_mcheck_init(struct cpuinfo_x86 *c)
 {
 	u32 lo, hi;
 
+	pax_open_kernel();
 	machine_check_vector = winchip_machine_check;
+	pax_close_kernel();
 	/* Make sure the vector pointer is visible before we enable MCEs: */
 	wmb();
 
