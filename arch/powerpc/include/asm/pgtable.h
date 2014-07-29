@@ -2,6 +2,7 @@
 #define _ASM_POWERPC_PGTABLE_H
 #ifdef __KERNEL__
 
+#include <linux/const.h>
 #ifndef __ASSEMBLY__
 #include <linux/mmdebug.h>
 #include <asm/processor.h>		/* For TASK_SIZE */

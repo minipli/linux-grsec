@@ -364,7 +364,7 @@ static int ieee802154fake_probe(struct platform_device *pdev)
 	phy->transmit_power = 0xbf;
 
 	dev->netdev_ops = &fake_ops;
-	dev->ml_priv = &fake_mlme;
+	dev->ml_priv = (void *)&fake_mlme;
 
 	priv = netdev_priv(dev);
 	priv->phy = phy;
