@@ -378,6 +378,7 @@ struct i2c_algorithm {
 	/* To determine what the adapter supports */
 	u32 (*functionality) (struct i2c_adapter *);
 };
+typedef struct i2c_algorithm __no_const i2c_algorithm_no_const;
 
 /**
  * struct i2c_bus_recovery_info - I2C bus recovery information
