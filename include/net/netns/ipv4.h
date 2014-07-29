@@ -79,7 +79,7 @@ struct netns_ipv4 {
 
 	struct ping_group_range ping_group_range;
 
-	atomic_t dev_addr_genid;
+	atomic_unchecked_t dev_addr_genid;
 
 #ifdef CONFIG_IP_MROUTE
 #ifndef CONFIG_IP_MROUTE_MULTIPLE_TABLES
@@ -89,6 +89,6 @@ struct netns_ipv4 {
 	struct fib_rules_ops	*mr_rules_ops;
 #endif
 #endif
-	atomic_t	rt_genid;
+	atomic_unchecked_t	rt_genid;
 };
 #endif
