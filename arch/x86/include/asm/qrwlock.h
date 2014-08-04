@@ -7,8 +7,8 @@
 #define queue_write_unlock queue_write_unlock
 static inline void queue_write_unlock(struct qrwlock *lock)
 {
-        barrier();
-        ACCESS_ONCE(*(u8 *)&lock->cnts) = 0;
+	barrier();
+	ACCESS_ONCE_RW(*(u8 *)&lock->cnts) = 0;
 }
 #endif
 
