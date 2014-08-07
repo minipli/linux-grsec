@@ -9,6 +9,7 @@ copy_page_c:
 	CFI_STARTPROC
 	movl $4096/8,%ecx
 	rep movsq
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(copy_page_c)
@@ -24,7 +25,7 @@ ENTRY(copy_page)
 	CFI_ADJUST_CFA_OFFSET 3*8
 	movq	%rbx,(%rsp)
 	CFI_REL_OFFSET rbx, 0
-	movq	%r12,1*8(%rsp)
+	movq	%r14,1*8(%rsp)
 	CFI_REL_OFFSET r12, 1*8
 	movq	%r13,2*8(%rsp)
 	CFI_REL_OFFSET r13, 2*8
@@ -41,7 +42,7 @@ ENTRY(copy_page)
 	movq     32 (%rsi), %r9
 	movq     40 (%rsi), %r10
 	movq     48 (%rsi), %r11
-	movq     56 (%rsi), %r12
+	movq     56 (%rsi), %r14
 
 	prefetcht0 5*64(%rsi)
 
@@ -52,7 +53,7 @@ ENTRY(copy_page)
 	movq     %r9,  32 (%rdi)
 	movq     %r10, 40 (%rdi)
 	movq     %r11, 48 (%rdi)
-	movq     %r12, 56 (%rdi)
+	movq     %r14, 56 (%rdi)
 
 	leaq    64 (%rsi), %rsi
 	leaq    64 (%rdi), %rdi
@@ -71,7 +72,7 @@ ENTRY(copy_page)
 	movq     32 (%rsi), %r9
 	movq     40 (%rsi), %r10
 	movq     48 (%rsi), %r11
-	movq     56 (%rsi), %r12
+	movq     56 (%rsi), %r14
 
 	movq     %rax,    (%rdi)
 	movq     %rbx,  8 (%rdi)
@@ -80,7 +81,7 @@ ENTRY(copy_page)
 	movq     %r9,  32 (%rdi)
 	movq     %r10, 40 (%rdi)
 	movq     %r11, 48 (%rdi)
-	movq     %r12, 56 (%rdi)
+	movq     %r14, 56 (%rdi)
 
 	leaq	64(%rdi),%rdi
 	leaq	64(%rsi),%rsi
@@ -89,12 +90,13 @@ ENTRY(copy_page)
 
 	movq	(%rsp),%rbx
 	CFI_RESTORE rbx
-	movq	1*8(%rsp),%r12
+	movq	1*8(%rsp),%r14
 	CFI_RESTORE r12
 	movq	2*8(%rsp),%r13
 	CFI_RESTORE r13
 	addq	$3*8,%rsp
 	CFI_ADJUST_CFA_OFFSET -3*8
+	pax_force_retaddr
 	ret
 .Lcopy_page_end:
 	CFI_ENDPROC
@@ -105,7 +107,7 @@ ENDPROC(copy_page)
 
 #include <asm/cpufeature.h>
 
-	.section .altinstr_replacement,"ax"
+	.section .altinstr_replacement,"a"
 1:	.byte 0xeb					/* jmp <disp8> */
 	.byte (copy_page_c - copy_page) - (2f - 1b)	/* offset */
 2:
