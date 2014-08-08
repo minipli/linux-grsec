@@ -513,7 +513,7 @@ struct r8152 {
 		void (*disable)(struct r8152 *);
 		void (*down)(struct r8152 *);
 		void (*unload)(struct r8152 *);
-	} rtl_ops;
+	} __no_const rtl_ops;
 
 	int intr_interval;
 	u32 msg_enable;

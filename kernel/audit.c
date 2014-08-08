@@ -122,7 +122,7 @@ u32		audit_sig_sid = 0;
    3) suppressed due to audit_rate_limit
    4) suppressed due to audit_backlog_limit
 */
-static atomic_t    audit_lost = ATOMIC_INIT(0);
+static atomic_unchecked_t    audit_lost = ATOMIC_INIT(0);
 
 /* The netlink socket. */
 static struct sock *audit_sock;
@@ -256,7 +256,7 @@ void audit_log_lost(const char *message)
 	unsigned long		now;
 	int			print;
 
-	atomic_inc(&audit_lost);
+	atomic_inc_unchecked(&audit_lost);
 
 	print = (audit_failure == AUDIT_FAIL_PANIC || !audit_rate_limit);
 
@@ -273,7 +273,7 @@ void audit_log_lost(const char *message)
 	if (print) {
 		if (printk_ratelimit())
 			pr_warn("audit_lost=%u audit_rate_limit=%u audit_backlog_limit=%u\n",
-				atomic_read(&audit_lost),
+				atomic_read_unchecked(&audit_lost),
 				audit_rate_limit,
 				audit_backlog_limit);
 		audit_panic(message);
@@ -803,7 +803,7 @@ static int audit_receive_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 		s.pid			= audit_pid;
 		s.rate_limit		= audit_rate_limit;
 		s.backlog_limit		= audit_backlog_limit;
-		s.lost			= atomic_read(&audit_lost);
+		s.lost			= atomic_read_unchecked(&audit_lost);
 		s.backlog		= skb_queue_len(&audit_skb_queue);
 		s.version		= AUDIT_VERSION_LATEST;
 		s.backlog_wait_time	= audit_backlog_wait_time;
