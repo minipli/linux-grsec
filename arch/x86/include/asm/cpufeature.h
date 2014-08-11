@@ -197,8 +197,9 @@
 
 /* Intel-defined CPU features, CPUID level 0x00000007:0 (ebx), word 9 */
 #define X86_FEATURE_FSGSBASE	(9*32+ 0) /* {RD/WR}{FS/GS}BASE instructions*/
-#define X86_FEATURE_SMEP	(9*32+ 7) /* Supervisor Mode Execution Protection */
+#define X86_FEATURE_SMEP	(9*32+ 7) /* Supervisor Mode Execution Prevention */
 #define X86_FEATURE_ERMS	(9*32+ 9) /* Enhanced REP MOVSB/STOSB */
+#define X86_FEATURE_SMAP	(9*32+20) /* Supervisor Mode Access Prevention */
 
 #if defined(__KERNEL__) && !defined(__ASSEMBLY__)
 
@@ -363,7 +364,7 @@ static __always_inline __pure bool __static_cpu_has(u16 bit)
 			     ".section .discard,\"aw\",@progbits\n"
 			     " .byte 0xff + (4f-3f) - (2b-1b)\n" /* size check */
 			     ".previous\n"
-			     ".section .altinstr_replacement,\"ax\"\n"
+			     ".section .altinstr_replacement,\"a\"\n"
 			     "3: movb $1,%0\n"
 			     "4:\n"
 			     ".previous\n"

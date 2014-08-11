@@ -83,12 +83,20 @@ struct file_handle;
 #define __SC_DECL5(t5, a5, ...) t5 a5, __SC_DECL4(__VA_ARGS__)
 #define __SC_DECL6(t6, a6, ...) t6 a6, __SC_DECL5(__VA_ARGS__)
 
-#define __SC_LONG1(t1, a1) 	long a1
-#define __SC_LONG2(t2, a2, ...) long a2, __SC_LONG1(__VA_ARGS__)
-#define __SC_LONG3(t3, a3, ...) long a3, __SC_LONG2(__VA_ARGS__)
-#define __SC_LONG4(t4, a4, ...) long a4, __SC_LONG3(__VA_ARGS__)
-#define __SC_LONG5(t5, a5, ...) long a5, __SC_LONG4(__VA_ARGS__)
-#define __SC_LONG6(t6, a6, ...) long a6, __SC_LONG5(__VA_ARGS__)
+#define __TYPE_IS_U(t) (__same_type((t)0, 0UL) || __same_type((t)0, 0U) || __same_type((t)0, (unsigned short)0) || __same_type((t)0, (unsigned char)0))
+#define __SC_TYPE(t, a) __typeof(				\
+	__builtin_choose_expr(					\
+		sizeof(t) > sizeof(int),			\
+		(t) 0,						\
+		__builtin_choose_expr(__TYPE_IS_U(t), 0UL, 0L)	\
+	)) a
+
+#define __SC_LONG1(t1, a1) 	__SC_TYPE(t1, a1)
+#define __SC_LONG2(t2, a2, ...) __SC_TYPE(t2, a2), __SC_LONG1(__VA_ARGS__)
+#define __SC_LONG3(t3, a3, ...) __SC_TYPE(t3, a3), __SC_LONG2(__VA_ARGS__)
+#define __SC_LONG4(t4, a4, ...) __SC_TYPE(t4, a4), __SC_LONG3(__VA_ARGS__)
+#define __SC_LONG5(t5, a5, ...) __SC_TYPE(t5, a5), __SC_LONG4(__VA_ARGS__)
+#define __SC_LONG6(t6, a6, ...) __SC_TYPE(t6, a6), __SC_LONG5(__VA_ARGS__)
 
 #define __SC_CAST1(t1, a1)	(t1) a1
 #define __SC_CAST2(t2, a2, ...) (t2) a2, __SC_CAST1(__VA_ARGS__)
@@ -392,11 +400,11 @@ asmlinkage long sys_sync(void);
 asmlinkage long sys_fsync(unsigned int fd);
 asmlinkage long sys_fdatasync(unsigned int fd);
 asmlinkage long sys_bdflush(int func, long data);
-asmlinkage long sys_mount(char __user *dev_name, char __user *dir_name,
-				char __user *type, unsigned long flags,
+asmlinkage long sys_mount(const char __user *dev_name, const char __user *dir_name,
+				const char __user *type, unsigned long flags,
 				void __user *data);
-asmlinkage long sys_umount(char __user *name, int flags);
-asmlinkage long sys_oldumount(char __user *name);
+asmlinkage long sys_umount(const char __user *name, int flags);
+asmlinkage long sys_oldumount(const char __user *name);
 asmlinkage long sys_truncate(const char __user *path, long length);
 asmlinkage long sys_ftruncate(unsigned int fd, unsigned long length);
 asmlinkage long sys_stat(const char __user *filename,
@@ -608,7 +616,7 @@ asmlinkage long sys_getsockname(int, struct sockaddr __user *, int __user *);
 asmlinkage long sys_getpeername(int, struct sockaddr __user *, int __user *);
 asmlinkage long sys_send(int, void __user *, size_t, unsigned);
 asmlinkage long sys_sendto(int, void __user *, size_t, unsigned,
-				struct sockaddr __user *, int);
+				struct sockaddr __user *, int) __intentional_overflow(0);
 asmlinkage long sys_sendmsg(int fd, struct msghdr __user *msg, unsigned flags);
 asmlinkage long sys_sendmmsg(int fd, struct mmsghdr __user *msg,
 			     unsigned int vlen, unsigned flags);

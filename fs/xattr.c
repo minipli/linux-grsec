@@ -225,6 +225,27 @@ int vfs_xattr_cmp(struct dentry *dentry, const char *xattr_name,
 	return rc;
 }
 
+#ifdef CONFIG_PAX_XATTR_PAX_FLAGS
+ssize_t
+pax_getxattr(struct dentry *dentry, void *value, size_t size)
+{
+	struct inode *inode = dentry->d_inode;
+	ssize_t error;
+
+	error = inode_permission(inode, MAY_EXEC);
+	if (error)
+		return error;
+
+	if (inode->i_op->getxattr)
+		error = inode->i_op->getxattr(dentry, XATTR_NAME_PAX_FLAGS, value, size);
+	else
+		error = -EOPNOTSUPP;
+
+	return error;
+}
+EXPORT_SYMBOL(pax_getxattr);
+#endif
+
 ssize_t
 vfs_getxattr(struct dentry *dentry, const char *name, void *value, size_t size)
 {
@@ -315,7 +336,7 @@ EXPORT_SYMBOL_GPL(vfs_removexattr);
  * Extended attribute SET operations
  */
 static long
-setxattr(struct dentry *d, const char __user *name, const void __user *value,
+setxattr(struct path *path, const char __user *name, const void __user *value,
 	 size_t size, int flags)
 {
 	int error;
@@ -339,7 +360,13 @@ setxattr(struct dentry *d, const char __user *name, const void __user *value,
 			return PTR_ERR(kvalue);
 	}
 
-	error = vfs_setxattr(d, kname, kvalue, size, flags);
+	if (!gr_acl_handle_setxattr(path->dentry, path->mnt)) {
+		error = -EACCES;
+		goto out;
+	}
+
+	error = vfs_setxattr(path->dentry, kname, kvalue, size, flags);
+out:
 	kfree(kvalue);
 	return error;
 }
@@ -356,7 +383,7 @@ SYSCALL_DEFINE5(setxattr, const char __user *, pathname,
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
-		error = setxattr(path.dentry, name, value, size, flags);
+		error = setxattr(&path, name, value, size, flags);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -375,7 +402,7 @@ SYSCALL_DEFINE5(lsetxattr, const char __user *, pathname,
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
-		error = setxattr(path.dentry, name, value, size, flags);
+		error = setxattr(&path, name, value, size, flags);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -386,17 +413,15 @@ SYSCALL_DEFINE5(fsetxattr, int, fd, const char __user *, name,
 		const void __user *,value, size_t, size, int, flags)
 {
 	struct file *f;
-	struct dentry *dentry;
 	int error = -EBADF;
 
 	f = fget(fd);
 	if (!f)
 		return error;
-	dentry = f->f_path.dentry;
-	audit_inode(NULL, dentry);
+	audit_inode(NULL, f->f_path.dentry);
 	error = mnt_want_write_file(f);
 	if (!error) {
-		error = setxattr(dentry, name, value, size, flags);
+		error = setxattr(&f->f_path, name, value, size, flags);
 		mnt_drop_write(f->f_path.mnt);
 	}
 	fput(f);
@@ -560,7 +585,7 @@ SYSCALL_DEFINE3(flistxattr, int, fd, char __user *, list, size_t, size)
  * Extended attribute REMOVE operations
  */
 static long
-removexattr(struct dentry *d, const char __user *name)
+removexattr(struct path *path, const char __user *name)
 {
 	int error;
 	char kname[XATTR_NAME_MAX + 1];
@@ -571,7 +596,10 @@ removexattr(struct dentry *d, const char __user *name)
 	if (error < 0)
 		return error;
 
-	return vfs_removexattr(d, kname);
+	if (!gr_acl_handle_removexattr(path->dentry, path->mnt))
+		return -EACCES;
+
+	return vfs_removexattr(path->dentry, kname);
 }
 
 SYSCALL_DEFINE2(removexattr, const char __user *, pathname,
@@ -585,7 +613,7 @@ SYSCALL_DEFINE2(removexattr, const char __user *, pathname,
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
-		error = removexattr(path.dentry, name);
+		error = removexattr(&path, name);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -603,7 +631,7 @@ SYSCALL_DEFINE2(lremovexattr, const char __user *, pathname,
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
-		error = removexattr(path.dentry, name);
+		error = removexattr(&path, name);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -613,17 +641,17 @@ SYSCALL_DEFINE2(lremovexattr, const char __user *, pathname,
 SYSCALL_DEFINE2(fremovexattr, int, fd, const char __user *, name)
 {
 	struct file *f;
-	struct dentry *dentry;
+	struct path *path;
 	int error = -EBADF;
 
 	f = fget(fd);
 	if (!f)
 		return error;
-	dentry = f->f_path.dentry;
-	audit_inode(NULL, dentry);
+	path = &f->f_path;
+	audit_inode(NULL, path->dentry);
 	error = mnt_want_write_file(f);
 	if (!error) {
-		error = removexattr(dentry, name);
+		error = removexattr(path, name);
 		mnt_drop_write(f->f_path.mnt);
 	}
 	fput(f);
