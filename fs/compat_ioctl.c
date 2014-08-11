@@ -621,7 +621,7 @@ static int serial_struct_ioctl(unsigned fd, unsigned cmd,
 			return -EFAULT;
                 if (__get_user(udata, &ss32->iomem_base))
 			return -EFAULT;
-                ss.iomem_base = compat_ptr(udata);
+                ss.iomem_base = (unsigned char __force_kernel *)compat_ptr(udata);
                 if (__get_user(ss.iomem_reg_shift, &ss32->iomem_reg_shift) ||
 		    __get_user(ss.port_high, &ss32->port_high))
 			return -EFAULT;
@@ -703,8 +703,8 @@ static int do_i2c_rdwr_ioctl(unsigned int fd, unsigned int cmd,
 	for (i = 0; i < nmsgs; i++) {
 		if (copy_in_user(&tmsgs[i].addr, &umsgs[i].addr, 3*sizeof(u16)))
 			return -EFAULT;
-		if (get_user(datap, &umsgs[i].buf) ||
-		    put_user(compat_ptr(datap), &tmsgs[i].buf))
+		if (get_user(datap, (compat_caddr_t __user *)&umsgs[i].buf) ||
+		    put_user(compat_ptr(datap), (u8 __user * __user *)&tmsgs[i].buf))
 			return -EFAULT;
 	}
 	return sys_ioctl(fd, cmd, (unsigned long)tdata);
@@ -797,7 +797,7 @@ static int compat_ioctl_preallocate(struct file *file,
 	    copy_in_user(&p->l_len,	&p32->l_len,	sizeof(s64)) ||
 	    copy_in_user(&p->l_sysid,	&p32->l_sysid,	sizeof(s32)) ||
 	    copy_in_user(&p->l_pid,	&p32->l_pid,	sizeof(u32)) ||
-	    copy_in_user(&p->l_pad,	&p32->l_pad,	4*sizeof(u32)))
+	    copy_in_user(p->l_pad,	p32->l_pad,	4*sizeof(u32)))
 		return -EFAULT;
 
 	return ioctl_preallocate(file, p);
@@ -1617,8 +1617,8 @@ asmlinkage long compat_sys_ioctl(unsigned int fd, unsigned int cmd,
 static int __init init_sys32_ioctl_cmp(const void *p, const void *q)
 {
 	unsigned int a, b;
-	a = *(unsigned int *)p;
-	b = *(unsigned int *)q;
+	a = *(const unsigned int *)p;
+	b = *(const unsigned int *)q;
 	if (a > b)
 		return 1;
 	if (a < b)
