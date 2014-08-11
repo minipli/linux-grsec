@@ -2533,7 +2533,7 @@ int btrfs_sync_log(struct btrfs_trans_handle *trans,
 		blk_finish_plug(&plug);
 		btrfs_abort_transaction(trans, root, ret);
 		btrfs_free_logged_extents(log, log_transid);
-		ACCESS_ONCE(root->fs_info->last_trans_log_full_commit) =
+		ACCESS_ONCE_RW(root->fs_info->last_trans_log_full_commit) =
 								trans->transid;
 		mutex_unlock(&root->log_mutex);
 		goto out;
@@ -2577,7 +2577,7 @@ int btrfs_sync_log(struct btrfs_trans_handle *trans,
 			list_del_init(&root_log_ctx.list);
 
 		blk_finish_plug(&plug);
-		ACCESS_ONCE(root->fs_info->last_trans_log_full_commit) =
+		ACCESS_ONCE_RW(root->fs_info->last_trans_log_full_commit) =
 								trans->transid;
 		if (ret != -ENOSPC) {
 			btrfs_abort_transaction(trans, root, ret);
@@ -2622,7 +2622,7 @@ int btrfs_sync_log(struct btrfs_trans_handle *trans,
 	 * now that we've moved on to the tree of log tree roots,
 	 * check the full commit flag again
 	 */
-	if (ACCESS_ONCE(root->fs_info->last_trans_log_full_commit) ==
+	if (ACCESS_ONCE_RW(root->fs_info->last_trans_log_full_commit) ==
 	    trans->transid) {
 		blk_finish_plug(&plug);
 		btrfs_wait_marked_extents(log, &log->dirty_log_pages, mark);
@@ -2637,7 +2637,7 @@ int btrfs_sync_log(struct btrfs_trans_handle *trans,
 					 EXTENT_DIRTY | EXTENT_NEW);
 	blk_finish_plug(&plug);
 	if (ret) {
-		ACCESS_ONCE(root->fs_info->last_trans_log_full_commit) =
+		ACCESS_ONCE_RW(root->fs_info->last_trans_log_full_commit) =
 								trans->transid;
 		btrfs_abort_transaction(trans, root, ret);
 		btrfs_free_logged_extents(log, log_transid);
@@ -2667,7 +2667,7 @@ int btrfs_sync_log(struct btrfs_trans_handle *trans,
 	 */
 	ret = write_ctree_super(trans, root->fs_info->tree_root, 1);
 	if (ret) {
-		ACCESS_ONCE(root->fs_info->last_trans_log_full_commit) =
+		ACCESS_ONCE_RW(root->fs_info->last_trans_log_full_commit) =
 								trans->transid;
 		btrfs_abort_transaction(trans, root, ret);
 		goto out_wake_log_root;

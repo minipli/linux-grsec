@@ -232,7 +232,7 @@ static int __do_lo_send_write(struct file *file,
 
 	file_start_write(file);
 	set_fs(get_ds());
-	bw = file->f_op->write(file, buf, len, &pos);
+	bw = file->f_op->write(file, (const char __force_user *)buf, len, &pos);
 	set_fs(old_fs);
 	file_end_write(file);
 	if (likely(bw == len))
