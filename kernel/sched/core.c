@@ -1775,7 +1775,7 @@ void set_numabalancing_state(bool enabled)
 int sysctl_numa_balancing(struct ctl_table *table, int write,
 			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table t;
+	ctl_table_no_const t;
 	int err;
 	int state = numabalancing_enabled;
 
@@ -2251,8 +2251,10 @@ context_switch(struct rq *rq, struct task_struct *prev,
 		next->active_mm = oldmm;
 		atomic_inc(&oldmm->mm_count);
 		enter_lazy_tlb(oldmm, next);
-	} else
+	} else {
 		switch_mm(oldmm, mm, next);
+		populate_stack();
+	}
 
 	if (!prev->mm) {
 		prev->active_mm = NULL;
@@ -3049,6 +3051,8 @@ int can_nice(const struct task_struct *p, const int nice)
 	/* convert nice value [19,-20] to rlimit style value [1,40] */
 	int nice_rlim = 20 - nice;
 
+	gr_learn_resource(p, RLIMIT_NICE, nice_rlim, 1);
+
 	return (nice_rlim <= task_rlimit(p, RLIMIT_NICE) ||
 		capable(CAP_SYS_NICE));
 }
@@ -3082,7 +3086,8 @@ SYSCALL_DEFINE1(nice, int, increment)
 	if (nice > 19)
 		nice = 19;
 
-	if (increment < 0 && !can_nice(current, nice))
+	if (increment < 0 && (!can_nice(current, nice) ||
+			      gr_handle_chroot_nice()))
 		return -EPERM;
 
 	retval = security_task_setnice(current, nice);
@@ -3355,6 +3360,7 @@ recheck:
 			if (policy != p->policy && !rlim_rtprio)
 				return -EPERM;
 
+			gr_learn_resource(p, RLIMIT_RTPRIO, attr->sched_priority, 1);
 			/* can't increase priority */
 			if (attr->sched_priority > p->rt_priority &&
 			    attr->sched_priority > rlim_rtprio)
@@ -4726,8 +4732,10 @@ void idle_task_exit(void)
 
 	BUG_ON(cpu_online(smp_processor_id()));
 
-	if (mm != &init_mm)
+	if (mm != &init_mm) {
 		switch_mm(mm, &init_mm, current);
+		populate_stack();
+	}
 	mmdrop(mm);
 }
 
@@ -4805,7 +4813,7 @@ static void migrate_tasks(unsigned int dead_cpu)
 
 #if defined(CONFIG_SCHED_DEBUG) && defined(CONFIG_SYSCTL)
 
-static struct ctl_table sd_ctl_dir[] = {
+static ctl_table_no_const sd_ctl_dir[] __read_only = {
 	{
 		.procname	= "sched_domain",
 		.mode		= 0555,
@@ -4822,17 +4830,17 @@ static struct ctl_table sd_ctl_root[] = {
 	{}
 };
 
-static struct ctl_table *sd_alloc_ctl_entry(int n)
+static ctl_table_no_const *sd_alloc_ctl_entry(int n)
 {
-	struct ctl_table *entry =
+	ctl_table_no_const *entry =
 		kcalloc(n, sizeof(struct ctl_table), GFP_KERNEL);
 
 	return entry;
 }
 
-static void sd_free_ctl_entry(struct ctl_table **tablep)
+static void sd_free_ctl_entry(ctl_table_no_const *tablep)
 {
-	struct ctl_table *entry;
+	ctl_table_no_const *entry;
 
 	/*
 	 * In the intermediate directories, both the child directory and
@@ -4840,22 +4848,25 @@ static void sd_free_ctl_entry(struct ctl_table **tablep)
 	 * will always be set. In the lowest directory the names are
 	 * static strings and all have proc handlers.
 	 */
-	for (entry = *tablep; entry->mode; entry++) {
-		if (entry->child)
-			sd_free_ctl_entry(&entry->child);
+	for (entry = tablep; entry->mode; entry++) {
+		if (entry->child) {
+			sd_free_ctl_entry(entry->child);
+			pax_open_kernel();
+			entry->child = NULL;
+			pax_close_kernel();
+		}
 		if (entry->proc_handler == NULL)
 			kfree(entry->procname);
 	}
 
-	kfree(*tablep);
-	*tablep = NULL;
+	kfree(tablep);
 }
 
 static int min_load_idx = 0;
 static int max_load_idx = CPU_LOAD_IDX_MAX-1;
 
 static void
-set_table_entry(struct ctl_table *entry,
+set_table_entry(ctl_table_no_const *entry,
 		const char *procname, void *data, int maxlen,
 		umode_t mode, proc_handler *proc_handler,
 		bool load_idx)
@@ -4875,7 +4886,7 @@ set_table_entry(struct ctl_table *entry,
 static struct ctl_table *
 sd_alloc_ctl_domain_table(struct sched_domain *sd)
 {
-	struct ctl_table *table = sd_alloc_ctl_entry(13);
+	ctl_table_no_const *table = sd_alloc_ctl_entry(13);
 
 	if (table == NULL)
 		return NULL;
@@ -4910,9 +4921,9 @@ sd_alloc_ctl_domain_table(struct sched_domain *sd)
 	return table;
 }
 
-static struct ctl_table *sd_alloc_ctl_cpu_table(int cpu)
+static ctl_table_no_const *sd_alloc_ctl_cpu_table(int cpu)
 {
-	struct ctl_table *entry, *table;
+	ctl_table_no_const *entry, *table;
 	struct sched_domain *sd;
 	int domain_num = 0, i;
 	char buf[32];
@@ -4939,11 +4950,13 @@ static struct ctl_table_header *sd_sysctl_header;
 static void register_sched_domain_sysctl(void)
 {
 	int i, cpu_num = num_possible_cpus();
-	struct ctl_table *entry = sd_alloc_ctl_entry(cpu_num + 1);
+	ctl_table_no_const *entry = sd_alloc_ctl_entry(cpu_num + 1);
 	char buf[32];
 
 	WARN_ON(sd_ctl_dir[0].child);
+	pax_open_kernel();
 	sd_ctl_dir[0].child = entry;
+	pax_close_kernel();
 
 	if (entry == NULL)
 		return;
@@ -4966,8 +4979,12 @@ static void unregister_sched_domain_sysctl(void)
 	if (sd_sysctl_header)
 		unregister_sysctl_table(sd_sysctl_header);
 	sd_sysctl_header = NULL;
-	if (sd_ctl_dir[0].child)
-		sd_free_ctl_entry(&sd_ctl_dir[0].child);
+	if (sd_ctl_dir[0].child) {
+		sd_free_ctl_entry(sd_ctl_dir[0].child);
+		pax_open_kernel();
+		sd_ctl_dir[0].child = NULL;
+		pax_close_kernel();
+	}
 }
 #else
 static void register_sched_domain_sysctl(void)
