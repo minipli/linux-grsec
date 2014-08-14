@@ -81,8 +81,8 @@ out:
 	return error;
 }
 
-static void find_start_end(unsigned long flags, unsigned long *begin,
-			   unsigned long *end)
+static void find_start_end(struct mm_struct *mm, unsigned long flags,
+			   unsigned long *begin, unsigned long *end)
 {
 	if (!test_thread_flag(TIF_ADDR32) && (flags & MAP_32BIT)) {
 		unsigned long new_begin;
@@ -101,7 +101,7 @@ static void find_start_end(unsigned long flags, unsigned long *begin,
 				*begin = new_begin;
 		}
 	} else {
-		*begin = current->mm->mmap_legacy_base;
+		*begin = mm->mmap_legacy_base;
 		*end = TASK_SIZE;
 	}
 }
@@ -114,20 +114,24 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	struct vm_area_struct *vma;
 	struct vm_unmapped_area_info info;
 	unsigned long begin, end;
+	unsigned long offset = gr_rand_threadstack_offset(mm, filp, flags);
 
 	if (flags & MAP_FIXED)
 		return addr;
 
-	find_start_end(flags, &begin, &end);
+	find_start_end(mm, flags, &begin, &end);
 
 	if (len > end)
 		return -ENOMEM;
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (addr) {
 		addr = PAGE_ALIGN(addr);
 		vma = find_vma(mm, addr);
-		if (end - len >= addr &&
-		    (!vma || addr + len <= vma->vm_start))
+		if (end - len >= addr && check_heap_stack_gap(vma, addr, len, offset))
 			return addr;
 	}
 
@@ -137,6 +141,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	info.high_limit = end;
 	info.align_mask = filp ? get_align_mask() : 0;
 	info.align_offset = pgoff << PAGE_SHIFT;
+	info.threadstack_offset = offset;
 	return vm_unmapped_area(&info);
 }
 
@@ -149,6 +154,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	struct mm_struct *mm = current->mm;
 	unsigned long addr = addr0;
 	struct vm_unmapped_area_info info;
+	unsigned long offset = gr_rand_threadstack_offset(mm, filp, flags);
 
 	/* requested length too big for entire address space */
 	if (len > TASK_SIZE)
@@ -161,12 +167,15 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	if (!test_thread_flag(TIF_ADDR32) && (flags & MAP_32BIT))
 		goto bottomup;
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	/* requesting a specific address */
 	if (addr) {
 		addr = PAGE_ALIGN(addr);
 		vma = find_vma(mm, addr);
-		if (TASK_SIZE - len >= addr &&
-				(!vma || addr + len <= vma->vm_start))
+		if (TASK_SIZE - len >= addr && check_heap_stack_gap(vma, addr, len, offset))
 			return addr;
 	}
 
@@ -176,6 +185,7 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	info.high_limit = mm->mmap_base;
 	info.align_mask = filp ? get_align_mask() : 0;
 	info.align_offset = pgoff << PAGE_SHIFT;
+	info.threadstack_offset = offset;
 	addr = vm_unmapped_area(&info);
 	if (!(addr & ~PAGE_MASK))
 		return addr;
