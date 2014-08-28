@@ -7,7 +7,7 @@
 #include <linux/linkage.h>
 #include <asm/ptrace.h>
 #include <asm/ftrace.h>
-
+#include <asm/alternative-asm.h>
 
 	.code64
 	.section .entry.text, "ax"

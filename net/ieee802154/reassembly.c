@@ -438,7 +438,7 @@ static struct ctl_table lowpan_frags_ctl_table[] = {
 
 static int __net_init lowpan_frags_ns_sysctl_register(struct net *net)
 {
-	ctl_table_header *table = NULL;
+	ctl_table_no_const *table = NULL;
 	struct ctl_table_header *hdr;
 	struct netns_ieee802154_lowpan *ieee802154_lowpan =
 		net_ieee802154_lowpan(net);

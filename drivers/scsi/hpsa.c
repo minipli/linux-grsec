@@ -7329,7 +7329,7 @@ static void hpsa_enter_performant_mode(struct ctlr_info *h, u32 trans_support)
 	 * perform the superfluous readl() after each command submission.
 	 */
 	if (trans_support & (CFGTBL_Trans_io_accel1 | CFGTBL_Trans_io_accel2))
-		access = SA5_performant_access_no_read;
+		access = &SA5_performant_access_no_read;
 
 	/* Controller spec: zero out this buffer. */
 	for (i = 0; i < h->nreply_queues; i++)
