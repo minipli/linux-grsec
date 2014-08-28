@@ -59,6 +59,7 @@ static inline int __range_ok(unsigned long addr, unsigned long size)
 	__range_ok((unsigned long)(addr), (size));	\
 })
 
+#define access_ok_noprefault(type, addr, size) access_ok((type), (addr), (size))
 #define access_ok(type, addr, size) __access_ok(addr, size)
 
 /*
@@ -275,6 +276,10 @@ static inline unsigned long __must_check
 copy_to_user(void __user *to, const void *from, unsigned long n)
 {
 	might_fault();
+
+	if ((long)n < 0)
+		return n;
+
 	return __copy_to_user(to, from, n);
 }
 
@@ -303,10 +308,14 @@ __compiletime_warning("copy_from_user() buffer size is not provably correct")
 static inline unsigned long __must_check
 copy_from_user(void *to, const void __user *from, unsigned long n)
 {
-	unsigned int sz = __compiletime_object_size(to);
+	size_t sz = __compiletime_object_size(to);
 
 	might_fault();
-	if (unlikely(sz != -1 && sz < n)) {
+
+	if ((long)n < 0)
+		return n;
+
+	if (unlikely(sz != (size_t)-1 && sz < n)) {
 		copy_from_user_overflow();
 		return n;
 	}

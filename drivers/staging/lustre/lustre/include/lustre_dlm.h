@@ -1141,7 +1141,7 @@ struct ldlm_callback_suite {
 	ldlm_completion_callback lcs_completion;
 	ldlm_blocking_callback   lcs_blocking;
 	ldlm_glimpse_callback    lcs_glimpse;
-};
+} __no_const;
 
 /* ldlm_lockd.c */
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
