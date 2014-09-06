@@ -10,6 +10,7 @@
 #include <linux/compiler.h>
 #include <asm/page.h>
 #include <asm/types.h>
+#include <asm/percpu.h>
 
 /*
  * low level task data that entry.S needs immediate access to
@@ -23,7 +24,6 @@ struct exec_domain;
 #include <linux/atomic.h>
 
 struct thread_info {
-	struct task_struct	*task;		/* main task structure */
 	struct exec_domain	*exec_domain;	/* execution domain */
 	__u32			flags;		/* low level flags */
 	__u32			status;		/* thread synchronous flags */
@@ -32,19 +32,13 @@ struct thread_info {
 	mm_segment_t		addr_limit;
 	struct restart_block    restart_block;
 	void __user		*sysenter_return;
-#ifdef CONFIG_X86_32
-	unsigned long           previous_esp;   /* ESP of the previous stack in
-						   case of nested (IRQ) stacks
-						*/
-	__u8			supervisor_stack[0];
-#endif
+	unsigned long		lowest_stack;
 	unsigned int		sig_on_uaccess_error:1;
 	unsigned int		uaccess_err:1;	/* uaccess failed */
 };
 
-#define INIT_THREAD_INFO(tsk)			\
+#define INIT_THREAD_INFO			\
 {						\
-	.task		= &tsk,			\
 	.exec_domain	= &default_exec_domain,	\
 	.flags		= 0,			\
 	.cpu		= 0,			\
@@ -55,7 +49,7 @@ struct thread_info {
 	},					\
 }
 
-#define init_thread_info	(init_thread_union.thread_info)
+#define init_thread_info	(init_thread_union.stack)
 #define init_stack		(init_thread_union.stack)
 
 #else /* !__ASSEMBLY__ */
@@ -95,6 +89,7 @@ struct thread_info {
 #define TIF_SYSCALL_TRACEPOINT	28	/* syscall tracepoint instrumentation */
 #define TIF_ADDR32		29	/* 32-bit address space on 64 bits */
 #define TIF_X32			30	/* 32-bit native x86-64 binary */
+#define TIF_GRSEC_SETXID	31	/* update credentials on syscall entry/exit */
 
 #define _TIF_SYSCALL_TRACE	(1 << TIF_SYSCALL_TRACE)
 #define _TIF_NOTIFY_RESUME	(1 << TIF_NOTIFY_RESUME)
@@ -118,17 +113,18 @@ struct thread_info {
 #define _TIF_SYSCALL_TRACEPOINT	(1 << TIF_SYSCALL_TRACEPOINT)
 #define _TIF_ADDR32		(1 << TIF_ADDR32)
 #define _TIF_X32		(1 << TIF_X32)
+#define _TIF_GRSEC_SETXID	(1 << TIF_GRSEC_SETXID)
 
 /* work to do in syscall_trace_enter() */
 #define _TIF_WORK_SYSCALL_ENTRY	\
 	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_EMU | _TIF_SYSCALL_AUDIT |	\
 	 _TIF_SECCOMP | _TIF_SINGLESTEP | _TIF_SYSCALL_TRACEPOINT |	\
-	 _TIF_NOHZ)
+	 _TIF_NOHZ | _TIF_GRSEC_SETXID)
 
 /* work to do in syscall_trace_leave() */
 #define _TIF_WORK_SYSCALL_EXIT	\
 	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | _TIF_SINGLESTEP |	\
-	 _TIF_SYSCALL_TRACEPOINT | _TIF_NOHZ)
+	 _TIF_SYSCALL_TRACEPOINT | _TIF_NOHZ | _TIF_GRSEC_SETXID)
 
 /* work to do on interrupt/exception return */
 #define _TIF_WORK_MASK							\
@@ -139,7 +135,7 @@ struct thread_info {
 /* work to do on any return to user space */
 #define _TIF_ALLWORK_MASK						\
 	((0x0000FFFF & ~_TIF_SECCOMP) | _TIF_SYSCALL_TRACEPOINT |	\
-	_TIF_NOHZ)
+	_TIF_NOHZ | _TIF_GRSEC_SETXID)
 
 /* Only used for 64 bit */
 #define _TIF_DO_NOTIFY_MASK						\
@@ -152,6 +148,23 @@ struct thread_info {
 
 #define _TIF_WORK_CTXSW_PREV (_TIF_WORK_CTXSW|_TIF_USER_RETURN_NOTIFY)
 #define _TIF_WORK_CTXSW_NEXT (_TIF_WORK_CTXSW)
+
+#ifdef __ASSEMBLY__
+/* how to get the thread information struct from ASM */
+#define GET_THREAD_INFO(reg)	 \
+	mov PER_CPU_VAR(current_tinfo), reg
+
+/* use this one if reg already contains %esp */
+#define GET_THREAD_INFO_WITH_ESP(reg) GET_THREAD_INFO(reg)
+#else
+/* how to get the thread information struct from C */
+DECLARE_PER_CPU(struct thread_info *, current_tinfo);
+
+static __always_inline struct thread_info *current_thread_info(void)
+{
+	return this_cpu_read_stable(current_tinfo);
+}
+#endif
 
 #ifdef CONFIG_X86_32
 
@@ -169,30 +182,9 @@ struct thread_info {
 	sp;					\
 })
 
-/* how to get the thread information struct from C */
-static inline struct thread_info *current_thread_info(void)
-{
-	return (struct thread_info *)
-		(current_stack_pointer & ~(THREAD_SIZE - 1));
-}
-
-#else /* !__ASSEMBLY__ */
-
-/* how to get the thread information struct from ASM */
-#define GET_THREAD_INFO(reg)	 \
-	movl $-THREAD_SIZE, reg; \
-	andl %esp, reg
-
-/* use this one if reg already contains %esp */
-#define GET_THREAD_INFO_WITH_ESP(reg) \
-	andl $-THREAD_SIZE, reg
-
 #endif
 
 #else /* X86_32 */
-
-#include <asm/percpu.h>
-#define KERNEL_STACK_OFFSET (5*8)
 
 /*
  * macros/functions for gaining access to the thread information structure
@@ -201,27 +193,8 @@ static inline struct thread_info *current_thread_info(void)
 #ifndef __ASSEMBLY__
 DECLARE_PER_CPU(unsigned long, kernel_stack);
 
-static inline struct thread_info *current_thread_info(void)
-{
-	struct thread_info *ti;
-	ti = (void *)(this_cpu_read_stable(kernel_stack) +
-		      KERNEL_STACK_OFFSET - THREAD_SIZE);
-	return ti;
-}
-
-#else /* !__ASSEMBLY__ */
-
-/* how to get the thread information struct from ASM */
-#define GET_THREAD_INFO(reg) \
-	movq PER_CPU_VAR(kernel_stack),reg ; \
-	subq $(THREAD_SIZE-KERNEL_STACK_OFFSET),reg
-
-/*
- * Same if PER_CPU_VAR(kernel_stack) is, perhaps with some offset, already in
- * a certain register (to be used in assembler memory operands).
- */
-#define THREAD_INFO(reg, off) KERNEL_STACK_OFFSET+(off)-THREAD_SIZE(reg)
-
+/* how to get the current stack pointer from C */
+register unsigned long current_stack_pointer asm("rsp") __used;
 #endif
 
 #endif /* !X86_32 */
@@ -280,5 +253,12 @@ static inline bool is_ia32_task(void)
 extern void arch_task_cache_init(void);
 extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
 extern void arch_release_task_struct(struct task_struct *tsk);
+
+#define __HAVE_THREAD_FUNCTIONS
+#define task_thread_info(task)	(&(task)->tinfo)
+#define task_stack_page(task)	((task)->stack)
+#define setup_thread_stack(p, org) do {} while (0)
+#define end_of_stack(p) ((unsigned long *)task_stack_page(p) + 1)
+
 #endif
 #endif /* _ASM_X86_THREAD_INFO_H */
