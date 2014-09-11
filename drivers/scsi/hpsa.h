@@ -127,7 +127,7 @@ struct ctlr_info {
 	unsigned int msix_vector;
 	unsigned int msi_vector;
 	int intr_mode; /* either PERF_MODE_INT or SIMPLE_MODE_INT */
-	struct access_method access;
+	struct access_method *access;
 	char hba_mode_enabled;
 
 	/* queue and queue Info */
