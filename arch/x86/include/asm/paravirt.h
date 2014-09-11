@@ -560,7 +560,7 @@ static inline pmd_t __pmd(pmdval_t val)
 	return (pmd_t) { ret };
 }
 
-static inline pmdval_t pmd_val(pmd_t pmd)
+static inline __intentional_overflow(-1) pmdval_t pmd_val(pmd_t pmd)
 {
 	pmdval_t ret;
 
@@ -623,6 +623,18 @@ static inline void set_pgd(pgd_t *pgdp, pgd_t pgd)
 			    val, (u64)val >> 32);
 	else
 		PVOP_VCALL2(pv_mmu_ops.set_pgd, pgdp,
+			    val);
+}
+
+static inline void set_pgd_batched(pgd_t *pgdp, pgd_t pgd)
+{
+	pgdval_t val = native_pgd_val(pgd);
+
+	if (sizeof(pgdval_t) > sizeof(long))
+		PVOP_VCALL3(pv_mmu_ops.set_pgd_batched, pgdp,
+			    val, (u64)val >> 32);
+	else
+		PVOP_VCALL2(pv_mmu_ops.set_pgd_batched, pgdp,
 			    val);
 }
 
@@ -709,6 +721,21 @@ static inline void __set_fixmap(unsigned /* enum fixed_addresses */ idx,
 {
 	pv_mmu_ops.set_fixmap(idx, phys, flags);
 }
+
+#ifdef CONFIG_PAX_KERNEXEC
+static inline unsigned long pax_open_kernel(void)
+{
+	return PVOP_CALL0(unsigned long, pv_mmu_ops.pax_open_kernel);
+}
+
+static inline unsigned long pax_close_kernel(void)
+{
+	return PVOP_CALL0(unsigned long, pv_mmu_ops.pax_close_kernel);
+}
+#else
+static inline unsigned long pax_open_kernel(void) { return 0; }
+static inline unsigned long pax_close_kernel(void) { return 0; }
+#endif
 
 #if defined(CONFIG_SMP) && defined(CONFIG_PARAVIRT_SPINLOCKS)
 
@@ -906,7 +933,7 @@ extern void default_banner(void);
 
 #define PARA_PATCH(struct, off)        ((PARAVIRT_PATCH_##struct + (off)) / 4)
 #define PARA_SITE(ptype, clobbers, ops) _PVSITE(ptype, clobbers, ops, .long, 4)
-#define PARA_INDIRECT(addr)	*%cs:addr
+#define PARA_INDIRECT(addr)	*%ss:addr
 #endif
 
 #define INTERRUPT_RETURN						\
@@ -981,6 +1008,21 @@ extern void default_banner(void);
 	PARA_SITE(PARA_PATCH(pv_cpu_ops, PV_CPU_irq_enable_sysexit),	\
 		  CLBR_NONE,						\
 		  jmp PARA_INDIRECT(pv_cpu_ops+PV_CPU_irq_enable_sysexit))
+
+#define GET_CR0_INTO_RDI				\
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_read_cr0);	\
+	mov %rax,%rdi
+
+#define SET_RDI_INTO_CR0				\
+	call PARA_INDIRECT(pv_cpu_ops+PV_CPU_write_cr0)
+
+#define GET_CR3_INTO_RDI				\
+	call PARA_INDIRECT(pv_mmu_ops+PV_MMU_read_cr3);	\
+	mov %rax,%rdi
+
+#define SET_RDI_INTO_CR3				\
+	call PARA_INDIRECT(pv_mmu_ops+PV_MMU_write_cr3)
+
 #endif	/* CONFIG_X86_32 */
 
 #endif /* __ASSEMBLY__ */
