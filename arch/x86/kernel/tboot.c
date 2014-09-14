@@ -219,7 +219,7 @@ static int tboot_setup_sleep(void)
 
 void tboot_shutdown(u32 shutdown_type)
 {
-	void (*shutdown)(void);
+	void (* __noreturn shutdown)(void);
 
 	if (!tboot_enabled())
 		return;
@@ -241,7 +241,7 @@ void tboot_shutdown(u32 shutdown_type)
 
 	switch_to_tboot_pt();
 
-	shutdown = (void(*)(void))(unsigned long)tboot->shutdown_entry;
+	shutdown = (void *)(unsigned long)tboot->shutdown_entry;
 	shutdown();
 
 	/* should not reach here */
@@ -298,7 +298,7 @@ void tboot_sleep(u8 sleep_state, u32 pm1a_control, u32 pm1b_control)
 	tboot_shutdown(acpi_shutdown_map[sleep_state]);
 }
 
-static atomic_t ap_wfs_count;
+static atomic_unchecked_t ap_wfs_count;
 
 static int tboot_wait_for_aps(int num_aps)
 {
@@ -322,16 +322,16 @@ static int __cpuinit tboot_cpu_callback(struct notifier_block *nfb,
 {
 	switch (action) {
 	case CPU_DYING:
-		atomic_inc(&ap_wfs_count);
+		atomic_inc_unchecked(&ap_wfs_count);
 		if (num_online_cpus() == 1)
-			if (tboot_wait_for_aps(atomic_read(&ap_wfs_count)))
+			if (tboot_wait_for_aps(atomic_read_unchecked(&ap_wfs_count)))
 				return NOTIFY_BAD;
 		break;
 	}
 	return NOTIFY_OK;
 }
 
-static struct notifier_block tboot_cpu_notifier __cpuinitdata =
+static struct notifier_block tboot_cpu_notifier =
 {
 	.notifier_call = tboot_cpu_callback,
 };
@@ -343,7 +343,7 @@ static __init int tboot_late_init(void)
 
 	tboot_create_trampoline();
 
-	atomic_set(&ap_wfs_count, 0);
+	atomic_set_unchecked(&ap_wfs_count, 0);
 	register_hotcpu_notifier(&tboot_cpu_notifier);
 	return 0;
 }
