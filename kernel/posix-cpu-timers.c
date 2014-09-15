@@ -6,9 +6,11 @@
 #include <linux/posix-timers.h>
 #include <linux/errno.h>
 #include <linux/math64.h>
+#include <linux/security.h>
 #include <asm/uaccess.h>
 #include <linux/kernel_stat.h>
 #include <trace/events/timer.h>
+#include <linux/random.h>
 
 /*
  * Called after updating RLIMIT_CPU to run cpu timer and update
@@ -511,6 +513,8 @@ static void cleanup_timers(struct list_head *head,
  */
 void posix_cpu_timers_exit(struct task_struct *tsk)
 {
+	add_device_randomness((const void*) &tsk->se.sum_exec_runtime,
+						sizeof(unsigned long long));
 	cleanup_timers(tsk->cpu_timers,
 		       tsk->utime, tsk->stime, tsk->se.sum_exec_runtime);
 
@@ -1625,14 +1629,14 @@ struct k_clock clock_posix_cpu = {
 
 static __init int init_posix_cpu_timers(void)
 {
-	struct k_clock process = {
+	static struct k_clock process = {
 		.clock_getres	= process_cpu_clock_getres,
 		.clock_get	= process_cpu_clock_get,
 		.timer_create	= process_cpu_timer_create,
 		.nsleep		= process_cpu_nsleep,
 		.nsleep_restart	= process_cpu_nsleep_restart,
 	};
-	struct k_clock thread = {
+	static struct k_clock thread = {
 		.clock_getres	= thread_cpu_clock_getres,
 		.clock_get	= thread_cpu_clock_get,
 		.timer_create	= thread_cpu_timer_create,

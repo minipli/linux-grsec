@@ -142,7 +142,7 @@ bail:
 
 static void ocfs2_fast_put_link(struct dentry *dentry, struct nameidata *nd, void *cookie)
 {
-	char *link = nd_get_link(nd);
+	const char *link = nd_get_link(nd);
 	if (!IS_ERR(link))
 		kfree(link);
 }

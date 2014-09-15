@@ -324,6 +324,8 @@ static inline void handle_one_irq(unsigned int irq)
 		set_bits(irqtp->flags, &curtp->flags);
 }
 
+extern void gr_handle_kernel_exploit(void);
+
 static inline void check_stack_overflow(void)
 {
 #ifdef CONFIG_DEBUG_STACKOVERFLOW
@@ -336,6 +338,7 @@ static inline void check_stack_overflow(void)
 		printk("do_IRQ: stack overflow: %ld\n",
 			sp - sizeof(struct thread_info));
 		dump_stack();
+		gr_handle_kernel_exploit();
 	}
 #endif
 }
@@ -547,9 +550,6 @@ struct irq_host *irq_alloc_host(struct device_node *of_node,
 	host->ops = ops;
 	host->of_node = of_node_get(of_node);
 
-	if (host->ops->match == NULL)
-		host->ops->match = default_irq_host_match;
-
 	raw_spin_lock_irqsave(&irq_big_lock, flags);
 
 	/* If it's a legacy controller, check for duplicates and
@@ -622,7 +622,12 @@ struct irq_host *irq_find_host(struct device_node *node)
 	 */
 	raw_spin_lock_irqsave(&irq_big_lock, flags);
 	list_for_each_entry(h, &irq_hosts, link)
-		if (h->ops->match(h, node)) {
+		if (h->ops->match) {
+			if (h->ops->match(h, node)) {
+				found = h;
+				break;
+			}
+		} else if (default_irq_host_match(h, node)) {
 			found = h;
 			break;
 		}
