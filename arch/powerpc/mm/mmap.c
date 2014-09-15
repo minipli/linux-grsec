@@ -103,7 +103,7 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 
 		mm->get_unmapped_area = arch_get_unmapped_area;
 	} else {
-		mm->mmap_base = mmap_base();
+		mm->mmap_base = mmap_base(mm);
 
 #ifdef CONFIG_PAX_RANDMMAP
 		if (mm->pax_flags & MF_PAX_RANDMMAP)
