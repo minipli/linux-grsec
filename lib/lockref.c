@@ -97,7 +97,7 @@ EXPORT_SYMBOL(lockref_get_not_zero);
 int lockref_get_or_lock(struct lockref *lockref)
 {
 	CMPXCHG_LOOP(
-		lockref_inc(&new);
+		__lockref_inc(&new);
 		if (!old.count)
 			break;
 	,
