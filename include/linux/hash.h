@@ -37,6 +37,9 @@ static __always_inline u64 hash_64(u64 val, unsigned int bits)
 {
 	u64 hash = val;
 
+#if defined(CONFIG_ARCH_HAS_FAST_MULTIPLIER) && BITS_PER_LONG == 64
+	hash = hash * GOLDEN_RATIO_PRIME_64;
+#else
 	/*  Sigh, gcc can't optimise this alone like it does for 32 bits. */
 	u64 n = hash;
 	n <<= 18;
@@ -51,6 +54,7 @@ static __always_inline u64 hash_64(u64 val, unsigned int bits)
 	hash += n;
 	n <<= 2;
 	hash += n;
+#endif
 
 	/* High bits are more random, so use them. */
 	return hash >> (64 - bits);
@@ -83,7 +87,7 @@ static inline u32 hash32_ptr(const void *ptr)
 struct fast_hash_ops {
 	u32 (*hash)(const void *data, u32 len, u32 seed);
 	u32 (*hash2)(const u32 *data, u32 len, u32 seed);
-};
+} __no_const;
 
 /**
  *	arch_fast_hash - Caclulates a hash over a given buffer that can have
