@@ -164,7 +164,7 @@ int efi_setup_page_tables(unsigned long pa_memmap, unsigned num_pages)
 			unsigned long addr = (unsigned long) __va(0);
 			pgd_t pe = __pgd(pgd_val(*pgd_offset_k(addr)) &  ~_PAGE_NX);
 
-			pr_info("PAX: Disabling NX protection for low memory map. Try booting without \"efi=old_map\"");
+			pr_info("PAX: Disabling NX protection for low memory map. Try booting without \"efi=old_map\"\n");
 #ifdef CONFIG_PAX_PER_CPU_PGD
 			set_pgd(pgd_offset_cpu(0, kernel, addr), pe);
 #endif
