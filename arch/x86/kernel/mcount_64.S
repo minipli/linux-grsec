@@ -7,7 +7,7 @@
 #include <linux/linkage.h>
 #include <asm/ptrace.h>
 #include <asm/ftrace.h>
-
+#include <asm/alternative-asm.h>
 
 	.code64
 	.section .entry.text, "ax"
@@ -24,8 +24,9 @@
 #ifdef CONFIG_DYNAMIC_FTRACE
 
 ENTRY(function_hook)
+	pax_force_retaddr
 	retq
-END(function_hook)
+ENDPROC(function_hook)
 
 /* skip is set if stack has been adjusted */
 .macro ftrace_caller_setup skip=0
@@ -62,8 +63,9 @@ GLOBAL(ftrace_graph_call)
 #endif
 
 GLOBAL(ftrace_stub)
+	pax_force_retaddr
 	retq
-END(ftrace_caller)
+ENDPROC(ftrace_caller)
 
 ENTRY(ftrace_regs_caller)
 	/* Save the current flags before compare (in SS location)*/
@@ -127,7 +129,7 @@ GLOBAL(ftrace_regs_call)
 	popfq
 	jmp  ftrace_stub
 
-END(ftrace_regs_caller)
+ENDPROC(ftrace_regs_caller)
 
 
 #else /* ! CONFIG_DYNAMIC_FTRACE */
@@ -145,6 +147,7 @@ ENTRY(function_hook)
 #endif
 
 GLOBAL(ftrace_stub)
+	pax_force_retaddr
 	retq
 
 trace:
@@ -158,12 +161,13 @@ trace:
 #endif
 	subq $MCOUNT_INSN_SIZE, %rdi
 
+	pax_force_fptr ftrace_trace_function
 	call   *ftrace_trace_function
 
 	MCOUNT_RESTORE_FRAME
 
 	jmp ftrace_stub
-END(function_hook)
+ENDPROC(function_hook)
 #endif /* CONFIG_DYNAMIC_FTRACE */
 #endif /* CONFIG_FUNCTION_TRACER */
 
@@ -185,8 +189,9 @@ ENTRY(ftrace_graph_caller)
 
 	MCOUNT_RESTORE_FRAME
 
+	pax_force_retaddr
 	retq
-END(ftrace_graph_caller)
+ENDPROC(ftrace_graph_caller)
 
 GLOBAL(return_to_handler)
 	subq  $24, %rsp
@@ -202,5 +207,7 @@ GLOBAL(return_to_handler)
 	movq 8(%rsp), %rdx
 	movq (%rsp), %rax
 	addq $24, %rsp
+	pax_force_fptr %rdi
 	jmp *%rdi
+ENDPROC(return_to_handler)
 #endif

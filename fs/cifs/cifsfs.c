@@ -1092,7 +1092,7 @@ cifs_init_request_bufs(void)
 */
 	cifs_req_cachep = kmem_cache_create("cifs_request",
 					    CIFSMaxBufSize + max_hdr_size, 0,
-					    SLAB_HWCACHE_ALIGN, NULL);
+					    SLAB_HWCACHE_ALIGN | SLAB_USERCOPY, NULL);
 	if (cifs_req_cachep == NULL)
 		return -ENOMEM;
 
@@ -1119,7 +1119,7 @@ cifs_init_request_bufs(void)
 	efficient to alloc 1 per page off the slab compared to 17K (5page)
 	alloc of large cifs buffers even when page debugging is on */
 	cifs_sm_req_cachep = kmem_cache_create("cifs_small_rq",
-			MAX_CIFS_SMALL_BUFFER_SIZE, 0, SLAB_HWCACHE_ALIGN,
+			MAX_CIFS_SMALL_BUFFER_SIZE, 0, SLAB_HWCACHE_ALIGN | SLAB_USERCOPY,
 			NULL);
 	if (cifs_sm_req_cachep == NULL) {
 		mempool_destroy(cifs_req_poolp);
@@ -1204,8 +1204,8 @@ init_cifs(void)
 	atomic_set(&bufAllocCount, 0);
 	atomic_set(&smBufAllocCount, 0);
 #ifdef CONFIG_CIFS_STATS2
-	atomic_set(&totBufAllocCount, 0);
-	atomic_set(&totSmBufAllocCount, 0);
+	atomic_set_unchecked(&totBufAllocCount, 0);
+	atomic_set_unchecked(&totSmBufAllocCount, 0);
 #endif /* CONFIG_CIFS_STATS2 */
 
 	atomic_set(&midCount, 0);
