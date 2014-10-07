@@ -38,7 +38,7 @@ struct kmem_cache {
 /* 4) cache creation/removal */
 	const char *name;
 	struct list_head list;
-	int refcount;
+	atomic_t refcount;
 	int object_size;
 	int align;
 
@@ -54,10 +54,14 @@ struct kmem_cache {
 	unsigned long node_allocs;
 	unsigned long node_frees;
 	unsigned long node_overflow;
-	atomic_t allochit;
-	atomic_t allocmiss;
-	atomic_t freehit;
-	atomic_t freemiss;
+	atomic_unchecked_t allochit;
+	atomic_unchecked_t allocmiss;
+	atomic_unchecked_t freehit;
+	atomic_unchecked_t freemiss;
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	atomic_unchecked_t sanitized;
+	atomic_unchecked_t not_sanitized;
+#endif
 
 	/*
 	 * If debugging is enabled, then the allocator can add additional
