@@ -14,6 +14,7 @@
 #include <asm/cpufeature.h>
 #include <asm/processor.h>
 #include <asm/vdso.h>
+#include <asm/mman.h>
 
 #ifdef CONFIG_COMPAT_VDSO
 #define VDSO_DEFAULT	0

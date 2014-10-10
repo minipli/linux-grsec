@@ -9,26 +9,33 @@
 #include <linux/inet_diag.h>
 #include <linux/sock_diag.h>
 
-static const struct sock_diag_handler *sock_diag_handlers[AF_MAX];
+static const struct sock_diag_handler *sock_diag_handlers[AF_MAX] __read_only;
 static int (*inet_rcv_compat)(struct sk_buff *skb, struct nlmsghdr *nlh);
 static DEFINE_MUTEX(sock_diag_table_mutex);
 
 int sock_diag_check_cookie(void *sk, __u32 *cookie)
 {
+#ifndef CONFIG_GRKERNSEC_HIDESYM
 	if ((cookie[0] != INET_DIAG_NOCOOKIE ||
 	     cookie[1] != INET_DIAG_NOCOOKIE) &&
 	    ((u32)(unsigned long)sk != cookie[0] ||
 	     (u32)((((unsigned long)sk) >> 31) >> 1) != cookie[1]))
 		return -ESTALE;
 	else
+#endif
 		return 0;
 }
 EXPORT_SYMBOL_GPL(sock_diag_check_cookie);
 
 void sock_diag_save_cookie(void *sk, __u32 *cookie)
 {
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	cookie[0] = 0;
+	cookie[1] = 0;
+#else
 	cookie[0] = (u32)(unsigned long)sk;
 	cookie[1] = (u32)(((unsigned long)sk >> 31) >> 1);
+#endif
 }
 EXPORT_SYMBOL_GPL(sock_diag_save_cookie);
 
@@ -52,10 +59,9 @@ EXPORT_SYMBOL_GPL(sock_diag_put_meminfo);
 int sock_diag_put_filterinfo(bool may_report_filterinfo, struct sock *sk,
 			     struct sk_buff *skb, int attrtype)
 {
-	struct sock_fprog_kern *fprog;
-	struct sk_filter *filter;
 	struct nlattr *attr;
-	unsigned int flen;
+	struct sk_filter *filter;
+	unsigned int len;
 	int err = 0;
 
 	if (!may_report_filterinfo) {
@@ -64,20 +70,24 @@ int sock_diag_put_filterinfo(bool may_report_filterinfo, struct sock *sk,
 	}
 
 	rcu_read_lock();
+
 	filter = rcu_dereference(sk->sk_filter);
-	if (!filter)
-		goto out;
+	len = filter ? filter->len * sizeof(struct sock_filter) : 0;
 
-	fprog = filter->orig_prog;
-	flen = sk_filter_proglen(fprog);
-
-	attr = nla_reserve(skb, attrtype, flen);
+	attr = nla_reserve(skb, attrtype, len);
 	if (attr == NULL) {
 		err = -EMSGSIZE;
 		goto out;
 	}
 
-	memcpy(nla_data(attr), fprog->filter, flen);
+	if (filter) {
+		struct sock_filter *fb = (struct sock_filter *)nla_data(attr);
+		int i;
+
+		for (i = 0; i < filter->len; i++, fb++)
+			sk_decode_filter(&filter->insns[i], fb);
+	}
+
 out:
 	rcu_read_unlock();
 	return err;
@@ -110,8 +120,11 @@ int sock_diag_register(const struct sock_diag_handler *hndl)
 	mutex_lock(&sock_diag_table_mutex);
 	if (sock_diag_handlers[hndl->family])
 		err = -EBUSY;
-	else
+	else {
+		pax_open_kernel();
 		sock_diag_handlers[hndl->family] = hndl;
+		pax_close_kernel();
+	}
 	mutex_unlock(&sock_diag_table_mutex);
 
 	return err;
@@ -127,7 +140,9 @@ void sock_diag_unregister(const struct sock_diag_handler *hnld)
 
 	mutex_lock(&sock_diag_table_mutex);
 	BUG_ON(sock_diag_handlers[family] != hnld);
+	pax_open_kernel();
 	sock_diag_handlers[family] = NULL;
+	pax_close_kernel();
 	mutex_unlock(&sock_diag_table_mutex);
 }
 EXPORT_SYMBOL_GPL(sock_diag_unregister);

@@ -349,7 +349,7 @@ struct sock {
 	unsigned int		sk_napi_id;
 	unsigned int		sk_ll_usec;
 #endif
-	atomic_t		sk_drops;
+	atomic_unchecked_t	sk_drops;
 	int			sk_rcvbuf;
 
 	struct sk_filter __rcu	*sk_filter;
@@ -1038,7 +1038,7 @@ struct proto {
 	void			(*destroy_cgroup)(struct mem_cgroup *memcg);
 	struct cg_proto		*(*proto_cgroup)(struct mem_cgroup *memcg);
 #endif
-};
+} __randomize_layout;
 
 /*
  * Bits in struct cg_proto.flags
@@ -1225,7 +1225,7 @@ static inline u64 memcg_memory_allocated_read(struct cg_proto *prot)
 	return ret >> PAGE_SHIFT;
 }
 
-static inline long
+static inline long __intentional_overflow(-1)
 sk_memory_allocated(const struct sock *sk)
 {
 	struct proto *prot = sk->sk_prot;
@@ -1370,7 +1370,7 @@ struct sock_iocb {
 	struct scm_cookie	*scm;
 	struct msghdr		*msg, async_msg;
 	struct kiocb		*kiocb;
-};
+} __randomize_layout;
 
 static inline struct sock_iocb *kiocb_to_siocb(struct kiocb *iocb)
 {
@@ -1623,6 +1623,33 @@ void sk_common_release(struct sock *sk);
 /* Initialise core socket variables */
 void sock_init_data(struct socket *sock, struct sock *sk);
 
+void sk_filter_release_rcu(struct rcu_head *rcu);
+
+/**
+ *	sk_filter_release - release a socket filter
+ *	@fp: filter to remove
+ *
+ *	Remove a filter from a socket and release its resources.
+ */
+
+static inline void sk_filter_release(struct sk_filter *fp)
+{
+	if (atomic_dec_and_test(&fp->refcnt))
+		call_rcu(&fp->rcu, sk_filter_release_rcu);
+}
+
+static inline void sk_filter_uncharge(struct sock *sk, struct sk_filter *fp)
+{
+	atomic_sub(sk_filter_size(fp->len), &sk->sk_omem_alloc);
+	sk_filter_release(fp);
+}
+
+static inline void sk_filter_charge(struct sock *sk, struct sk_filter *fp)
+{
+	atomic_inc(&fp->refcnt);
+	atomic_add(sk_filter_size(fp->len), &sk->sk_omem_alloc);
+}
+
 /*
  * Socket reference counting postulates.
  *
@@ -1805,7 +1832,7 @@ static inline void sk_nocaps_add(struct sock *sk, netdev_features_t flags)
 }
 
 static inline int skb_do_copy_data_nocache(struct sock *sk, struct sk_buff *skb,
-					   char __user *from, char *to,
+					   char __user *from, unsigned char *to,
 					   int copy, int offset)
 {
 	if (skb->ip_summed == CHECKSUM_NONE) {
@@ -2067,7 +2094,7 @@ static inline void sk_stream_moderate_sndbuf(struct sock *sk)
 	}
 }
 
-struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp);
+struct sk_buff * __intentional_overflow(0) sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp);
 
 /**
  * sk_page_frag - return an appropriate page_frag
