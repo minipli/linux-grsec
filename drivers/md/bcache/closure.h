@@ -238,7 +238,7 @@ static inline void closure_set_stopped(struct closure *cl)
 static inline void set_closure_fn(struct closure *cl, closure_fn *fn,
 				  struct workqueue_struct *wq)
 {
-	BUG_ON(object_is_on_stack(cl));
+	BUG_ON(object_starts_on_stack(cl));
 	closure_set_ip(cl);
 	cl->fn = fn;
 	cl->wq = wq;
