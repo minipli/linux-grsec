@@ -424,8 +424,10 @@ static int max8660_probe(struct i2c_client *client,
 		max8660->shadow_regs[MAX8660_OVER1] = 5;
 	} else {
 		/* Otherwise devices can be toggled via software */
-		max8660_dcdc_ops.enable = max8660_dcdc_enable;
-		max8660_dcdc_ops.disable = max8660_dcdc_disable;
+		pax_open_kernel();
+		*(void **)&max8660_dcdc_ops.enable = max8660_dcdc_enable;
+		*(void **)&max8660_dcdc_ops.disable = max8660_dcdc_disable;
+		pax_close_kernel();
 	}
 
 	/*

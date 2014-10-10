@@ -1145,6 +1145,7 @@ struct net_device_ops {
 							void *priv);
 	int			(*ndo_get_lock_subclass)(struct net_device *dev);
 };
+typedef struct net_device_ops __no_const net_device_ops_no_const;
 
 /**
  * enum net_device_priv_flags - &struct net_device priv_flags
@@ -1312,11 +1313,11 @@ struct net_device {
 	struct net_device_stats	stats;
 
 	/* dropped packets by core network, Do not use this in drivers */
-	atomic_long_t		rx_dropped;
-	atomic_long_t		tx_dropped;
+	atomic_long_unchecked_t	rx_dropped;
+	atomic_long_unchecked_t	tx_dropped;
 
 	/* Stats to monitor carrier on<->off transitions */
-	atomic_t		carrier_changes;
+	atomic_unchecked_t	carrier_changes;
 
 #ifdef CONFIG_WIRELESS_EXT
 	/* List of functions to handle Wireless Extensions (instead of ioctl).
