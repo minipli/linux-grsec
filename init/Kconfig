@@ -1079,6 +1079,7 @@ endif # CGROUPS
 
 config CHECKPOINT_RESTORE
 	bool "Checkpoint/restore support" if EXPERT
+	depends on !GRKERNSEC
 	default n
 	help
 	  Enables additional kernel features in a sake of checkpoint/restore.
@@ -1546,7 +1547,7 @@ config SLUB_DEBUG
 
 config COMPAT_BRK
 	bool "Disable heap randomization"
-	default y
+	default n
 	help
 	  Randomizing heap placement makes heap exploits harder, but it
 	  also breaks ancient binaries (including anything libc5 based).
@@ -1834,7 +1835,7 @@ config INIT_ALL_POSSIBLE
 config STOP_MACHINE
 	bool
 	default y
-	depends on (SMP && MODULE_UNLOAD) || HOTPLUG_CPU
+	depends on (SMP && MODULE_UNLOAD) || HOTPLUG_CPU || GRKERNSEC
 	help
 	  Need stop_machine() primitive.
 
