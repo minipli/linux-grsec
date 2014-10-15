@@ -25,10 +25,21 @@
 
 #include "slab.h"
 
-enum slab_state slab_state;
+enum slab_state slab_state __read_only;
 LIST_HEAD(slab_caches);
 DEFINE_MUTEX(slab_mutex);
 struct kmem_cache *kmem_cache;
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+bool pax_sanitize_slab __read_only = true;
+static int __init pax_sanitize_slab_setup(char *str)
+{
+	pax_sanitize_slab = !!simple_strtol(str, NULL, 0);
+	printk("%sabled PaX slab sanitization\n", pax_sanitize_slab ? "En" : "Dis");
+	return 1;
+}
+__setup("pax_sanitize_slab=", pax_sanitize_slab_setup);
+#endif
 
 #ifdef CONFIG_DEBUG_VM
 static int kmem_cache_sanity_check(const char *name, size_t size)
@@ -160,7 +171,7 @@ do_kmem_cache_create(char *name, size_t object_size, size_t size, size_t align,
 	if (err)
 		goto out_free_cache;
 
-	s->refcount = 1;
+	atomic_set(&s->refcount, 1);
 	list_add(&s->list, &slab_caches);
 out:
 	if (err)
@@ -341,8 +352,7 @@ void kmem_cache_destroy(struct kmem_cache *s)
 
 	mutex_lock(&slab_mutex);
 
-	s->refcount--;
-	if (s->refcount)
+	if (!atomic_dec_and_test(&s->refcount))
 		goto out_unlock;
 
 	if (memcg_cleanup_cache_params(s) != 0)
@@ -418,7 +428,7 @@ void __init create_boot_cache(struct kmem_cache *s, const char *name, size_t siz
 		panic("Creation of kmalloc slab %s size=%zu failed. Reason %d\n",
 					name, size, err);
 
-	s->refcount = -1;	/* Exempt from merging for now */
+	atomic_set(&s->refcount, -1);	/* Exempt from merging for now */
 }
 
 struct kmem_cache *__init create_kmalloc_cache(const char *name, size_t size,
@@ -431,7 +441,7 @@ struct kmem_cache *__init create_kmalloc_cache(const char *name, size_t size,
 
 	create_boot_cache(s, name, size, flags);
 	list_add(&s->list, &slab_caches);
-	s->refcount = 1;
+	atomic_set(&s->refcount, 1);
 	return s;
 }
 
@@ -441,6 +451,11 @@ EXPORT_SYMBOL(kmalloc_caches);
 #ifdef CONFIG_ZONE_DMA
 struct kmem_cache *kmalloc_dma_caches[KMALLOC_SHIFT_HIGH + 1];
 EXPORT_SYMBOL(kmalloc_dma_caches);
+#endif
+
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+struct kmem_cache *kmalloc_usercopy_caches[KMALLOC_SHIFT_HIGH + 1];
+EXPORT_SYMBOL(kmalloc_usercopy_caches);
 #endif
 
 /*
@@ -507,6 +522,13 @@ struct kmem_cache *kmalloc_slab(size_t size, gfp_t flags)
 		return kmalloc_dma_caches[index];
 
 #endif
+
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+	if (unlikely((flags & GFP_USERCOPY)))
+		return kmalloc_usercopy_caches[index];
+
+#endif
+
 	return kmalloc_caches[index];
 }
 
@@ -563,7 +585,7 @@ void __init create_kmalloc_caches(unsigned long flags)
 	for (i = KMALLOC_SHIFT_LOW; i <= KMALLOC_SHIFT_HIGH; i++) {
 		if (!kmalloc_caches[i]) {
 			kmalloc_caches[i] = create_kmalloc_cache(NULL,
-							1 << i, flags);
+							1 << i, SLAB_USERCOPY | flags);
 		}
 
 		/*
@@ -572,10 +594,10 @@ void __init create_kmalloc_caches(unsigned long flags)
 		 * earlier power of two caches
 		 */
 		if (KMALLOC_MIN_SIZE <= 32 && !kmalloc_caches[1] && i == 6)
-			kmalloc_caches[1] = create_kmalloc_cache(NULL, 96, flags);
+			kmalloc_caches[1] = create_kmalloc_cache(NULL, 96, SLAB_USERCOPY | flags);
 
 		if (KMALLOC_MIN_SIZE <= 64 && !kmalloc_caches[2] && i == 7)
-			kmalloc_caches[2] = create_kmalloc_cache(NULL, 192, flags);
+			kmalloc_caches[2] = create_kmalloc_cache(NULL, 192, SLAB_USERCOPY | flags);
 	}
 
 	/* Kmalloc array is now usable */
@@ -608,6 +630,23 @@ void __init create_kmalloc_caches(unsigned long flags)
 		}
 	}
 #endif
+
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+	for (i = 0; i <= KMALLOC_SHIFT_HIGH; i++) {
+		struct kmem_cache *s = kmalloc_caches[i];
+
+		if (s) {
+			int size = kmalloc_size(i);
+			char *n = kasprintf(GFP_NOWAIT,
+				 "usercopy-kmalloc-%d", size);
+
+			BUG_ON(!n);
+			kmalloc_usercopy_caches[i] = create_kmalloc_cache(n,
+				size, SLAB_USERCOPY | flags);
+		}
+	}
+#endif
+
 }
 #endif /* !CONFIG_SLOB */
 
@@ -666,6 +705,9 @@ void print_slabinfo_header(struct seq_file *m)
 	seq_puts(m, " : globalstat <listallocs> <maxobjs> <grown> <reaped> "
 		 "<error> <maxfreeable> <nodeallocs> <remotefrees> <alienoverflow>");
 	seq_puts(m, " : cpustat <allochit> <allocmiss> <freehit> <freemiss>");
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	seq_puts(m, " : pax <sanitized> <not_sanitized>");
+#endif
 #endif
 	seq_putc(m, '\n');
 }

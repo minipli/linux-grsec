@@ -100,7 +100,7 @@ bool osq_lock(struct optimistic_spin_queue *lock)
 
 	prev = decode_cpu(old);
 	node->prev = prev;
-	ACCESS_ONCE(prev->next) = node;
+	ACCESS_ONCE_RW(prev->next) = node;
 
 	/*
 	 * Normally @prev is untouchable after the above store; because at that
@@ -172,8 +172,8 @@ unqueue:
 	 * it will wait in Step-A.
 	 */
 
-	ACCESS_ONCE(next->prev) = prev;
-	ACCESS_ONCE(prev->next) = next;
+	ACCESS_ONCE_RW(next->prev) = prev;
+	ACCESS_ONCE_RW(prev->next) = next;
 
 	return false;
 }
@@ -195,13 +195,13 @@ void osq_unlock(struct optimistic_spin_queue *lock)
 	node = this_cpu_ptr(&osq_node);
 	next = xchg(&node->next, NULL);
 	if (next) {
-		ACCESS_ONCE(next->locked) = 1;
+		ACCESS_ONCE_RW(next->locked) = 1;
 		return;
 	}
 
 	next = osq_wait_next(lock, node, NULL);
 	if (next)
-		ACCESS_ONCE(next->locked) = 1;
+		ACCESS_ONCE_RW(next->locked) = 1;
 }
 
 #endif
