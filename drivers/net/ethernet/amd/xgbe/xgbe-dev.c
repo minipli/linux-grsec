@@ -2528,93 +2528,93 @@ static int xgbe_init(struct xgbe_prv_data *pdata)
 const struct xgbe_hw_if default_xgbe_hw_if = {
 	.tx_complete = xgbe_tx_complete,
 
-	.set_promiscuous_mode = xgbe_set_promiscuous_mode;
-	.set_all_multicast_mode = xgbe_set_all_multicast_mode;
-	.add_mac_addresses = xgbe_add_mac_addresses;
-	.set_mac_address = xgbe_set_mac_address;
+	.set_promiscuous_mode = xgbe_set_promiscuous_mode,
+	.set_all_multicast_mode = xgbe_set_all_multicast_mode,
+	.add_mac_addresses = xgbe_add_mac_addresses,
+	.set_mac_address = xgbe_set_mac_address,
 
-	.enable_rx_csum = xgbe_enable_rx_csum;
-	.disable_rx_csum = xgbe_disable_rx_csum;
+	.enable_rx_csum = xgbe_enable_rx_csum,
+	.disable_rx_csum = xgbe_disable_rx_csum,
 
-	.enable_rx_vlan_stripping = xgbe_enable_rx_vlan_stripping;
-	.disable_rx_vlan_stripping = xgbe_disable_rx_vlan_stripping;
-	.enable_rx_vlan_filtering = xgbe_enable_rx_vlan_filtering;
-	.disable_rx_vlan_filtering = xgbe_disable_rx_vlan_filtering;
-	.update_vlan_hash_table = xgbe_update_vlan_hash_table;
+	.enable_rx_vlan_stripping = xgbe_enable_rx_vlan_stripping,
+	.disable_rx_vlan_stripping = xgbe_disable_rx_vlan_stripping,
+	.enable_rx_vlan_filtering = xgbe_enable_rx_vlan_filtering,
+	.disable_rx_vlan_filtering = xgbe_disable_rx_vlan_filtering,
+	.update_vlan_hash_table = xgbe_update_vlan_hash_table,
 
-	.read_mmd_regs = xgbe_read_mmd_regs;
-	.write_mmd_regs = xgbe_write_mmd_regs;
+	.read_mmd_regs = xgbe_read_mmd_regs,
+	.write_mmd_regs = xgbe_write_mmd_regs,
 
-	.set_gmii_speed = xgbe_set_gmii_speed;
-	.set_gmii_2500_speed = xgbe_set_gmii_2500_speed;
-	.set_xgmii_speed = xgbe_set_xgmii_speed;
+	.set_gmii_speed = xgbe_set_gmii_speed,
+	.set_gmii_2500_speed = xgbe_set_gmii_2500_speed,
+	.set_xgmii_speed = xgbe_set_xgmii_speed,
 
-	.enable_tx = xgbe_enable_tx;
-	.disable_tx = xgbe_disable_tx;
-	.enable_rx = xgbe_enable_rx;
-	.disable_rx = xgbe_disable_rx;
+	.enable_tx = xgbe_enable_tx,
+	.disable_tx = xgbe_disable_tx,
+	.enable_rx = xgbe_enable_rx,
+	.disable_rx = xgbe_disable_rx,
 
-	.powerup_tx = xgbe_powerup_tx;
-	.powerdown_tx = xgbe_powerdown_tx;
-	.powerup_rx = xgbe_powerup_rx;
-	.powerdown_rx = xgbe_powerdown_rx;
+	.powerup_tx = xgbe_powerup_tx,
+	.powerdown_tx = xgbe_powerdown_tx,
+	.powerup_rx = xgbe_powerup_rx,
+	.powerdown_rx = xgbe_powerdown_rx,
 
-	.pre_xmit = xgbe_pre_xmit;
-	.dev_read = xgbe_dev_read;
-	.enable_int = xgbe_enable_int;
-	.disable_int = xgbe_disable_int;
-	.init = xgbe_init;
-	.exit = xgbe_exit;
+	.pre_xmit = xgbe_pre_xmit,
+	.dev_read = xgbe_dev_read,
+	.enable_int = xgbe_enable_int,
+	.disable_int = xgbe_disable_int,
+	.init = xgbe_init,
+	.exit = xgbe_exit,
 
 	/* Descriptor related Sequences have to be initialized here */
-	.tx_desc_init = xgbe_tx_desc_init;
-	.rx_desc_init = xgbe_rx_desc_init;
-	.tx_desc_reset = xgbe_tx_desc_reset;
-	.rx_desc_reset = xgbe_rx_desc_reset;
-	.is_last_desc = xgbe_is_last_desc;
-	.is_context_desc = xgbe_is_context_desc;
+	.tx_desc_init = xgbe_tx_desc_init,
+	.rx_desc_init = xgbe_rx_desc_init,
+	.tx_desc_reset = xgbe_tx_desc_reset,
+	.rx_desc_reset = xgbe_rx_desc_reset,
+	.is_last_desc = xgbe_is_last_desc,
+	.is_context_desc = xgbe_is_context_desc,
 
 	/* For FLOW ctrl */
-	.config_tx_flow_control = xgbe_config_tx_flow_control;
-	.config_rx_flow_control = xgbe_config_rx_flow_control;
+	.config_tx_flow_control = xgbe_config_tx_flow_control,
+	.config_rx_flow_control = xgbe_config_rx_flow_control,
 
 	/* For RX coalescing */
-	.config_rx_coalesce = xgbe_config_rx_coalesce;
-	.config_tx_coalesce = xgbe_config_tx_coalesce;
-	.usec_to_riwt = xgbe_usec_to_riwt;
-	.riwt_to_usec = xgbe_riwt_to_usec;
+	.config_rx_coalesce = xgbe_config_rx_coalesce,
+	.config_tx_coalesce = xgbe_config_tx_coalesce,
+	.usec_to_riwt = xgbe_usec_to_riwt,
+	.riwt_to_usec = xgbe_riwt_to_usec,
 
 	/* For RX and TX threshold config */
-	.config_rx_threshold = xgbe_config_rx_threshold;
-	.config_tx_threshold = xgbe_config_tx_threshold;
+	.config_rx_threshold = xgbe_config_rx_threshold,
+	.config_tx_threshold = xgbe_config_tx_threshold,
 
 	/* For RX and TX Store and Forward Mode config */
-	.config_rsf_mode = xgbe_config_rsf_mode;
-	.config_tsf_mode = xgbe_config_tsf_mode;
+	.config_rsf_mode = xgbe_config_rsf_mode,
+	.config_tsf_mode = xgbe_config_tsf_mode,
 
 	/* For TX DMA Operating on Second Frame config */
-	.config_osp_mode = xgbe_config_osp_mode;
+	.config_osp_mode = xgbe_config_osp_mode,
 
 	/* For RX and TX PBL config */
-	.config_rx_pbl_val = xgbe_config_rx_pbl_val;
-	.get_rx_pbl_val = xgbe_get_rx_pbl_val;
-	.config_tx_pbl_val = xgbe_config_tx_pbl_val;
-	.get_tx_pbl_val = xgbe_get_tx_pbl_val;
-	.config_pblx8 = xgbe_config_pblx8;
+	.config_rx_pbl_val = xgbe_config_rx_pbl_val,
+	.get_rx_pbl_val = xgbe_get_rx_pbl_val,
+	.config_tx_pbl_val = xgbe_config_tx_pbl_val,
+	.get_tx_pbl_val = xgbe_get_tx_pbl_val,
+	.config_pblx8 = xgbe_config_pblx8,
 
 	/* For MMC statistics support */
-	.tx_mmc_int = xgbe_tx_mmc_int;
-	.rx_mmc_int = xgbe_rx_mmc_int;
-	.read_mmc_stats = xgbe_read_mmc_stats;
+	.tx_mmc_int = xgbe_tx_mmc_int,
+	.rx_mmc_int = xgbe_rx_mmc_int,
+	.read_mmc_stats = xgbe_read_mmc_stats,
 
 	/* For PTP config */
-	.config_tstamp = xgbe_config_tstamp;
-	.update_tstamp_addend = xgbe_update_tstamp_addend;
-	.set_tstamp_time = xgbe_set_tstamp_time;
-	.get_tstamp_time = xgbe_get_tstamp_time;
-	.get_tx_tstamp = xgbe_get_tx_tstamp;
+	.config_tstamp = xgbe_config_tstamp,
+	.update_tstamp_addend = xgbe_update_tstamp_addend,
+	.set_tstamp_time = xgbe_set_tstamp_time,
+	.get_tstamp_time = xgbe_get_tstamp_time,
+	.get_tx_tstamp = xgbe_get_tx_tstamp,
 
 	/* For Data Center Bridging config */
-	.config_dcb_tc = xgbe_config_dcb_tc;
-	.config_dcb_pfc = xgbe_config_dcb_pfc;
+	.config_dcb_tc = xgbe_config_dcb_tc,
+	.config_dcb_pfc = xgbe_config_dcb_pfc,
 };

@@ -1389,7 +1389,7 @@ static int xgbe_vlan_rx_add_vid(struct net_device *netdev, __be16 proto,
 				u16 vid)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 
 	DBGPR("-->%s\n", __func__);
 
@@ -1465,7 +1465,7 @@ static int xgbe_set_features(struct net_device *netdev,
 			     netdev_features_t features)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	unsigned int rxcsum, rxvlan, rxvlan_filter;
 
 	rxcsum = pdata->netdev_features & NETIF_F_RXCSUM;
@@ -1521,7 +1521,7 @@ struct net_device_ops *xgbe_get_netdev_ops(void)
 static void xgbe_rx_refresh(struct xgbe_channel *channel)
 {
 	struct xgbe_prv_data *pdata = channel->pdata;
-	struct xgbe_desc_if *desc_if = &pdata->desc_if;
+	struct xgbe_desc_if *desc_if = pdata->desc_if;
 	struct xgbe_ring *ring = channel->rx_ring;
 	struct xgbe_ring_data *rdata;
 
