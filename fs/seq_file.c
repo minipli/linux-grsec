@@ -10,6 +10,8 @@
 #include <linux/seq_file.h>
 #include <linux/slab.h>
 #include <linux/cred.h>
+#include <linux/sched.h>
+#include <linux/grsecurity.h>
 
 #include <asm/uaccess.h>
 #include <asm/page.h>
@@ -60,6 +62,9 @@ int seq_open(struct file *file, const struct seq_operations *op)
 #ifdef CONFIG_USER_NS
 	p->user_ns = file->f_cred->user_ns;
 #endif
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	p->exec_id = current->exec_id;
+#endif
 
 	/*
 	 * Wrappers around seq_open(e.g. swaps_open) need to be
@@ -82,6 +87,16 @@ int seq_open(struct file *file, const struct seq_operations *op)
 }
 EXPORT_SYMBOL(seq_open);
 
+
+int seq_open_restrict(struct file *file, const struct seq_operations *op)
+{
+	if (gr_proc_is_restricted())
+		return -EACCES;
+
+	return seq_open(file, op);
+}
+EXPORT_SYMBOL(seq_open_restrict);
+
 static int traverse(struct seq_file *m, loff_t offset)
 {
 	loff_t pos = 0, index;
@@ -96,7 +111,7 @@ static int traverse(struct seq_file *m, loff_t offset)
 		return 0;
 	}
 	if (!m->buf) {
-		m->buf = kmalloc(m->size = PAGE_SIZE, GFP_KERNEL);
+		m->buf = kmalloc(m->size = PAGE_SIZE, GFP_KERNEL | GFP_USERCOPY);
 		if (!m->buf)
 			return -ENOMEM;
 	}
@@ -137,7 +152,7 @@ Eoverflow:
 	m->op->stop(m, p);
 	kfree(m->buf);
 	m->count = 0;
-	m->buf = kmalloc(m->size <<= 1, GFP_KERNEL);
+	m->buf = kmalloc(m->size <<= 1, GFP_KERNEL | GFP_USERCOPY);
 	return !m->buf ? -ENOMEM : -EAGAIN;
 }
 
@@ -153,7 +168,7 @@ Eoverflow:
 ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 {
 	struct seq_file *m = file->private_data;
-	size_t copied = 0;
+	ssize_t copied = 0;
 	loff_t pos;
 	size_t n;
 	void *p;
@@ -192,7 +207,7 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 
 	/* grab buffer if we didn't have one */
 	if (!m->buf) {
-		m->buf = kmalloc(m->size = PAGE_SIZE, GFP_KERNEL);
+		m->buf = kmalloc(m->size = PAGE_SIZE, GFP_KERNEL | GFP_USERCOPY);
 		if (!m->buf)
 			goto Enomem;
 	}
@@ -234,7 +249,7 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 		m->op->stop(m, p);
 		kfree(m->buf);
 		m->count = 0;
-		m->buf = kmalloc(m->size <<= 1, GFP_KERNEL);
+		m->buf = kmalloc(m->size <<= 1, GFP_KERNEL | GFP_USERCOPY);
 		if (!m->buf)
 			goto Enomem;
 		m->version = 0;
@@ -584,7 +599,7 @@ static void single_stop(struct seq_file *p, void *v)
 int single_open(struct file *file, int (*show)(struct seq_file *, void *),
 		void *data)
 {
-	struct seq_operations *op = kmalloc(sizeof(*op), GFP_KERNEL);
+	seq_operations_no_const *op = kzalloc(sizeof(*op), GFP_KERNEL);
 	int res = -ENOMEM;
 
 	if (op) {
@@ -605,7 +620,7 @@ EXPORT_SYMBOL(single_open);
 int single_open_size(struct file *file, int (*show)(struct seq_file *, void *),
 		void *data, size_t size)
 {
-	char *buf = kmalloc(size, GFP_KERNEL);
+	char *buf = kmalloc(size, GFP_KERNEL | GFP_USERCOPY);
 	int ret;
 	if (!buf)
 		return -ENOMEM;
@@ -619,6 +634,17 @@ int single_open_size(struct file *file, int (*show)(struct seq_file *, void *),
 	return 0;
 }
 EXPORT_SYMBOL(single_open_size);
+
+int single_open_restrict(struct file *file, int (*show)(struct seq_file *, void *),
+		void *data)
+{
+	if (gr_proc_is_restricted())
+		return -EACCES;
+
+	return single_open(file, show, data);
+}
+EXPORT_SYMBOL(single_open_restrict);
+
 
 int single_release(struct inode *inode, struct file *file)
 {
