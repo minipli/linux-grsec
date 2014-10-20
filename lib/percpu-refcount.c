@@ -29,7 +29,7 @@
  * can't hit 0 before we've added up all the percpu refs.
  */
 
-#define PCPU_COUNT_BIAS		(1U << 31)
+#define PCPU_COUNT_BIAS		(1U << 30)
 
 static unsigned __percpu *pcpu_count_ptr(struct percpu_ref *ref)
 {
