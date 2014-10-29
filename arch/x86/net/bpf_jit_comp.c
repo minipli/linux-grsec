@@ -932,7 +932,6 @@ static void bpf_jit_free_deferred(struct work_struct *work)
 	struct bpf_prog *fp = container_of(work, struct bpf_prog, work);
 	unsigned long addr = (unsigned long)fp->bpf_func & PAGE_MASK;
 
-	set_memory_rw(addr, 1);
 	module_free_exec(NULL, (void *)addr);
 	kfree(fp);
 }
