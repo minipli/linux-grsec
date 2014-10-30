@@ -454,7 +454,7 @@ static const struct fscache_state *fscache_look_up_object(struct fscache_object 
 	_debug("LOOKUP \"%s\" in \"%s\"",
 	       cookie->def->name, object->cache->tag->name);
 
-	fscache_stat(&fscache_n_object_lookups);
+	fscache_stat_unchecked(&fscache_n_object_lookups);
 	fscache_stat(&fscache_n_cop_lookup_object);
 	ret = object->cache->ops->lookup_object(object);
 	fscache_stat_d(&fscache_n_cop_lookup_object);
@@ -464,7 +464,7 @@ static const struct fscache_state *fscache_look_up_object(struct fscache_object 
 	if (ret == -ETIMEDOUT) {
 		/* probably stuck behind another object, so move this one to
 		 * the back of the queue */
-		fscache_stat(&fscache_n_object_lookups_timed_out);
+		fscache_stat_unchecked(&fscache_n_object_lookups_timed_out);
 		_leave(" [timeout]");
 		return NO_TRANSIT;
 	}
@@ -492,7 +492,7 @@ void fscache_object_lookup_negative(struct fscache_object *object)
 	_enter("{OBJ%x,%s}", object->debug_id, object->state->name);
 
 	if (!test_and_set_bit(FSCACHE_OBJECT_IS_LOOKED_UP, &object->flags)) {
-		fscache_stat(&fscache_n_object_lookups_negative);
+		fscache_stat_unchecked(&fscache_n_object_lookups_negative);
 
 		/* Allow write requests to begin stacking up and read requests to begin
 		 * returning ENODATA.
@@ -527,7 +527,7 @@ void fscache_obtained_object(struct fscache_object *object)
 	/* if we were still looking up, then we must have a positive lookup
 	 * result, in which case there may be data available */
 	if (!test_and_set_bit(FSCACHE_OBJECT_IS_LOOKED_UP, &object->flags)) {
-		fscache_stat(&fscache_n_object_lookups_positive);
+		fscache_stat_unchecked(&fscache_n_object_lookups_positive);
 
 		/* We do (presumably) have data */
 		clear_bit_unlock(FSCACHE_COOKIE_NO_DATA_YET, &cookie->flags);
@@ -539,7 +539,7 @@ void fscache_obtained_object(struct fscache_object *object)
 		clear_bit_unlock(FSCACHE_COOKIE_LOOKING_UP, &cookie->flags);
 		wake_up_bit(&cookie->flags, FSCACHE_COOKIE_LOOKING_UP);
 	} else {
-		fscache_stat(&fscache_n_object_created);
+		fscache_stat_unchecked(&fscache_n_object_created);
 	}
 
 	set_bit(FSCACHE_OBJECT_IS_AVAILABLE, &object->flags);
@@ -575,7 +575,7 @@ static const struct fscache_state *fscache_object_available(struct fscache_objec
 	fscache_stat_d(&fscache_n_cop_lookup_complete);
 
 	fscache_hist(fscache_obj_instantiate_histogram, object->lookup_jif);
-	fscache_stat(&fscache_n_object_avail);
+	fscache_stat_unchecked(&fscache_n_object_avail);
 
 	_leave("");
 	return transit_to(JUMPSTART_DEPS);
@@ -722,7 +722,7 @@ static const struct fscache_state *fscache_drop_object(struct fscache_object *ob
 
 	/* this just shifts the object release to the work processor */
 	fscache_put_object(object);
-	fscache_stat(&fscache_n_object_dead);
+	fscache_stat_unchecked(&fscache_n_object_dead);
 
 	_leave("");
 	return transit_to(OBJECT_DEAD);
@@ -887,7 +887,7 @@ enum fscache_checkaux fscache_check_aux(struct fscache_object *object,
 	enum fscache_checkaux result;
 
 	if (!object->cookie->def->check_aux) {
-		fscache_stat(&fscache_n_checkaux_none);
+		fscache_stat_unchecked(&fscache_n_checkaux_none);
 		return FSCACHE_CHECKAUX_OKAY;
 	}
 
@@ -896,17 +896,17 @@ enum fscache_checkaux fscache_check_aux(struct fscache_object *object,
 	switch (result) {
 		/* entry okay as is */
 	case FSCACHE_CHECKAUX_OKAY:
-		fscache_stat(&fscache_n_checkaux_okay);
+		fscache_stat_unchecked(&fscache_n_checkaux_okay);
 		break;
 
 		/* entry requires update */
 	case FSCACHE_CHECKAUX_NEEDS_UPDATE:
-		fscache_stat(&fscache_n_checkaux_update);
+		fscache_stat_unchecked(&fscache_n_checkaux_update);
 		break;
 
 		/* entry requires deletion */
 	case FSCACHE_CHECKAUX_OBSOLETE:
-		fscache_stat(&fscache_n_checkaux_obsolete);
+		fscache_stat_unchecked(&fscache_n_checkaux_obsolete);
 		break;
 
 	default:
@@ -992,7 +992,7 @@ static const struct fscache_state *fscache_invalidate_object(struct fscache_obje
 {
 	const struct fscache_state *s;
 
-	fscache_stat(&fscache_n_invalidates_run);
+	fscache_stat_unchecked(&fscache_n_invalidates_run);
 	fscache_stat(&fscache_n_cop_invalidate_object);
 	s = _fscache_invalidate_object(object, event);
 	fscache_stat_d(&fscache_n_cop_invalidate_object);
@@ -1007,7 +1007,7 @@ static const struct fscache_state *fscache_update_object(struct fscache_object *
 {
 	_enter("{OBJ%x},%d", object->debug_id, event);
 
-	fscache_stat(&fscache_n_updates_run);
+	fscache_stat_unchecked(&fscache_n_updates_run);
 	fscache_stat(&fscache_n_cop_update_object);
 	object->cache->ops->update_object(object);
 	fscache_stat_d(&fscache_n_cop_update_object);
