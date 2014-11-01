@@ -3234,7 +3234,7 @@ static int wrmsr_interception(struct vcpu_svm *svm)
 	msr.host_initiated = false;
 
 	svm->next_rip = kvm_rip_read(&svm->vcpu) + 2;
-	if (svm_set_msr(&svm->vcpu, &msr)) {
+	if (kvm_set_msr(&svm->vcpu, &msr)) {
 		trace_kvm_msr_write_ex(ecx, data);
 		kvm_inject_gp(&svm->vcpu, 0);
 	} else {
@@ -3534,9 +3534,9 @@ static int handle_exit(struct kvm_vcpu *vcpu)
 
 	if (exit_code >= ARRAY_SIZE(svm_exit_handlers)
 	    || !svm_exit_handlers[exit_code]) {
-		kvm_run->exit_reason = KVM_EXIT_UNKNOWN;
-		kvm_run->hw.hardware_exit_reason = exit_code;
-		return 0;
+		WARN_ONCE(1, "vmx: unexpected exit reason 0x%x\n", exit_code);
+		kvm_queue_exception(vcpu, UD_VECTOR);
+		return 1;
 	}
 
 	return svm_exit_handlers[exit_code](svm);
@@ -3547,7 +3547,11 @@ static void reload_tss(struct kvm_vcpu *vcpu)
 	int cpu = raw_smp_processor_id();
 
 	struct svm_cpu_data *sd = per_cpu(svm_data, cpu);
+
+	pax_open_kernel();
 	sd->tss_desc->type = 9; /* available 32/64-bit TSS */
+	pax_close_kernel();
+
 	load_TR_desc();
 }
 
@@ -3946,6 +3950,10 @@ static void svm_vcpu_run(struct kvm_vcpu *vcpu)
 #ifndef CONFIG_X86_32_LAZY_GS
 	loadsegment(gs, svm->host.gs);
 #endif
+#endif
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	__set_fs(current_thread_info()->addr_limit);
 #endif
 
 	reload_tss(vcpu);

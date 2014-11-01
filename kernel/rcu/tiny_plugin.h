@@ -152,17 +152,17 @@ static void check_cpu_stall(struct rcu_ctrlblk *rcp)
 		dump_stack();
 	}
 	if (*rcp->curtail && ULONG_CMP_GE(j, js))
-		ACCESS_ONCE(rcp->jiffies_stall) = jiffies +
+		ACCESS_ONCE_RW(rcp->jiffies_stall) = jiffies +
 			3 * rcu_jiffies_till_stall_check() + 3;
 	else if (ULONG_CMP_GE(j, js))
-		ACCESS_ONCE(rcp->jiffies_stall) = jiffies + rcu_jiffies_till_stall_check();
+		ACCESS_ONCE_RW(rcp->jiffies_stall) = jiffies + rcu_jiffies_till_stall_check();
 }
 
 static void reset_cpu_stall_ticks(struct rcu_ctrlblk *rcp)
 {
 	rcp->ticks_this_gp = 0;
 	rcp->gp_start = jiffies;
-	ACCESS_ONCE(rcp->jiffies_stall) = jiffies + rcu_jiffies_till_stall_check();
+	ACCESS_ONCE_RW(rcp->jiffies_stall) = jiffies + rcu_jiffies_till_stall_check();
 }
 
 static void check_cpu_stalls(void)
