@@ -324,6 +324,8 @@ static ssize_t cadet_read(struct file *file, char __user *data, size_t count, lo
 	unsigned char readbuf[RDS_BUFFER];
 	int i = 0;
 
+	if (count > RDS_BUFFER)
+		return -EFAULT;
 	mutex_lock(&dev->lock);
 	if (dev->rdsstat == 0)
 		cadet_start_rds(dev);
@@ -339,7 +341,7 @@ static ssize_t cadet_read(struct file *file, char __user *data, size_t count, lo
 	while (i < count && dev->rdsin != dev->rdsout)
 		readbuf[i++] = dev->rdsbuf[dev->rdsout++];
 
-	if (i && copy_to_user(data, readbuf, i))
+	if (i > sizeof(readbuf) || copy_to_user(data, readbuf, i))
 		i = -EFAULT;
 unlock:
 	mutex_unlock(&dev->lock);

@@ -284,9 +284,6 @@
 /*
  * To allow fractional bits to be tracked, the entropy_count field is
  * denominated in units of 1/8th bits.
- *
- * 2*(ENTROPY_SHIFT + log2(poolbits)) must <= 31, or the multiply in
- * credit_entropy_bits() needs to be 64 bits wide.
  */
 #define ENTROPY_SHIFT 3
 #define ENTROPY_BITS(r) ((r)->entropy_count >> ENTROPY_SHIFT)
@@ -433,9 +430,9 @@ struct entropy_store {
 };
 
 static void push_to_pool(struct work_struct *work);
-static __u32 input_pool_data[INPUT_POOL_WORDS];
-static __u32 blocking_pool_data[OUTPUT_POOL_WORDS];
-static __u32 nonblocking_pool_data[OUTPUT_POOL_WORDS];
+static __u32 input_pool_data[INPUT_POOL_WORDS] __latent_entropy;
+static __u32 blocking_pool_data[OUTPUT_POOL_WORDS] __latent_entropy;
+static __u32 nonblocking_pool_data[OUTPUT_POOL_WORDS] __latent_entropy;
 
 static struct entropy_store input_pool = {
 	.poolinfo = &poolinfo_table[0],
@@ -524,8 +521,8 @@ static void _mix_pool_bytes(struct entropy_store *r, const void *in,
 		input_rotate = (input_rotate + (i ? 7 : 14)) & 31;
 	}
 
-	ACCESS_ONCE(r->input_rotate) = input_rotate;
-	ACCESS_ONCE(r->add_ptr) = i;
+	ACCESS_ONCE_RW(r->input_rotate) = input_rotate;
+	ACCESS_ONCE_RW(r->add_ptr) = i;
 	smp_wmb();
 
 	if (out)
@@ -632,7 +629,7 @@ retry:
 		/* The +2 corresponds to the /4 in the denominator */
 
 		do {
-			unsigned int anfrac = min(pnfrac, pool_size/2);
+			u64 anfrac = min(pnfrac, pool_size/2);
 			unsigned int add =
 				((pool_size - entropy_count)*anfrac*3) >> s;
 
@@ -1063,8 +1060,8 @@ static void extract_buf(struct entropy_store *r, __u8 *out)
 	 * pool while mixing, and hash one final time.
 	 */
 	sha_transform(hash.w, extract, workspace);
-	memset(extract, 0, sizeof(extract));
-	memset(workspace, 0, sizeof(workspace));
+	memzero_explicit(extract, sizeof(extract));
+	memzero_explicit(workspace, sizeof(workspace));
 
 	/*
 	 * In case the hash function has some recognizable output
@@ -1076,7 +1073,7 @@ static void extract_buf(struct entropy_store *r, __u8 *out)
 	hash.w[2] ^= rol32(hash.w[2], 16);
 
 	memcpy(out, &hash, EXTRACT_SIZE);
-	memset(&hash, 0, sizeof(hash));
+	memzero_explicit(&hash, sizeof(hash));
 }
 
 static ssize_t extract_entropy(struct entropy_store *r, void *buf,
@@ -1124,7 +1121,7 @@ static ssize_t extract_entropy(struct entropy_store *r, void *buf,
 	}
 
 	/* Wipe data just returned from memory */
-	memset(tmp, 0, sizeof(tmp));
+	memzero_explicit(tmp, sizeof(tmp));
 
 	return ret;
 }
@@ -1151,7 +1148,7 @@ static ssize_t extract_entropy_user(struct entropy_store *r, void __user *buf,
 
 		extract_buf(r, tmp);
 		i = min_t(int, nbytes, EXTRACT_SIZE);
-		if (copy_to_user(buf, tmp, i)) {
+		if (i > sizeof(tmp) || copy_to_user(buf, tmp, i)) {
 			ret = -EFAULT;
 			break;
 		}
@@ -1162,7 +1159,7 @@ static ssize_t extract_entropy_user(struct entropy_store *r, void __user *buf,
 	}
 
 	/* Wipe data just returned from memory */
-	memset(tmp, 0, sizeof(tmp));
+	memzero_explicit(tmp, sizeof(tmp));
 
 	return ret;
 }
@@ -1507,7 +1504,7 @@ EXPORT_SYMBOL(generate_random_uuid);
 #include <linux/sysctl.h>
 
 static int min_read_thresh = 8, min_write_thresh;
-static int max_read_thresh = INPUT_POOL_WORDS * 32;
+static int max_read_thresh = OUTPUT_POOL_WORDS * 32;
 static int max_write_thresh = INPUT_POOL_WORDS * 32;
 static char sysctl_bootid[16];
 
@@ -1523,7 +1520,7 @@ static char sysctl_bootid[16];
 static int proc_do_uuid(struct ctl_table *table, int write,
 			void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table fake_table;
+	ctl_table_no_const fake_table;
 	unsigned char buf[64], tmp_uuid[16], *uuid;
 
 	uuid = table->data;
@@ -1553,7 +1550,7 @@ static int proc_do_uuid(struct ctl_table *table, int write,
 static int proc_do_entropy(ctl_table *table, int write,
 			   void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	ctl_table fake_table;
+	ctl_table_no_const fake_table;
 	int entropy_count;
 
 	entropy_count = *(int *)table->data >> ENTROPY_SHIFT;
