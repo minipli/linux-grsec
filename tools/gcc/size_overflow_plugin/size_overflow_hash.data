@@ -974,6 +974,7 @@ kvm_write_guest_cached_11106 kvm_write_guest_cached 4 11106 NULL
 tw_change_queue_depth_11116 tw_change_queue_depth 2 11116 NULL
 page_offset_11120 page_offset 0 11120 NULL
 tracing_buffers_read_11124 tracing_buffers_read 3 11124 NULL
+alloc_alien_cache_11127 alloc_alien_cache 2 11127 NULL
 snd_gf1_pcm_playback_silence_11172 snd_gf1_pcm_playback_silence 3-4 11172 NULL
 il_dbgfs_rx_queue_read_11221 il_dbgfs_rx_queue_read 3 11221 NULL
 comedi_alloc_spriv_11234 comedi_alloc_spriv 2 11234 NULL
@@ -1321,6 +1322,7 @@ __kfifo_in_14797 __kfifo_in 3-0 14797 NULL nohasharray
 ttm_page_pool_free_14797 ttm_page_pool_free 2-0 14797 &__kfifo_in_14797
 hpet_readl_14801 hpet_readl 0 14801 NULL nohasharray
 snd_als300_gcr_read_14801 snd_als300_gcr_read 0 14801 &hpet_readl_14801
+do_tune_cpucache_14828 do_tune_cpucache 2 14828 NULL
 mrp_attr_create_14853 mrp_attr_create 3 14853 NULL
 lcd_write_14857 lcd_write 3 14857 NULL
 get_user_cpu_mask_14861 get_user_cpu_mask 2 14861 NULL
@@ -1651,7 +1653,8 @@ seq_copy_in_user_18543 seq_copy_in_user 3 18543 NULL
 sas_change_queue_depth_18555 sas_change_queue_depth 2 18555 NULL
 smk_write_rules_list_18565 smk_write_rules_list 3 18565 NULL
 debug_output_18575 debug_output 3 18575 NULL
-filemap_fdatawait_range_18600 filemap_fdatawait_range 0 18600 NULL
+filemap_fdatawait_range_18600 filemap_fdatawait_range 0 18600 NULL nohasharray
+slabinfo_write_18600 slabinfo_write 3 18600 &filemap_fdatawait_range_18600
 iowarrior_write_18604 iowarrior_write 3 18604 NULL
 from_buffer_18625 from_buffer 3 18625 NULL
 kmalloc_kernel_18641 kmalloc_kernel 1 18641 NULL
@@ -3892,6 +3895,7 @@ nvkm_connector_create__43711 nvkm_connector_create_ 6 43711 NULL
 fuse_send_read_43725 fuse_send_read 4-0 43725 NULL
 drbd_md_first_sector_43729 drbd_md_first_sector 0 43729 NULL
 snd_rme32_playback_copy_43732 snd_rme32_playback_copy 5 43732 NULL
+__alloc_alien_cache_43734 __alloc_alien_cache 2 43734 NULL
 fuse_conn_congestion_threshold_write_43736 fuse_conn_congestion_threshold_write 3 43736 NULL
 gigaset_initcs_43753 gigaset_initcs 2 43753 NULL
 sctp_setsockopt_active_key_43755 sctp_setsockopt_active_key 3 43755 NULL
@@ -4217,6 +4221,7 @@ newpart_47485 newpart 6-4 47485 NULL
 mcp23s17_read_regs_47491 mcp23s17_read_regs 4 47491 NULL
 core_sys_select_47494 core_sys_select 1 47494 NULL
 as3722_block_write_47503 as3722_block_write 2-3 47503 NULL
+alloc_arraycache_47505 alloc_arraycache 2 47505 NULL
 unlink_simple_47506 unlink_simple 3 47506 NULL
 pstore_decompress_47510 pstore_decompress 0 47510 NULL
 ec_i2c_count_response_47518 ec_i2c_count_response 0 47518 NULL
@@ -5531,6 +5536,7 @@ ttm_page_pool_free_61661 ttm_page_pool_free 2-0 61661 NULL
 insert_one_name_61668 insert_one_name 7 61668 NULL
 qib_format_hwmsg_61679 qib_format_hwmsg 2 61679 NULL
 lock_loop_61681 lock_loop 1 61681 NULL
+__do_tune_cpucache_61684 __do_tune_cpucache 2 61684 NULL
 filter_read_61692 filter_read 3 61692 NULL
 SyS_kexec_file_load_61715 SyS_kexec_file_load 3 61715 NULL
 iov_length_61716 iov_length 0 61716 NULL
