@@ -16,6 +16,7 @@
 #include <asm/thread_info.h>
 #include <asm/cpufeature.h>
 #include <asm/alternative-asm.h>
+#include <asm/pgtable.h>
 
 /*
  * By placing feature2 after feature1 in altinstructions section, we logically
@@ -29,7 +30,7 @@
 	.byte 0xe9	/* 32bit jump */
 	.long \orig-1f	/* by default jump to orig */
 1:
-	.section .altinstr_replacement,"ax"
+	.section .altinstr_replacement,"a"
 2:	.byte 0xe9			/* near jump with 32bit immediate */
 	.long \alt1-1b /* offset */   /* or alternatively to alt1 */
 3:	.byte 0xe9			/* near jump with 32bit immediate */
@@ -71,47 +72,20 @@
 #endif
 	.endm
 
-/* Standard copy_to_user with segment limit checking */
-ENTRY(_copy_to_user)
-	CFI_STARTPROC
-	GET_THREAD_INFO(%rax)
-	movq %rdi,%rcx
-	addq %rdx,%rcx
-	jc bad_to_user
-	cmpq TI_addr_limit(%rax),%rcx
-	ja bad_to_user
-	ALTERNATIVE_JUMP X86_FEATURE_REP_GOOD,X86_FEATURE_ERMS,	\
-		copy_user_generic_unrolled,copy_user_generic_string,	\
-		copy_user_enhanced_fast_string
-	CFI_ENDPROC
-ENDPROC(_copy_to_user)
-
-/* Standard copy_from_user with segment limit checking */
-ENTRY(_copy_from_user)
-	CFI_STARTPROC
-	GET_THREAD_INFO(%rax)
-	movq %rsi,%rcx
-	addq %rdx,%rcx
-	jc bad_from_user
-	cmpq TI_addr_limit(%rax),%rcx
-	ja bad_from_user
-	ALTERNATIVE_JUMP X86_FEATURE_REP_GOOD,X86_FEATURE_ERMS,	\
-		copy_user_generic_unrolled,copy_user_generic_string,	\
-		copy_user_enhanced_fast_string
-	CFI_ENDPROC
-ENDPROC(_copy_from_user)
-
 	.section .fixup,"ax"
 	/* must zero dest */
 ENTRY(bad_from_user)
 bad_from_user:
 	CFI_STARTPROC
+	testl %edx,%edx
+	js bad_to_user
 	movl %edx,%ecx
 	xorl %eax,%eax
 	rep
 	stosb
 bad_to_user:
 	movl %edx,%eax
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(bad_from_user)
@@ -179,6 +153,7 @@ ENTRY(copy_user_generic_unrolled)
 	decl %ecx
 	jnz 21b
 23:	xor %eax,%eax
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"
@@ -251,6 +226,7 @@ ENTRY(copy_user_generic_string)
 3:	rep
 	movsb
 4:	xorl %eax,%eax
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"
@@ -287,6 +263,7 @@ ENTRY(copy_user_enhanced_fast_string)
 1:	rep
 	movsb
 2:	xorl %eax,%eax
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"
