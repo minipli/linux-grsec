@@ -155,8 +155,6 @@ enum
 	KERN_PANIC_ON_NMI=76, /* int: whether we will panic on an unrecovered */
 };
 
-
-
 /* CTL_VM names: */
 enum
 {
@@ -961,12 +959,12 @@ extern void sysctl_head_finish(struct ctl_table_header *prev);
 extern int sysctl_perm(struct ctl_table_root *root,
 		struct ctl_table *table, int op);
 
-typedef struct ctl_table ctl_table;
-
 typedef int proc_handler (struct ctl_table *ctl, int write,
 			  void __user *buffer, size_t *lenp, loff_t *ppos);
 
 extern int proc_dostring(struct ctl_table *, int,
+			 void __user *, size_t *, loff_t *);
+extern int proc_dostring_modpriv(struct ctl_table *, int,
 			 void __user *, size_t *, loff_t *);
 extern int proc_dointvec(struct ctl_table *, int,
 			 void __user *, size_t *, loff_t *);
@@ -1045,7 +1043,9 @@ struct ctl_table
 	struct ctl_table_poll *poll;
 	void *extra1;
 	void *extra2;
-};
+} __do_const __randomize_layout;
+typedef struct ctl_table __no_const ctl_table_no_const;
+typedef struct ctl_table ctl_table;
 
 struct ctl_table_root {
 	struct list_head root_list;

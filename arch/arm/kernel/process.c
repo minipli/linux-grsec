@@ -28,7 +28,6 @@
 #include <linux/tick.h>
 #include <linux/utsname.h>
 #include <linux/uaccess.h>
-#include <linux/random.h>
 #include <linux/hw_breakpoint.h>
 #include <linux/cpuidle.h>
 
@@ -92,7 +91,7 @@ static int __init hlt_setup(char *__unused)
 __setup("nohlt", nohlt_setup);
 __setup("hlt", hlt_setup);
 
-void arm_machine_restart(char mode, const char *cmd)
+__noreturn void arm_machine_restart(char mode, const char *cmd)
 {
 	/* Disable interrupts first */
 	local_irq_disable();
@@ -135,7 +134,7 @@ void arm_machine_restart(char mode, const char *cmd)
 void (*pm_power_off)(void);
 EXPORT_SYMBOL(pm_power_off);
 
-void (*arm_pm_restart)(char str, const char *cmd) = arm_machine_restart;
+void (*arm_pm_restart)(char str, const char *cmd) __noreturn = arm_machine_restart;
 EXPORT_SYMBOL_GPL(arm_pm_restart);
 
 static void do_nothing(void *unused)
@@ -250,6 +249,7 @@ void machine_power_off(void)
 	machine_shutdown();
 	if (pm_power_off)
 		pm_power_off();
+	BUG();
 }
 
 void machine_restart(char *cmd)
@@ -268,8 +268,8 @@ void __show_regs(struct pt_regs *regs)
 		init_utsname()->release,
 		(int)strcspn(init_utsname()->version, " "),
 		init_utsname()->version);
-	print_symbol("PC is at %s\n", instruction_pointer(regs));
-	print_symbol("LR is at %s\n", regs->ARM_lr);
+	printk("PC is at %pA\n", (void *)instruction_pointer(regs));
+	printk("LR is at %pA\n", (void *)regs->ARM_lr);
 	printk("pc : [<%08lx>]    lr : [<%08lx>]    psr: %08lx\n"
 	       "sp : %08lx  ip : %08lx  fp : %08lx\n",
 		regs->ARM_pc, regs->ARM_lr, regs->ARM_cpsr,
@@ -487,12 +487,6 @@ unsigned long get_wchan(struct task_struct *p)
 			return frame.pc;
 	} while (count ++ < 16);
 	return 0;
-}
-
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long range_end = mm->brk + 0x02000000;
-	return randomize_range(mm->brk, range_end, 0) ? : mm->brk;
 }
 
 #ifdef CONFIG_MMU

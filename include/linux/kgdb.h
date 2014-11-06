@@ -53,7 +53,7 @@ extern int kgdb_connected;
 extern int kgdb_io_module_registered;
 
 extern atomic_t			kgdb_setting_breakpoint;
-extern atomic_t			kgdb_cpu_doing_single_step;
+extern atomic_unchecked_t	kgdb_cpu_doing_single_step;
 
 extern struct task_struct	*kgdb_usethread;
 extern struct task_struct	*kgdb_contthread;
@@ -252,7 +252,7 @@ struct kgdb_arch {
 	void	(*disable_hw_break)(struct pt_regs *regs);
 	void	(*remove_all_hw_break)(void);
 	void	(*correct_hw_break)(void);
-};
+} __do_const;
 
 /**
  * struct kgdb_io - Describe the interface for an I/O driver to talk with KGDB.
@@ -277,11 +277,11 @@ struct kgdb_io {
 	void			(*pre_exception) (void);
 	void			(*post_exception) (void);
 	int			is_console;
-};
+} __do_const;
 
 extern struct kgdb_arch		arch_kgdb_ops;
 
-extern unsigned long __weak kgdb_arch_pc(int exception, struct pt_regs *regs);
+extern unsigned long kgdb_arch_pc(int exception, struct pt_regs *regs);
 
 extern int kgdb_register_io_module(struct kgdb_io *local_kgdb_io_ops);
 extern void kgdb_unregister_io_module(struct kgdb_io *local_kgdb_io_ops);

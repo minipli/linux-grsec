@@ -1,3 +1,4 @@
+.section .rodata,"a",@progbits
 ENTRY(sys_call_table)
 	.long sys_restart_syscall	/* 0 - old "setup()" system call, used for restarting */
 	.long sys_exit

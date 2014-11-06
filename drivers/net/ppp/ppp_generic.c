@@ -588,7 +588,7 @@ static long ppp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			if (file == ppp->owner)
 				ppp_shutdown_interface(ppp);
 		}
-		if (atomic_long_read(&file->f_count) <= 2) {
+		if (atomic_long_read(&file->f_count) < 2) {
 			ppp_release(NULL, file);
 			err = 0;
 		} else
@@ -986,7 +986,6 @@ ppp_net_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 	void __user *addr = (void __user *) ifr->ifr_ifru.ifru_data;
 	struct ppp_stats stats;
 	struct ppp_comp_stats cstats;
-	char *vers;
 
 	switch (cmd) {
 	case SIOCGPPPSTATS:
@@ -1008,8 +1007,7 @@ ppp_net_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 		break;
 
 	case SIOCGPPPVER:
-		vers = PPP_VERSION;
-		if (copy_to_user(addr, vers, strlen(vers) + 1))
+		if (copy_to_user(addr, PPP_VERSION, sizeof(PPP_VERSION)))
 			break;
 		err = 0;
 		break;

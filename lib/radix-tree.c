@@ -80,7 +80,7 @@ struct radix_tree_preload {
 	int nr;
 	struct radix_tree_node *nodes[RADIX_TREE_MAX_PATH];
 };
-static DEFINE_PER_CPU(struct radix_tree_preload, radix_tree_preloads) = { 0, };
+static DEFINE_PER_CPU(struct radix_tree_preload, radix_tree_preloads);
 
 static inline void *ptr_to_indirect(void *ptr)
 {
@@ -1273,8 +1273,10 @@ unsigned long radix_tree_locate_item(struct radix_tree_root *root, void *item)
 
 		node = indirect_to_ptr(node);
 		max_index = radix_tree_maxindex(node->height);
-		if (cur_index > max_index)
+		if (cur_index > max_index) {
+			rcu_read_unlock();
 			break;
+		}
 
 		cur_index = __locate(node, item, cur_index, &found_index);
 		rcu_read_unlock();
