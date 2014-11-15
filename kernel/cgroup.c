@@ -5341,6 +5341,14 @@ static void cgroup_release_agent(struct work_struct *work)
 						    release_list);
 		list_del_init(&cgrp->release_list);
 		raw_spin_unlock(&release_list_lock);
+
+		/*
+		 * don't bother calling call_usermodehelper if we haven't
+		 * configured a binary to execute
+		 */
+		if (cgrp->root->release_agent_path[0] == '\0')
+			goto continue_free;
+
 		pathbuf = kmalloc(PATH_MAX, GFP_KERNEL);
 		if (!pathbuf)
 			goto continue_free;
@@ -5539,7 +5547,7 @@ static int cgroup_css_links_read(struct seq_file *seq, void *v)
 		struct task_struct *task;
 		int count = 0;
 
-		seq_printf(seq, "css_set %p\n", cset);
+		seq_printf(seq, "css_set %pK\n", cset);
 
 		list_for_each_entry(task, &cset->tasks, cg_list) {
 			if (count++ > MAX_TASKS_SHOWN_PER_CSS)

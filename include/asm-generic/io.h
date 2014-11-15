@@ -289,7 +289,7 @@ static inline void pci_iounmap(struct pci_dev *dev, void __iomem *p)
  * These are pretty trivial
  */
 #ifndef virt_to_phys
-static inline unsigned long virt_to_phys(volatile void *address)
+static inline unsigned long __intentional_overflow(-1) virt_to_phys(volatile void *address)
 {
 	return __pa((unsigned long)address);
 }

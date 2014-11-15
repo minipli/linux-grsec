@@ -197,7 +197,7 @@ void init_espfix_ap(void)
 		set_pte(&pte_p[n*PTE_STRIDE], pte);
 
 	/* Job is done for this CPU and any CPU which shares this page */
-	ACCESS_ONCE(espfix_pages[page]) = stack_page;
+	ACCESS_ONCE_RW(espfix_pages[page]) = stack_page;
 
 unlock_done:
 	mutex_unlock(&espfix_init_mutex);

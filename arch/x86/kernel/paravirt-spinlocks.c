@@ -8,7 +8,7 @@
 
 #include <asm/paravirt.h>
 
-struct pv_lock_ops pv_lock_ops = {
+struct pv_lock_ops pv_lock_ops __read_only = {
 #ifdef CONFIG_SMP
 	.lock_spinning = __PV_IS_CALLEE_SAVE(paravirt_nop),
 	.unlock_kick = paravirt_nop,

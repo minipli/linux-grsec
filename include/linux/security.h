@@ -27,6 +27,7 @@
 #include <linux/slab.h>
 #include <linux/err.h>
 #include <linux/string.h>
+#include <linux/grsecurity.h>
 
 struct linux_binprm;
 struct cred;
@@ -115,8 +116,6 @@ struct xfrm_user_sec_ctx;
 struct seq_file;
 
 extern int cap_netlink_send(struct sock *sk, struct sk_buff *skb);
-
-void reset_security_ops(void);
 
 #ifdef CONFIG_MMU
 extern unsigned long mmap_min_addr;
@@ -1729,7 +1728,7 @@ struct security_operations {
 				 struct audit_context *actx);
 	void (*audit_rule_free) (void *lsmrule);
 #endif /* CONFIG_AUDIT */
-};
+} __randomize_layout;
 
 /* prototypes */
 extern int security_init(void);
