@@ -106,6 +106,10 @@ unsigned long arch_get_unmapped_area(struct file *filp, unsigned long addr,
 		goto found_addr;
 	}
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (addr) {
 		if (do_color_align && last_mmap)
 			addr = COLOR_ALIGN(addr, last_mmap, pgoff);
@@ -167,6 +171,10 @@ arch_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 	}
 
 	/* requesting a specific address */
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (addr) {
 		if (do_color_align && last_mmap)
 			addr = COLOR_ALIGN(addr, last_mmap, pgoff);
@@ -248,6 +256,13 @@ void arch_pick_mmap_layout(struct mm_struct *mm)
 {
 	mm->mmap_legacy_base = mmap_legacy_base();
 	mm->mmap_base = mmap_upper_limit();
+
+#ifdef CONFIG_PAX_RANDMMAP
+	if (mm->pax_flags & MF_PAX_RANDMMAP) {
+		mm->mmap_legacy_base += mm->delta_mmap;
+		mm->mmap_base -= mm->delta_mmap + mm->delta_stack;
+	}
+#endif
 
 	if (mmap_is_legacy()) {
 		mm->mmap_base = mm->mmap_legacy_base;

@@ -2128,12 +2128,17 @@ ftrace_code_disable(struct module *mod, struct dyn_ftrace *rec)
 	if (unlikely(ftrace_disabled))
 		return 0;
 
+	ret = ftrace_arch_code_modify_prepare();
+	FTRACE_WARN_ON(ret);
+	if (ret)
+		return 0;
+
 	ret = ftrace_make_nop(mod, rec, MCOUNT_ADDR);
+	FTRACE_WARN_ON(ftrace_arch_code_modify_post_process());
 	if (ret) {
 		ftrace_bug(ret, ip);
-		return 0;
 	}
-	return 1;
+	return ret ? 0 : 1;
 }
 
 /*
@@ -4458,8 +4463,10 @@ static int ftrace_process_locs(struct module *mod,
 	if (!count)
 		return 0;
 
+	pax_open_kernel();
 	sort(start, count, sizeof(*start),
 	     ftrace_cmp_ips, ftrace_swap_ips);
+	pax_close_kernel();
 
 	start_pg = ftrace_allocate_pages(count);
 	if (!start_pg)
