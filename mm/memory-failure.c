@@ -61,7 +61,7 @@ int sysctl_memory_failure_early_kill __read_mostly = 0;
 
 int sysctl_memory_failure_recovery __read_mostly = 1;
 
-atomic_long_t num_poisoned_pages __read_mostly = ATOMIC_LONG_INIT(0);
+atomic_long_unchecked_t num_poisoned_pages __read_mostly = ATOMIC_LONG_INIT(0);
 
 #if defined(CONFIG_HWPOISON_INJECT) || defined(CONFIG_HWPOISON_INJECT_MODULE)
 
@@ -202,7 +202,7 @@ static int kill_proc(struct task_struct *t, unsigned long addr, int trapno,
 		pfn, t->comm, t->pid);
 	si.si_signo = SIGBUS;
 	si.si_errno = 0;
-	si.si_addr = (void *)addr;
+	si.si_addr = (void __user *)addr;
 #ifdef __ARCH_SI_TRAPNO
 	si.si_trapno = trapno;
 #endif
@@ -795,7 +795,7 @@ static struct page_state {
 	unsigned long res;
 	char *msg;
 	int (*action)(struct page *p, unsigned long pfn);
-} error_states[] = {
+} __do_const error_states[] = {
 	{ reserved,	reserved,	"reserved kernel",	me_kernel },
 	/*
 	 * free pages are specially detected outside this table:
@@ -1095,7 +1095,7 @@ int memory_failure(unsigned long pfn, int trapno, int flags)
 		nr_pages = 1 << compound_order(hpage);
 	else /* normal page or thp */
 		nr_pages = 1;
-	atomic_long_add(nr_pages, &num_poisoned_pages);
+	atomic_long_add_unchecked(nr_pages, &num_poisoned_pages);
 
 	/*
 	 * We need/can do nothing about count=0 pages.
@@ -1124,7 +1124,7 @@ int memory_failure(unsigned long pfn, int trapno, int flags)
 			if (PageHWPoison(hpage)) {
 				if ((hwpoison_filter(p) && TestClearPageHWPoison(p))
 				    || (p != hpage && TestSetPageHWPoison(hpage))) {
-					atomic_long_sub(nr_pages, &num_poisoned_pages);
+					atomic_long_sub_unchecked(nr_pages, &num_poisoned_pages);
 					unlock_page(hpage);
 					return 0;
 				}
@@ -1190,14 +1190,14 @@ int memory_failure(unsigned long pfn, int trapno, int flags)
 	 */
 	if (!PageHWPoison(p)) {
 		printk(KERN_ERR "MCE %#lx: just unpoisoned\n", pfn);
-		atomic_long_sub(nr_pages, &num_poisoned_pages);
+		atomic_long_sub_unchecked(nr_pages, &num_poisoned_pages);
 		put_page(hpage);
 		res = 0;
 		goto out;
 	}
 	if (hwpoison_filter(p)) {
 		if (TestClearPageHWPoison(p))
-			atomic_long_sub(nr_pages, &num_poisoned_pages);
+			atomic_long_sub_unchecked(nr_pages, &num_poisoned_pages);
 		unlock_page(hpage);
 		put_page(hpage);
 		return 0;
@@ -1419,7 +1419,7 @@ int unpoison_memory(unsigned long pfn)
 			return 0;
 		}
 		if (TestClearPageHWPoison(p))
-			atomic_long_dec(&num_poisoned_pages);
+			atomic_long_dec_unchecked(&num_poisoned_pages);
 		pr_info("MCE: Software-unpoisoned free page %#lx\n", pfn);
 		return 0;
 	}
@@ -1433,7 +1433,7 @@ int unpoison_memory(unsigned long pfn)
 	 */
 	if (TestClearPageHWPoison(page)) {
 		pr_info("MCE: Software-unpoisoned page %#lx\n", pfn);
-		atomic_long_sub(nr_pages, &num_poisoned_pages);
+		atomic_long_sub_unchecked(nr_pages, &num_poisoned_pages);
 		freeit = 1;
 		if (PageHuge(page))
 			clear_page_hwpoison_huge_page(page);
@@ -1558,11 +1558,11 @@ static int soft_offline_huge_page(struct page *page, int flags)
 		if (PageHuge(page)) {
 			set_page_hwpoison_huge_page(hpage);
 			dequeue_hwpoisoned_huge_page(hpage);
-			atomic_long_add(1 << compound_order(hpage),
+			atomic_long_add_unchecked(1 << compound_order(hpage),
 					&num_poisoned_pages);
 		} else {
 			SetPageHWPoison(page);
-			atomic_long_inc(&num_poisoned_pages);
+			atomic_long_inc_unchecked(&num_poisoned_pages);
 		}
 	}
 	return ret;
@@ -1601,7 +1601,7 @@ static int __soft_offline_page(struct page *page, int flags)
 		put_page(page);
 		pr_info("soft_offline: %#lx: invalidated\n", pfn);
 		SetPageHWPoison(page);
-		atomic_long_inc(&num_poisoned_pages);
+		atomic_long_inc_unchecked(&num_poisoned_pages);
 		return 0;
 	}
 
@@ -1652,7 +1652,7 @@ static int __soft_offline_page(struct page *page, int flags)
 			if (!is_free_buddy_page(page))
 				pr_info("soft offline: %#lx: page leaked\n",
 					pfn);
-			atomic_long_inc(&num_poisoned_pages);
+			atomic_long_inc_unchecked(&num_poisoned_pages);
 		}
 	} else {
 		pr_info("soft offline: %#lx: isolation failed: %d, page count %d, type %lx\n",
@@ -1726,11 +1726,11 @@ int soft_offline_page(struct page *page, int flags)
 		if (PageHuge(page)) {
 			set_page_hwpoison_huge_page(hpage);
 			dequeue_hwpoisoned_huge_page(hpage);
-			atomic_long_add(1 << compound_order(hpage),
+			atomic_long_add_unchecked(1 << compound_order(hpage),
 					&num_poisoned_pages);
 		} else {
 			SetPageHWPoison(page);
-			atomic_long_inc(&num_poisoned_pages);
+			atomic_long_inc_unchecked(&num_poisoned_pages);
 		}
 	}
 	unset_migratetype_isolate(page, MIGRATE_MOVABLE);
