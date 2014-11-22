@@ -109,36 +109,32 @@ static inline void bpf_flush_icache(void *start, void *end)
 #define CHOOSE_LOAD_FUNC(K, func) \
 	((int)K < 0 ? ((int)K >= SKF_LL_OFF ? func##_negative_offset : func) : func##_positive_offset)
 
-struct bpf_binary_header {
-	unsigned int	pages;
-	/* Note : for security reasons, bpf code will follow a randomly
-	 * sized amount of int3 instructions
-	 */
-	u8		image[];
-};
-
-static struct bpf_binary_header *bpf_alloc_binary(unsigned int proglen,
+/* Note : for security reasons, bpf code will follow a randomly
+ * sized amount of int3 instructions
+ */
+static u8 *bpf_alloc_binary(unsigned int proglen,
 						  u8 **image_ptr)
 {
 	unsigned int sz, hole;
-	struct bpf_binary_header *header;
+	u8 *header;
 
 	/* Most of BPF filters are really small,
 	 * but if some of them fill a page, allow at least
 	 * 128 extra bytes to insert a random section of int3
 	 */
-	sz = round_up(proglen + sizeof(*header) + 128, PAGE_SIZE);
-	header = module_alloc(sz);
+	sz = round_up(proglen + 128, PAGE_SIZE);
+	header = module_alloc_exec(sz);
 	if (!header)
 		return NULL;
 
+	pax_open_kernel();
 	memset(header, 0xcc, sz); /* fill whole space with int3 instructions */
+	pax_close_kernel();
 
-	header->pages = sz / PAGE_SIZE;
-	hole = min(sz - (proglen + sizeof(*header)), PAGE_SIZE - sizeof(*header));
+	hole = PAGE_SIZE - (proglen & ~PAGE_MASK);
 
 	/* insert a random number of int3 instructions before BPF code */
-	*image_ptr = &header->image[prandom_u32() % hole];
+	*image_ptr = &header[prandom_u32() % hole];
 	return header;
 }
 
@@ -864,7 +860,9 @@ common_load:
 				pr_err("bpf_jit_compile fatal error\n");
 				return -EFAULT;
 			}
+			pax_open_kernel();
 			memcpy(image + proglen, temp, ilen);
+			pax_close_kernel();
 		}
 		proglen += ilen;
 		addrs[i] = proglen;
@@ -879,7 +877,7 @@ void bpf_jit_compile(struct bpf_prog *prog)
 
 void bpf_int_jit_compile(struct bpf_prog *prog)
 {
-	struct bpf_binary_header *header = NULL;
+	u8 *header = NULL;
 	int proglen, oldproglen = 0;
 	struct jit_context ctx = {};
 	u8 *image = NULL;
@@ -911,7 +909,7 @@ void bpf_int_jit_compile(struct bpf_prog *prog)
 		if (proglen <= 0) {
 			image = NULL;
 			if (header)
-				module_free(NULL, header);
+				module_free_exec(NULL, image);
 			goto out;
 		}
 		if (image) {
@@ -935,7 +933,6 @@ void bpf_int_jit_compile(struct bpf_prog *prog)
 
 	if (image) {
 		bpf_flush_icache(header, image + proglen);
-		set_memory_ro((unsigned long)header, header->pages);
 		prog->bpf_func = (void *)image;
 		prog->jited = 1;
 	}
@@ -947,10 +944,8 @@ static void bpf_jit_free_deferred(struct work_struct *work)
 {
 	struct bpf_prog *fp = container_of(work, struct bpf_prog, work);
 	unsigned long addr = (unsigned long)fp->bpf_func & PAGE_MASK;
-	struct bpf_binary_header *header = (void *)addr;
 
-	set_memory_rw(addr, header->pages);
-	module_free(NULL, header);
+	module_free_exec(NULL, (void *)addr);
 	kfree(fp);
 }
 

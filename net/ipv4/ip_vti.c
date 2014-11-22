@@ -45,7 +45,7 @@
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
 
-static struct rtnl_link_ops vti_link_ops __read_mostly;
+static struct rtnl_link_ops vti_link_ops;
 
 static int vti_net_id __read_mostly;
 static int vti_tunnel_init(struct net_device *dev);
@@ -519,7 +519,7 @@ static const struct nla_policy vti_policy[IFLA_VTI_MAX + 1] = {
 	[IFLA_VTI_REMOTE]	= { .len = FIELD_SIZEOF(struct iphdr, daddr) },
 };
 
-static struct rtnl_link_ops vti_link_ops __read_mostly = {
+static struct rtnl_link_ops vti_link_ops = {
 	.kind		= "vti",
 	.maxtype	= IFLA_VTI_MAX,
 	.policy		= vti_policy,
