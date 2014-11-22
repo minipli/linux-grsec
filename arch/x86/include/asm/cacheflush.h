@@ -27,7 +27,7 @@ static inline unsigned long get_page_memtype(struct page *pg)
 	unsigned long pg_flags = pg->flags & _PGMT_MASK;
 
 	if (pg_flags == _PGMT_DEFAULT)
-		return -1;
+		return ~0UL;
 	else if (pg_flags == _PGMT_WC)
 		return _PAGE_CACHE_WC;
 	else if (pg_flags == _PGMT_UC_MINUS)

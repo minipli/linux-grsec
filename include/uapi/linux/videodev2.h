@@ -1285,7 +1285,7 @@ struct v4l2_ext_control {
 	union {
 		__s32 value;
 		__s64 value64;
-		char *string;
+		char __user *string;
 		__u8 *p_u8;
 		__u16 *p_u16;
 		__u32 *p_u32;

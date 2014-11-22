@@ -69,8 +69,8 @@ asmlinkage long sys32_ftruncate64(unsigned int fd, unsigned long offset_low,
  */
 static int cp_stat64(struct stat64 __user *ubuf, struct kstat *stat)
 {
-	typeof(ubuf->st_uid) uid = 0;
-	typeof(ubuf->st_gid) gid = 0;
+	typeof(((struct stat64 *)0)->st_uid) uid = 0;
+	typeof(((struct stat64 *)0)->st_gid) gid = 0;
 	SET_UID(uid, from_kuid_munged(current_user_ns(), stat->uid));
 	SET_GID(gid, from_kgid_munged(current_user_ns(), stat->gid));
 	if (!access_ok(VERIFY_WRITE, ubuf, sizeof(struct stat64)) ||

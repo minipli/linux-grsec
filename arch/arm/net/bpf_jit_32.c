@@ -71,7 +71,11 @@ struct jit_ctx {
 #endif
 };
 
+#ifdef CONFIG_GRKERNSEC_BPF_HARDEN
+int bpf_jit_enable __read_only;
+#else
 int bpf_jit_enable __read_mostly;
+#endif
 
 static u64 jit_get_skb_b(struct sk_buff *skb, unsigned offset)
 {
@@ -930,5 +934,6 @@ void bpf_jit_free(struct bpf_prog *fp)
 {
 	if (fp->jited)
 		module_free(NULL, fp->bpf_func);
-	kfree(fp);
+
+	bpf_prog_unlock_free(fp);
 }
