@@ -82,6 +82,16 @@ echo ""
 fi
 
 echo "%install"
+echo 'chmod -f 0500 /boot'
+echo 'if [ -d /lib/modules ]; then'
+echo 'chmod -f 0500 /lib/modules'
+echo 'fi'
+echo 'if [ -d /lib32/modules ]; then'
+echo 'chmod -f 0500 /lib32/modules'
+echo 'fi'
+echo 'if [ -d /lib64/modules ]; then'
+echo 'chmod -f 0500 /lib64/modules'
+echo 'fi'
 echo 'KBUILD_IMAGE=$(make image_name)'
 echo "%ifarch ia64"
 echo 'mkdir -p $RPM_BUILD_ROOT/boot/efi $RPM_BUILD_ROOT/lib/modules'
@@ -139,7 +149,7 @@ echo "rm -f /boot/vmlinuz-$KERNELRELEASE-rpm /boot/System.map-$KERNELRELEASE-rpm
 echo "fi"
 echo ""
 echo "%files"
-echo '%defattr (-, root, root)'
+echo '%defattr (400, root, root, 500)'
 echo "%dir /lib/modules"
 echo "/lib/modules/$KERNELRELEASE"
 echo "%exclude /lib/modules/$KERNELRELEASE/build"
@@ -152,7 +162,7 @@ echo '%defattr (-, root, root)'
 echo "/usr/include"
 echo ""
 echo "%files devel"
-echo '%defattr (-, root, root)'
+echo '%defattr (400, root, root, 500)'
 echo "/usr/src/kernels/$KERNELRELEASE"
 echo "/lib/modules/$KERNELRELEASE/build"
 echo "/lib/modules/$KERNELRELEASE/source"
