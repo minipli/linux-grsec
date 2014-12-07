@@ -130,6 +130,7 @@ extern u64 __ua_limit;
 	__ok == 0;							\
 })
 
+#define access_ok_noprefault(type, addr, size) access_ok((type), (addr), (size))
 #define access_ok(type, addr, size)					\
 	likely(__access_ok((addr), (size), __access_mask))
 
@@ -301,7 +302,8 @@ do {									\
 			__get_kernel_common((x), size, __gu_ptr);	\
 		else							\
 			__get_user_common((x), size, __gu_ptr);		\
-	}								\
+	} else								\
+		(x) = 0;						\
 									\
 	__gu_err;							\
 })
@@ -316,6 +318,7 @@ do {									\
 	"	.insn						\n"	\
 	"	.section .fixup,\"ax\"				\n"	\
 	"3:	li	%0, %4					\n"	\
+	"	move	%1, $0					\n"	\
 	"	j	2b					\n"	\
 	"	.previous					\n"	\
 	"	.section __ex_table,\"a\"			\n"	\
@@ -630,6 +633,7 @@ do {									\
 	"	.insn						\n"	\
 	"	.section .fixup,\"ax\"				\n"	\
 	"3:	li	%0, %4					\n"	\
+	"	move	%1, $0					\n"	\
 	"	j	2b					\n"	\
 	"	.previous					\n"	\
 	"	.section __ex_table,\"a\"			\n"	\
