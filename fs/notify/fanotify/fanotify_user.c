@@ -251,8 +251,8 @@ static ssize_t copy_event_to_user(struct fsnotify_group *group,
 
 	fd = fanotify_event_metadata.fd;
 	ret = -EFAULT;
-	if (copy_to_user(buf, &fanotify_event_metadata,
-			 fanotify_event_metadata.event_len))
+	if (fanotify_event_metadata.event_len > sizeof fanotify_event_metadata ||
+	    copy_to_user(buf, &fanotify_event_metadata, fanotify_event_metadata.event_len))
 		goto out_close_fd;
 
 	ret = prepare_for_access_response(group, event, fd);
@@ -742,6 +742,8 @@ SYSCALL_DEFINE2(fanotify_init, unsigned int, flags, unsigned int, event_f_flags)
 	oevent->path.mnt = NULL;
 	oevent->path.dentry = NULL;
 
+	if (force_o_largefile())
+		event_f_flags |= O_LARGEFILE;
 	group->fanotify_data.f_flags = event_f_flags;
 #ifdef CONFIG_FANOTIFY_ACCESS_PERMISSIONS
 	oevent->response = 0;
