@@ -585,8 +585,8 @@ struct xgbe_prv_data {
 
 	int irq_number;
 
-	struct xgbe_hw_if hw_if;
-	struct xgbe_desc_if desc_if;
+	const struct xgbe_hw_if *hw_if;
+	const struct xgbe_desc_if *desc_if;
 
 	/* AXI DMA settings */
 	unsigned int axdomain;
@@ -698,6 +698,9 @@ struct xgbe_prv_data {
 	unsigned int debugfs_xpcs_reg;
 #endif
 };
+
+extern const struct xgbe_hw_if default_xgbe_hw_if;
+extern const struct xgbe_desc_if default_xgbe_desc_if;
 
 /* Function prototypes*/
 

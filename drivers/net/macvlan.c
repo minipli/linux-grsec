@@ -264,7 +264,7 @@ static void macvlan_broadcast_enqueue(struct macvlan_port *port,
 free_nskb:
 	kfree_skb(nskb);
 err:
-	atomic_long_inc(&skb->dev->rx_dropped);
+	atomic_long_inc_unchecked(&skb->dev->rx_dropped);
 }
 
 /* called under rcu_read_lock() from netif_receive_skb */
@@ -1150,13 +1150,15 @@ static const struct nla_policy macvlan_policy[IFLA_MACVLAN_MAX + 1] = {
 int macvlan_link_register(struct rtnl_link_ops *ops)
 {
 	/* common fields */
-	ops->priv_size		= sizeof(struct macvlan_dev);
-	ops->validate		= macvlan_validate;
-	ops->maxtype		= IFLA_MACVLAN_MAX;
-	ops->policy		= macvlan_policy;
-	ops->changelink		= macvlan_changelink;
-	ops->get_size		= macvlan_get_size;
-	ops->fill_info		= macvlan_fill_info;
+	pax_open_kernel();
+	*(size_t *)&ops->priv_size	= sizeof(struct macvlan_dev);
+	*(void **)&ops->validate	= macvlan_validate;
+	*(int *)&ops->maxtype		= IFLA_MACVLAN_MAX;
+	*(const void **)&ops->policy	= macvlan_policy;
+	*(void **)&ops->changelink	= macvlan_changelink;
+	*(void **)&ops->get_size	= macvlan_get_size;
+	*(void **)&ops->fill_info	= macvlan_fill_info;
+	pax_close_kernel();
 
 	return rtnl_link_register(ops);
 };
@@ -1236,7 +1238,7 @@ static int macvlan_device_event(struct notifier_block *unused,
 	return NOTIFY_DONE;
 }
 
-static struct notifier_block macvlan_notifier_block __read_mostly = {
+static struct notifier_block macvlan_notifier_block = {
 	.notifier_call	= macvlan_device_event,
 };
 

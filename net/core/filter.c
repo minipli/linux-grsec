@@ -559,7 +559,11 @@ do_pass:
 
 		/* Unkown instruction. */
 		default:
-			goto err;
+			WARN(1, KERN_ALERT "Unknown sock filter code:%u jt:%u tf:%u k:%u\n",
+				       fp->code, fp->jt, fp->jf, fp->k);
+			kfree(addrs);
+			BUG();
+			return -EINVAL;
 		}
 
 		insn++;
@@ -606,7 +610,7 @@ static int check_load_and_stores(const struct sock_filter *filter, int flen)
 	u16 *masks, memvalid = 0; /* One bit per cell, 16 cells */
 	int pc, ret = 0;
 
-	BUILD_BUG_ON(BPF_MEMWORDS > 16);
+	BUILD_BUG_ON(BPF_MEMWORDS != 16);
 
 	masks = kmalloc_array(flen, sizeof(*masks), GFP_KERNEL);
 	if (!masks)
@@ -933,7 +937,7 @@ static struct bpf_prog *bpf_migrate_filter(struct bpf_prog *fp)
 
 	/* Expand fp for appending the new filter representation. */
 	old_fp = fp;
-	fp = krealloc(old_fp, bpf_prog_size(new_len), GFP_KERNEL);
+	fp = bpf_prog_realloc(old_fp, bpf_prog_size(new_len), 0);
 	if (!fp) {
 		/* The old_fp is still around in case we couldn't
 		 * allocate new memory, so uncharge on that one.
@@ -1013,11 +1017,11 @@ int bpf_prog_create(struct bpf_prog **pfp, struct sock_fprog_kern *fprog)
 	if (fprog->filter == NULL)
 		return -EINVAL;
 
-	fp = kmalloc(bpf_prog_size(fprog->len), GFP_KERNEL);
+	fp = bpf_prog_alloc(bpf_prog_size(fprog->len), 0);
 	if (!fp)
 		return -ENOMEM;
 
-	memcpy(fp->insns, fprog->filter, fsize);
+	memcpy(fp->insns, (void __force_kernel *)fprog->filter, fsize);
 
 	fp->len = fprog->len;
 	/* Since unattached filters are not copied back to user
@@ -1069,12 +1073,12 @@ int sk_attach_filter(struct sock_fprog *fprog, struct sock *sk)
 	if (fprog->filter == NULL)
 		return -EINVAL;
 
-	prog = kmalloc(bpf_fsize, GFP_KERNEL);
+	prog = bpf_prog_alloc(bpf_fsize, 0);
 	if (!prog)
 		return -ENOMEM;
 
 	if (copy_from_user(prog->insns, fprog->filter, fsize)) {
-		kfree(prog);
+		__bpf_prog_free(prog);
 		return -EFAULT;
 	}
 
@@ -1082,7 +1086,7 @@ int sk_attach_filter(struct sock_fprog *fprog, struct sock *sk)
 
 	err = bpf_prog_store_orig_filter(prog, fprog);
 	if (err) {
-		kfree(prog);
+		__bpf_prog_free(prog);
 		return -ENOMEM;
 	}
 
