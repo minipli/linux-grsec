@@ -1021,6 +1021,8 @@ EXPORT_SYMBOL_GPL(acpi_subsys_freeze);
 
 #endif /* CONFIG_PM_SLEEP */
 
+static void acpi_dev_pm_detach(struct device *dev, bool power_off);
+
 static struct dev_pm_domain acpi_general_pm_domain = {
 	.ops = {
 #ifdef CONFIG_PM_RUNTIME
@@ -1039,6 +1041,7 @@ static struct dev_pm_domain acpi_general_pm_domain = {
 		.restore_early = acpi_subsys_resume_early,
 #endif
 	},
+	.detach = acpi_dev_pm_detach
 };
 
 /**
@@ -1108,7 +1111,6 @@ int acpi_dev_pm_attach(struct device *dev, bool power_on)
 		acpi_device_wakeup(adev, ACPI_STATE_S0, false);
 	}
 
-	dev->pm_domain->detach = acpi_dev_pm_detach;
 	return 0;
 }
 EXPORT_SYMBOL_GPL(acpi_dev_pm_attach);

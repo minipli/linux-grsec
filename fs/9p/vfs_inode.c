@@ -1312,7 +1312,7 @@ static void *v9fs_vfs_follow_link(struct dentry *dentry, struct nameidata *nd)
 void
 v9fs_vfs_put_link(struct dentry *dentry, struct nameidata *nd, void *p)
 {
-	char *s = nd_get_link(nd);
+	const char *s = nd_get_link(nd);
 
 	p9_debug(P9_DEBUG_VFS, " %pd %s\n",
 		 dentry, IS_ERR(s) ? "<error>" : s);

@@ -154,7 +154,7 @@ static int flat_probe(void)
 	return 1;
 }
 
-static struct apic apic_flat =  {
+static struct apic apic_flat __read_only =  {
 	.name				= "flat",
 	.probe				= flat_probe,
 	.acpi_madt_oem_check		= flat_acpi_madt_oem_check,
@@ -260,7 +260,7 @@ static int physflat_probe(void)
 	return 0;
 }
 
-static struct apic apic_physflat =  {
+static struct apic apic_physflat __read_only =  {
 
 	.name				= "physical flat",
 	.probe				= physflat_probe,

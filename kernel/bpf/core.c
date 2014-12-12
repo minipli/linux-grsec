@@ -143,7 +143,7 @@ bpf_jit_binary_alloc(unsigned int proglen, u8 **image_ptr,
 	 * random section of illegal instructions.
 	 */
 	size = round_up(proglen + sizeof(*hdr) + 128, PAGE_SIZE);
-	hdr = module_alloc(size);
+	hdr = module_alloc_exec(size);
 	if (hdr == NULL)
 		return NULL;
 
@@ -163,7 +163,7 @@ bpf_jit_binary_alloc(unsigned int proglen, u8 **image_ptr,
 
 void bpf_jit_binary_free(struct bpf_binary_header *hdr)
 {
-	module_free(NULL, hdr);
+	module_free_exec(NULL, hdr);
 }
 #endif /* CONFIG_BPF_JIT */
 
