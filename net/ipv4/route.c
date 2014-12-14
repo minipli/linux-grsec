@@ -316,7 +316,7 @@ static inline unsigned int rt_hash(__be32 daddr, __be32 saddr, int idx,
 
 static inline int rt_genid(struct net *net)
 {
-	return atomic_read(&net->ipv4.rt_genid);
+	return atomic_read_unchecked(&net->ipv4.rt_genid);
 }
 
 #ifdef CONFIG_PROC_FS
@@ -644,7 +644,7 @@ static void __net_exit ip_rt_do_proc_exit(struct net *net)
 #endif
 }
 
-static struct pernet_operations ip_rt_proc_ops __net_initdata =  {
+static struct pernet_operations ip_rt_proc_ops __net_initconst =  {
 	.init = ip_rt_do_proc_init,
 	.exit = ip_rt_do_proc_exit,
 };
@@ -940,7 +940,7 @@ static void rt_cache_invalidate(struct net *net)
 	unsigned char shuffle;
 
 	get_random_bytes(&shuffle, sizeof(shuffle));
-	atomic_add(shuffle + 1U, &net->ipv4.rt_genid);
+	atomic_add_unchecked(shuffle + 1U, &net->ipv4.rt_genid);
 	redirect_genid++;
 	inetpeer_invalidate_tree(AF_INET);
 }
@@ -1372,11 +1372,11 @@ void rt_bind_peer(struct rtable *rt, __be32 daddr, int create)
 
 #define IP_IDENTS_SZ 2048u
 struct ip_ident_bucket {
-	atomic_t	id;
+	atomic_unchecked_t	id;
 	u32		stamp32;
 };
 
-static struct ip_ident_bucket *ip_idents __read_mostly;
+static struct ip_ident_bucket ip_idents[IP_IDENTS_SZ] __read_mostly;
 
 /* In order to protect privacy, we add a perturbation to identifiers
  * if one generator is seldom used. This makes hard for an attacker
@@ -1396,7 +1396,7 @@ u32 ip_idents_reserve(u32 hash, int segs)
 		delta = (u32)(x >> 32);
 	}
 
-	return atomic_add_return(segs + delta, &bucket->id) - segs;
+	return atomic_add_return_unchecked(segs + delta, &bucket->id) - segs;
 }
 EXPORT_SYMBOL(ip_idents_reserve);
 
@@ -3254,7 +3254,7 @@ static int ipv4_sysctl_rtcache_flush(ctl_table *__ctl, int write,
 {
 	if (write) {
 		int flush_delay;
-		ctl_table ctl;
+		ctl_table_no_const ctl;
 		struct net *net;
 
 		memcpy(&ctl, __ctl, sizeof(ctl));
@@ -3403,6 +3403,7 @@ static struct ctl_table ipv4_route_flush_table[] = {
 		.maxlen		= sizeof(int),
 		.mode		= 0200,
 		.proc_handler	= ipv4_sysctl_rtcache_flush,
+		.extra1		= &init_net,
 	},
 	{ },
 };
@@ -3416,25 +3417,23 @@ static __net_initdata struct ctl_path ipv4_route_path[] = {
 
 static __net_init int sysctl_route_net_init(struct net *net)
 {
-	struct ctl_table *tbl;
+	ctl_table_no_const *tbl = NULL;
 
-	tbl = ipv4_route_flush_table;
 	if (!net_eq(net, &init_net)) {
-		tbl = kmemdup(tbl, sizeof(ipv4_route_flush_table), GFP_KERNEL);
+		tbl = kmemdup(ipv4_route_flush_table, sizeof(ipv4_route_flush_table), GFP_KERNEL);
 		if (tbl == NULL)
 			goto err_dup;
-	}
-	tbl[0].extra1 = net;
 
-	net->ipv4.route_hdr =
-		register_net_sysctl_table(net, ipv4_route_path, tbl);
+		net->ipv4.route_hdr = register_net_sysctl_table(net, ipv4_route_path, tbl);
+	} else
+		net->ipv4.route_hdr = register_net_sysctl_table(net, ipv4_route_path, ipv4_route_flush_table);
+
 	if (net->ipv4.route_hdr == NULL)
 		goto err_reg;
 	return 0;
 
 err_reg:
-	if (tbl != ipv4_route_flush_table)
-		kfree(tbl);
+	kfree(tbl);
 err_dup:
 	return -ENOMEM;
 }
@@ -3449,7 +3448,7 @@ static __net_exit void sysctl_route_net_exit(struct net *net)
 	kfree(tbl);
 }
 
-static __net_initdata struct pernet_operations sysctl_route_ops = {
+static __net_initconst struct pernet_operations sysctl_route_ops = {
 	.init = sysctl_route_net_init,
 	.exit = sysctl_route_net_exit,
 };
@@ -3464,7 +3463,7 @@ static __net_init int rt_genid_init(struct net *net)
 	return 0;
 }
 
-static __net_initdata struct pernet_operations rt_genid_ops = {
+static __net_initconst struct pernet_operations rt_genid_ops = {
 	.init = rt_genid_init,
 };
 
@@ -3487,11 +3486,7 @@ int __init ip_rt_init(void)
 {
 	int rc = 0;
 
-	ip_idents = kmalloc(IP_IDENTS_SZ * sizeof(*ip_idents), GFP_KERNEL);
-	if (!ip_idents)
-		panic("IP: failed to allocate ip_idents\n");
-
-	get_random_bytes(ip_idents, IP_IDENTS_SZ * sizeof(*ip_idents));
+	get_random_bytes(ip_idents, sizeof(ip_idents));
 
 #ifdef CONFIG_IP_ROUTE_CLASSID
 	ip_rt_acct = __alloc_percpu(256 * sizeof(struct ip_rt_acct), __alignof__(struct ip_rt_acct));
