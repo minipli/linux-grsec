@@ -1032,7 +1032,7 @@ ttm_dma_pool_shrink_scan(struct shrinker *shrink, struct shrink_control *sc)
 						      sc->gfp_mask);
 		freed += nr_free - shrink_pages;
 
-		pr_debug("%s: (%s:%d) Asked to shrink %ld, have %ld more to go\n",
+		pr_debug("%s: (%s:%d) Asked to shrink %lu, have %lu more to go\n",
 			 p->pool->dev_name, p->pool->name, current->pid,
 			 nr_free, shrink_pages);
 	}
