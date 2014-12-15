@@ -496,7 +496,7 @@ static irqreturn_t ivybridge_irq_handler(DRM_IRQ_ARGS)
 	u32 de_iir, gt_iir, de_ier, pch_iir, pm_iir;
 	struct drm_i915_master_private *master_priv;
 
-	atomic_inc(&dev_priv->irq_received);
+	atomic_inc_unchecked(&dev_priv->irq_received);
 
 	/* disable master interrupt before clearing iir  */
 	de_ier = I915_READ(DEIER);
@@ -579,7 +579,7 @@ static irqreturn_t ironlake_irq_handler(DRM_IRQ_ARGS)
 	struct drm_i915_master_private *master_priv;
 	u32 bsd_usr_interrupt = GT_BSD_USER_INTERRUPT;
 
-	atomic_inc(&dev_priv->irq_received);
+	atomic_inc_unchecked(&dev_priv->irq_received);
 
 	if (IS_GEN6(dev))
 		bsd_usr_interrupt = GT_GEN6_BSD_USER_INTERRUPT;
@@ -1229,7 +1229,7 @@ static irqreturn_t i915_driver_irq_handler(DRM_IRQ_ARGS)
 	int ret = IRQ_NONE, pipe;
 	bool blc_event = false;
 
-	atomic_inc(&dev_priv->irq_received);
+	atomic_inc_unchecked(&dev_priv->irq_received);
 
 	iir = I915_READ(IIR);
 
@@ -1748,7 +1748,7 @@ static void ironlake_irq_preinstall(struct drm_device *dev)
 {
 	drm_i915_private_t *dev_priv = (drm_i915_private_t *) dev->dev_private;
 
-	atomic_set(&dev_priv->irq_received, 0);
+	atomic_set_unchecked(&dev_priv->irq_received, 0);
 
 	INIT_WORK(&dev_priv->hotplug_work, i915_hotplug_work_func);
 	INIT_WORK(&dev_priv->error_work, i915_error_work_func);
@@ -1936,7 +1936,7 @@ static void i915_driver_irq_preinstall(struct drm_device * dev)
 	drm_i915_private_t *dev_priv = (drm_i915_private_t *) dev->dev_private;
 	int pipe;
 
-	atomic_set(&dev_priv->irq_received, 0);
+	atomic_set_unchecked(&dev_priv->irq_received, 0);
 
 	INIT_WORK(&dev_priv->hotplug_work, i915_hotplug_work_func);
 	INIT_WORK(&dev_priv->error_work, i915_error_work_func);

@@ -1142,10 +1142,14 @@ void dev_load(struct net *net, const char *name)
 	if (no_module && capable(CAP_NET_ADMIN))
 		no_module = request_module("netdev-%s", name);
 	if (no_module && capable(CAP_SYS_MODULE)) {
+#ifdef CONFIG_GRKERNSEC_MODHARDEN
+		___request_module(true, "grsec_modharden_netdev", "%s", name);
+#else
 		if (!request_module("%s", name))
 			pr_err("Loading kernel module for a network device "
 "with CAP_SYS_MODULE (deprecated).  Use CAP_NET_ADMIN and alias netdev-%s "
 "instead\n", name);
+#endif
 	}
 }
 EXPORT_SYMBOL(dev_load);
@@ -1597,7 +1601,7 @@ int dev_forward_skb(struct net_device *dev, struct sk_buff *skb)
 {
 	if (skb_shinfo(skb)->tx_flags & SKBTX_DEV_ZEROCOPY) {
 		if (skb_copy_ubufs(skb, GFP_ATOMIC)) {
-			atomic_long_inc(&dev->rx_dropped);
+			atomic_long_inc_unchecked(&dev->rx_dropped);
 			kfree_skb(skb);
 			return NET_RX_DROP;
 		}
@@ -1607,7 +1611,7 @@ int dev_forward_skb(struct net_device *dev, struct sk_buff *skb)
 	nf_reset(skb);
 
 	if (unlikely(!is_skb_forwardable(dev, skb))) {
-		atomic_long_inc(&dev->rx_dropped);
+		atomic_long_inc_unchecked(&dev->rx_dropped);
 		kfree_skb(skb);
 		return NET_RX_DROP;
 	}
@@ -2047,7 +2051,7 @@ static int illegal_highdma(struct net_device *dev, struct sk_buff *skb)
 
 struct dev_gso_cb {
 	void (*destructor)(struct sk_buff *skb);
-};
+} __no_const;
 
 #define DEV_GSO_CB(skb) ((struct dev_gso_cb *)(skb)->cb)
 
@@ -2969,7 +2973,7 @@ enqueue:
 
 	local_irq_restore(flags);
 
-	atomic_long_inc(&skb->dev->rx_dropped);
+	atomic_long_inc_unchecked(&skb->dev->rx_dropped);
 	kfree_skb(skb);
 	return NET_RX_DROP;
 }
@@ -3043,7 +3047,7 @@ int netif_rx_ni(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(netif_rx_ni);
 
-static void net_tx_action(struct softirq_action *h)
+static __latent_entropy void net_tx_action(void)
 {
 	struct softnet_data *sd = &__get_cpu_var(softnet_data);
 
@@ -3342,7 +3346,7 @@ ncls:
 	if (pt_prev) {
 		ret = pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 	} else {
-		atomic_long_inc(&skb->dev->rx_dropped);
+		atomic_long_inc_unchecked(&skb->dev->rx_dropped);
 		kfree_skb(skb);
 		/* Jamal, now you will not able to escape explaining
 		 * me how you were going to use this. :-)
@@ -3908,7 +3912,7 @@ void netif_napi_del(struct napi_struct *napi)
 }
 EXPORT_SYMBOL(netif_napi_del);
 
-static void net_rx_action(struct softirq_action *h)
+static __latent_entropy void net_rx_action(void)
 {
 	struct softnet_data *sd = &__get_cpu_var(softnet_data);
 	unsigned long time_limit = jiffies + 2;
@@ -4186,7 +4190,13 @@ static void dev_seq_printf_stats(struct seq_file *seq, struct net_device *dev)
 	struct rtnl_link_stats64 temp;
 	const struct rtnl_link_stats64 *stats = dev_get_stats(dev, &temp);
 
-	seq_printf(seq, "%6s: %7llu %7llu %4llu %4llu %4llu %5llu %10llu %9llu "
+	if (gr_proc_is_restricted())
+		seq_printf(seq, "%6s: %7llu %7llu %4llu %4llu %4llu %5llu %10llu %9llu "
+		   "%8llu %7llu %4llu %4llu %4llu %5llu %7llu %10llu\n",
+		   dev->name, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL,
+		   0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL, 0ULL);
+	else
+		seq_printf(seq, "%6s: %7llu %7llu %4llu %4llu %4llu %5llu %10llu %9llu "
 		   "%8llu %7llu %4llu %4llu %4llu %5llu %7llu %10llu\n",
 		   dev->name, stats->rx_bytes, stats->rx_packets,
 		   stats->rx_errors,
@@ -4261,7 +4271,7 @@ static int softnet_seq_show(struct seq_file *seq, void *v)
 	return 0;
 }
 
-static const struct seq_operations dev_seq_ops = {
+const struct seq_operations dev_seq_ops = {
 	.start = dev_seq_start,
 	.next  = dev_seq_next,
 	.stop  = dev_seq_stop,
@@ -4291,7 +4301,7 @@ static const struct seq_operations softnet_seq_ops = {
 
 static int softnet_seq_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &softnet_seq_ops);
+	return seq_open_restrict(file, &softnet_seq_ops);
 }
 
 static const struct file_operations softnet_seq_fops = {
@@ -4378,8 +4388,13 @@ static int ptype_seq_show(struct seq_file *seq, void *v)
 		else
 			seq_printf(seq, "%04x", ntohs(pt->type));
 
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		seq_printf(seq, " %-8s %p\n",
+			   pt->dev ? pt->dev->name : "", NULL);
+#else
 		seq_printf(seq, " %-8s %pF\n",
 			   pt->dev ? pt->dev->name : "", pt->func);
+#endif
 	}
 
 	return 0;
@@ -4441,7 +4456,7 @@ static void __net_exit dev_proc_net_exit(struct net *net)
 	proc_net_remove(net, "dev");
 }
 
-static struct pernet_operations __net_initdata dev_proc_ops = {
+static struct pernet_operations __net_initconst dev_proc_ops = {
 	.init = dev_proc_net_init,
 	.exit = dev_proc_net_exit,
 };
@@ -5936,7 +5951,7 @@ struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
 	} else {
 		netdev_stats_to_stats64(storage, &dev->stats);
 	}
-	storage->rx_dropped += atomic_long_read(&dev->rx_dropped);
+	storage->rx_dropped += atomic_long_read_unchecked(&dev->rx_dropped);
 	return storage;
 }
 EXPORT_SYMBOL(dev_get_stats);
@@ -6515,7 +6530,7 @@ static void __net_exit netdev_exit(struct net *net)
 	kfree(net->dev_index_head);
 }
 
-static struct pernet_operations __net_initdata netdev_net_ops = {
+static struct pernet_operations __net_initconst netdev_net_ops = {
 	.init = netdev_init,
 	.exit = netdev_exit,
 };
@@ -6577,7 +6592,7 @@ static void __net_exit default_device_exit_batch(struct list_head *net_list)
 	rtnl_unlock();
 }
 
-static struct pernet_operations __net_initdata default_device_ops = {
+static struct pernet_operations __net_initconst default_device_ops = {
 	.exit = default_device_exit,
 	.exit_batch = default_device_exit_batch,
 };
