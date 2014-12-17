@@ -3749,7 +3749,7 @@ int bond_3ad_xor_xmit(struct sk_buff *skb, struct net_device *dev)
 		bond_dev_queue_xmit(bond, skb, slave->dev);
 	} else {
 		dev_kfree_skb_any(skb);
-		atomic_long_inc(&dev->tx_dropped);
+		atomic_long_inc_unchecked(&dev->tx_dropped);
 	}
 
 	return NETDEV_TX_OK;
