@@ -55,7 +55,7 @@ struct ewma *ewma_add(struct ewma *avg, unsigned long val)
 {
 	unsigned long internal = ACCESS_ONCE(avg->internal);
 
-	ACCESS_ONCE(avg->internal) = internal ?
+	ACCESS_ONCE_RW(avg->internal) = internal ?
 		(((internal << avg->weight) - internal) +
 			(val << avg->factor)) >> avg->weight :
 		(val << avg->factor);

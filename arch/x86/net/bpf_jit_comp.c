@@ -145,36 +145,32 @@ static int pkt_type_offset(void)
 	return -1;
 }
 
-struct bpf_binary_header {
-	unsigned int	pages;
-	/* Note : for security reasons, bpf code will follow a randomly
-	 * sized amount of int3 instructions
-	 */
-	u8		image[];
-};
-
-static struct bpf_binary_header *bpf_alloc_binary(unsigned int proglen,
+/* Note : for security reasons, bpf code will follow a randomly
+ * sized amount of int3 instructions
+ */
+static u8 *bpf_alloc_binary(unsigned int proglen,
 						  u8 **image_ptr)
 {
 	unsigned int sz, hole;
-	struct bpf_binary_header *header;
+	u8 *header;
 
 	/* Most of BPF filters are really small,
 	 * but if some of them fill a page, allow at least
 	 * 128 extra bytes to insert a random section of int3
 	 */
-	sz = round_up(proglen + sizeof(*header) + 128, PAGE_SIZE);
-	header = module_alloc(sz);
+	sz = round_up(proglen + 128, PAGE_SIZE);
+	header = module_alloc_exec(sz);
 	if (!header)
 		return NULL;
 
+	pax_open_kernel();
 	memset(header, 0xcc, sz); /* fill whole space with int3 instructions */
+	pax_close_kernel();
 
-	header->pages = sz / PAGE_SIZE;
-	hole = min(sz - (proglen + sizeof(*header)), PAGE_SIZE - sizeof(*header));
+	hole = PAGE_SIZE - (proglen & ~PAGE_MASK);
 
 	/* insert a random number of int3 instructions before BPF code */
-	*image_ptr = &header->image[prandom_u32() % hole];
+	*image_ptr = &header[prandom_u32() % hole];
 	return header;
 }
 
@@ -187,7 +183,7 @@ void bpf_jit_compile(struct sk_filter *fp)
 	int t_offset, f_offset;
 	u8 t_op, f_op, seen = 0, pass;
 	u8 *image = NULL;
-	struct bpf_binary_header *header = NULL;
+	u8 *header = NULL;
 	u8 *func;
 	int pc_ret0 = -1; /* bpf index of first RET #0 instruction (if any) */
 	unsigned int cleanup_addr; /* epilogue code offset */
@@ -734,10 +730,12 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 				if (unlikely(proglen + ilen > oldproglen)) {
 					pr_err("bpb_jit_compile fatal error\n");
 					kfree(addrs);
-					module_free(NULL, header);
+					module_free_exec(NULL, image);
 					return;
 				}
+				pax_open_kernel();
 				memcpy(image + proglen, temp, ilen);
+				pax_close_kernel();
 			}
 			proglen += ilen;
 			addrs[i] = proglen;
@@ -770,7 +768,6 @@ cond_branch:			f_offset = addrs[i + filter[i].jf] - addrs[i];
 
 	if (image) {
 		bpf_flush_icache(header, image + proglen);
-		set_memory_ro((unsigned long)header, header->pages);
 		fp->bpf_func = (void *)image;
 	}
 out:
@@ -782,10 +779,8 @@ static void bpf_jit_free_deferred(struct work_struct *work)
 {
 	struct sk_filter *fp = container_of(work, struct sk_filter, work);
 	unsigned long addr = (unsigned long)fp->bpf_func & PAGE_MASK;
-	struct bpf_binary_header *header = (void *)addr;
 
-	set_memory_rw(addr, header->pages);
-	module_free(NULL, header);
+	module_free_exec(NULL, (void *)addr);
 	kfree(fp);
 }
 
