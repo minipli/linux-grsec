@@ -446,6 +446,7 @@ config CPU_32v5
 
 config CPU_32v6
 	bool
+	select CPU_USE_DOMAINS if CPU_V6 && MMU && !PAX_KERNEXEC && !PAX_MEMORY_UDEREF
 	select TLS_REG_EMUL if !CPU_32v6K && !MMU
 
 config CPU_32v6K
@@ -600,6 +601,7 @@ config CPU_CP15_MPU
 
 config CPU_USE_DOMAINS
 	bool
+	depends on !ARM_LPAE && !PAX_KERNEXEC && !PAX_MEMORY_UDEREF
 	help
 	  This option enables or disables the use of domain switching
 	  via the set_fs() function.
@@ -798,7 +800,7 @@ config NEED_KUSER_HELPERS
 
 config KUSER_HELPERS
 	bool "Enable kuser helpers in vector page" if !NEED_KUSER_HELPERS
-	depends on MMU
+	depends on MMU && (!(CPU_V6 || CPU_V6K || CPU_V7) || GRKERNSEC_OLD_ARM_USERLAND)
 	default y
 	help
 	  Warning: disabling this option may break user programs.
@@ -812,7 +814,7 @@ config KUSER_HELPERS
 	  See Documentation/arm/kernel_user_helpers.txt for details.
 
 	  However, the fixed address nature of these helpers can be used
-	  by ROP (return orientated programming) authors when creating
+	  by ROP (Return Oriented Programming) authors when creating
 	  exploits.
 
 	  If all of the binaries and libraries which run on your platform
