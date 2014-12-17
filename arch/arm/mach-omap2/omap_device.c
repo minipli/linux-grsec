@@ -510,7 +510,7 @@ void omap_device_delete(struct omap_device *od)
 struct platform_device __init *omap_device_build(const char *pdev_name,
 						 int pdev_id,
 						 struct omap_hwmod *oh,
-						 void *pdata, int pdata_len)
+						 const void *pdata, int pdata_len)
 {
 	struct omap_hwmod *ohs[] = { oh };
 
@@ -538,7 +538,7 @@ struct platform_device __init *omap_device_build(const char *pdev_name,
 struct platform_device __init *omap_device_build_ss(const char *pdev_name,
 						    int pdev_id,
 						    struct omap_hwmod **ohs,
-						    int oh_cnt, void *pdata,
+						    int oh_cnt, const void *pdata,
 						    int pdata_len)
 {
 	int ret = -ENOMEM;
