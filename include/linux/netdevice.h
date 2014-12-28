@@ -1156,6 +1156,7 @@ struct net_device_ops {
 	bool			(*ndo_gso_check) (struct sk_buff *skb,
 						  struct net_device *dev);
 };
+typedef struct net_device_ops __no_const net_device_ops_no_const;
 
 /**
  * enum net_device_priv_flags - &struct net_device priv_flags
@@ -1498,10 +1499,10 @@ struct net_device {
 
 	struct net_device_stats	stats;
 
-	atomic_long_t		rx_dropped;
-	atomic_long_t		tx_dropped;
+	atomic_long_unchecked_t	rx_dropped;
+	atomic_long_unchecked_t	tx_dropped;
 
-	atomic_t		carrier_changes;
+	atomic_unchecked_t	carrier_changes;
 
 #ifdef CONFIG_WIRELESS_EXT
 	const struct iw_handler_def *	wireless_handlers;

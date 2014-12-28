@@ -42,7 +42,7 @@
 /* Forward declarations for tiny_plugin.h. */
 struct rcu_ctrlblk;
 static void __rcu_process_callbacks(struct rcu_ctrlblk *rcp);
-static void rcu_process_callbacks(struct softirq_action *unused);
+static void rcu_process_callbacks(void);
 static void __call_rcu(struct rcu_head *head,
 		       void (*func)(struct rcu_head *rcu),
 		       struct rcu_ctrlblk *rcp);
@@ -310,7 +310,7 @@ static void __rcu_process_callbacks(struct rcu_ctrlblk *rcp)
 				      false));
 }
 
-static void rcu_process_callbacks(struct softirq_action *unused)
+static __latent_entropy void rcu_process_callbacks(void)
 {
 	__rcu_process_callbacks(&rcu_sched_ctrlblk);
 	__rcu_process_callbacks(&rcu_bh_ctrlblk);
