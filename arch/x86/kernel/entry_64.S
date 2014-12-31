@@ -971,7 +971,7 @@ tracesys:
 
 	pax_erase_kstack
 
-	LOAD_ARGS 0			/* else restore clobbered regs */
+	LOAD_ARGS			/* else restore clobbered regs */
 	jmp system_call_fastpath	/*      and return to the fast path */
 
 tracesys_phase2:
