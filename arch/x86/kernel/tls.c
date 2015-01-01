@@ -40,6 +40,22 @@ static bool tls_desc_okay(const struct user_desc *info)
 	if (!info->seg_32bit)
 		return false;
 
+	/* Only allow data segments in the TLS array. */
+	if (info->contents > 1)
+		return false;
+
+	/*
+	 * Non-present segments with DPL 3 present an interesting attack
+	 * surface.  The kernel should handle such segments correctly,
+	 * but TLS is very difficult to protect in a sandbox, so prevent
+	 * such segments from being created.
+	 *
+	 * If userspace needs to remove a TLS entry, it can still delete
+	 * it outright.
+	 */
+	if (info->seg_not_present)
+		return false;
+
 	return true;
 }
 
@@ -102,6 +118,11 @@ int do_set_thread_area(struct task_struct *p, int idx,
 
 	if (idx < GDT_ENTRY_TLS_MIN || idx > GDT_ENTRY_TLS_MAX)
 		return -EINVAL;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((p->mm->pax_flags & MF_PAX_SEGMEXEC) && (info.contents & MODIFY_LDT_CONTENTS_CODE))
+		return -EINVAL;
+#endif
 
 	set_tls_desc(p, idx, &info, 1);
 
@@ -224,7 +245,7 @@ int regset_tls_set(struct task_struct *target, const struct user_regset *regset,
 
 	if (kbuf)
 		info = kbuf;
-	else if (__copy_from_user(infobuf, ubuf, count))
+	else if (count > sizeof infobuf || __copy_from_user(infobuf, ubuf, count))
 		return -EFAULT;
 	else
 		info = infobuf;

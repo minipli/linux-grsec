@@ -4803,7 +4803,7 @@ static int bond_get_tx_queues(struct net *net, struct nlattr *tb[],
 	return 0;
 }
 
-static struct rtnl_link_ops bond_link_ops __read_mostly = {
+static struct rtnl_link_ops bond_link_ops = {
 	.kind		= "bond",
 	.priv_size	= sizeof(struct bonding),
 	.setup		= bond_setup,

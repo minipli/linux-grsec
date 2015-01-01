@@ -207,9 +207,6 @@ do_kdsk_ioctl(int cmd, struct kbentry __user *user_kbe, int perm, struct kbd_str
 	if (copy_from_user(&tmp, user_kbe, sizeof(struct kbentry)))
 		return -EFAULT;
 
-	if (!capable(CAP_SYS_TTY_CONFIG))
-		perm = 0;
-
 	switch (cmd) {
 	case KDGKBENT:
 		key_map = key_maps[s];
@@ -221,6 +218,9 @@ do_kdsk_ioctl(int cmd, struct kbentry __user *user_kbe, int perm, struct kbd_str
 		    val = (i ? K_HOLE : K_NOSUCHMAP);
 		return put_user(val, &user_kbe->kb_value);
 	case KDSKBENT:
+		if (!capable(CAP_SYS_TTY_CONFIG))
+			perm = 0;
+
 		if (!perm)
 			return -EPERM;
 		if (!i && v == K_NOSUCHMAP) {
@@ -322,9 +322,6 @@ do_kdgkb_ioctl(int cmd, struct kbsentry __user *user_kdgkb, int perm)
 	int i, j, k;
 	int ret;
 
-	if (!capable(CAP_SYS_TTY_CONFIG))
-		perm = 0;
-
 	kbs = kmalloc(sizeof(*kbs), GFP_KERNEL);
 	if (!kbs) {
 		ret = -ENOMEM;
@@ -358,6 +355,9 @@ do_kdgkb_ioctl(int cmd, struct kbsentry __user *user_kdgkb, int perm)
 		kfree(kbs);
 		return ((p && *p) ? -EOVERFLOW : 0);
 	case KDSKBSENT:
+		if (!capable(CAP_SYS_TTY_CONFIG))
+			perm = 0;
+
 		if (!perm) {
 			ret = -EPERM;
 			goto reterr;

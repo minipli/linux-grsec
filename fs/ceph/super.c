@@ -785,7 +785,7 @@ static int ceph_compare_super(struct super_block *sb, void *data)
 /*
  * construct our own bdi so we can control readahead, etc.
  */
-static atomic_long_t bdi_seq = ATOMIC_LONG_INIT(0);
+static atomic_long_unchecked_t bdi_seq = ATOMIC_LONG_INIT(0);
 
 static int ceph_register_bdi(struct super_block *sb,
 			     struct ceph_fs_client *fsc)
@@ -802,7 +802,7 @@ static int ceph_register_bdi(struct super_block *sb,
 			default_backing_dev_info.ra_pages;
 
 	err = bdi_register(&fsc->backing_dev_info, NULL, "ceph-%d",
-			   atomic_long_inc_return(&bdi_seq));
+			   atomic_long_inc_return_unchecked(&bdi_seq));
 	if (!err)
 		sb->s_bdi = &fsc->backing_dev_info;
 	return err;
@@ -901,6 +901,7 @@ static struct file_system_type ceph_fs_type = {
 	.kill_sb	= ceph_kill_sb,
 	.fs_flags	= FS_RENAME_DOES_D_MOVE,
 };
+MODULE_ALIAS_FS("ceph");
 
 #define _STRINGIFY(x) #x
 #define STRINGIFY(x) _STRINGIFY(x)
