@@ -70,8 +70,7 @@ static DEFINE_MUTEX(espfix_init_mutex);
 #define ESPFIX_MAX_PAGES  DIV_ROUND_UP(CONFIG_NR_CPUS, ESPFIX_STACKS_PER_PAGE)
 static void *espfix_pages[ESPFIX_MAX_PAGES];
 
-static __page_aligned_rodata pud_t espfix_pud_page[PTRS_PER_PUD]
-	__aligned(PAGE_SIZE);
+static __page_aligned_rodata pud_t espfix_pud_page[PTRS_PER_PUD];
 
 static unsigned int page_random, slot_random;
 
