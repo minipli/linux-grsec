@@ -103,7 +103,7 @@ static struct rndis_request *get_rndis_request(struct rndis_device *dev,
 	 * template
 	 */
 	set = &rndis_msg->msg.set_req;
-	set->req_id = atomic_inc_return(&dev->new_req_id);
+	set->req_id = atomic_inc_return_unchecked(&dev->new_req_id);
 
 	/* Add to the request list */
 	spin_lock_irqsave(&dev->request_lock, flags);
@@ -770,7 +770,7 @@ static void rndis_filter_halt_device(struct rndis_device *dev)
 
 	/* Setup the rndis set */
 	halt = &request->request_msg.msg.halt_req;
-	halt->req_id = atomic_inc_return(&dev->new_req_id);
+	halt->req_id = atomic_inc_return_unchecked(&dev->new_req_id);
 
 	/* Ignore return since this msg is optional. */
 	rndis_filter_send_request(dev, request);

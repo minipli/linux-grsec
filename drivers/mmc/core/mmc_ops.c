@@ -247,7 +247,7 @@ mmc_send_cxd_data(struct mmc_card *card, struct mmc_host *host,
 	void *data_buf;
 	int is_on_stack;
 
-	is_on_stack = object_is_on_stack(buf);
+	is_on_stack = object_starts_on_stack(buf);
 	if (is_on_stack) {
 		/*
 		 * dma onto stack is unsafe/nonportable, but callers to this
