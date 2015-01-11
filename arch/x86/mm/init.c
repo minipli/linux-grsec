@@ -17,6 +17,7 @@
 #include <asm/proto.h>
 #include <asm/dma.h>		/* for MAX_DMA_PFN */
 #include <asm/microcode.h>
+#include <asm/desc.h>
 
 #include "mm_internal.h"
 
@@ -563,7 +564,18 @@ void __init init_mem_mapping(void)
 	early_ioremap_page_table_range_init();
 #endif
 
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	clone_pgd_range(get_cpu_pgd(0, kernel) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+	clone_pgd_range(get_cpu_pgd(0, user) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+	load_cr3(get_cpu_pgd(0, kernel));
+#else
 	load_cr3(swapper_pg_dir);
+#endif
+
 	__flush_tlb_all();
 
 	early_memtest(0, max_pfn_mapped << PAGE_SHIFT);
@@ -581,7 +593,13 @@ void __init init_mem_mapping(void)
  */
 int devmem_is_allowed(unsigned long pagenr)
 {
-	if (pagenr < 256)
+	if (!pagenr)
+		return 1;
+#ifdef CONFIG_VM86
+	if (pagenr < (ISA_START_ADDRESS >> PAGE_SHIFT))
+		return 1;
+#endif
+	if ((ISA_START_ADDRESS >> PAGE_SHIFT) <= pagenr && pagenr < (ISA_END_ADDRESS >> PAGE_SHIFT))
 		return 1;
 	if (iomem_is_exclusive(pagenr << PAGE_SHIFT))
 		return 0;
@@ -630,6 +648,87 @@ void free_init_pages(char *what, unsigned long begin, unsigned long end)
 
 void free_initmem(void)
 {
+
+#ifdef CONFIG_PAX_KERNEXEC
+#ifdef CONFIG_X86_32
+	/* PaX: limit KERNEL_CS to actual size */
+	unsigned long addr, limit;
+	struct desc_struct d;
+	int cpu;
+
+	limit = paravirt_enabled() ? ktva_ktla(0xffffffff) : (unsigned long)&_etext;
+	limit = (limit - 1UL) >> PAGE_SHIFT;
+
+	memset(__LOAD_PHYSICAL_ADDR + PAGE_OFFSET, POISON_FREE_INITMEM, PAGE_SIZE);
+	for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
+		pack_descriptor(&d, get_desc_base(&get_cpu_gdt_table(cpu)[GDT_ENTRY_KERNEL_CS]), limit, 0x9B, 0xC);
+		write_gdt_entry(get_cpu_gdt_table(cpu), GDT_ENTRY_KERNEL_CS, &d, DESCTYPE_S);
+		write_gdt_entry(get_cpu_gdt_table(cpu), GDT_ENTRY_KERNEXEC_KERNEL_CS, &d, DESCTYPE_S);
+	}
+
+	/* PaX: make KERNEL_CS read-only */
+	addr = PFN_ALIGN(ktla_ktva((unsigned long)&_text));
+	if (!paravirt_enabled())
+		set_memory_ro(addr, (PFN_ALIGN(_sdata) - addr) >> PAGE_SHIFT);
+/*
+		for (addr = ktla_ktva((unsigned long)&_text); addr < (unsigned long)&_sdata; addr += PMD_SIZE) {
+			pgd = pgd_offset_k(addr);
+			pud = pud_offset(pgd, addr);
+			pmd = pmd_offset(pud, addr);
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		}
+*/
+#ifdef CONFIG_X86_PAE
+	set_memory_nx(PFN_ALIGN(__init_begin), (PFN_ALIGN(__init_end) - PFN_ALIGN(__init_begin)) >> PAGE_SHIFT);
+/*
+	for (addr = (unsigned long)&__init_begin; addr < (unsigned long)&__init_end; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+	set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+*/
+#endif
+
+#ifdef CONFIG_MODULES
+	set_memory_4k((unsigned long)MODULES_EXEC_VADDR, (MODULES_EXEC_END - MODULES_EXEC_VADDR) >> PAGE_SHIFT);
+#endif
+
+#else
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+	unsigned long addr, end;
+
+	/* PaX: make kernel code/rodata read-only, rest non-executable */
+	for (addr = __START_KERNEL_map; addr < __START_KERNEL_map + KERNEL_IMAGE_SIZE; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		if (!pmd_present(*pmd))
+			continue;
+		if ((unsigned long)_text <= addr && addr < (unsigned long)_sdata)
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		else
+			set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+
+	addr = (unsigned long)__va(__pa(__START_KERNEL_map));
+	end = addr + KERNEL_IMAGE_SIZE;
+	for (; addr < end; addr += PMD_SIZE) {
+	pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		if (!pmd_present(*pmd))
+			continue;
+		if ((unsigned long)__va(__pa(_text)) <= addr && addr < (unsigned long)__va(__pa(_sdata)))
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+	}
+#endif
+
+	flush_tlb_all();
+#endif
+
 	free_init_pages("unused kernel",
 			(unsigned long)(&__init_begin),
 			(unsigned long)(&__init_end));
