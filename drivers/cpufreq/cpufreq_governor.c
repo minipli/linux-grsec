@@ -245,7 +245,7 @@ int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 	struct dbs_data *dbs_data;
 	struct od_cpu_dbs_info_s *od_dbs_info = NULL;
 	struct cs_cpu_dbs_info_s *cs_dbs_info = NULL;
-	struct od_ops *od_ops = NULL;
+	const struct od_ops *od_ops = NULL;
 	struct od_dbs_tuners *od_tuners = NULL;
 	struct cs_dbs_tuners *cs_tuners = NULL;
 	struct cpu_dbs_common_info *cpu_cdbs;
@@ -311,7 +311,7 @@ int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 		if ((cdata->governor == GOV_CONSERVATIVE) &&
 				(!policy->governor->initialized)) {
-			struct cs_ops *cs_ops = dbs_data->cdata->gov_ops;
+			const struct cs_ops *cs_ops = dbs_data->cdata->gov_ops;
 
 			cpufreq_register_notifier(cs_ops->notifier_block,
 					CPUFREQ_TRANSITION_NOTIFIER);
@@ -331,7 +331,7 @@ int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 
 			if ((dbs_data->cdata->governor == GOV_CONSERVATIVE) &&
 				(policy->governor->initialized == 1)) {
-				struct cs_ops *cs_ops = dbs_data->cdata->gov_ops;
+				const struct cs_ops *cs_ops = dbs_data->cdata->gov_ops;
 
 				cpufreq_unregister_notifier(cs_ops->notifier_block,
 						CPUFREQ_TRANSITION_NOTIFIER);

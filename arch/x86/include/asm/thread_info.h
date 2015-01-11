@@ -24,7 +24,6 @@ struct exec_domain;
 #include <linux/atomic.h>
 
 struct thread_info {
-	struct task_struct	*task;		/* main task structure */
 	struct exec_domain	*exec_domain;	/* execution domain */
 	__u32			flags;		/* low level flags */
 	__u32			status;		/* thread synchronous flags */
@@ -33,13 +32,13 @@ struct thread_info {
 	mm_segment_t		addr_limit;
 	struct restart_block    restart_block;
 	void __user		*sysenter_return;
+	unsigned long		lowest_stack;
 	unsigned int		sig_on_uaccess_error:1;
 	unsigned int		uaccess_err:1;	/* uaccess failed */
 };
 
-#define INIT_THREAD_INFO(tsk)			\
+#define INIT_THREAD_INFO			\
 {						\
-	.task		= &tsk,			\
 	.exec_domain	= &default_exec_domain,	\
 	.flags		= 0,			\
 	.cpu		= 0,			\
@@ -50,7 +49,7 @@ struct thread_info {
 	},					\
 }
 
-#define init_thread_info	(init_thread_union.thread_info)
+#define init_thread_info	(init_thread_union.stack)
 #define init_stack		(init_thread_union.stack)
 
 #else /* !__ASSEMBLY__ */
@@ -151,7 +150,6 @@ struct thread_info {
 #define _TIF_WORK_CTXSW_NEXT (_TIF_WORK_CTXSW)
 
 #define STACK_WARN		(THREAD_SIZE/8)
-#define KERNEL_STACK_OFFSET	(5*(BITS_PER_LONG/8))
 
 /*
  * macros/functions for gaining access to the thread information structure
@@ -162,26 +160,18 @@ struct thread_info {
 
 DECLARE_PER_CPU(unsigned long, kernel_stack);
 
+DECLARE_PER_CPU(struct thread_info *, current_tinfo);
+
 static inline struct thread_info *current_thread_info(void)
 {
-	struct thread_info *ti;
-	ti = (void *)(this_cpu_read_stable(kernel_stack) +
-		      KERNEL_STACK_OFFSET - THREAD_SIZE);
-	return ti;
+	return this_cpu_read_stable(current_tinfo);
 }
 
 #else /* !__ASSEMBLY__ */
 
 /* how to get the thread information struct from ASM */
 #define GET_THREAD_INFO(reg) \
-	_ASM_MOV PER_CPU_VAR(kernel_stack),reg ; \
-	_ASM_SUB $(THREAD_SIZE-KERNEL_STACK_OFFSET),reg ;
-
-/*
- * Same if PER_CPU_VAR(kernel_stack) is, perhaps with some offset, already in
- * a certain register (to be used in assembler memory operands).
- */
-#define THREAD_INFO(reg, off) KERNEL_STACK_OFFSET+(off)-THREAD_SIZE(reg)
+	_ASM_MOV PER_CPU_VAR(current_tinfo),reg ;
 
 #endif
 
@@ -237,5 +227,12 @@ static inline bool is_ia32_task(void)
 extern void arch_task_cache_init(void);
 extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
 extern void arch_release_task_struct(struct task_struct *tsk);
+
+#define __HAVE_THREAD_FUNCTIONS
+#define task_thread_info(task)	(&(task)->tinfo)
+#define task_stack_page(task)	((task)->stack)
+#define setup_thread_stack(p, org) do {} while (0)
+#define end_of_stack(p) ((unsigned long *)task_stack_page(p) + 1)
+
 #endif
 #endif /* _ASM_X86_THREAD_INFO_H */
