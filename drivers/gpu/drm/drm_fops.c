@@ -89,7 +89,7 @@ int drm_open(struct inode *inode, struct file *filp)
 		return PTR_ERR(minor);
 
 	dev = minor->dev;
-	if (!dev->open_count++)
+	if (local_inc_return(&dev->open_count) == 1)
 		need_setup = 1;
 
 	/* share address_space across all char-devs of a single device */
@@ -106,7 +106,7 @@ int drm_open(struct inode *inode, struct file *filp)
 	return 0;
 
 err_undo:
-	dev->open_count--;
+	local_dec(&dev->open_count);
 	drm_minor_release(minor);
 	return retcode;
 }
@@ -376,7 +376,7 @@ int drm_release(struct inode *inode, struct file *filp)
 
 	mutex_lock(&drm_global_mutex);
 
-	DRM_DEBUG("open_count = %d\n", dev->open_count);
+	DRM_DEBUG("open_count = %ld\n", local_read(&dev->open_count));
 
 	mutex_lock(&dev->struct_mutex);
 	list_del(&file_priv->lhead);
@@ -389,10 +389,10 @@ int drm_release(struct inode *inode, struct file *filp)
 	 * Begin inline drm_release
 	 */
 
-	DRM_DEBUG("pid = %d, device = 0x%lx, open_count = %d\n",
+	DRM_DEBUG("pid = %d, device = 0x%lx, open_count = %ld\n",
 		  task_pid_nr(current),
 		  (long)old_encode_dev(file_priv->minor->kdev->devt),
-		  dev->open_count);
+		  local_read(&dev->open_count));
 
 	/* Release any auth tokens that might point to this file_priv,
 	   (do that under the drm_global_mutex) */
@@ -465,7 +465,7 @@ int drm_release(struct inode *inode, struct file *filp)
 	 * End inline drm_release
 	 */
 
-	if (!--dev->open_count) {
+	if (local_dec_and_test(&dev->open_count)) {
 		retcode = drm_lastclose(dev);
 		if (drm_device_is_unplugged(dev))
 			drm_put_dev(dev);

@@ -608,7 +608,7 @@ struct l2cap_ops {
 						     unsigned char *kdata,
 						     struct iovec *iov,
 						     int len);
-};
+} __do_const;
 
 struct l2cap_conn {
 	struct hci_conn		*hcon;

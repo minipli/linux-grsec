@@ -190,7 +190,7 @@ static unsigned long align_sigframe(unsigned long sp)
 	 * Align the stack pointer according to the i386 ABI,
 	 * i.e. so that on function entry ((sp + 4) & 15) == 0.
 	 */
-	sp = ((sp + 4) & -16ul) - 4;
+	sp = ((sp - 12) & -16ul) - 4;
 #else /* !CONFIG_X86_32 */
 	sp = round_down(sp, 16) - 8;
 #endif
@@ -298,10 +298,9 @@ __setup_frame(int sig, struct ksignal *ksig, sigset_t *set,
 	}
 
 	if (current->mm->context.vdso)
-		restorer = current->mm->context.vdso +
-			selected_vdso32->sym___kernel_sigreturn;
+		restorer = (void __force_user *)(current->mm->context.vdso + selected_vdso32->sym___kernel_sigreturn);
 	else
-		restorer = &frame->retcode;
+		restorer = (void __user *)&frame->retcode;
 	if (ksig->ka.sa.sa_flags & SA_RESTORER)
 		restorer = ksig->ka.sa.sa_restorer;
 
@@ -315,7 +314,7 @@ __setup_frame(int sig, struct ksignal *ksig, sigset_t *set,
 	 * reasons and because gdb uses it as a signature to notice
 	 * signal handler stack frames.
 	 */
-	err |= __put_user(*((u64 *)&retcode), (u64 *)frame->retcode);
+	err |= __put_user(*((u64 *)&retcode), (u64 __user *)frame->retcode);
 
 	if (err)
 		return -EFAULT;
@@ -362,8 +361,10 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 		save_altstack_ex(&frame->uc.uc_stack, regs->sp);
 
 		/* Set up to return from userspace.  */
-		restorer = current->mm->context.vdso +
-			selected_vdso32->sym___kernel_rt_sigreturn;
+		if (current->mm->context.vdso)
+			restorer = (void __force_user *)(current->mm->context.vdso + selected_vdso32->sym___kernel_rt_sigreturn);
+		else
+			restorer = (void __user *)&frame->retcode;
 		if (ksig->ka.sa.sa_flags & SA_RESTORER)
 			restorer = ksig->ka.sa.sa_restorer;
 		put_user_ex(restorer, &frame->pretcode);
@@ -375,7 +376,7 @@ static int __setup_rt_frame(int sig, struct ksignal *ksig,
 		 * reasons and because gdb uses it as a signature to notice
 		 * signal handler stack frames.
 		 */
-		put_user_ex(*((u64 *)&rt_retcode), (u64 *)frame->retcode);
+		put_user_ex(*((u64 *)&rt_retcode), (u64 __user *)frame->retcode);
 	} put_user_catch(err);
 	
 	err |= copy_siginfo_to_user(&frame->info, &ksig->info);
@@ -611,7 +612,12 @@ setup_rt_frame(struct ksignal *ksig, struct pt_regs *regs)
 {
 	int usig = signr_convert(ksig->sig);
 	sigset_t *set = sigmask_to_save();
-	compat_sigset_t *cset = (compat_sigset_t *) set;
+	sigset_t sigcopy;
+	compat_sigset_t *cset;
+
+	sigcopy = *set;
+
+	cset = (compat_sigset_t *) &sigcopy;
 
 	/* Set up the stack frame */
 	if (is_ia32_frame()) {
@@ -622,7 +628,7 @@ setup_rt_frame(struct ksignal *ksig, struct pt_regs *regs)
 	} else if (is_x32_frame()) {
 		return x32_setup_rt_frame(ksig, cset, regs);
 	} else {
-		return __setup_rt_frame(ksig->sig, ksig, set, regs);
+		return __setup_rt_frame(ksig->sig, ksig, &sigcopy, regs);
 	}
 }
 
