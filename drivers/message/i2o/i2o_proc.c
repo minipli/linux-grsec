@@ -255,12 +255,6 @@ static char *scsi_devices[] = {
 	"Array Controller Device"
 };
 
-static char *chtostr(char *tmp, u8 *chars, int n)
-{
-	tmp[0] = 0;
-	return strncat(tmp, (char *)chars, n);
-}
-
 static int i2o_report_query_status(struct seq_file *seq, int block_status,
 				   char *group)
 {
@@ -707,9 +701,9 @@ static int i2o_seq_show_status(struct seq_file *seq, void *v)
 static int i2o_seq_show_hw(struct seq_file *seq, void *v)
 {
 	struct i2o_controller *c = (struct i2o_controller *)seq->private;
-	static u32 work32[5];
-	static u8 *work8 = (u8 *) work32;
-	static u16 *work16 = (u16 *) work32;
+	u32 work32[5];
+	u8 *work8 = (u8 *) work32;
+	u16 *work16 = (u16 *) work32;
 	int token;
 	u32 hwcap;
 
@@ -790,7 +784,6 @@ static int i2o_seq_show_ddm_table(struct seq_file *seq, void *v)
 	} *result;
 
 	i2o_exec_execute_ddm_table ddm_table;
-	char tmp[28 + 1];
 
 	result = kmalloc(sizeof(*result), GFP_KERNEL);
 	if (!result)
@@ -825,8 +818,7 @@ static int i2o_seq_show_ddm_table(struct seq_file *seq, void *v)
 
 		seq_printf(seq, "%-#7x", ddm_table.i2o_vendor_id);
 		seq_printf(seq, "%-#8x", ddm_table.module_id);
-		seq_printf(seq, "%-29s",
-			   chtostr(tmp, ddm_table.module_name_version, 28));
+		seq_printf(seq, "%-.28s", ddm_table.module_name_version);
 		seq_printf(seq, "%9d  ", ddm_table.data_size);
 		seq_printf(seq, "%8d", ddm_table.code_size);
 
@@ -893,7 +885,6 @@ static int i2o_seq_show_drivers_stored(struct seq_file *seq, void *v)
 
 	i2o_driver_result_table *result;
 	i2o_driver_store_table *dst;
-	char tmp[28 + 1];
 
 	result = kmalloc(sizeof(i2o_driver_result_table), GFP_KERNEL);
 	if (result == NULL)
@@ -928,9 +919,8 @@ static int i2o_seq_show_drivers_stored(struct seq_file *seq, void *v)
 
 		seq_printf(seq, "%-#7x", dst->i2o_vendor_id);
 		seq_printf(seq, "%-#8x", dst->module_id);
-		seq_printf(seq, "%-29s",
-			   chtostr(tmp, dst->module_name_version, 28));
-		seq_printf(seq, "%-9s", chtostr(tmp, dst->date, 8));
+		seq_printf(seq, "%-.28s", dst->module_name_version);
+		seq_printf(seq, "%-.8s", dst->date);
 		seq_printf(seq, "%8d ", dst->module_size);
 		seq_printf(seq, "%8d ", dst->mpb_size);
 		seq_printf(seq, "0x%04x", dst->module_flags);
@@ -1246,11 +1236,10 @@ static int i2o_seq_show_authorized_users(struct seq_file *seq, void *v)
 static int i2o_seq_show_dev_identity(struct seq_file *seq, void *v)
 {
 	struct i2o_device *d = (struct i2o_device *)seq->private;
-	static u32 work32[128];	// allow for "stuff" + up to 256 byte (max) serial number
+	u32 work32[128];	// allow for "stuff" + up to 256 byte (max) serial number
 	// == (allow) 512d bytes (max)
-	static u16 *work16 = (u16 *) work32;
+	u16 *work16 = (u16 *) work32;
 	int token;
-	char tmp[16 + 1];
 
 	token = i2o_parm_field_get(d, 0xF100, -1, &work32, sizeof(work32));
 
@@ -1262,14 +1251,10 @@ static int i2o_seq_show_dev_identity(struct seq_file *seq, void *v)
 	seq_printf(seq, "Device Class  : %s\n", i2o_get_class_name(work16[0]));
 	seq_printf(seq, "Owner TID     : %0#5x\n", work16[2]);
 	seq_printf(seq, "Parent TID    : %0#5x\n", work16[3]);
-	seq_printf(seq, "Vendor info   : %s\n",
-		   chtostr(tmp, (u8 *) (work32 + 2), 16));
-	seq_printf(seq, "Product info  : %s\n",
-		   chtostr(tmp, (u8 *) (work32 + 6), 16));
-	seq_printf(seq, "Description   : %s\n",
-		   chtostr(tmp, (u8 *) (work32 + 10), 16));
-	seq_printf(seq, "Product rev.  : %s\n",
-		   chtostr(tmp, (u8 *) (work32 + 14), 8));
+	seq_printf(seq, "Vendor info   : %.16s\n", (u8 *) (work32 + 2));
+	seq_printf(seq, "Product info  : %.16s\n", (u8 *) (work32 + 6));
+	seq_printf(seq, "Description   : %.16s\n", (u8 *) (work32 + 10));
+	seq_printf(seq, "Product rev.  : %.8s\n", (u8 *) (work32 + 14));
 
 	seq_printf(seq, "Serial number : ");
 	print_serial_number(seq, (u8 *) (work32 + 16),
@@ -1306,8 +1291,6 @@ static int i2o_seq_show_ddm_identity(struct seq_file *seq, void *v)
 		u8 pad[256];	// allow up to 256 byte (max) serial number
 	} result;
 
-	char tmp[24 + 1];
-
 	token = i2o_parm_field_get(d, 0xF101, -1, &result, sizeof(result));
 
 	if (token < 0) {
@@ -1316,10 +1299,8 @@ static int i2o_seq_show_ddm_identity(struct seq_file *seq, void *v)
 	}
 
 	seq_printf(seq, "Registering DDM TID : 0x%03x\n", result.ddm_tid);
-	seq_printf(seq, "Module name         : %s\n",
-		   chtostr(tmp, result.module_name, 24));
-	seq_printf(seq, "Module revision     : %s\n",
-		   chtostr(tmp, result.module_rev, 8));
+	seq_printf(seq, "Module name         : %.24s\n", result.module_name);
+	seq_printf(seq, "Module revision     : %.8s\n", result.module_rev);
 
 	seq_printf(seq, "Serial number       : ");
 	print_serial_number(seq, result.serial_number, sizeof(result) - 36);
@@ -1343,8 +1324,6 @@ static int i2o_seq_show_uinfo(struct seq_file *seq, void *v)
 		u8 instance_number[4];
 	} result;
 
-	char tmp[64 + 1];
-
 	token = i2o_parm_field_get(d, 0xF102, -1, &result, sizeof(result));
 
 	if (token < 0) {
@@ -1352,14 +1331,10 @@ static int i2o_seq_show_uinfo(struct seq_file *seq, void *v)
 		return 0;
 	}
 
-	seq_printf(seq, "Device name     : %s\n",
-		   chtostr(tmp, result.device_name, 64));
-	seq_printf(seq, "Service name    : %s\n",
-		   chtostr(tmp, result.service_name, 64));
-	seq_printf(seq, "Physical name   : %s\n",
-		   chtostr(tmp, result.physical_location, 64));
-	seq_printf(seq, "Instance number : %s\n",
-		   chtostr(tmp, result.instance_number, 4));
+	seq_printf(seq, "Device name     : %.64s\n", result.device_name);
+	seq_printf(seq, "Service name    : %.64s\n", result.service_name);
+	seq_printf(seq, "Physical name   : %.64s\n", result.physical_location);
+	seq_printf(seq, "Instance number : %.4s\n", result.instance_number);
 
 	return 0;
 }
@@ -1368,9 +1343,9 @@ static int i2o_seq_show_uinfo(struct seq_file *seq, void *v)
 static int i2o_seq_show_sgl_limits(struct seq_file *seq, void *v)
 {
 	struct i2o_device *d = (struct i2o_device *)seq->private;
-	static u32 work32[12];
-	static u16 *work16 = (u16 *) work32;
-	static u8 *work8 = (u8 *) work32;
+	u32 work32[12];
+	u16 *work16 = (u16 *) work32;
+	u8 *work8 = (u8 *) work32;
 	int token;
 
 	token = i2o_parm_field_get(d, 0xF103, -1, &work32, sizeof(work32));
