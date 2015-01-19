@@ -133,7 +133,7 @@ struct dentry {
 		struct hlist_node d_alias;	/* inode alias list */
 	 	struct rcu_head d_rcu;
 	} d_u;
-};
+} __randomize_layout;
 
 /*
  * dentry->d_lock spinlock nesting subclasses:

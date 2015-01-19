@@ -16,6 +16,7 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/file.h>
+#include <linux/security.h>
 #include <linux/fdtable.h>
 #include <linux/bitops.h>
 #include <linux/interrupt.h>
@@ -139,7 +140,7 @@ out:
  * Return <0 error code on error; 1 on successful completion.
  * The files->file_lock should be held on entry, and will be held on exit.
  */
-static int expand_fdtable(struct files_struct *files, int nr)
+static int expand_fdtable(struct files_struct *files, unsigned int nr)
 	__releases(files->file_lock)
 	__acquires(files->file_lock)
 {
@@ -184,7 +185,7 @@ static int expand_fdtable(struct files_struct *files, int nr)
  * expanded and execution may have blocked.
  * The files->file_lock should be held on entry, and will be held on exit.
  */
-static int expand_files(struct files_struct *files, int nr)
+static int expand_files(struct files_struct *files, unsigned int nr)
 {
 	struct fdtable *fdt;
 
@@ -800,6 +801,7 @@ int replace_fd(unsigned fd, struct file *file, unsigned flags)
 	if (!file)
 		return __close_fd(files, fd);
 
+	gr_learn_resource(current, RLIMIT_NOFILE, fd, 0);
 	if (fd >= rlimit(RLIMIT_NOFILE))
 		return -EBADF;
 
@@ -826,6 +828,7 @@ SYSCALL_DEFINE3(dup3, unsigned int, oldfd, unsigned int, newfd, int, flags)
 	if (unlikely(oldfd == newfd))
 		return -EINVAL;
 
+	gr_learn_resource(current, RLIMIT_NOFILE, newfd, 0);
 	if (newfd >= rlimit(RLIMIT_NOFILE))
 		return -EBADF;
 
@@ -881,6 +884,7 @@ SYSCALL_DEFINE1(dup, unsigned int, fildes)
 int f_dupfd(unsigned int from, struct file *file, unsigned flags)
 {
 	int err;
+	gr_learn_resource(current, RLIMIT_NOFILE, from, 0);
 	if (from >= rlimit(RLIMIT_NOFILE))
 		return -EINVAL;
 	err = alloc_fd(from, flags);

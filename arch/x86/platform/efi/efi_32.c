@@ -61,10 +61,21 @@ void __init efi_call_phys_prolog(void)
 {
 	struct desc_ptr gdt_descr;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	struct desc_struct d;
+#endif
+
 	local_irq_save(efi_rt_eflags);
 
 	load_cr3(initial_page_table);
 	__flush_tlb_all();
+
+#ifdef CONFIG_PAX_KERNEXEC
+	pack_descriptor(&d, 0, 0xFFFFF, 0x9B, 0xC);
+	write_gdt_entry(get_cpu_gdt_table(0), GDT_ENTRY_KERNEXEC_EFI_CS, &d, DESCTYPE_S);
+	pack_descriptor(&d, 0, 0xFFFFF, 0x93, 0xC);
+	write_gdt_entry(get_cpu_gdt_table(0), GDT_ENTRY_KERNEXEC_EFI_DS, &d, DESCTYPE_S);
+#endif
 
 	gdt_descr.address = __pa(get_cpu_gdt_table(0));
 	gdt_descr.size = GDT_SIZE - 1;
@@ -75,11 +86,24 @@ void __init efi_call_phys_epilog(void)
 {
 	struct desc_ptr gdt_descr;
 
+#ifdef CONFIG_PAX_KERNEXEC
+	struct desc_struct d;
+
+	memset(&d, 0, sizeof d);
+	write_gdt_entry(get_cpu_gdt_table(0), GDT_ENTRY_KERNEXEC_EFI_CS, &d, DESCTYPE_S);
+	write_gdt_entry(get_cpu_gdt_table(0), GDT_ENTRY_KERNEXEC_EFI_DS, &d, DESCTYPE_S);
+#endif
+
 	gdt_descr.address = (unsigned long)get_cpu_gdt_table(0);
 	gdt_descr.size = GDT_SIZE - 1;
 	load_gdt(&gdt_descr);
 
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	load_cr3(get_cpu_pgd(smp_processor_id(), kernel));
+#else
 	load_cr3(swapper_pg_dir);
+#endif
+
 	__flush_tlb_all();
 
 	local_irq_restore(efi_rt_eflags);

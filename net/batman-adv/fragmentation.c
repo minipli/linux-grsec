@@ -251,7 +251,7 @@ batadv_frag_merge_packets(struct hlist_head *chain, struct sk_buff *skb)
 	kfree(entry);
 
 	/* Make room for the rest of the fragments. */
-	if (pskb_expand_head(skb_out, 0, size - skb->len, GFP_ATOMIC) < 0) {
+	if (pskb_expand_head(skb_out, 0, size - skb_out->len, GFP_ATOMIC) < 0) {
 		kfree_skb(skb_out);
 		skb_out = NULL;
 		goto free;
@@ -450,7 +450,7 @@ bool batadv_frag_send_packet(struct sk_buff *skb,
 	frag_header.packet_type = BATADV_UNICAST_FRAG;
 	frag_header.version = BATADV_COMPAT_VERSION;
 	frag_header.ttl = BATADV_TTL;
-	frag_header.seqno = htons(atomic_inc_return(&bat_priv->frag_seqno));
+	frag_header.seqno = htons(atomic_inc_return_unchecked(&bat_priv->frag_seqno));
 	frag_header.reserved = 0;
 	frag_header.no = 0;
 	frag_header.total_size = htons(skb->len);

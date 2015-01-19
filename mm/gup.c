@@ -274,11 +274,6 @@ static int faultin_page(struct task_struct *tsk, struct vm_area_struct *vma,
 	unsigned int fault_flags = 0;
 	int ret;
 
-	/* For mlock, just skip the stack guard page. */
-	if ((*flags & FOLL_MLOCK) &&
-			(stack_guard_page_start(vma, address) ||
-			 stack_guard_page_end(vma, address + PAGE_SIZE)))
-		return -ENOENT;
 	if (*flags & FOLL_WRITE)
 		fault_flags |= FAULT_FLAG_WRITE;
 	if (nonblocking)
@@ -444,14 +439,14 @@ long __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 	if (!(gup_flags & FOLL_FORCE))
 		gup_flags |= FOLL_NUMA;
 
-	do {
+	while (nr_pages) {
 		struct page *page;
 		unsigned int foll_flags = gup_flags;
 		unsigned int page_increm;
 
 		/* first iteration or cross vma bound */
 		if (!vma || start >= vma->vm_end) {
-			vma = find_extend_vma(mm, start);
+			vma = find_vma(mm, start);
 			if (!vma && in_gate_area(mm, start)) {
 				int ret;
 				ret = get_gate_page(mm, start & PAGE_MASK,
@@ -463,7 +458,7 @@ long __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 				goto next_page;
 			}
 
-			if (!vma || check_vma_flags(vma, gup_flags))
+			if (!vma || start < vma->vm_start || check_vma_flags(vma, gup_flags))
 				return i ? : -EFAULT;
 			if (is_vm_hugetlb_page(vma)) {
 				i = follow_hugetlb_page(mm, vma, pages, vmas,
@@ -518,7 +513,7 @@ next_page:
 		i += page_increm;
 		start += page_increm * PAGE_SIZE;
 		nr_pages -= page_increm;
-	} while (nr_pages);
+	}
 	return i;
 }
 EXPORT_SYMBOL(__get_user_pages);
