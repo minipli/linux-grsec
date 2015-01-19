@@ -38,6 +38,7 @@ static inline void __pud_populate(pud_t *pud, pmd_t *pmd)
 }
 
 #define pud_populate(MM, PUD, PMD)	__pud_populate(PUD, PMD)
+#define pud_populate_kernel(MM, PUD, PMD)	pud_populate((MM), (PUD), (PMD))
 
 static inline pud_t *pud_alloc_one(struct mm_struct *mm, unsigned long addr)
 {

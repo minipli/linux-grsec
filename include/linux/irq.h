@@ -352,7 +352,8 @@ struct irq_chip {
 	void		(*irq_release_resources)(struct irq_data *data);
 
 	unsigned long	flags;
-};
+} __do_const;
+typedef struct irq_chip __no_const irq_chip_no_const;
 
 /*
  * irq_chip specific flags

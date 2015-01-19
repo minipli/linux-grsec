@@ -27,6 +27,7 @@ static unsigned long hugetlb_get_unmapped_area_bottomup(struct file *filp,
 							unsigned long pgoff,
 							unsigned long flags)
 {
+	struct mm_struct *mm = current->mm;
 	unsigned long task_size = TASK_SIZE;
 	struct vm_unmapped_area_info info;
 
@@ -35,7 +36,7 @@ static unsigned long hugetlb_get_unmapped_area_bottomup(struct file *filp,
 
 	info.flags = 0;
 	info.length = len;
-	info.low_limit = TASK_UNMAPPED_BASE;
+	info.low_limit = mm->mmap_base;
 	info.high_limit = min(task_size, VA_EXCLUDE_START);
 	info.align_mask = PAGE_MASK & ~HPAGE_MASK;
 	info.align_offset = 0;
@@ -44,6 +45,12 @@ static unsigned long hugetlb_get_unmapped_area_bottomup(struct file *filp,
 	if ((addr & ~PAGE_MASK) && task_size > VA_EXCLUDE_END) {
 		VM_BUG_ON(addr != -ENOMEM);
 		info.low_limit = VA_EXCLUDE_END;
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (mm->pax_flags & MF_PAX_RANDMMAP)
+			info.low_limit += mm->delta_mmap;
+#endif
+
 		info.high_limit = task_size;
 		addr = vm_unmapped_area(&info);
 	}
@@ -82,6 +89,12 @@ hugetlb_get_unmapped_area_topdown(struct file *filp, const unsigned long addr0,
 		VM_BUG_ON(addr != -ENOMEM);
 		info.flags = 0;
 		info.low_limit = TASK_UNMAPPED_BASE;
+
+#ifdef CONFIG_PAX_RANDMMAP
+		if (mm->pax_flags & MF_PAX_RANDMMAP)
+			info.low_limit += mm->delta_mmap;
+#endif
+
 		info.high_limit = STACK_TOP32;
 		addr = vm_unmapped_area(&info);
 	}
@@ -111,11 +124,14 @@ hugetlb_get_unmapped_area(struct file *file, unsigned long addr,
 		return addr;
 	}
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (!(mm->pax_flags & MF_PAX_RANDMMAP))
+#endif
+
 	if (addr) {
 		addr = ALIGN(addr, HPAGE_SIZE);
 		vma = find_vma(mm, addr);
-		if (task_size - len >= addr &&
-		    (!vma || addr + len <= vma->vm_start))
+		if (task_size - len >= addr && check_heap_stack_gap(vma, addr, len))
 			return addr;
 	}
 	if (mm->get_unmapped_area == arch_get_unmapped_area)
