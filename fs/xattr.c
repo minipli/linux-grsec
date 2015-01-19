@@ -227,6 +227,27 @@ int vfs_xattr_cmp(struct dentry *dentry, const char *xattr_name,
 	return rc;
 }
 
+#ifdef CONFIG_PAX_XATTR_PAX_FLAGS
+ssize_t
+pax_getxattr(struct dentry *dentry, void *value, size_t size)
+{
+	struct inode *inode = dentry->d_inode;
+	ssize_t error;
+
+	error = inode_permission(inode, MAY_EXEC);
+	if (error)
+		return error;
+
+	if (inode->i_op->getxattr)
+		error = inode->i_op->getxattr(dentry, XATTR_NAME_PAX_FLAGS, value, size);
+	else
+		error = -EOPNOTSUPP;
+
+	return error;
+}
+EXPORT_SYMBOL(pax_getxattr);
+#endif
+
 ssize_t
 vfs_getxattr(struct dentry *dentry, const char *name, void *value, size_t size)
 {
@@ -319,7 +340,7 @@ EXPORT_SYMBOL_GPL(vfs_removexattr);
  * Extended attribute SET operations
  */
 static long
-setxattr(struct dentry *d, const char __user *name, const void __user *value,
+setxattr(struct path *path, const char __user *name, const void __user *value,
 	 size_t size, int flags)
 {
 	int error;
@@ -355,7 +376,12 @@ setxattr(struct dentry *d, const char __user *name, const void __user *value,
 			posix_acl_fix_xattr_from_user(kvalue, size);
 	}
 
-	error = vfs_setxattr(d, kname, kvalue, size, flags);
+	if (!gr_acl_handle_setxattr(path->dentry, path->mnt)) {
+		error = -EACCES;
+		goto out;
+	}
+
+	error = vfs_setxattr(path->dentry, kname, kvalue, size, flags);
 out:
 	if (vvalue)
 		vfree(vvalue);
@@ -377,7 +403,7 @@ retry:
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
-		error = setxattr(path.dentry, name, value, size, flags);
+		error = setxattr(&path, name, value, size, flags);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -401,7 +427,7 @@ retry:
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
-		error = setxattr(path.dentry, name, value, size, flags);
+		error = setxattr(&path, name, value, size, flags);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -416,16 +442,14 @@ SYSCALL_DEFINE5(fsetxattr, int, fd, const char __user *, name,
 		const void __user *,value, size_t, size, int, flags)
 {
 	struct fd f = fdget(fd);
-	struct dentry *dentry;
 	int error = -EBADF;
 
 	if (!f.file)
 		return error;
-	dentry = f.file->f_path.dentry;
-	audit_inode(NULL, dentry, 0);
+	audit_inode(NULL, f.file->f_path.dentry, 0);
 	error = mnt_want_write_file(f.file);
 	if (!error) {
-		error = setxattr(dentry, name, value, size, flags);
+		error = setxattr(&f.file->f_path, name, value, size, flags);
 		mnt_drop_write_file(f.file);
 	}
 	fdput(f);
@@ -626,7 +650,7 @@ SYSCALL_DEFINE3(flistxattr, int, fd, char __user *, list, size_t, size)
  * Extended attribute REMOVE operations
  */
 static long
-removexattr(struct dentry *d, const char __user *name)
+removexattr(struct path *path, const char __user *name)
 {
 	int error;
 	char kname[XATTR_NAME_MAX + 1];
@@ -637,7 +661,10 @@ removexattr(struct dentry *d, const char __user *name)
 	if (error < 0)
 		return error;
 
-	return vfs_removexattr(d, kname);
+	if (!gr_acl_handle_removexattr(path->dentry, path->mnt))
+		return -EACCES;
+
+	return vfs_removexattr(path->dentry, kname);
 }
 
 SYSCALL_DEFINE2(removexattr, const char __user *, pathname,
@@ -652,7 +679,7 @@ retry:
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
-		error = removexattr(path.dentry, name);
+		error = removexattr(&path, name);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -675,7 +702,7 @@ retry:
 		return error;
 	error = mnt_want_write(path.mnt);
 	if (!error) {
-		error = removexattr(path.dentry, name);
+		error = removexattr(&path, name);
 		mnt_drop_write(path.mnt);
 	}
 	path_put(&path);
@@ -689,16 +716,16 @@ retry:
 SYSCALL_DEFINE2(fremovexattr, int, fd, const char __user *, name)
 {
 	struct fd f = fdget(fd);
-	struct dentry *dentry;
+	struct path *path;
 	int error = -EBADF;
 
 	if (!f.file)
 		return error;
-	dentry = f.file->f_path.dentry;
-	audit_inode(NULL, dentry, 0);
+	path = &f.file->f_path;
+	audit_inode(NULL, path->dentry, 0);
 	error = mnt_want_write_file(f.file);
 	if (!error) {
-		error = removexattr(dentry, name);
+		error = removexattr(path, name);
 		mnt_drop_write_file(f.file);
 	}
 	fdput(f);
