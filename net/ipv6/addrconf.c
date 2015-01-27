@@ -598,7 +598,7 @@ static int inet6_netconf_dump_devconf(struct sk_buff *skb,
 		idx = 0;
 		head = &net->dev_index_head[h];
 		rcu_read_lock();
-		cb->seq = atomic_read(&net->ipv6.dev_addr_genid) ^
+		cb->seq = atomic_read_unchecked(&net->ipv6.dev_addr_genid) ^
 			  net->dev_base_seq;
 		hlist_for_each_entry_rcu(dev, head, index_hlist) {
 			if (idx < s_idx)
@@ -2390,7 +2390,7 @@ int addrconf_set_dstaddr(struct net *net, void __user *arg)
 		p.iph.ihl = 5;
 		p.iph.protocol = IPPROTO_IPV6;
 		p.iph.ttl = 64;
-		ifr.ifr_ifru.ifru_data = (__force void __user *)&p;
+		ifr.ifr_ifru.ifru_data = (void __force_user *)&p;
 
 		if (ops->ndo_do_ioctl) {
 			mm_segment_t oldfs = get_fs();
@@ -4141,7 +4141,7 @@ static int inet6_dump_addr(struct sk_buff *skb, struct netlink_callback *cb,
 	s_ip_idx = ip_idx = cb->args[2];
 
 	rcu_read_lock();
-	cb->seq = atomic_read(&net->ipv6.dev_addr_genid) ^ net->dev_base_seq;
+	cb->seq = atomic_read_unchecked(&net->ipv6.dev_addr_genid) ^ net->dev_base_seq;
 	for (h = s_h; h < NETDEV_HASHENTRIES; h++, s_idx = 0) {
 		idx = 0;
 		head = &net->dev_index_head[h];
@@ -4753,7 +4753,7 @@ static void __ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 			dst_free(&ifp->rt->dst);
 		break;
 	}
-	atomic_inc(&net->ipv6.dev_addr_genid);
+	atomic_inc_unchecked(&net->ipv6.dev_addr_genid);
 	rt_genid_bump_ipv6(net);
 }
 
@@ -4774,7 +4774,7 @@ int addrconf_sysctl_forward(struct ctl_table *ctl, int write,
 	int *valp = ctl->data;
 	int val = *valp;
 	loff_t pos = *ppos;
-	struct ctl_table lctl;
+	ctl_table_no_const lctl;
 	int ret;
 
 	/*
@@ -4859,7 +4859,7 @@ int addrconf_sysctl_disable(struct ctl_table *ctl, int write,
 	int *valp = ctl->data;
 	int val = *valp;
 	loff_t pos = *ppos;
-	struct ctl_table lctl;
+	ctl_table_no_const lctl;
 	int ret;
 
 	/*

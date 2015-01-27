@@ -28,7 +28,7 @@ DEFINE_MUTEX(kernfs_mutex);
  *
  *	Returns 31 bit hash of ns + name (so it fits in an off_t )
  */
-static unsigned int kernfs_name_hash(const char *name, const void *ns)
+static unsigned int kernfs_name_hash(const unsigned char *name, const void *ns)
 {
 	unsigned long hash = init_name_hash();
 	unsigned int len = strlen(name);
