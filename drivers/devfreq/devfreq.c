@@ -607,7 +607,7 @@ int devfreq_add_governor(struct devfreq_governor *governor)
 		goto err_out;
 	}
 
-	list_add(&governor->node, &devfreq_governor_list);
+	pax_list_add((struct list_head *)&governor->node, &devfreq_governor_list);
 
 	list_for_each_entry(devfreq, &devfreq_list, node) {
 		int ret = 0;
@@ -695,7 +695,7 @@ int devfreq_remove_governor(struct devfreq_governor *governor)
 		}
 	}
 
-	list_del(&governor->node);
+	pax_list_del((struct list_head *)&governor->node);
 err_out:
 	mutex_unlock(&devfreq_list_lock);
 
