@@ -65,14 +65,13 @@
  *
  */
 
+static net_device_ops_no_const apdev_netdev_ops;
+
 static int hostap_enable_hostapd(struct vnt_private *pDevice, int rtnl_locked)
 {
 	struct vnt_private *apdev_priv;
 	struct net_device *dev = pDevice->dev;
 	int ret;
-	const struct net_device_ops apdev_netdev_ops = {
-		.ndo_start_xmit         = pDevice->tx_80211,
-	};
 
 	pr_debug("%s: Enabling hostapd mode\n", dev->name);
 
@@ -84,6 +83,8 @@ static int hostap_enable_hostapd(struct vnt_private *pDevice, int rtnl_locked)
 	*apdev_priv = *pDevice;
 	eth_hw_addr_inherit(pDevice->apdev, dev);
 
+	/* only half broken now */
+	apdev_netdev_ops.ndo_start_xmit = pDevice->tx_80211;
 	pDevice->apdev->netdev_ops = &apdev_netdev_ops;
 
 	pDevice->apdev->type = ARPHRD_IEEE80211;

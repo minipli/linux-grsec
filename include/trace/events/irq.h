@@ -36,7 +36,7 @@ struct softirq_action;
  */
 TRACE_EVENT(irq_handler_entry,
 
-	TP_PROTO(int irq, struct irqaction *action),
+	TP_PROTO(int irq, const struct irqaction *action),
 
 	TP_ARGS(irq, action),
 
@@ -66,7 +66,7 @@ TRACE_EVENT(irq_handler_entry,
  */
 TRACE_EVENT(irq_handler_exit,
 
-	TP_PROTO(int irq, struct irqaction *action, int ret),
+	TP_PROTO(int irq, const struct irqaction *action, int ret),
 
 	TP_ARGS(irq, action, ret),
 
