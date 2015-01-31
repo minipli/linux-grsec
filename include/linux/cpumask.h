@@ -464,7 +464,7 @@ static inline bool cpumask_full(const struct cpumask *srcp)
  * cpumask_weight - Count of bits in *srcp
  * @srcp: the cpumask to count bits (< nr_cpu_ids) in.
  */
-static inline unsigned int cpumask_weight(const struct cpumask *srcp)
+static inline unsigned int __intentional_overflow(-1) cpumask_weight(const struct cpumask *srcp)
 {
 	return bitmap_weight(cpumask_bits(srcp), nr_cpumask_bits);
 }

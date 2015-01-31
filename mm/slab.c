@@ -3482,7 +3482,7 @@ __do_kmalloc_node(size_t size, gfp_t flags, int node, unsigned long caller)
 	return kmem_cache_alloc_node_trace(cachep, flags, node, size);
 }
 
-void *__kmalloc_node(size_t size, gfp_t flags, int node)
+void * __size_overflow(1) __kmalloc_node(size_t size, gfp_t flags, int node)
 {
 	return __do_kmalloc_node(size, flags, node, _RET_IP_);
 }
@@ -3502,7 +3502,7 @@ EXPORT_SYMBOL(__kmalloc_node_track_caller);
  * @flags: the type of memory to allocate (see kmalloc).
  * @caller: function caller for debug tracking of the caller
  */
-static __always_inline void *__do_kmalloc(size_t size, gfp_t flags,
+static __always_inline void * __size_overflow(1) __do_kmalloc(size_t size, gfp_t flags,
 					  unsigned long caller)
 {
 	struct kmem_cache *cachep;

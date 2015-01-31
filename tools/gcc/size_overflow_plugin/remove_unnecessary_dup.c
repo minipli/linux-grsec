@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 by Emese Revfy <re.emese@gmail.com>
+ * Copyright 2011-2015 by Emese Revfy <re.emese@gmail.com>
  * Licensed under the GPL v2, or (at your option) v3
  *
  * Homepage:
@@ -17,7 +17,6 @@
  * $ make run
  */
 
-#include "gcc-common.h"
 #include "size_overflow.h"
 
 bool skip_expr_on_double_type(const_gimple stmt)

@@ -1016,7 +1016,7 @@ static int __init slab_proc_init(void)
 module_init(slab_proc_init);
 #endif /* CONFIG_SLABINFO */
 
-static __always_inline void *__do_krealloc(const void *p, size_t new_size,
+static __always_inline void * __size_overflow(2) __do_krealloc(const void *p, size_t new_size,
 					   gfp_t flags)
 {
 	void *ret;

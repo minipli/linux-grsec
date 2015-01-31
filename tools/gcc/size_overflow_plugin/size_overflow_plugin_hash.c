@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 by Emese Revfy <re.emese@gmail.com>
+ * Copyright 2011-2015 by Emese Revfy <re.emese@gmail.com>
  * Licensed under the GPL v2, or (at your option) v3
  *
  * Homepage:
@@ -17,7 +17,6 @@
  * $ make run
  */
 
-#include "gcc-common.h"
 #include "size_overflow.h"
 
 #include "size_overflow_hash.h"
@@ -167,11 +166,41 @@ static const struct size_overflow_hash *get_proper_hash_chain(const struct size_
 	return NULL;
 }
 
+static const char *set_function_name(const_tree decl, char* func_name)
+{
+	const char *name;
+	unsigned int len, new_len;
+	const void *end;
+	const_tree orig_decl = DECL_ORIGIN(decl);
+
+	len = DECL_NAME_LENGTH(orig_decl);
+	name = DECL_NAME_POINTER(orig_decl);
+
+	if (!made_by_compiler(orig_decl))
+		return name;
+
+	/* Sometimes gcc loses the original cgraph node leaving only clones behind.
+	 * In such cases we will extract the name from the clone and use it in the hash table
+	 * without checking the parameter number on the original (unavailable) decl.
+	 */
+	gcc_assert(in_lto_p);
+	end = memchr(name, '.', len);
+	gcc_assert(end);
+	new_len = (long)end - (long)name;
+	gcc_assert(new_len > 0);
+
+	memcpy(func_name, name, new_len);
+	func_name[new_len] = 0;
+	return func_name;
+}
+
 const struct size_overflow_hash *get_function_hash(const_tree fndecl)
 {
 	const struct size_overflow_hash *entry;
 	struct function_hash fn_hash_data;
-	const char *func_name;
+	unsigned int len = DECL_NAME_LENGTH(fndecl);
+	char func_name[len + 1];
+	const char *name;
 
 	// skip builtins __builtin_constant_p
 	if (DECL_BUILT_IN(fndecl))
@@ -183,39 +212,44 @@ const struct size_overflow_hash *get_function_hash(const_tree fndecl)
 	set_function_codes(&fn_hash_data);
 	gcc_assert(fn_hash_data.tree_codes_len != 0);
 
-	func_name = DECL_NAME_POINTER(fn_hash_data.fndecl);
-	set_hash(func_name, &fn_hash_data);
+	name = set_function_name(fn_hash_data.fndecl, func_name);
+	set_hash(name, &fn_hash_data);
 
 	entry = size_overflow_hash[fn_hash_data.hash];
-	entry = get_proper_hash_chain(entry, func_name);
+	entry = get_proper_hash_chain(entry, name);
 	if (entry)
 		return entry;
 	entry = size_overflow_hash_aux[fn_hash_data.hash];
-	return get_proper_hash_chain(entry, func_name);
+	return get_proper_hash_chain(entry, name);
 }
 
 static void print_missing_msg(const_tree func, unsigned int argnum)
 {
 	location_t loc;
-	const char *curfunc;
 	struct function_hash fn_hash_data;
+	unsigned int len = DECL_NAME_LENGTH(func);
+	char curfunc[len + 1];
+	const char *name;
 
-	fn_hash_data.fndecl = DECL_ORIGIN(func);
+	fn_hash_data.fndecl = func;
 	fn_hash_data.tree_codes_len = 0;
 
 	loc = DECL_SOURCE_LOCATION(fn_hash_data.fndecl);
-	curfunc = DECL_NAME_POINTER(fn_hash_data.fndecl);
+	name = set_function_name(fn_hash_data.fndecl, curfunc);
 
 	set_function_codes(&fn_hash_data);
-	set_hash(curfunc, &fn_hash_data);
+	set_hash(name, &fn_hash_data);
 
-	inform(loc, "Function %s is missing from the size_overflow hash table +%s+%u+%u+", curfunc, curfunc, argnum, fn_hash_data.hash);
+	inform(loc, "Function %s is missing from the size_overflow hash table +%s+%u+%u+", name, name, argnum, fn_hash_data.hash);
 }
 
 unsigned int find_arg_number_tree(const_tree arg, const_tree func)
 {
 	tree var;
 	unsigned int argnum = 1;
+
+	if (DECL_ARGUMENTS(func) == NULL_TREE)
+		return CANNOT_FIND_ARG;
 
 	if (TREE_CODE(arg) == SSA_NAME)
 		arg = SSA_NAME_VAR(arg);
@@ -230,135 +264,39 @@ unsigned int find_arg_number_tree(const_tree arg, const_tree func)
 	return CANNOT_FIND_ARG;
 }
 
-static const char *get_asm_string(const_gimple stmt)
+const_tree get_attribute(const char* attr_name, const_tree decl)
 {
-	if (!stmt)
-		return NULL;
-	if (gimple_code(stmt) != GIMPLE_ASM)
-		return NULL;
-
-	return gimple_asm_string(stmt);
-}
-
-bool is_size_overflow_intentional_asm_turn_off(const_gimple stmt)
-{
-	const char *str;
-
-	str = get_asm_string(stmt);
-	if (!str)
-		return false;
-	return !strncmp(str, TURN_OFF_ASM_STR, sizeof(TURN_OFF_ASM_STR) - 1);
-}
-
-bool is_size_overflow_intentional_asm_yes(const_gimple stmt)
-{
-	const char *str;
-
-	str = get_asm_string(stmt);
-	if (!str)
-		return false;
-	return !strncmp(str, YES_ASM_STR, sizeof(YES_ASM_STR) - 1);
-}
-
-bool is_size_overflow_asm(const_gimple stmt)
-{
-	const char *str;
-
-	str = get_asm_string(stmt);
-	if (!str)
-		return false;
-	return !strncmp(str, OK_ASM_STR, sizeof(OK_ASM_STR) - 1);
-}
-
-bool is_a_return_check(const_tree node)
-{
-	if (TREE_CODE(node) == FUNCTION_DECL)
-		return true;
-
-	gcc_assert(TREE_CODE(node) == PARM_DECL);
-	return false;
-}
-
-// Get the argnum of a function decl, if node is a return then the argnum is 0
-unsigned int get_function_num(const_tree node, const_tree orig_fndecl)
-{
-	if (is_a_return_check(node))
-		return 0;
-	else
-		return find_arg_number_tree(node, orig_fndecl);
-}
-
-unsigned int get_correct_arg_count(unsigned int argnum, const_tree fndecl)
-{
-	const struct size_overflow_hash *hash;
-	unsigned int new_argnum;
-	tree arg;
-	const_tree origarg;
-
-	if (argnum == 0)
-		return argnum;
-
-	hash = get_function_hash(fndecl);
-	if (hash && hash->param & (1U << argnum))
-		return argnum;
-
-	if (DECL_EXTERNAL(fndecl))
-		return argnum;
-
-	origarg = DECL_ARGUMENTS(DECL_ORIGIN(fndecl));
-	argnum--;
-	while (origarg && argnum) {
-		origarg = TREE_CHAIN(origarg);
-		argnum--;
-	}
-	gcc_assert(argnum == 0);
-	gcc_assert(origarg != NULL_TREE);
-
-	for (arg = DECL_ARGUMENTS(fndecl), new_argnum = 1; arg; arg = TREE_CHAIN(arg), new_argnum++)
-		if (operand_equal_p(origarg, arg, 0) || !strcmp(DECL_NAME_POINTER(origarg), DECL_NAME_POINTER(arg)))
-			return new_argnum;
-
-	return CANNOT_FIND_ARG;
-}
-
-static bool is_in_hash_table(const_tree fndecl, unsigned int num)
-{
-	const struct size_overflow_hash *hash;
-
-	hash = get_function_hash(fndecl);
-	if (hash && (hash->param & (1U << num)))
-		return true;
-	return false;
+	const_tree attr = lookup_attribute(attr_name, DECL_ATTRIBUTES(decl));
+	if (attr && TREE_VALUE(attr))
+		return attr;
+	return NULL_TREE;
 }
 
 /* Check if the function has a size_overflow attribute or it is in the size_overflow hash table.
  * If the function is missing everywhere then print the missing message into stderr.
  */
-bool is_missing_function(const_tree orig_fndecl, unsigned int num)
+void print_missing_function(next_interesting_function_t node)
 {
-	switch (DECL_FUNCTION_CODE(orig_fndecl)) {
-#if BUILDING_GCC_VERSION >= 4008
-	case BUILT_IN_BSWAP16:
-#endif
-	case BUILT_IN_BSWAP32:
-	case BUILT_IN_BSWAP64:
-	case BUILT_IN_EXPECT:
-	case BUILT_IN_MEMCMP:
-		return false;
-	default:
-		break;
+	const_tree decl;
+	unsigned int num;
+	const struct size_overflow_hash *hash;
+
+	if (node->marked == ASM_STMT_SO_MARK)
+		return;
+
+	if (node->orig_next_node) {
+		decl = node->orig_next_node->decl;
+		num = node->orig_next_node->num;
+	} else {
+		decl = node->decl;
+		num = node->num;
 	}
 
-	// skip test.c
-	if (strcmp(DECL_NAME_POINTER(current_function_decl), "coolmalloc")) {
-		if (lookup_attribute("size_overflow", DECL_ATTRIBUTES(orig_fndecl)))
-			warning(0, "unnecessary size_overflow attribute on: %s\n", DECL_NAME_POINTER(orig_fndecl));
-	}
+//	if (get_attribute("size_overflow", decl))
+//		warning(0, "unnecessary size_overflow attribute on: %s\n", DECL_NAME_POINTER(decl));
 
-	if (is_in_hash_table(orig_fndecl, num))
-		return false;
-
-	print_missing_msg(orig_fndecl, num);
-	return true;
+	hash = get_function_hash(decl);
+	if (!hash || !(hash->param & (1U << num)))
+		print_missing_msg(decl, num);
 }
 

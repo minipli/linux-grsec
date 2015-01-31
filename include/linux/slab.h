@@ -310,14 +310,14 @@ static __always_inline __size_overflow(1) int kmalloc_index(size_t size)
 }
 #endif /* !CONFIG_SLOB */
 
-void *__kmalloc(size_t size, gfp_t flags) __alloc_size(1);
+void *__kmalloc(size_t size, gfp_t flags) __alloc_size(1) __size_overflow(1);
 void *kmem_cache_alloc(struct kmem_cache *, gfp_t flags);
 
 #ifdef CONFIG_NUMA
-void *__kmalloc_node(size_t size, gfp_t flags, int node) __alloc_size(1);
+void *__kmalloc_node(size_t size, gfp_t flags, int node) __alloc_size(1) __size_overflow(1);
 void *kmem_cache_alloc_node(struct kmem_cache *, gfp_t flags, int node);
 #else
-static __always_inline void *__kmalloc_node(size_t size, gfp_t flags, int node)
+static __always_inline void * __size_overflow(1) __kmalloc_node(size_t size, gfp_t flags, int node)
 {
 	return __kmalloc(size, flags);
 }
