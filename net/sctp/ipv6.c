@@ -972,7 +972,7 @@ static const struct inet6_protocol sctpv6_protocol = {
 	.flags        = INET6_PROTO_NOPOLICY | INET6_PROTO_FINAL,
 };
 
-static struct sctp_af sctp_af_inet6 = {
+static struct sctp_af sctp_af_inet6 __read_only = {
 	.sa_family	   = AF_INET6,
 	.sctp_xmit	   = sctp_v6_xmit,
 	.setsockopt	   = ipv6_setsockopt,
@@ -1002,7 +1002,7 @@ static struct sctp_af sctp_af_inet6 = {
 #endif
 };
 
-static struct sctp_pf sctp_pf_inet6 = {
+static struct sctp_pf sctp_pf_inet6 __read_only = {
 	.event_msgname = sctp_inet6_event_msgname,
 	.skb_msgname   = sctp_inet6_skb_msgname,
 	.af_supported  = sctp_inet6_af_supported,
@@ -1029,7 +1029,7 @@ void sctp_v6_pf_init(void)
 
 void sctp_v6_pf_exit(void)
 {
-	list_del(&sctp_af_inet6.list);
+	pax_list_del(&sctp_af_inet6.list);
 }
 
 /* Initialize IPv6 support and register with socket layer.  */
