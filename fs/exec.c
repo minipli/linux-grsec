@@ -2107,7 +2107,7 @@ void pax_track_stack(void)
 {
 	unsigned long sp = (unsigned long)&sp;
 	if (sp < current_thread_info()->lowest_stack &&
-	    sp > (unsigned long)task_stack_page(current))
+	    sp >= (unsigned long)task_stack_page(current) + 2 * sizeof(unsigned long))
 		current_thread_info()->lowest_stack = sp;
 }
 EXPORT_SYMBOL(pax_track_stack);
