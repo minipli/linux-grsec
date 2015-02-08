@@ -171,7 +171,7 @@ static struct ipv6_devconf ipv6_devconf __read_mostly = {
 	.hop_limit		= IPV6_DEFAULT_HOPLIMIT,
 	.mtu6			= IPV6_MIN_MTU,
 	.accept_ra		= 1,
-	.accept_redirects	= 1,
+	.accept_redirects	= 0,
 	.autoconf		= 1,
 	.force_mld_version	= 0,
 	.mldv1_unsolicited_report_interval = 10 * HZ,
@@ -208,7 +208,7 @@ static struct ipv6_devconf ipv6_devconf_dflt __read_mostly = {
 	.hop_limit		= IPV6_DEFAULT_HOPLIMIT,
 	.mtu6			= IPV6_MIN_MTU,
 	.accept_ra		= 1,
-	.accept_redirects	= 1,
+	.accept_redirects	= 0,
 	.autoconf		= 1,
 	.force_mld_version	= 0,
 	.mldv1_unsolicited_report_interval = 10 * HZ,
@@ -604,7 +604,7 @@ static int inet6_netconf_dump_devconf(struct sk_buff *skb,
 		idx = 0;
 		head = &net->dev_index_head[h];
 		rcu_read_lock();
-		cb->seq = atomic_read(&net->ipv6.dev_addr_genid) ^
+		cb->seq = atomic_read_unchecked(&net->ipv6.dev_addr_genid) ^
 			  net->dev_base_seq;
 		hlist_for_each_entry_rcu(dev, head, index_hlist) {
 			if (idx < s_idx)
@@ -2396,7 +2396,7 @@ int addrconf_set_dstaddr(struct net *net, void __user *arg)
 		p.iph.ihl = 5;
 		p.iph.protocol = IPPROTO_IPV6;
 		p.iph.ttl = 64;
-		ifr.ifr_ifru.ifru_data = (__force void __user *)&p;
+		ifr.ifr_ifru.ifru_data = (void __force_user *)&p;
 
 		if (ops->ndo_do_ioctl) {
 			mm_segment_t oldfs = get_fs();
@@ -3534,16 +3534,23 @@ static const struct file_operations if6_fops = {
 	.release	= seq_release_net,
 };
 
+extern void register_ipv6_seq_ops_addr(struct seq_operations *addr);
+extern void unregister_ipv6_seq_ops_addr(void);
+
 static int __net_init if6_proc_net_init(struct net *net)
 {
-	if (!proc_create("if_inet6", S_IRUGO, net->proc_net, &if6_fops))
+	register_ipv6_seq_ops_addr(&if6_seq_ops);
+	if (!proc_create("if_inet6", S_IRUGO, net->proc_net, &if6_fops)) {
+		unregister_ipv6_seq_ops_addr();
 		return -ENOMEM;
+	}
 	return 0;
 }
 
 static void __net_exit if6_proc_net_exit(struct net *net)
 {
 	remove_proc_entry("if_inet6", net->proc_net);
+	unregister_ipv6_seq_ops_addr();
 }
 
 static struct pernet_operations if6_proc_net_ops = {
@@ -4159,7 +4166,7 @@ static int inet6_dump_addr(struct sk_buff *skb, struct netlink_callback *cb,
 	s_ip_idx = ip_idx = cb->args[2];
 
 	rcu_read_lock();
-	cb->seq = atomic_read(&net->ipv6.dev_addr_genid) ^ net->dev_base_seq;
+	cb->seq = atomic_read_unchecked(&net->ipv6.dev_addr_genid) ^ net->dev_base_seq;
 	for (h = s_h; h < NETDEV_HASHENTRIES; h++, s_idx = 0) {
 		idx = 0;
 		head = &net->dev_index_head[h];
@@ -4536,6 +4543,22 @@ static int inet6_set_iftoken(struct inet6_dev *idev, struct in6_addr *token)
 	return 0;
 }
 
+static const struct nla_policy inet6_af_policy[IFLA_INET6_MAX + 1] = {
+	[IFLA_INET6_ADDR_GEN_MODE]	= { .type = NLA_U8 },
+	[IFLA_INET6_TOKEN]		= { .len = sizeof(struct in6_addr) },
+};
+
+static int inet6_validate_link_af(const struct net_device *dev,
+				  const struct nlattr *nla)
+{
+	struct nlattr *tb[IFLA_INET6_MAX + 1];
+
+	if (dev && !__in6_dev_get(dev))
+		return -EAFNOSUPPORT;
+
+	return nla_parse_nested(tb, IFLA_INET6_MAX, nla, inet6_af_policy);
+}
+
 static int inet6_set_link_af(struct net_device *dev, const struct nlattr *nla)
 {
 	int err = -EINVAL;
@@ -4788,7 +4811,7 @@ static void __ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 		rt_genid_bump_ipv6(net);
 		break;
 	}
-	atomic_inc(&net->ipv6.dev_addr_genid);
+	atomic_inc_unchecked(&net->ipv6.dev_addr_genid);
 }
 
 static void ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
@@ -4808,7 +4831,7 @@ int addrconf_sysctl_forward(struct ctl_table *ctl, int write,
 	int *valp = ctl->data;
 	int val = *valp;
 	loff_t pos = *ppos;
-	struct ctl_table lctl;
+	ctl_table_no_const lctl;
 	int ret;
 
 	/*
@@ -4893,7 +4916,7 @@ int addrconf_sysctl_disable(struct ctl_table *ctl, int write,
 	int *valp = ctl->data;
 	int val = *valp;
 	loff_t pos = *ppos;
-	struct ctl_table lctl;
+	ctl_table_no_const lctl;
 	int ret;
 
 	/*
@@ -5351,6 +5374,7 @@ static struct rtnl_af_ops inet6_ops = {
 	.family		  = AF_INET6,
 	.fill_link_af	  = inet6_fill_link_af,
 	.get_link_af_size = inet6_get_link_af_size,
+	.validate_link_af = inet6_validate_link_af,
 	.set_link_af	  = inet6_set_link_af,
 };
 

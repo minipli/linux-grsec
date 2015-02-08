@@ -171,7 +171,7 @@ struct rndis_device {
 	enum rndis_device_state state;
 	bool link_state;
 	bool link_change;
-	atomic_t new_req_id;
+	atomic_unchecked_t new_req_id;
 
 	spinlock_t request_lock;
 	struct list_head req_list;

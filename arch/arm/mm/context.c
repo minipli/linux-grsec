@@ -43,7 +43,7 @@
 #define NUM_USER_ASIDS		ASID_FIRST_VERSION
 
 static DEFINE_RAW_SPINLOCK(cpu_asid_lock);
-static atomic64_t asid_generation = ATOMIC64_INIT(ASID_FIRST_VERSION);
+static atomic64_unchecked_t asid_generation = ATOMIC64_INIT(ASID_FIRST_VERSION);
 static DECLARE_BITMAP(asid_map, NUM_USER_ASIDS);
 
 static DEFINE_PER_CPU(atomic64_t, active_asids);
@@ -144,21 +144,17 @@ static void flush_context(unsigned int cpu)
 	/* Update the list of reserved ASIDs and the ASID bitmap. */
 	bitmap_clear(asid_map, 0, NUM_USER_ASIDS);
 	for_each_possible_cpu(i) {
-		if (i == cpu) {
-			asid = 0;
-		} else {
-			asid = atomic64_xchg(&per_cpu(active_asids, i), 0);
-			/*
-			 * If this CPU has already been through a
-			 * rollover, but hasn't run another task in
-			 * the meantime, we must preserve its reserved
-			 * ASID, as this is the only trace we have of
-			 * the process it is still running.
-			 */
-			if (asid == 0)
-				asid = per_cpu(reserved_asids, i);
-			__set_bit(asid & ~ASID_MASK, asid_map);
-		}
+		asid = atomic64_xchg(&per_cpu(active_asids, i), 0);
+		/*
+		 * If this CPU has already been through a
+		 * rollover, but hasn't run another task in
+		 * the meantime, we must preserve its reserved
+		 * ASID, as this is the only trace we have of
+		 * the process it is still running.
+		 */
+		if (asid == 0)
+			asid = per_cpu(reserved_asids, i);
+		__set_bit(asid & ~ASID_MASK, asid_map);
 		per_cpu(reserved_asids, i) = asid;
 	}
 
@@ -182,7 +178,7 @@ static u64 new_context(struct mm_struct *mm, unsigned int cpu)
 {
 	static u32 cur_idx = 1;
 	u64 asid = atomic64_read(&mm->context.id);
-	u64 generation = atomic64_read(&asid_generation);
+	u64 generation = atomic64_read_unchecked(&asid_generation);
 
 	if (asid != 0 && is_reserved_asid(asid)) {
 		/*
@@ -203,7 +199,7 @@ static u64 new_context(struct mm_struct *mm, unsigned int cpu)
 		 */
 		asid = find_next_zero_bit(asid_map, NUM_USER_ASIDS, cur_idx);
 		if (asid == NUM_USER_ASIDS) {
-			generation = atomic64_add_return(ASID_FIRST_VERSION,
+			generation = atomic64_add_return_unchecked(ASID_FIRST_VERSION,
 							 &asid_generation);
 			flush_context(cpu);
 			asid = find_next_zero_bit(asid_map, NUM_USER_ASIDS, 1);
@@ -234,14 +230,14 @@ void check_and_switch_context(struct mm_struct *mm, struct task_struct *tsk)
 	cpu_set_reserved_ttbr0();
 
 	asid = atomic64_read(&mm->context.id);
-	if (!((asid ^ atomic64_read(&asid_generation)) >> ASID_BITS)
+	if (!((asid ^ atomic64_read_unchecked(&asid_generation)) >> ASID_BITS)
 	    && atomic64_xchg(&per_cpu(active_asids, cpu), asid))
 		goto switch_mm_fastpath;
 
 	raw_spin_lock_irqsave(&cpu_asid_lock, flags);
 	/* Check that our ASID belongs to the current generation. */
 	asid = atomic64_read(&mm->context.id);
-	if ((asid ^ atomic64_read(&asid_generation)) >> ASID_BITS) {
+	if ((asid ^ atomic64_read_unchecked(&asid_generation)) >> ASID_BITS) {
 		asid = new_context(mm, cpu);
 		atomic64_set(&mm->context.id, asid);
 	}

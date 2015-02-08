@@ -51,7 +51,7 @@ static void __jump_label_transform(struct jump_entry *entry,
 			 * Jump label is enabled for the first time.
 			 * So we expect a default_nop...
 			 */
-			if (unlikely(memcmp((void *)entry->code, default_nop, 5)
+			if (unlikely(memcmp((void *)ktla_ktva(entry->code), default_nop, 5)
 				     != 0))
 				bug_at((void *)entry->code, __LINE__);
 		} else {
@@ -59,7 +59,7 @@ static void __jump_label_transform(struct jump_entry *entry,
 			 * ...otherwise expect an ideal_nop. Otherwise
 			 * something went horribly wrong.
 			 */
-			if (unlikely(memcmp((void *)entry->code, ideal_nop, 5)
+			if (unlikely(memcmp((void *)ktla_ktva(entry->code), ideal_nop, 5)
 				     != 0))
 				bug_at((void *)entry->code, __LINE__);
 		}
@@ -75,13 +75,13 @@ static void __jump_label_transform(struct jump_entry *entry,
 		 * are converting the default nop to the ideal nop.
 		 */
 		if (init) {
-			if (unlikely(memcmp((void *)entry->code, default_nop, 5) != 0))
+			if (unlikely(memcmp((void *)ktla_ktva(entry->code), default_nop, 5) != 0))
 				bug_at((void *)entry->code, __LINE__);
 		} else {
 			code.jump = 0xe9;
 			code.offset = entry->target -
 				(entry->code + JUMP_LABEL_NOP_SIZE);
-			if (unlikely(memcmp((void *)entry->code, &code, 5) != 0))
+			if (unlikely(memcmp((void *)ktla_ktva(entry->code), &code, 5) != 0))
 				bug_at((void *)entry->code, __LINE__);
 		}
 		memcpy(&code, ideal_nops[NOP_ATOMIC5], JUMP_LABEL_NOP_SIZE);
