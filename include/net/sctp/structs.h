@@ -509,7 +509,7 @@ struct sctp_pf {
 	void (*to_sk_saddr)(union sctp_addr *, struct sock *sk);
 	void (*to_sk_daddr)(union sctp_addr *, struct sock *sk);
 	struct sctp_af *af;
-};
+} __do_const;
 
 
 /* Structure to track chunk fragments that have been acked, but peer
