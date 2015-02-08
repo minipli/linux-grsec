@@ -4,6 +4,7 @@
 #include <linux/swap.h>
 #include <linux/memblock.h>
 #include <linux/bootmem.h>	/* for max_low_pfn */
+#include <linux/tboot.h>
 
 #include <asm/cacheflush.h>
 #include <asm/e820.h>
@@ -17,6 +18,8 @@
 #include <asm/proto.h>
 #include <asm/dma.h>		/* for MAX_DMA_PFN */
 #include <asm/microcode.h>
+#include <asm/desc.h>
+#include <asm/bios_ebda.h>
 
 #include "mm_internal.h"
 
@@ -563,7 +566,18 @@ void __init init_mem_mapping(void)
 	early_ioremap_page_table_range_init();
 #endif
 
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	clone_pgd_range(get_cpu_pgd(0, kernel) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+	clone_pgd_range(get_cpu_pgd(0, user) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+	load_cr3(get_cpu_pgd(0, kernel));
+#else
 	load_cr3(swapper_pg_dir);
+#endif
+
 	__flush_tlb_all();
 
 	early_memtest(0, max_pfn_mapped << PAGE_SHIFT);
@@ -579,10 +593,40 @@ void __init init_mem_mapping(void)
  * Access has to be given to non-kernel-ram areas as well, these contain the PCI
  * mmio resources as well as potential bios/acpi data regions.
  */
+
+#ifdef CONFIG_GRKERNSEC_KMEM
+static unsigned int ebda_start __read_only;
+static unsigned int ebda_end __read_only;
+#endif
+
 int devmem_is_allowed(unsigned long pagenr)
 {
-	if (pagenr < 256)
+#ifdef CONFIG_GRKERNSEC_KMEM
+	/* allow BDA */
+	if (!pagenr)
 		return 1;
+	/* allow EBDA */
+	if (pagenr >= ebda_start && pagenr < ebda_end)
+		return 1;
+	/* if tboot is in use, allow access to its hardcoded serial log range */
+	if (tboot_enabled() && ((0x60000 >> PAGE_SHIFT) <= pagenr) && (pagenr < (0x68000 >> PAGE_SHIFT)))
+		return 1;
+#else
+	if (!pagenr)
+		return 1;
+#ifdef CONFIG_VM86
+	if (pagenr < (ISA_START_ADDRESS >> PAGE_SHIFT))
+		return 1;
+#endif
+#endif
+
+	if ((ISA_START_ADDRESS >> PAGE_SHIFT) <= pagenr && pagenr < (ISA_END_ADDRESS >> PAGE_SHIFT))
+		return 1;
+#ifdef CONFIG_GRKERNSEC_KMEM
+	/* throw out everything else below 1MB */
+	if (pagenr <= 256)
+		return 0;
+#endif
 	if (iomem_is_exclusive(pagenr << PAGE_SHIFT))
 		return 0;
 	if (!page_is_ram(pagenr))
@@ -628,8 +672,117 @@ void free_init_pages(char *what, unsigned long begin, unsigned long end)
 #endif
 }
 
+#ifdef CONFIG_GRKERNSEC_KMEM
+static inline void gr_init_ebda(void)
+{
+	unsigned int ebda_addr;
+	unsigned int ebda_size = 0;
+
+	ebda_addr = get_bios_ebda();
+	if (ebda_addr) {
+		ebda_size = *(unsigned char *)phys_to_virt(ebda_addr);
+		ebda_size <<= 10;
+	}
+	if (ebda_addr && ebda_size) {
+		ebda_start = ebda_addr >> PAGE_SHIFT;
+		ebda_end = min((unsigned int)PAGE_ALIGN(ebda_addr + ebda_size), (unsigned int)0xa0000) >> PAGE_SHIFT;
+	} else {
+		ebda_start = 0x9f000 >> PAGE_SHIFT;
+		ebda_end = 0xa0000 >> PAGE_SHIFT;
+	}
+}
+#else
+static inline void gr_init_ebda(void) { }
+#endif
+
 void free_initmem(void)
 {
+#ifdef CONFIG_PAX_KERNEXEC
+#ifdef CONFIG_X86_32
+	/* PaX: limit KERNEL_CS to actual size */
+	unsigned long addr, limit;
+	struct desc_struct d;
+	int cpu;
+#else
+	pgd_t *pgd;
+	pud_t *pud;
+	pmd_t *pmd;
+	unsigned long addr, end;
+#endif
+#endif
+
+	gr_init_ebda();
+
+#ifdef CONFIG_PAX_KERNEXEC
+#ifdef CONFIG_X86_32
+	limit = paravirt_enabled() ? ktva_ktla(0xffffffff) : (unsigned long)&_etext;
+	limit = (limit - 1UL) >> PAGE_SHIFT;
+
+	memset(__LOAD_PHYSICAL_ADDR + PAGE_OFFSET, POISON_FREE_INITMEM, PAGE_SIZE);
+	for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
+		pack_descriptor(&d, get_desc_base(&get_cpu_gdt_table(cpu)[GDT_ENTRY_KERNEL_CS]), limit, 0x9B, 0xC);
+		write_gdt_entry(get_cpu_gdt_table(cpu), GDT_ENTRY_KERNEL_CS, &d, DESCTYPE_S);
+		write_gdt_entry(get_cpu_gdt_table(cpu), GDT_ENTRY_KERNEXEC_KERNEL_CS, &d, DESCTYPE_S);
+	}
+
+	/* PaX: make KERNEL_CS read-only */
+	addr = PFN_ALIGN(ktla_ktva((unsigned long)&_text));
+	if (!paravirt_enabled())
+		set_memory_ro(addr, (PFN_ALIGN(_sdata) - addr) >> PAGE_SHIFT);
+/*
+		for (addr = ktla_ktva((unsigned long)&_text); addr < (unsigned long)&_sdata; addr += PMD_SIZE) {
+			pgd = pgd_offset_k(addr);
+			pud = pud_offset(pgd, addr);
+			pmd = pmd_offset(pud, addr);
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		}
+*/
+#ifdef CONFIG_X86_PAE
+	set_memory_nx(PFN_ALIGN(__init_begin), (PFN_ALIGN(__init_end) - PFN_ALIGN(__init_begin)) >> PAGE_SHIFT);
+/*
+	for (addr = (unsigned long)&__init_begin; addr < (unsigned long)&__init_end; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+	set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+*/
+#endif
+
+#ifdef CONFIG_MODULES
+	set_memory_4k((unsigned long)MODULES_EXEC_VADDR, (MODULES_EXEC_END - MODULES_EXEC_VADDR) >> PAGE_SHIFT);
+#endif
+
+#else
+	/* PaX: make kernel code/rodata read-only, rest non-executable */
+	for (addr = __START_KERNEL_map; addr < __START_KERNEL_map + KERNEL_IMAGE_SIZE; addr += PMD_SIZE) {
+		pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		if (!pmd_present(*pmd))
+			continue;
+		if ((unsigned long)_text <= addr && addr < (unsigned long)_sdata)
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+		else
+			set_pmd(pmd, __pmd(pmd_val(*pmd) | (_PAGE_NX & __supported_pte_mask)));
+	}
+
+	addr = (unsigned long)__va(__pa(__START_KERNEL_map));
+	end = addr + KERNEL_IMAGE_SIZE;
+	for (; addr < end; addr += PMD_SIZE) {
+	pgd = pgd_offset_k(addr);
+		pud = pud_offset(pgd, addr);
+		pmd = pmd_offset(pud, addr);
+		if (!pmd_present(*pmd))
+			continue;
+		if ((unsigned long)__va(__pa(_text)) <= addr && addr < (unsigned long)__va(__pa(_sdata)))
+			set_pmd(pmd, __pmd(pmd_val(*pmd) & ~_PAGE_RW));
+	}
+#endif
+
+	flush_tlb_all();
+#endif
+
 	free_init_pages("unused kernel",
 			(unsigned long)(&__init_begin),
 			(unsigned long)(&__init_end));
