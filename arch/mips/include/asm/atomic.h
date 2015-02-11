@@ -108,7 +108,7 @@ static inline void atomic_##op##suffix(int i, atomic##suffix##_t * v)		\
 										\
 		__asm__ __volatile__(						\
 		"	.set	mips3					\n"	\
-		"	ll	%0, %1		# atomic_" #op #suffix "\n"	\
+		"1:	ll	%0, %1		# atomic_" #op #suffix "\n"	\
 		"2:	" #asm_op " %0, %2				\n"	\
 		"	sc	%0, %1					\n"	\
 		"	beqz	%0, 1b					\n"	\
@@ -455,7 +455,7 @@ static inline void atomic64_##op##suffix(long i, atomic64##suffix##_t * v)	\
 										\
 		__asm__ __volatile__(						\
 		"	.set	mips3					\n"	\
-		"	lld	%0, %1		# atomic64_" #op #suffix "\n"	\
+		"1:	lld	%0, %1		# atomic64_" #op #suffix "\n"	\
 		"2:	" #asm_op " %0, %2				\n"	\
 		"	scd	%0, %1					\n"	\
 		"	beqz	%0, 1b					\n"	\
