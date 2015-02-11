@@ -8,6 +8,7 @@
 #include <linux/linkage.h>
 #include <asm/dwarf2.h>
 #include <asm/percpu.h>
+#include <asm/alternative-asm.h>
 
 .text
 
@@ -46,12 +47,14 @@ CFI_STARTPROC
 	CFI_REMEMBER_STATE
 	popfq_cfi
 	mov $1, %al
+	pax_force_retaddr
 	ret
 
 	CFI_RESTORE_STATE
 .Lnot_same:
 	popfq_cfi
 	xor %al,%al
+	pax_force_retaddr
 	ret
 
 CFI_ENDPROC

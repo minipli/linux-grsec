@@ -38,12 +38,39 @@
 #endif
 
 #ifdef CONFIG_MMU
-void *module_alloc(unsigned long size)
+static inline void *__module_alloc(unsigned long size, pgprot_t prot)
 {
+	if (!size || PAGE_ALIGN(size) > MODULES_END - MODULES_VADDR)
+		return NULL;
 	return __vmalloc_node_range(size, 1, MODULES_VADDR, MODULES_END,
-				GFP_KERNEL, PAGE_KERNEL_EXEC, NUMA_NO_NODE,
+				GFP_KERNEL, prot, NUMA_NO_NODE,
 				__builtin_return_address(0));
 }
+
+void *module_alloc(unsigned long size)
+{
+
+#ifdef CONFIG_PAX_KERNEXEC
+	return __module_alloc(size, PAGE_KERNEL);
+#else
+	return __module_alloc(size, PAGE_KERNEL_EXEC);
+#endif
+
+}
+
+#ifdef CONFIG_PAX_KERNEXEC
+void module_free_exec(struct module *mod, void *module_region)
+{
+	module_free(mod, module_region);
+}
+EXPORT_SYMBOL(module_free_exec);
+
+void *module_alloc_exec(unsigned long size)
+{
+	return __module_alloc(size, PAGE_KERNEL_EXEC);
+}
+EXPORT_SYMBOL(module_alloc_exec);
+#endif
 #endif
 
 int
