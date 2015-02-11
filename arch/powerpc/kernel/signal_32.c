@@ -1013,7 +1013,7 @@ int handle_rt_signal32(unsigned long sig, struct k_sigaction *ka,
 	/* Save user registers on the stack */
 	frame = &rt_sf->uc.uc_mcontext;
 	addr = frame;
-	if (vdso32_rt_sigtramp && current->mm->context.vdso_base) {
+	if (vdso32_rt_sigtramp && current->mm->context.vdso_base != ~0UL) {
 		sigret = 0;
 		tramp = current->mm->context.vdso_base + vdso32_rt_sigtramp;
 	} else {
