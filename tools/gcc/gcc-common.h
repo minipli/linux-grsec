@@ -34,7 +34,13 @@
 #include "timevar.h"
 
 #include "params.h"
+
+#if BUILDING_GCC_VERSION <= 4009
 #include "pointer-set.h"
+#else
+#include "hash-map.h"
+#endif
+
 #include "emit-rtl.h"
 //#include "reload.h"
 //#include "ira.h"
@@ -58,7 +64,7 @@
 #include "gimple-pretty-print.h"
 #endif
 
-#if BUILDING_GCC_VERSION >= 4006
+#if BUILDING_GCC_VERSION >= 4007
 //#include "c-tree.h"
 //#include "cp/cp-tree.h"
 #include "c-family/c-common.h"
@@ -210,6 +216,8 @@ static inline bool is_simple_builtin(tree decl)
 	sscanf(get_random_seed(noinit), "%" HOST_WIDE_INT_PRINT "x", &seed);	\
 	seed * seed; })
 
+#define int_const_binop(code, arg1, arg2) int_const_binop((code), (arg1), (arg2), 0)
+
 static inline bool gimple_clobber_p(gimple s)
 {
 	return false;
@@ -342,12 +350,26 @@ static inline const char *get_tree_code_name(enum tree_code code)
 #define TODO_dump_cgraph 0
 #endif
 
+#if BUILDING_GCC_VERSION <= 4009
+#define TODO_verify_il 0
+#endif
+
 #if BUILDING_GCC_VERSION >= 4009
 #define TODO_ggc_collect 0
 #define NODE_SYMBOL(node) (node)
 #define NODE_DECL(node) (node)->decl
 #define cgraph_node_name(node) (node)->name()
 #define NODE_IMPLICIT_ALIAS(node) (node)->cpp_implicit_alias
+#endif
+
+#if BUILDING_GCC_VERSION >= 5000
+#define TODO_verify_ssa TODO_verify_il
+#define TODO_verify_flow TODO_verify_il
+#define TODO_verify_stmts TODO_verify_il
+#define TODO_verify_rtl_sharing TODO_verify_il
+
+#define debug_cgraph_node(node) (node)->debug()
+#define cgraph_get_node(decl) cgraph_node::get(decl)
 #endif
 
 #endif
