@@ -1859,7 +1859,7 @@ int native_ioapic_set_affinity(struct irq_data *data,
 	return ret;
 }
 
-atomic_t irq_mis_count;
+atomic_unchecked_t irq_mis_count;
 
 #ifdef CONFIG_GENERIC_PENDING_IRQ
 static bool io_apic_level_ack_pending(struct irq_cfg *cfg)
@@ -2000,7 +2000,7 @@ static void ack_ioapic_level(struct irq_data *data)
 	 * at the cpu.
 	 */
 	if (!(v & (1 << (i & 0x1f)))) {
-		atomic_inc(&irq_mis_count);
+		atomic_inc_unchecked(&irq_mis_count);
 
 		eoi_ioapic_irq(irq, cfg);
 	}

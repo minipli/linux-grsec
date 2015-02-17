@@ -2092,7 +2092,7 @@ static int hotkey_mask_get(void)
 	return 0;
 }
 
-void static hotkey_mask_warn_incomplete_mask(void)
+static void hotkey_mask_warn_incomplete_mask(void)
 {
 	/* log only what the user can fix... */
 	const u32 wantedmask = hotkey_driver_mask &
@@ -2436,10 +2436,10 @@ static void hotkey_compare_and_issue_event(struct tp_nvram_state *oldn,
 				&& !tp_features.bright_unkfw)
 			TPACPI_MAY_SEND_KEY(TP_ACPI_HOTKEYSCAN_FNHOME);
 	}
+}
 
 #undef TPACPI_COMPARE_KEY
 #undef TPACPI_MAY_SEND_KEY
-}
 
 /*
  * Polling driver

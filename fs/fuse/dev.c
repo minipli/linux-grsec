@@ -1394,7 +1394,7 @@ static ssize_t fuse_dev_splice_read(struct file *in, loff_t *ppos,
 	ret = 0;
 	pipe_lock(pipe);
 
-	if (!pipe->readers) {
+	if (!atomic_read(&pipe->readers)) {
 		send_sig(SIGPIPE, current, 0);
 		if (!ret)
 			ret = -EPIPE;
@@ -1423,7 +1423,7 @@ static ssize_t fuse_dev_splice_read(struct file *in, loff_t *ppos,
 		page_nr++;
 		ret += buf->len;
 
-		if (pipe->files)
+		if (atomic_read(&pipe->files))
 			do_wakeup = 1;
 	}
 

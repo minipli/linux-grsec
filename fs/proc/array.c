@@ -344,6 +344,21 @@ static void task_cpus_allowed(struct seq_file *m, struct task_struct *task)
 	seq_putc(m, '\n');
 }
 
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+static inline void task_pax(struct seq_file *m, struct task_struct *p)
+{
+	if (p->mm)
+		seq_printf(m, "PaX:\t%c%c%c%c%c\n",
+			   p->mm->pax_flags & MF_PAX_PAGEEXEC ? 'P' : 'p',
+			   p->mm->pax_flags & MF_PAX_EMUTRAMP ? 'E' : 'e',
+			   p->mm->pax_flags & MF_PAX_MPROTECT ? 'M' : 'm',
+			   p->mm->pax_flags & MF_PAX_RANDMMAP ? 'R' : 'r',
+			   p->mm->pax_flags & MF_PAX_SEGMEXEC ? 'S' : 's');
+	else
+		seq_printf(m, "PaX:\t-----\n");
+}
+#endif
+
 int proc_pid_status(struct seq_file *m, struct pid_namespace *ns,
 			struct pid *pid, struct task_struct *task)
 {
@@ -362,6 +377,11 @@ int proc_pid_status(struct seq_file *m, struct pid_namespace *ns,
 	task_cpus_allowed(m, task);
 	cpuset_task_status_allowed(m, task);
 	task_context_switch_counts(m, task);
+
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+	task_pax(m, task);
+#endif
+
 	return 0;
 }
 

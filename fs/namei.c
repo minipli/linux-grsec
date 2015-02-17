@@ -497,7 +497,7 @@ struct nameidata {
 	int		last_type;
 	unsigned	depth;
 	struct file	*base;
-	char *saved_names[MAX_NESTED_LINKS + 1];
+	const char *saved_names[MAX_NESTED_LINKS + 1];
 };
 
 /*
@@ -708,13 +708,13 @@ void nd_jump_link(struct nameidata *nd, struct path *path)
 	nd->flags |= LOOKUP_JUMPED;
 }
 
-void nd_set_link(struct nameidata *nd, char *path)
+void nd_set_link(struct nameidata *nd, const char *path)
 {
 	nd->saved_names[nd->depth] = path;
 }
 EXPORT_SYMBOL(nd_set_link);
 
-char *nd_get_link(struct nameidata *nd)
+const char *nd_get_link(const struct nameidata *nd)
 {
 	return nd->saved_names[nd->depth];
 }
@@ -849,7 +849,7 @@ follow_link(struct path *link, struct nameidata *nd, void **p)
 {
 	struct dentry *dentry = link->dentry;
 	int error;
-	char *s;
+	const char *s;
 
 	BUG_ON(nd->flags & LOOKUP_RCU);
 
@@ -1705,7 +1705,7 @@ EXPORT_SYMBOL(full_name_hash);
 static inline u64 hash_name(const char *name)
 {
 	unsigned long a, b, adata, bdata, mask, hash, len;
-	const struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;
+	static const struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;
 
 	hash = a = 0;
 	len = -sizeof(unsigned long);
@@ -4371,14 +4371,24 @@ EXPORT_SYMBOL(vfs_whiteout);
 
 int readlink_copy(char __user *buffer, int buflen, const char *link)
 {
+	char tmpbuf[64];
+	const char *newlink;
 	int len = PTR_ERR(link);
+
 	if (IS_ERR(link))
 		goto out;
 
 	len = strlen(link);
 	if (len > (unsigned) buflen)
 		len = buflen;
-	if (copy_to_user(buffer, link, len))
+
+	if (len < sizeof(tmpbuf)) {
+		memcpy(tmpbuf, link, len);
+		newlink = tmpbuf;
+	} else
+		newlink = link;
+
+	if (copy_to_user(buffer, newlink, len))
 		len = -EFAULT;
 out:
 	return len;

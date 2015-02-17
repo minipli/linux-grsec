@@ -2702,7 +2702,7 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static struct rtnl_link_ops vxlan_link_ops __read_mostly = {
+static struct rtnl_link_ops vxlan_link_ops = {
 	.kind		= "vxlan",
 	.maxtype	= IFLA_VXLAN_MAX,
 	.policy		= vxlan_policy,
@@ -2749,7 +2749,7 @@ static int vxlan_lowerdev_event(struct notifier_block *unused,
 	return NOTIFY_DONE;
 }
 
-static struct notifier_block vxlan_notifier_block __read_mostly = {
+static struct notifier_block vxlan_notifier_block = {
 	.notifier_call = vxlan_lowerdev_event,
 };
 

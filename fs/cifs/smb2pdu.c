@@ -2144,8 +2144,7 @@ SMB2_query_directory(const unsigned int xid, struct cifs_tcon *tcon,
 	default:
 		cifs_dbg(VFS, "info level %u isn't supported\n",
 			 srch_inf->info_level);
-		rc = -EINVAL;
-		goto qdir_exit;
+		return -EINVAL;
 	}
 
 	req->FileIndex = cpu_to_le32(index);

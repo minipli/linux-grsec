@@ -226,7 +226,7 @@ struct visorchipset_busdev_notifiers {
 	void (*device_resume)(ulong bus_no, ulong dev_no);
 	int (*get_channel_info)(uuid_le type_uuid, ulong *min_size,
 				ulong *max_size);
-};
+} __no_const;
 
 /*  These functions live inside visorchipset, and will be called to indicate
  *  responses to specific events (by code outside of visorchipset).
@@ -241,7 +241,7 @@ struct visorchipset_busdev_responders {
 	void (*device_destroy)(ulong bus_no, ulong dev_no, int response);
 	void (*device_pause)(ulong bus_no, ulong dev_no, int response);
 	void (*device_resume)(ulong bus_no, ulong dev_no, int response);
-};
+} __no_const;
 
 /** Register functions (in the bus driver) to get called by visorchipset
  *  whenever a bus or device appears for which this service partition is

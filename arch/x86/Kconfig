@@ -130,7 +130,7 @@ config X86
 	select RTC_LIB
 	select HAVE_DEBUG_STACKOVERFLOW
 	select HAVE_IRQ_EXIT_ON_IRQ_STACK if X86_64
-	select HAVE_CC_STACKPROTECTOR
+	select HAVE_CC_STACKPROTECTOR if X86_64 || !PAX_MEMORY_UDEREF
 	select GENERIC_CPU_AUTOPROBE
 	select HAVE_ARCH_AUDITSYSCALL
 	select ARCH_SUPPORTS_ATOMIC_RMW
@@ -263,7 +263,7 @@ config X86_HT
 
 config X86_32_LAZY_GS
 	def_bool y
-	depends on X86_32 && !CC_STACKPROTECTOR
+	depends on X86_32 && !CC_STACKPROTECTOR && !PAX_MEMORY_UDEREF
 
 config ARCH_HWEIGHT_CFLAGS
 	string
@@ -1239,7 +1239,7 @@ config PAGE_OFFSET
 	hex
 	default 0xB0000000 if VMSPLIT_3G_OPT
 	default 0x80000000 if VMSPLIT_2G
-	default 0x78000000 if VMSPLIT_2G_OPT
+	default 0x70000000 if VMSPLIT_2G_OPT
 	default 0x40000000 if VMSPLIT_1G
 	default 0xC0000000
 	depends on X86_32
@@ -1865,7 +1865,9 @@ config X86_NEED_RELOCS
 
 config PHYSICAL_ALIGN
 	hex "Alignment value to which kernel should be aligned"
-	default "0x200000"
+	default "0x1000000"
+	range 0x200000 0x1000000 if PAX_KERNEXEC && X86_PAE
+	range 0x400000 0x1000000 if PAX_KERNEXEC && !X86_PAE
 	range 0x2000 0x1000000 if X86_32
 	range 0x200000 0x1000000 if X86_64
 	---help---
@@ -1948,6 +1950,7 @@ config COMPAT_VDSO
 	def_bool n
 	prompt "Disable the 32-bit vDSO (needed for glibc 2.3.3)"
 	depends on X86_32 || IA32_EMULATION
+	depends on !PAX_PAGEEXEC && !PAX_SEGMEXEC && !PAX_KERNEXEC && !PAX_MEMORY_UDEREF
 	---help---
 	  Certain buggy versions of glibc will crash if they are
 	  presented with a 32-bit vDSO that is not mapped at the address
