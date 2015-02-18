@@ -78,7 +78,7 @@ void mcs_spin_lock(struct mcs_spinlock **lock, struct mcs_spinlock *node)
 		 */
 		return;
 	}
-	ACCESS_ONCE(prev->next) = node;
+	ACCESS_ONCE_RW(prev->next) = node;
 
 	/* Wait until the lock holder passes the lock down. */
 	arch_mcs_spin_lock_contended(&node->locked);

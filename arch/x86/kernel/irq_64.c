@@ -26,6 +26,8 @@ EXPORT_PER_CPU_SYMBOL(irq_stat);
 DEFINE_PER_CPU(struct pt_regs *, irq_regs);
 EXPORT_PER_CPU_SYMBOL(irq_regs);
 
+extern void gr_handle_kernel_exploit(void);
+
 int sysctl_panic_on_stackoverflow;
 
 /*
@@ -44,7 +46,7 @@ static inline void stack_overflow_check(struct pt_regs *regs)
 	u64 estack_top, estack_bottom;
 	u64 curbase = (u64)task_stack_page(current);
 
-	if (user_mode_vm(regs))
+	if (user_mode(regs))
 		return;
 
 	if (regs->sp >= curbase + sizeof(struct thread_info) +
@@ -68,6 +70,8 @@ static inline void stack_overflow_check(struct pt_regs *regs)
 		current->comm, curbase, regs->sp,
 		irq_stack_top, irq_stack_bottom,
 		estack_top, estack_bottom);
+
+	gr_handle_kernel_exploit();
 
 	if (sysctl_panic_on_stackoverflow)
 		panic("low stack detected by irq handler - check messages\n");

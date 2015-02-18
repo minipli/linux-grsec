@@ -74,7 +74,7 @@ static void ipip6_tunnel_setup(struct net_device *dev);
 static void ipip6_dev_free(struct net_device *dev);
 static bool check_6rd(struct ip_tunnel *tunnel, const struct in6_addr *v6dst,
 		      __be32 *v4dst);
-static struct rtnl_link_ops sit_link_ops __read_mostly;
+static struct rtnl_link_ops sit_link_ops;
 
 static int sit_net_id __read_mostly;
 struct sit_net {
@@ -1505,12 +1505,12 @@ static bool ipip6_netlink_encap_parms(struct nlattr *data[],
 
 	if (data[IFLA_IPTUN_ENCAP_SPORT]) {
 		ret = true;
-		ipencap->sport = nla_get_u16(data[IFLA_IPTUN_ENCAP_SPORT]);
+		ipencap->sport = nla_get_be16(data[IFLA_IPTUN_ENCAP_SPORT]);
 	}
 
 	if (data[IFLA_IPTUN_ENCAP_DPORT]) {
 		ret = true;
-		ipencap->dport = nla_get_u16(data[IFLA_IPTUN_ENCAP_DPORT]);
+		ipencap->dport = nla_get_be16(data[IFLA_IPTUN_ENCAP_DPORT]);
 	}
 
 	return ret;
@@ -1706,9 +1706,9 @@ static int ipip6_fill_info(struct sk_buff *skb, const struct net_device *dev)
 
 	if (nla_put_u16(skb, IFLA_IPTUN_ENCAP_TYPE,
 			tunnel->encap.type) ||
-	    nla_put_u16(skb, IFLA_IPTUN_ENCAP_SPORT,
+	    nla_put_be16(skb, IFLA_IPTUN_ENCAP_SPORT,
 			tunnel->encap.sport) ||
-	    nla_put_u16(skb, IFLA_IPTUN_ENCAP_DPORT,
+	    nla_put_be16(skb, IFLA_IPTUN_ENCAP_DPORT,
 			tunnel->encap.dport) ||
 	    nla_put_u16(skb, IFLA_IPTUN_ENCAP_FLAGS,
 			tunnel->encap.dport))
@@ -1750,7 +1750,7 @@ static void ipip6_dellink(struct net_device *dev, struct list_head *head)
 		unregister_netdevice_queue(dev, head);
 }
 
-static struct rtnl_link_ops sit_link_ops __read_mostly = {
+static struct rtnl_link_ops sit_link_ops = {
 	.kind		= "sit",
 	.maxtype	= IFLA_IPTUN_MAX,
 	.policy		= ipip6_policy,

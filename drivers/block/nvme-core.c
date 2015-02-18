@@ -73,7 +73,6 @@ static LIST_HEAD(dev_list);
 static struct task_struct *nvme_thread;
 static struct workqueue_struct *nvme_workq;
 static wait_queue_head_t nvme_kthread_wait;
-static struct notifier_block nvme_nb;
 
 static void nvme_reset_failed_dev(struct work_struct *ws);
 
@@ -2926,6 +2925,10 @@ static struct pci_driver nvme_driver = {
 	.err_handler	= &nvme_err_handler,
 };
 
+static struct notifier_block nvme_nb = {
+	.notifier_call = &nvme_cpu_notify,
+};
+
 static int __init nvme_init(void)
 {
 	int result;
@@ -2942,7 +2945,6 @@ static int __init nvme_init(void)
 	else if (result > 0)
 		nvme_major = result;
 
-	nvme_nb.notifier_call = &nvme_cpu_notify;
 	result = register_hotcpu_notifier(&nvme_nb);
 	if (result)
 		goto unregister_blkdev;

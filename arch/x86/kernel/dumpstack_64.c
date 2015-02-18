@@ -153,12 +153,12 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
 		const struct stacktrace_ops *ops, void *data)
 {
 	const unsigned cpu = get_cpu();
-	struct thread_info *tinfo;
 	unsigned long *irq_stack = (unsigned long *)per_cpu(irq_stack_ptr, cpu);
 	unsigned long dummy;
 	unsigned used = 0;
 	int graph = 0;
 	int done = 0;
+	void *stack_start;
 
 	if (!task)
 		task = current;
@@ -179,7 +179,6 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
 	 * current stack address. If the stacks consist of nested
 	 * exceptions
 	 */
-	tinfo = task_thread_info(task);
 	while (!done) {
 		unsigned long *stack_end;
 		enum stack_type stype;
@@ -202,7 +201,7 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
 			if (ops->stack(data, id) < 0)
 				break;
 
-			bp = ops->walk_stack(tinfo, stack, bp, ops,
+			bp = ops->walk_stack(task, stack_end - EXCEPTION_STKSZ, stack, bp, ops,
 					     data, stack_end, &graph);
 			ops->stack(data, "<EOE>");
 			/*
@@ -210,6 +209,8 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
 			 * second-to-last pointer (index -2 to end) in the
 			 * exception stack:
 			 */
+			if ((u16)stack_end[-1] != __KERNEL_DS)
+				goto out;
 			stack = (unsigned long *) stack_end[-2];
 			done = 0;
 			break;
@@ -218,7 +219,7 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
 
 			if (ops->stack(data, "IRQ") < 0)
 				break;
-			bp = ops->walk_stack(tinfo, stack, bp,
+			bp = ops->walk_stack(task, irq_stack, stack, bp,
 				     ops, data, stack_end, &graph);
 			/*
 			 * We link to the next stack (which would be
@@ -240,7 +241,9 @@ void dump_trace(struct task_struct *task, struct pt_regs *regs,
 	/*
 	 * This handles the process stack:
 	 */
-	bp = ops->walk_stack(tinfo, stack, bp, ops, data, NULL, &graph);
+	stack_start = (void *)((unsigned long)stack & ~(THREAD_SIZE-1));
+	bp = ops->walk_stack(task, stack_start, stack, bp, ops, data, NULL, &graph);
+out:
 	put_cpu();
 }
 EXPORT_SYMBOL(dump_trace);
@@ -344,8 +347,55 @@ int is_valid_bugaddr(unsigned long ip)
 {
 	unsigned short ud2;
 
-	if (__copy_from_user(&ud2, (const void __user *) ip, sizeof(ud2)))
+	if (probe_kernel_address((unsigned short *)ip, ud2))
 		return 0;
 
 	return ud2 == 0x0b0f;
 }
+
+#if defined(CONFIG_PAX_MEMORY_STACKLEAK) || defined(CONFIG_PAX_USERCOPY)
+void pax_check_alloca(unsigned long size)
+{
+	unsigned long sp = (unsigned long)&sp, stack_start, stack_end;
+	unsigned cpu, used;
+	char *id;
+
+	/* check the process stack first */
+	stack_start = (unsigned long)task_stack_page(current);
+	stack_end = stack_start + THREAD_SIZE;
+	if (likely(stack_start <= sp && sp < stack_end)) {
+		unsigned long stack_left = sp & (THREAD_SIZE - 1);
+		BUG_ON(stack_left < 256 || size >= stack_left - 256);
+		return;
+	}
+
+	cpu = get_cpu();
+
+	/* check the irq stacks */
+	stack_end = (unsigned long)per_cpu(irq_stack_ptr, cpu);
+	stack_start = stack_end - IRQ_STACK_SIZE;
+	if (stack_start <= sp && sp < stack_end) {
+		unsigned long stack_left = sp & (IRQ_STACK_SIZE - 1);
+		put_cpu();
+		BUG_ON(stack_left < 256 || size >= stack_left - 256);
+		return;
+	}
+
+	/* check the exception stacks */
+	used = 0;
+	stack_end = (unsigned long)in_exception_stack(cpu, sp, &used, &id);
+	stack_start = stack_end - EXCEPTION_STKSZ;
+	if (stack_end && stack_start <= sp && sp < stack_end) {
+		unsigned long stack_left = sp & (EXCEPTION_STKSZ - 1);
+		put_cpu();
+		BUG_ON(stack_left < 256 || size >= stack_left - 256);
+		return;
+	}
+
+	put_cpu();
+
+	/* unknown stack */
+	BUG();
+}
+EXPORT_SYMBOL(pax_check_alloca);
+#endif
