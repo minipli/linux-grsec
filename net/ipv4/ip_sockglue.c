@@ -426,15 +426,12 @@ int ip_recv_error(struct sock *sk, struct msghdr *msg, int len, int *addr_len)
 
 	memcpy(&errhdr.ee, &serr->ee, sizeof(struct sock_extended_err));
 	sin = &errhdr.offender;
-	sin->sin_family = AF_UNSPEC;
-	if (serr->ee.ee_origin == SO_EE_ORIGIN_ICMP) {
-		struct inet_sock *inet = inet_sk(sk);
+	memset(sin, 0, sizeof(*sin));
 
+	if (serr->ee.ee_origin == SO_EE_ORIGIN_ICMP) {
 		sin->sin_family = AF_INET;
 		sin->sin_addr.s_addr = ip_hdr(skb)->saddr;
-		sin->sin_port = 0;
-		memset(&sin->sin_zero, 0, sizeof(sin->sin_zero));
-		if (inet->cmsg_flags)
+		if (inet_sk(sk)->cmsg_flags)
 			ip_cmsg_recv(msg, skb);
 	}
 
@@ -1171,7 +1168,8 @@ static int do_ip_getsockopt(struct sock *sk, int level, int optname,
 		len = min_t(unsigned int, len, opt->optlen);
 		if (put_user(len, optlen))
 			return -EFAULT;
-		if (copy_to_user(optval, opt->__data, len))
+		if ((len > (sizeof(optbuf) - sizeof(struct ip_options))) ||
+		    copy_to_user(optval, opt->__data, len))
 			return -EFAULT;
 		return 0;
 	}
@@ -1302,7 +1300,7 @@ static int do_ip_getsockopt(struct sock *sk, int level, int optname,
 		if (sk->sk_type != SOCK_STREAM)
 			return -ENOPROTOOPT;
 
-		msg.msg_control = optval;
+		msg.msg_control = (void __force_kernel *)optval;
 		msg.msg_controllen = len;
 		msg.msg_flags = flags;
 

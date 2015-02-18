@@ -110,6 +110,7 @@
 #include <asm/mce.h>
 #include <asm/alternative.h>
 #include <asm/prom.h>
+#include <asm/boot.h>
 
 /*
  * max_low_pfn_mapped: highest direct mapped pfn under 4GB
@@ -205,11 +206,49 @@ EXPORT_SYMBOL(boot_cpu_data);
 #endif
 
 
-#if !defined(CONFIG_X86_PAE) || defined(CONFIG_X86_64)
-__visible unsigned long mmu_cr4_features;
+#ifdef CONFIG_X86_64
+__visible unsigned long mmu_cr4_features __read_only = X86_CR4_PSE | X86_CR4_PAE | X86_CR4_PGE;
+#elif defined(CONFIG_X86_PAE)
+__visible unsigned long mmu_cr4_features __read_only = X86_CR4_PAE;
 #else
-__visible unsigned long mmu_cr4_features = X86_CR4_PAE;
+__visible unsigned long mmu_cr4_features __read_only;
 #endif
+
+void set_in_cr4(unsigned long mask)
+{
+	unsigned long cr4 = read_cr4();
+
+	if ((cr4 & mask) == mask && cr4 == mmu_cr4_features)
+		return;
+
+	pax_open_kernel();
+	mmu_cr4_features |= mask;
+	pax_close_kernel();
+
+	if (trampoline_cr4_features)
+		*trampoline_cr4_features = mmu_cr4_features;
+	cr4 |= mask;
+	write_cr4(cr4);
+}
+EXPORT_SYMBOL(set_in_cr4);
+
+void clear_in_cr4(unsigned long mask)
+{
+	unsigned long cr4 = read_cr4();
+
+	if (!(cr4 & mask) && cr4 == mmu_cr4_features)
+		return;
+
+	pax_open_kernel();
+	mmu_cr4_features &= ~mask;
+	pax_close_kernel();
+
+	if (trampoline_cr4_features)
+		*trampoline_cr4_features = mmu_cr4_features;
+	cr4 &= ~mask;
+	write_cr4(cr4);
+}
+EXPORT_SYMBOL(clear_in_cr4);
 
 /* Boot loader ID and version as integers, for the benefit of proc_dointvec */
 int bootloader_type, bootloader_version;
@@ -772,7 +811,7 @@ static void __init trim_bios_range(void)
 	 * area (640->1Mb) as ram even though it is not.
 	 * take them out.
 	 */
-	e820_remove_range(BIOS_BEGIN, BIOS_END - BIOS_BEGIN, E820_RAM, 1);
+	e820_remove_range(ISA_START_ADDRESS, ISA_END_ADDRESS - ISA_START_ADDRESS, E820_RAM, 1);
 
 	sanitize_e820_map(e820.map, ARRAY_SIZE(e820.map), &e820.nr_map);
 }
@@ -780,7 +819,7 @@ static void __init trim_bios_range(void)
 /* called before trim_bios_range() to spare extra sanitize */
 static void __init e820_add_kernel_range(void)
 {
-	u64 start = __pa_symbol(_text);
+	u64 start = __pa_symbol(ktla_ktva(_text));
 	u64 size = __pa_symbol(_end) - start;
 
 	/*
@@ -856,8 +895,12 @@ dump_kernel_offset(struct notifier_block *self, unsigned long v, void *p)
 
 void __init setup_arch(char **cmdline_p)
 {
+#ifdef CONFIG_X86_32
+	memblock_reserve(LOAD_PHYSICAL_ADDR, __pa_symbol(__bss_stop) - LOAD_PHYSICAL_ADDR);
+#else
 	memblock_reserve(__pa_symbol(_text),
 			 (unsigned long)__bss_stop - (unsigned long)_text);
+#endif
 
 	early_reserve_initrd();
 
@@ -947,14 +990,14 @@ void __init setup_arch(char **cmdline_p)
 
 	if (!boot_params.hdr.root_flags)
 		root_mountflags &= ~MS_RDONLY;
-	init_mm.start_code = (unsigned long) _text;
-	init_mm.end_code = (unsigned long) _etext;
+	init_mm.start_code = ktla_ktva((unsigned long) _text);
+	init_mm.end_code = ktla_ktva((unsigned long) _etext);
 	init_mm.end_data = (unsigned long) _edata;
 	init_mm.brk = _brk_end;
 
-	code_resource.start = __pa_symbol(_text);
-	code_resource.end = __pa_symbol(_etext)-1;
-	data_resource.start = __pa_symbol(_etext);
+	code_resource.start = __pa_symbol(ktla_ktva(_text));
+	code_resource.end = __pa_symbol(ktla_ktva(_etext))-1;
+	data_resource.start = __pa_symbol(_sdata);
 	data_resource.end = __pa_symbol(_edata)-1;
 	bss_resource.start = __pa_symbol(__bss_start);
 	bss_resource.end = __pa_symbol(__bss_stop)-1;
