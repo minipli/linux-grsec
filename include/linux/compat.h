@@ -240,7 +240,7 @@ long compat_sys_msgrcv(int first, int second, int msgtyp, int third,
 		int version, void __user *uptr);
 long compat_sys_msgctl(int first, int second, void __user *uptr);
 long compat_sys_shmat(int first, int second, compat_uptr_t third, int version,
-		void __user *uptr);
+		void __user *uptr) __intentional_overflow(0);
 long compat_sys_shmctl(int first, int second, void __user *uptr);
 long compat_sys_semtimedop(int semid, struct sembuf __user *tsems,
 		unsigned nsems, const struct compat_timespec __user *timeout);
@@ -334,7 +334,7 @@ extern int compat_ptrace_request(struct task_struct *child,
 extern long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 			       compat_ulong_t addr, compat_ulong_t data);
 asmlinkage long compat_sys_ptrace(compat_long_t request, compat_long_t pid,
-				  compat_long_t addr, compat_long_t data);
+				  compat_ulong_t addr, compat_ulong_t data);
 
 /*
  * epoll (fs/eventpoll.c) compat bits follow ...

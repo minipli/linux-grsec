@@ -220,6 +220,20 @@ extern struct ctl_table epoll_table[];
 int sysctl_legacy_va_layout;
 #endif
 
+#ifdef CONFIG_PAX_SOFTMODE
+static ctl_table pax_table[] = {
+	{
+		.procname	= "softmode",
+		.data		= &pax_softmode,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0600,
+		.proc_handler	= &proc_dointvec,
+	},
+
+	{ }
+};
+#endif
+
 /* The default sysctl tables: */
 
 static struct ctl_table root_table[] = {
@@ -266,6 +280,15 @@ static int max_extfrag_threshold = 1000;
 #endif
 
 static struct ctl_table kern_table[] = {
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 	{
 		.procname	= "sched_child_runs_first",
 		.data		= &sysctl_sched_child_runs_first,
@@ -1216,6 +1239,13 @@ static struct ctl_table vm_table[] = {
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= &zero,
 	},
+	{
+		.procname	= "heap_stack_gap",
+		.data		= &sysctl_heap_stack_gap,
+		.maxlen		= sizeof(sysctl_heap_stack_gap),
+		.mode		= 0644,
+		.proc_handler	= proc_doulongvec_minmax,
+	},
 #else
 	{
 		.procname	= "nr_trim_pages",
@@ -1732,7 +1762,9 @@ int sysctl_perm(struct ctl_table_root *root, struct ctl_table *table, int op)
 static void sysctl_set_parent(struct ctl_table *parent, struct ctl_table *table)
 {
 	for (; table->procname; table++) {
-		table->parent = parent;
+		pax_open_kernel();
+		*(void **)&table->parent = (ctl_table_no_const *)parent;
+		pax_close_kernel();
 		if (table->child)
 			sysctl_set_parent(table, table->child);
 	}
@@ -1856,7 +1888,8 @@ struct ctl_table_header *__register_sysctl_paths(
 	const struct ctl_path *path, struct ctl_table *table)
 {
 	struct ctl_table_header *header;
-	struct ctl_table *new, **prevp;
+	struct ctl_table **prevp;
+	ctl_table_no_const *new;
 	unsigned int n, npath;
 	struct ctl_table_set *set;
 
@@ -1877,7 +1910,7 @@ struct ctl_table_header *__register_sysctl_paths(
 	if (!header)
 		return NULL;
 
-	new = (struct ctl_table *) (header + 1);
+	new = (ctl_table_no_const *) (header + 1);
 
 	/* Now connect the dots */
 	prevp = &header->ctl_table;
@@ -2229,6 +2262,8 @@ static int proc_put_long(void __user **buf, size_t *size, unsigned long val,
 	len = strlen(tmp);
 	if (len > *size)
 		len = *size;
+	if (len > sizeof(tmp))
+		len = sizeof(tmp);
 	if (copy_to_user(*buf, tmp, len))
 		return -EFAULT;
 	*size -= len;
@@ -2393,7 +2428,7 @@ int proc_dointvec(struct ctl_table *table, int write,
 static int proc_taint(struct ctl_table *table, int write,
 			       void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table t;
+	ctl_table_no_const t;
 	unsigned long tmptaint = get_taint();
 	int err;
 
@@ -2545,8 +2580,11 @@ static int __do_proc_doulongvec_minmax(void *data, struct ctl_table *table, int 
 			*i = val;
 		} else {
 			val = convdiv * (*i) / convmul;
-			if (!first)
+			if (!first) {
 				err = proc_put_char(&buffer, &left, '\t');
+				if (err)
+					break;
+			}
 			err = proc_put_long(&buffer, &left, val, false);
 			if (err)
 				break;
