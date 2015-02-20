@@ -716,8 +716,11 @@ void ping_rcv(struct sk_buff *skb)
 	sk = ping_v4_lookup(net, saddr, daddr, ntohs(icmph->un.echo.id),
 			    skb->dev->ifindex);
 	if (sk != NULL) {
+		struct sk_buff *skb2 = skb_clone(skb, GFP_ATOMIC);
+
 		pr_debug("rcv on socket %p\n", sk);
-		ping_queue_rcv_skb(sk, skb_get(skb));
+		if (skb2)
+			ping_queue_rcv_skb(sk, skb2);
 		sock_put(sk);
 		return;
 	}
@@ -842,7 +845,7 @@ static void ping_format_sock(struct sock *sp, struct seq_file *f,
 		sk_rmem_alloc_get(sp),
 		0, 0L, 0, sock_i_uid(sp), 0, sock_i_ino(sp),
 		atomic_read(&sp->sk_refcnt), sp,
-		atomic_read(&sp->sk_drops), len);
+		atomic_read_unchecked(&sp->sk_drops), len);
 }
 
 static int ping_seq_show(struct seq_file *seq, void *v)

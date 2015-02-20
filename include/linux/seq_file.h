@@ -24,6 +24,9 @@ struct seq_file {
 	struct mutex lock;
 	const struct seq_operations *op;
 	int poll_event;
+#ifdef CONFIG_GRKERNSEC_PROC_MEMMAP
+	u64 exec_id;
+#endif
 	void *private;
 };
 
@@ -33,6 +36,7 @@ struct seq_operations {
 	void * (*next) (struct seq_file *m, void *v, loff_t *pos);
 	int (*show) (struct seq_file *m, void *v);
 };
+typedef struct seq_operations __no_const seq_operations_no_const;
 
 #define SEQ_SKIP 1
 
@@ -76,6 +80,7 @@ static inline void seq_commit(struct seq_file *m, int num)
 
 char *mangle_path(char *s, char *p, char *esc);
 int seq_open(struct file *, const struct seq_operations *);
+int seq_open_restrict(struct file *, const struct seq_operations *);
 ssize_t seq_read(struct file *, char __user *, size_t, loff_t *);
 loff_t seq_lseek(struct file *, loff_t, int);
 int seq_release(struct inode *, struct file *);
@@ -117,6 +122,7 @@ static inline int seq_nodemask_list(struct seq_file *m, nodemask_t *mask)
 }
 
 int single_open(struct file *, int (*)(struct seq_file *, void *), void *);
+int single_open_restrict(struct file *, int (*)(struct seq_file *, void *), void *);
 int single_release(struct inode *, struct file *);
 void *__seq_open_private(struct file *, const struct seq_operations *, int);
 int seq_open_private(struct file *, const struct seq_operations *, int);
