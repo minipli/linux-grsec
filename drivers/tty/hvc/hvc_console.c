@@ -342,7 +342,7 @@ static int hvc_open(struct tty_struct *tty, struct file * filp)
 
 	spin_lock_irqsave(&hp->port.lock, flags);
 	/* Check and then increment for fast path open. */
-	if (hp->port.count++ > 0) {
+	if (atomic_inc_return(&hp->port.count) > 1) {
 		spin_unlock_irqrestore(&hp->port.lock, flags);
 		hvc_kick();
 		return 0;
@@ -397,7 +397,7 @@ static void hvc_close(struct tty_struct *tty, struct file * filp)
 
 	spin_lock_irqsave(&hp->port.lock, flags);
 
-	if (--hp->port.count == 0) {
+	if (atomic_dec_return(&hp->port.count) == 0) {
 		spin_unlock_irqrestore(&hp->port.lock, flags);
 		/* We are done with the tty pointer now. */
 		tty_port_tty_set(&hp->port, NULL);
@@ -419,9 +419,9 @@ static void hvc_close(struct tty_struct *tty, struct file * filp)
 		 */
 		tty_wait_until_sent_from_close(tty, HVC_CLOSE_WAIT);
 	} else {
-		if (hp->port.count < 0)
+		if (atomic_read(&hp->port.count) < 0)
 			printk(KERN_ERR "hvc_close %X: oops, count is %d\n",
-				hp->vtermno, hp->port.count);
+				hp->vtermno, atomic_read(&hp->port.count));
 		spin_unlock_irqrestore(&hp->port.lock, flags);
 	}
 }
@@ -451,12 +451,12 @@ static void hvc_hangup(struct tty_struct *tty)
 	 * open->hangup case this can be called after the final close so prevent
 	 * that from happening for now.
 	 */
-	if (hp->port.count <= 0) {
+	if (atomic_read(&hp->port.count) <= 0) {
 		spin_unlock_irqrestore(&hp->port.lock, flags);
 		return;
 	}
 
-	hp->port.count = 0;
+	atomic_set(&hp->port.count, 0);
 	spin_unlock_irqrestore(&hp->port.lock, flags);
 	tty_port_tty_set(&hp->port, NULL);
 
@@ -504,7 +504,7 @@ static int hvc_write(struct tty_struct *tty, const unsigned char *buf, int count
 		return -EPIPE;
 
 	/* FIXME what's this (unprotected) check for? */
-	if (hp->port.count <= 0)
+	if (atomic_read(&hp->port.count) <= 0)
 		return -EIO;
 
 	spin_lock_irqsave(&hp->lock, flags);

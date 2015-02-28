@@ -36,7 +36,7 @@ struct outer_cache_fns {
 
 	/* This is an ARM L2C thing */
 	void (*write_sec)(unsigned long, unsigned);
-};
+} __no_const;
 
 extern struct outer_cache_fns outer_cache;
 

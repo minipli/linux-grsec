@@ -65,9 +65,6 @@ ifeq ($(CONFIG_X86_32),y)
         # CPU-specific tuning. Anything which can be shared with UML should go here.
         include $(srctree)/arch/x86/Makefile_32.cpu
         KBUILD_CFLAGS += $(cflags-y)
-
-        # temporary until string.h is fixed
-        KBUILD_CFLAGS += -ffreestanding
 else
         BITS := 64
         UTS_MACHINE := x86_64
@@ -106,6 +103,9 @@ else
         # newer gccs do it by default
         KBUILD_CFLAGS += $(call cc-option,-maccumulate-outgoing-args)
 endif
+
+# temporary until string.h is fixed
+KBUILD_CFLAGS += -ffreestanding
 
 # Make sure compiler does not have buggy stack-protector support.
 ifdef CONFIG_CC_STACKPROTECTOR
@@ -180,6 +180,7 @@ archheaders:
 	$(Q)$(MAKE) $(build)=arch/x86/syscalls all
 
 archprepare:
+	$(if $(LDFLAGS_BUILD_ID),,$(error $(OLD_LD)))
 ifeq ($(CONFIG_KEXEC_FILE),y)
 	$(Q)$(MAKE) $(build)=arch/x86/purgatory arch/x86/purgatory/kexec-purgatory.c
 endif
@@ -262,4 +263,10 @@ define archhelp
   echo  '                  bzdisk/fdimage*/isoimage also accept:'
   echo  '                  FDARGS="..."  arguments for the booted kernel'
   echo  '                  FDINITRD=file initrd for the booted kernel'
+endef
+
+define OLD_LD
+
+*** ${VERSION}.${PATCHLEVEL} PaX kernels no longer build correctly with old versions of binutils.
+*** Please upgrade your binutils to 2.18 or newer
 endef
