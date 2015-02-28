@@ -109,7 +109,7 @@ static inline bool pm_runtime_callbacks_present(struct device *dev)
 
 static inline void pm_runtime_mark_last_busy(struct device *dev)
 {
-	ACCESS_ONCE(dev->power.last_busy) = jiffies;
+	ACCESS_ONCE_RW(dev->power.last_busy) = jiffies;
 }
 
 #else /* !CONFIG_PM_RUNTIME */
