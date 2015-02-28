@@ -220,35 +220,35 @@ static __always_inline void data_access_exceeds_word_size(void)
 {
 }
 
-static __always_inline void __read_once_size(volatile void *p, void *res, int size)
+static __always_inline void __read_once_size(const volatile void *p, void *res, int size)
 {
 	switch (size) {
-	case 1: *(__u8 *)res = *(volatile __u8 *)p; break;
-	case 2: *(__u16 *)res = *(volatile __u16 *)p; break;
-	case 4: *(__u32 *)res = *(volatile __u32 *)p; break;
+	case 1: *(__u8 *)res = *(const volatile __u8 *)p; break;
+	case 2: *(__u16 *)res = *(const volatile __u16 *)p; break;
+	case 4: *(__u32 *)res = *(const volatile __u32 *)p; break;
 #ifdef CONFIG_64BIT
-	case 8: *(__u64 *)res = *(volatile __u64 *)p; break;
+	case 8: *(__u64 *)res = *(const volatile __u64 *)p; break;
 #endif
 	default:
 		barrier();
-		__builtin_memcpy((void *)res, (const void *)p, size);
+		__builtin_memcpy(res, (const void *)p, size);
 		data_access_exceeds_word_size();
 		barrier();
 	}
 }
 
-static __always_inline void __write_once_size(volatile void *p, void *res, int size)
+static __always_inline void __write_once_size(volatile void *p, const void *res, int size)
 {
 	switch (size) {
-	case 1: *(volatile __u8 *)p = *(__u8 *)res; break;
-	case 2: *(volatile __u16 *)p = *(__u16 *)res; break;
-	case 4: *(volatile __u32 *)p = *(__u32 *)res; break;
+	case 1: *(volatile __u8 *)p = *(const __u8 *)res; break;
+	case 2: *(volatile __u16 *)p = *(const __u16 *)res; break;
+	case 4: *(volatile __u32 *)p = *(const __u32 *)res; break;
 #ifdef CONFIG_64BIT
-	case 8: *(volatile __u64 *)p = *(__u64 *)res; break;
+	case 8: *(volatile __u64 *)p = *(const __u64 *)res; break;
 #endif
 	default:
 		barrier();
-		__builtin_memcpy((void *)p, (const void *)res, size);
+		__builtin_memcpy((void *)p, res, size);
 		data_access_exceeds_word_size();
 		barrier();
 	}
@@ -277,10 +277,10 @@ static __always_inline void __write_once_size(volatile void *p, void *res, int s
  */
 
 #define READ_ONCE(x) \
-	({ typeof(x) __val; __read_once_size(&x, &__val, sizeof(__val)); __val; })
+	({ union { typeof(x) __val; char __c[1]; } __u; __read_once_size(&(x), __u.__c, sizeof(x)); __u.__val; })
 
 #define WRITE_ONCE(x, val) \
-	({ typeof(x) __val; __val = val; __write_once_size(&x, &__val, sizeof(__val)); __val; })
+	({ typeof(x) __val = (val); __write_once_size(&(x), &__val, sizeof(__val)); __val; })
 
 #endif /* __KERNEL__ */
 
