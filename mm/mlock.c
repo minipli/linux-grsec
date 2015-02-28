@@ -606,7 +606,7 @@ static int do_mlock(unsigned long start, size_t len, int on)
 {
 	unsigned long nstart, end, tmp;
 	struct vm_area_struct * vma, * prev;
-	int error;
+	int error = 0;
 
 	VM_BUG_ON(start & ~PAGE_MASK);
 	VM_BUG_ON(len != PAGE_ALIGN(len));
@@ -615,6 +615,9 @@ static int do_mlock(unsigned long start, size_t len, int on)
 		return -EINVAL;
 	if (end == start)
 		return 0;
+	if (end > TASK_SIZE)
+		return -EINVAL;
+
 	vma = find_vma(current->mm, start);
 	if (!vma || vma->vm_start > start)
 		return -ENOMEM;
@@ -625,6 +628,11 @@ static int do_mlock(unsigned long start, size_t len, int on)
 
 	for (nstart = start ; ; ) {
 		vm_flags_t newflags;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if ((current->mm->pax_flags & MF_PAX_SEGMEXEC) && (vma->vm_start >= SEGMEXEC_TASK_SIZE))
+			break;
+#endif
 
 		/* Here we know that  vma->vm_start <= nstart < vma->vm_end. */
 
@@ -775,6 +783,11 @@ static int do_mlockall(int flags)
 
 	for (vma = current->mm->mmap; vma ; vma = prev->vm_next) {
 		vm_flags_t newflags;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if ((current->mm->pax_flags & MF_PAX_SEGMEXEC) && (vma->vm_start >= SEGMEXEC_TASK_SIZE))
+			break;
+#endif
 
 		newflags = vma->vm_flags & ~VM_LOCKED;
 		if (flags & MCL_CURRENT)

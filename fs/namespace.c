@@ -1414,7 +1414,7 @@ static inline bool may_mount(void)
  * unixes. Our API is identical to OSF/1 to avoid making a mess of AMD
  */
 
-SYSCALL_DEFINE2(umount, char __user *, name, int, flags)
+SYSCALL_DEFINE2(umount, const char __user *, name, int, flags)
 {
 	struct path path;
 	struct mount *mnt;
@@ -1459,7 +1459,7 @@ out:
 /*
  *	The 2.0 compatible umount. No flags.
  */
-SYSCALL_DEFINE1(oldumount, char __user *, name)
+SYSCALL_DEFINE1(oldumount, const char __user *, name)
 {
 	return sys_umount(name, 0);
 }
@@ -2545,7 +2545,7 @@ static void free_mnt_ns(struct mnt_namespace *ns)
  * number incrementing at 10Ghz will take 12,427 years to wrap which
  * is effectively never, so we can ignore the possibility.
  */
-static atomic64_t mnt_ns_seq = ATOMIC64_INIT(1);
+static atomic64_unchecked_t mnt_ns_seq = ATOMIC64_INIT(1);
 
 static struct mnt_namespace *alloc_mnt_ns(struct user_namespace *user_ns)
 {
@@ -2560,7 +2560,7 @@ static struct mnt_namespace *alloc_mnt_ns(struct user_namespace *user_ns)
 		kfree(new_ns);
 		return ERR_PTR(ret);
 	}
-	new_ns->seq = atomic64_add_return(1, &mnt_ns_seq);
+	new_ns->seq = atomic64_inc_return_unchecked(&mnt_ns_seq);
 	atomic_set(&new_ns->count, 1);
 	new_ns->root = NULL;
 	INIT_LIST_HEAD(&new_ns->list);
@@ -2570,7 +2570,7 @@ static struct mnt_namespace *alloc_mnt_ns(struct user_namespace *user_ns)
 	return new_ns;
 }
 
-struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
+__latent_entropy struct mnt_namespace *copy_mnt_ns(unsigned long flags, struct mnt_namespace *ns,
 		struct user_namespace *user_ns, struct fs_struct *new_fs)
 {
 	struct mnt_namespace *new_ns;
@@ -2691,8 +2691,8 @@ struct dentry *mount_subtree(struct vfsmount *mnt, const char *name)
 }
 EXPORT_SYMBOL(mount_subtree);
 
-SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
-		char __user *, type, unsigned long, flags, void __user *, data)
+SYSCALL_DEFINE5(mount, const char __user *, dev_name, const char __user *, dir_name,
+		const char __user *, type, unsigned long, flags, void __user *, data)
 {
 	int ret;
 	char *kernel_type;
@@ -3076,7 +3076,7 @@ static int mntns_install(struct nsproxy *nsproxy, void *ns)
 	    !ns_capable(current_user_ns(), CAP_SYS_ADMIN))
 		return -EPERM;
 
-	if (fs->users != 1)
+	if (atomic_read(&fs->users) != 1)
 		return -EINVAL;
 
 	get_mnt_ns(mnt_ns);
