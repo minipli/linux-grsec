@@ -61,10 +61,10 @@ int ovs_vport_send(struct vport *, struct sk_buff *);
 /* The following definitions are for implementers of vport devices: */
 
 struct vport_err_stats {
-	atomic_long_t rx_dropped;
-	atomic_long_t rx_errors;
-	atomic_long_t tx_dropped;
-	atomic_long_t tx_errors;
+	atomic_long_unchecked_t rx_dropped;
+	atomic_long_unchecked_t rx_errors;
+	atomic_long_unchecked_t tx_dropped;
+	atomic_long_unchecked_t tx_errors;
 };
 /**
  * struct vport_portids - array of netlink portids of a vport.

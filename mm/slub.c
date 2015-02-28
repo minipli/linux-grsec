@@ -197,7 +197,7 @@ struct track {
 
 enum track_item { TRACK_ALLOC, TRACK_FREE };
 
-#ifdef CONFIG_SYSFS
+#if defined(CONFIG_SYSFS) && !defined(CONFIG_GRKERNSEC_PROC_ADD)
 static int sysfs_slab_add(struct kmem_cache *);
 static int sysfs_slab_alias(struct kmem_cache *, const char *);
 static void memcg_propagate_slab_attrs(struct kmem_cache *s);
@@ -535,7 +535,7 @@ static void print_track(const char *s, struct track *t)
 	if (!t->addr)
 		return;
 
-	pr_err("INFO: %s in %pS age=%lu cpu=%u pid=%d\n",
+	pr_err("INFO: %s in %pA age=%lu cpu=%u pid=%d\n",
 	       s, (void *)t->addr, jiffies - t->when, t->cpu, t->pid);
 #ifdef CONFIG_STACKTRACE
 	{
@@ -2645,6 +2645,14 @@ static __always_inline void slab_free(struct kmem_cache *s,
 
 	slab_free_hook(s, x);
 
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	if (!(s->flags & SLAB_NO_SANITIZE)) {
+		memset(x, PAX_MEMORY_SANITIZE_VALUE, s->object_size);
+		if (s->ctor)
+			s->ctor(x);
+	}
+#endif
+
 redo:
 	/*
 	 * Determine the currently cpus per cpu slab.
@@ -2982,6 +2990,9 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	s->inuse = size;
 
 	if (((flags & (SLAB_DESTROY_BY_RCU | SLAB_POISON)) ||
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+		(!(flags & SLAB_NO_SANITIZE)) ||
+#endif
 		s->ctor)) {
 		/*
 		 * Relocate free pointer after the object if it is not
@@ -3301,6 +3312,59 @@ void *__kmalloc_node(size_t size, gfp_t flags, int node)
 EXPORT_SYMBOL(__kmalloc_node);
 #endif
 
+bool is_usercopy_object(const void *ptr)
+{
+	struct page *page;
+	struct kmem_cache *s;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		return false;
+
+	if (!slab_is_available())
+		return false;
+
+	if (!virt_addr_valid(ptr))
+		return false;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page))
+		return false;
+
+	s = page->slab_cache;
+	return s->flags & SLAB_USERCOPY;
+}
+
+#ifdef CONFIG_PAX_USERCOPY
+const char *check_heap_object(const void *ptr, unsigned long n)
+{
+	struct page *page;
+	struct kmem_cache *s;
+	unsigned long offset;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		return "<null>";
+
+	if (!virt_addr_valid(ptr))
+		return NULL;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page))
+		return NULL;
+
+	s = page->slab_cache;
+	if (!(s->flags & SLAB_USERCOPY))
+		return s->name;
+
+	offset = (ptr - page_address(page)) % s->size;
+	if (offset <= s->object_size && n <= s->object_size - offset)
+		return NULL;
+
+	return s->name;
+}
+#endif
+
 size_t ksize(const void *object)
 {
 	struct page *page;
@@ -3329,6 +3393,7 @@ void kfree(const void *x)
 	if (unlikely(ZERO_OR_NULL_PTR(x)))
 		return;
 
+	VM_BUG_ON(!virt_addr_valid(x));
 	page = virt_to_head_page(x);
 	if (unlikely(!PageSlab(page))) {
 		BUG_ON(!PageCompound(page));
@@ -3624,7 +3689,7 @@ __kmem_cache_alias(const char *name, size_t size, size_t align,
 		int i;
 		struct kmem_cache *c;
 
-		s->refcount++;
+		atomic_inc(&s->refcount);
 
 		/*
 		 * Adjust the object sizes so that we clear
@@ -3643,7 +3708,7 @@ __kmem_cache_alias(const char *name, size_t size, size_t align,
 		}
 
 		if (sysfs_slab_alias(s, name)) {
-			s->refcount--;
+			atomic_dec(&s->refcount);
 			s = NULL;
 		}
 	}
@@ -3760,7 +3825,7 @@ void *__kmalloc_node_track_caller(size_t size, gfp_t gfpflags,
 }
 #endif
 
-#ifdef CONFIG_SYSFS
+#if defined(CONFIG_SYSFS) && !defined(CONFIG_GRKERNSEC_PROC_ADD)
 static int count_inuse(struct page *page)
 {
 	return page->inuse;
@@ -4041,7 +4106,11 @@ static int list_locations(struct kmem_cache *s, char *buf,
 		len += sprintf(buf + len, "%7ld ", l->count);
 
 		if (l->addr)
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+			len += sprintf(buf + len, "%pS", NULL);
+#else
 			len += sprintf(buf + len, "%pS", (void *)l->addr);
+#endif
 		else
 			len += sprintf(buf + len, "<not-available>");
 
@@ -4143,12 +4212,12 @@ static void __init resiliency_test(void)
 	validate_slab_cache(kmalloc_caches[9]);
 }
 #else
-#ifdef CONFIG_SYSFS
+#if defined(CONFIG_SYSFS) && !defined(CONFIG_GRKERNSEC_PROC_ADD)
 static void resiliency_test(void) {};
 #endif
 #endif
 
-#ifdef CONFIG_SYSFS
+#if defined(CONFIG_SYSFS) && !defined(CONFIG_GRKERNSEC_PROC_ADD)
 enum slab_stat_type {
 	SL_ALL,			/* All slabs */
 	SL_PARTIAL,		/* Only partially allocated slabs */
@@ -4385,13 +4454,17 @@ static ssize_t ctor_show(struct kmem_cache *s, char *buf)
 {
 	if (!s->ctor)
 		return 0;
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+	return sprintf(buf, "%pS\n", NULL);
+#else
 	return sprintf(buf, "%pS\n", s->ctor);
+#endif
 }
 SLAB_ATTR_RO(ctor);
 
 static ssize_t aliases_show(struct kmem_cache *s, char *buf)
 {
-	return sprintf(buf, "%d\n", s->refcount < 0 ? 0 : s->refcount - 1);
+	return sprintf(buf, "%d\n", atomic_read(&s->refcount) < 0 ? 0 : atomic_read(&s->refcount) - 1);
 }
 SLAB_ATTR_RO(aliases);
 
@@ -4479,6 +4552,22 @@ static ssize_t cache_dma_show(struct kmem_cache *s, char *buf)
 SLAB_ATTR_RO(cache_dma);
 #endif
 
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+static ssize_t usercopy_show(struct kmem_cache *s, char *buf)
+{
+	return sprintf(buf, "%d\n", !!(s->flags & SLAB_USERCOPY));
+}
+SLAB_ATTR_RO(usercopy);
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+static ssize_t sanitize_show(struct kmem_cache *s, char *buf)
+{
+	return sprintf(buf, "%d\n", !(s->flags & SLAB_NO_SANITIZE));
+}
+SLAB_ATTR_RO(sanitize);
+#endif
+
 static ssize_t destroy_by_rcu_show(struct kmem_cache *s, char *buf)
 {
 	return sprintf(buf, "%d\n", !!(s->flags & SLAB_DESTROY_BY_RCU));
@@ -4534,7 +4623,7 @@ static ssize_t trace_store(struct kmem_cache *s, const char *buf,
 	 * as well as cause other issues like converting a mergeable
 	 * cache into an umergeable one.
 	 */
-	if (s->refcount > 1)
+	if (atomic_read(&s->refcount) > 1)
 		return -EINVAL;
 
 	s->flags &= ~SLAB_TRACE;
@@ -4654,7 +4743,7 @@ static ssize_t failslab_show(struct kmem_cache *s, char *buf)
 static ssize_t failslab_store(struct kmem_cache *s, const char *buf,
 							size_t length)
 {
-	if (s->refcount > 1)
+	if (atomic_read(&s->refcount) > 1)
 		return -EINVAL;
 
 	s->flags &= ~SLAB_FAILSLAB;
@@ -4823,6 +4912,12 @@ static struct attribute *slab_attrs[] = {
 #endif
 #ifdef CONFIG_ZONE_DMA
 	&cache_dma_attr.attr,
+#endif
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+	&usercopy_attr.attr,
+#endif
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	&sanitize_attr.attr,
 #endif
 #ifdef CONFIG_NUMA
 	&remote_node_defrag_ratio_attr.attr,
@@ -5068,6 +5163,7 @@ static char *create_unique_id(struct kmem_cache *s)
 	return name;
 }
 
+#if defined(CONFIG_SYSFS) && !defined(CONFIG_GRKERNSEC_PROC_ADD)
 static int sysfs_slab_add(struct kmem_cache *s)
 {
 	int err;
@@ -5141,6 +5237,7 @@ void sysfs_slab_remove(struct kmem_cache *s)
 	kobject_del(&s->kobj);
 	kobject_put(&s->kobj);
 }
+#endif
 
 /*
  * Need to buffer aliases during bootup until sysfs becomes
@@ -5154,6 +5251,7 @@ struct saved_alias {
 
 static struct saved_alias *alias_list;
 
+#if defined(CONFIG_SYSFS) && !defined(CONFIG_GRKERNSEC_PROC_ADD)
 static int sysfs_slab_alias(struct kmem_cache *s, const char *name)
 {
 	struct saved_alias *al;
@@ -5176,6 +5274,7 @@ static int sysfs_slab_alias(struct kmem_cache *s, const char *name)
 	alias_list = al;
 	return 0;
 }
+#endif
 
 static int __init slab_sysfs_init(void)
 {

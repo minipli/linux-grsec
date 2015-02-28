@@ -1632,12 +1632,10 @@ static srpc_service_t sfw_services[] = {
 
 extern sfw_test_client_ops_t ping_test_client;
 extern srpc_service_t	ping_test_service;
-extern void ping_init_test_client(void);
 extern void ping_init_test_service(void);
 
 extern sfw_test_client_ops_t brw_test_client;
 extern srpc_service_t	brw_test_service;
-extern void brw_init_test_client(void);
 extern void brw_init_test_service(void);
 
 
@@ -1681,12 +1679,10 @@ sfw_startup (void)
 	INIT_LIST_HEAD(&sfw_data.fw_zombie_rpcs);
 	INIT_LIST_HEAD(&sfw_data.fw_zombie_sessions);
 
-	brw_init_test_client();
 	brw_init_test_service();
 	rc = sfw_register_test(&brw_test_service, &brw_test_client);
 	LASSERT (rc == 0);
 
-	ping_init_test_client();
 	ping_init_test_service();
 	rc = sfw_register_test(&ping_test_service, &ping_test_client);
 	LASSERT (rc == 0);
