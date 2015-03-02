@@ -3,7 +3,7 @@
  * Licensed under the GPL v2, or (at your option) v3
  *
  * Homepage:
- * http://www.grsecurity.net/~ephox/overflow_plugin/
+ * https://github.com/ephox-gcc-plugins/size_overflow
  *
  * Documentation:
  * http://forums.grsecurity.net/viewtopic.php?f=7&t=3043
@@ -70,9 +70,9 @@ static void __unused print_next_interesting_function(next_interesting_function_t
 		return;
 
 	fprintf(stderr, "print_next_interesting_function: ptr: %p, ", node);
-	fprintf(stderr, "function_name: %s decl_ptr: %p, ", DECL_NAME_POINTER(node->decl), node->decl);
+	fprintf(stderr, "decl_name: %s, ", node->decl_name);
 
-	fprintf(stderr, "num: %u marked: %s\n", node->num, print_so_mark_name(node->marked));
+	fprintf(stderr, "num: %u marked: %s context: %s\n", node->num, print_so_mark_name(node->marked), node->context);
 #if BUILDING_GCC_VERSION <= 4007
 	if (VEC_empty(next_interesting_function_t, node->children))
 		return;
@@ -80,12 +80,12 @@ static void __unused print_next_interesting_function(next_interesting_function_t
 #else
 	FOR_EACH_VEC_SAFE_ELT(node->children, i, cur) {
 #endif
-		fprintf(stderr, "\t%u. child: %s %u %p\n", i + 1, DECL_NAME_POINTER(cur->decl), cur->num, cur);
+		fprintf(stderr, "\t%u. child: %s %u %p\n", i + 1, cur->decl_name, cur->num, cur);
 	}
 }
 
 // Dump the full next_interesting_function_t list for parsing by print_dependecy.py
-void __unused print_next_interesting_functions(next_interesting_function_t head, bool only_this)
+void __unused print_next_interesting_functions_chain(next_interesting_function_t head, bool only_this)
 {
 	next_interesting_function_t cur;
 	unsigned int len;
@@ -105,6 +105,20 @@ void __unused print_next_interesting_functions(next_interesting_function_t head,
 	fprintf(stderr, "len: %u\n----------------------\n\n\n", len + 1);
 }
 
+void __unused print_global_next_interesting_functions(void)
+{
+	unsigned int i;
+
+	fprintf(stderr, "----------------------\nprint_global_next_interesting_functions:\n----------------------\n");
+	for (i = 0; i < GLOBAL_NIFN_LEN; i++) {
+		if (!global_next_interesting_function[i])
+			continue;
+		fprintf(stderr, "hash: %u\n", i);
+		print_next_interesting_functions_chain(global_next_interesting_function[i], false);
+	}
+	fprintf(stderr, "----------------------\n\n");
+}
+
 // Dump the information related to the specified next_interesting_function_t for parsing by print_dependecy.py
 void __unused print_children_chain_list(next_interesting_function_t next_node)
 {
@@ -118,7 +132,7 @@ void __unused print_children_chain_list(next_interesting_function_t next_node)
 #else
 	FOR_EACH_VEC_SAFE_ELT(next_node->children, i, cur) {
 #endif
-		fprintf(stderr, "parent: %s %u (marked: %s) child: %s %u\n", DECL_NAME_POINTER(next_node->decl), next_node->num, print_so_mark_name(next_node->marked), DECL_NAME_POINTER(cur->decl), cur->num);
+		fprintf(stderr, "parent: %s %u (marked: %s) child: %s %u\n", next_node->decl_name, next_node->num, print_so_mark_name(next_node->marked), cur->decl_name, cur->num);
 		print_children_chain_list(cur);
 	}
 }

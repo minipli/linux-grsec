@@ -3,7 +3,7 @@
  * Licensed under the GPL v2, or (at your option) v3
  *
  * Homepage:
- * http://www.grsecurity.net/~ephox/overflow_plugin/
+ * https://github.com/ephox-gcc-plugins/size_overflow
  *
  * Documentation:
  * http://forums.grsecurity.net/viewtopic.php?f=7&t=3043
@@ -19,10 +19,38 @@
 
 #include "size_overflow.h"
 
+const char *get_type_name_from_field(const_tree field_decl)
+{
+	const_tree context, type_name;
+
+	if (TREE_CODE(field_decl) != FIELD_DECL)
+		return NULL;
+
+	context = DECL_CONTEXT(field_decl);
+	gcc_assert(TREE_CODE(context) == RECORD_TYPE);
+	type_name = TYPE_NAME(TYPE_MAIN_VARIANT(context));
+	if (type_name == NULL_TREE)
+		return NULL;
+
+	if (TREE_CODE(type_name) == IDENTIFIER_NODE)
+		return IDENTIFIER_POINTER(type_name);
+	else if (TREE_CODE(type_name) == TYPE_DECL)
+		return DECL_NAME_POINTER(type_name);
+
+	debug_tree((tree)field_decl);
+	debug_tree((tree)type_name);
+	gcc_unreachable();
+}
+
 // Was the function created by the compiler itself?
 bool made_by_compiler(const_tree decl)
 {
 	struct cgraph_node *node;
+
+	if (FUNCTION_PTR_P(decl))
+		return false;
+	if (TREE_CODE(decl) == VAR_DECL)
+		return false;
 
 	gcc_assert(TREE_CODE(decl) == FUNCTION_DECL);
 	if (DECL_ARTIFICIAL(decl))
@@ -49,6 +77,21 @@ bool skip_types(const_tree var)
 		default:
 			return true;
 	}
+}
+
+gimple get_fnptr_def_stmt(const_tree fn_ptr)
+{
+	gimple def_stmt;
+
+	gcc_assert(fn_ptr != NULL_TREE);
+	gcc_assert(FUNCTION_PTR_P(fn_ptr));
+
+	if (is_gimple_constant(fn_ptr))
+		return NULL;
+
+	def_stmt = get_def_stmt(fn_ptr);
+	gcc_assert(def_stmt);
+	return def_stmt;
 }
 
 gimple get_def_stmt(const_tree node)
@@ -172,7 +215,7 @@ static bool unchanged_arglist(struct cgraph_node *new_node, struct cgraph_node *
 	return true;
 }
 
-unsigned int get_correct_argnum_only_fndecl(const_tree fndecl, const_tree correct_argnum_of_fndecl, unsigned int num)
+unsigned int get_correct_argnum_fndecl(const_tree fndecl, const_tree correct_argnum_of_fndecl, unsigned int num)
 {
 	unsigned int new_num;
 	const_tree fndecl_arg;
@@ -182,10 +225,12 @@ unsigned int get_correct_argnum_only_fndecl(const_tree fndecl, const_tree correc
 	if (num == 0)
 		return num;
 
-	target_fndecl_arglist = DECL_ARGUMENTS(correct_argnum_of_fndecl);
-	if (fndecl == correct_argnum_of_fndecl)
+	if (fndecl == correct_argnum_of_fndecl && !DECL_ARTIFICIAL(fndecl))
 		return num;
+	else if (fndecl == correct_argnum_of_fndecl && DECL_ARTIFICIAL(fndecl))
+		return CANNOT_FIND_ARG;
 
+	target_fndecl_arglist = DECL_ARGUMENTS(correct_argnum_of_fndecl);
 	if (fndecl_arglist == NULL_TREE || target_fndecl_arglist == NULL_TREE)
 		return CANNOT_FIND_ARG;
 
@@ -241,7 +286,7 @@ static unsigned int orig_argnum_on_clone(struct cgraph_node *new_node, struct cg
 }
 
 // Associate the argument between a clone and a cloned function
-unsigned int get_correct_argnum(struct cgraph_node *node, struct cgraph_node *correct_argnum_of_node, unsigned int argnum)
+static unsigned int get_correct_argnum_cnode(struct cgraph_node *node, struct cgraph_node *correct_argnum_of_node, unsigned int argnum)
 {
 	bool node_clone, correct_argnum_of_node_clone;
 	const_tree correct_argnum_of_node_decl, node_decl;
@@ -278,59 +323,47 @@ unsigned int get_correct_argnum(struct cgraph_node *node, struct cgraph_node *co
 		return clone_argnum_on_orig(correct_argnum_of_node, node, argnum);
 	else if (!node_clone && correct_argnum_of_node_clone)
 		return orig_argnum_on_clone(correct_argnum_of_node, node, argnum);
-	return argnum;
+
+	if (node)
+		debug_tree((tree)NODE_DECL(node));
+	debug_tree((tree)correct_argnum_of_node_decl);
+	gcc_unreachable();
 }
 
-// Find the original cloned function in our own database because gcc can lose this information
-static tree get_orig_decl_from_global_next_interesting_function(const_tree clone_fndecl)
+unsigned int get_correct_argnum(const_tree decl, const_tree correct_argnum_of_decl, unsigned int argnum)
 {
-	next_interesting_function_t next_node;
+	struct cgraph_node *node, *correct_argnum_of_node;
 
-	next_node = get_next_interesting_function(global_next_interesting_function_head, clone_fndecl, NONE_ARGNUM, NO_SO_MARK);
+	gcc_assert(decl != NULL_TREE);
+	gcc_assert(correct_argnum_of_decl != NULL_TREE);
 
-	if (!next_node)
-		return NULL_TREE;
-	if (next_node->orig_next_node)
-		return next_node->orig_next_node->decl;
-	return next_node->decl;
+	correct_argnum_of_node = get_cnode(correct_argnum_of_decl);
+	if (!correct_argnum_of_node || DECL_ARTIFICIAL(decl) || DECL_ARTIFICIAL(correct_argnum_of_decl))
+		return get_correct_argnum_fndecl(decl, correct_argnum_of_decl, argnum);
+
+	node = get_cnode(decl);
+	return get_correct_argnum_cnode(node, correct_argnum_of_node, argnum);
 }
 
 // Find the original cloned function
 tree get_orig_fndecl(const_tree clone_fndecl)
 {
 	tree orig_fndecl;
-	struct cgraph_node *node = get_cnode(clone_fndecl);
-
-	if (!node) {
-		orig_fndecl = get_orig_decl_from_global_next_interesting_function(clone_fndecl);
-		if (orig_fndecl != NULL_TREE)
-			return orig_fndecl;
-		return (tree)clone_fndecl;
-	}
-
-	if (!made_by_compiler(clone_fndecl))
-		return (tree)clone_fndecl;
+	struct cgraph_node *node;
 
 	orig_fndecl = (tree)DECL_ORIGIN(clone_fndecl);
 	if (!made_by_compiler(orig_fndecl))
 		return orig_fndecl;
 
+	node = get_cnode(clone_fndecl);
+	if (!node)
+		return (tree)clone_fndecl;
+
 	while (node->clone_of)
 		node = node->clone_of;
 	if (!made_by_compiler(NODE_DECL(node)))
 		return NODE_DECL(node);
-
-	while (node) {
-		orig_fndecl = get_orig_decl_from_global_next_interesting_function(clone_fndecl);
-		if (orig_fndecl != NULL_TREE)
-			return orig_fndecl;
-		node = node->clone_of;
-	}
-
-	orig_fndecl = get_orig_decl_from_global_next_interesting_function_by_str(clone_fndecl);
-	if (orig_fndecl != NULL_TREE)
-		return orig_fndecl;
-
+	// Return the cloned decl because it is needed for the transform callback
 	return (tree)clone_fndecl;
 }
 

@@ -3,7 +3,7 @@
  * Licensed under the GPL v2, or (at your option) v3
  *
  * Homepage:
- * http://www.grsecurity.net/~ephox/overflow_plugin/
+ * https://github.com/ephox-gcc-plugins/size_overflow
  *
  * Documentation:
  * http://forums.grsecurity.net/viewtopic.php?f=7&t=3043
@@ -163,11 +163,8 @@ static void print_missing_intentional(enum intentional_mark callee_attr, enum in
 	if (callee_attr == MARK_END_INTENTIONAL || callee_attr == MARK_YES)
 		return;
 
-	hash = get_function_hash(decl);
+	hash = get_size_overflow_hash_entry_tree(decl, argnum);
 	if (!hash)
-		return;
-
-	if (!(hash->param & (1U << argnum)))
 		return;
 
 	loc = DECL_SOURCE_LOCATION(decl);
@@ -871,7 +868,12 @@ static gimple get_dup_stmt(struct visited *visited, gimple stmt)
 	my_stmt = gsi_stmt(gsi);
 
 	gcc_assert(pointer_set_contains(visited->my_stmts, my_stmt));
-	gcc_assert(gimple_assign_rhs_code(stmt) == gimple_assign_rhs_code(my_stmt));
+	if (gimple_assign_rhs_code(stmt) != gimple_assign_rhs_code(my_stmt)) {
+		fprintf(stderr, "%s != %s\n", get_tree_code_name(gimple_assign_rhs_code(stmt)), get_tree_code_name(gimple_assign_rhs_code(my_stmt)));
+		debug_gimple_stmt(stmt);
+		debug_gimple_stmt(my_stmt);
+		gcc_unreachable();
+	}
 
 	return my_stmt;
 }

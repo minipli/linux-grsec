@@ -3,7 +3,7 @@
  * Licensed under the GPL v2, or (at your option) v3
  *
  * Homepage:
- * http://www.grsecurity.net/~ephox/overflow_plugin/
+ * https://github.com/ephox-gcc-plugins/size_overflow
  *
  * Documentation:
  * http://forums.grsecurity.net/viewtopic.php?f=7&t=3043
@@ -618,7 +618,7 @@ static tree create_cast_overflow_check(struct visited *visited, tree new_rhs1, g
 		{ true,  false, true,  true  }, // lhs < rhs
 	};
 
-	// skip lhs check on signed SI -> HI cast or signed SI -> QI cast !!!!
+	// skip lhs check on signed SI -> HI cast or signed SI -> QI cast
 	if (rhs_mode == SImode && !TYPE_UNSIGNED(rhs_type) && (lhs_mode == HImode || lhs_mode == QImode))
 		return create_assign(visited, stmt, lhs, AFTER_STMT);
 

@@ -3,7 +3,7 @@
  * Licensed under the GPL v2, or (at your option) v3
  *
  * Homepage:
- * http://www.grsecurity.net/~ephox/overflow_plugin/
+ * https://github.com/ephox-gcc-plugins/size_overflow
  *
  * Documentation:
  * http://forums.grsecurity.net/viewtopic.php?f=7&t=3043
@@ -29,7 +29,7 @@ tree size_overflow_type_DI;
 tree size_overflow_type_TI;
 
 static struct plugin_info size_overflow_plugin_info = {
-	.version	= "20150130",
+	.version	= "20150301",
 	.help		= "no-size-overflow\tturn off size overflow checking\n",
 };
 
@@ -183,7 +183,6 @@ int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version 
 	bool enable = true;
 	struct register_pass_info insert_size_overflow_asm_pass_info;
 	struct register_pass_info size_overflow_functions_pass_info;
-	struct register_pass_info size_overflow_free_pass_info;
 
 	static const struct ggc_root_tab gt_ggc_r_gt_size_overflow[] = {
 		{
@@ -206,12 +205,6 @@ int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version 
 	size_overflow_functions_pass_info.ref_pass_instance_number	= 1;
 	size_overflow_functions_pass_info.pos_op			= PASS_POS_INSERT_AFTER;
 
-	size_overflow_free_pass_info.pass			= make_size_overflow_free_pass();
-	size_overflow_free_pass_info.reference_pass_name	= "*free_cfg_annotations";
-	// gcc bug: ref_pass_instance_number can be 0 or 1
-	size_overflow_free_pass_info.ref_pass_instance_number	= 0;
-	size_overflow_free_pass_info.pos_op			= PASS_POS_INSERT_AFTER;
-
 	if (!plugin_default_version_check(version, &gcc_version)) {
 		error(G_("incompatible gcc/plugin versions"));
 		return 1;
@@ -231,7 +224,6 @@ int plugin_init(struct plugin_name_args *plugin_info, struct plugin_gcc_version 
 		register_callback(plugin_name, PLUGIN_REGISTER_GGC_ROOTS, NULL, (void *)&gt_ggc_r_gt_size_overflow);
 		register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &insert_size_overflow_asm_pass_info);
 		register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &size_overflow_functions_pass_info);
-		register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &size_overflow_free_pass_info);
 	}
 	register_callback(plugin_name, PLUGIN_ATTRIBUTES, register_attributes, NULL);
 

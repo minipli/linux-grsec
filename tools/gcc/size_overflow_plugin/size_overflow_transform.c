@@ -3,7 +3,7 @@
  * Licensed under the GPL v2, or (at your option) v3
  *
  * Homepage:
- * http://www.grsecurity.net/~ephox/overflow_plugin/
+ * https://github.com/ephox-gcc-plugins/size_overflow
  *
  * Documentation:
  * http://forums.grsecurity.net/viewtopic.php?f=7&t=3043
@@ -62,72 +62,6 @@ static void change_orig_node(struct visited *visited, gimple stmt, const_tree or
 	update_stmt(stmt);
 }
 
-static void set_conditions(struct pointer_set_t *visited, bool *interesting_conditions, const_tree lhs);
-
-static void walk_phi_set_conditions(struct pointer_set_t *visited, bool *interesting_conditions, const_tree result)
-{
-	gimple phi = get_def_stmt(result);
-	unsigned int i, n = gimple_phi_num_args(phi);
-
-	pointer_set_insert(visited, phi);
-	for (i = 0; i < n; i++) {
-		const_tree arg = gimple_phi_arg_def(phi, i);
-
-		set_conditions(visited, interesting_conditions, arg);
-	}
-}
-
-enum conditions {
-	NOT_UNARY, CAST
-};
-
-// Search for constants, cast assignments and binary/ternary assignments
-static void set_conditions(struct pointer_set_t *visited, bool *interesting_conditions, const_tree lhs)
-{
-	gimple def_stmt = get_def_stmt(lhs);
-
-	if (!def_stmt)
-		return;
-
-	if (pointer_set_contains(visited, def_stmt))
-		return;
-
-	switch (gimple_code(def_stmt)) {
-	case GIMPLE_CALL:
-	case GIMPLE_NOP:
-	case GIMPLE_ASM:
-		if (is_size_overflow_asm(def_stmt))
-			set_conditions(visited, interesting_conditions, get_size_overflow_asm_input(def_stmt));
-		return;
-	case GIMPLE_PHI:
-		return walk_phi_set_conditions(visited, interesting_conditions, lhs);
-	case GIMPLE_ASSIGN:
-		if (gimple_num_ops(def_stmt) == 2) {
-			const_tree rhs = gimple_assign_rhs1(def_stmt);
-
-			if (gimple_assign_cast_p(def_stmt))
-				interesting_conditions[CAST] = true;
-
-			return set_conditions(visited, interesting_conditions, rhs);
-		} else {
-			interesting_conditions[NOT_UNARY] = true;
-			return;
-		}
-	default:
-		debug_gimple_stmt(def_stmt);
-		gcc_unreachable();
-	}
-}
-
-static void search_interesting_conditions(const_tree node, bool *interesting_conditions)
-{
-	struct pointer_set_t *visited;
-
-	visited = pointer_set_create();
-	set_conditions(visited, interesting_conditions, node);
-	pointer_set_destroy(visited);
-}
-
 // e.g., 3.8.2, 64, arch/x86/ia32/ia32_signal.c copy_siginfo_from_user32(): compat_ptr() u32 max
 static bool skip_asm_cast(const_tree arg)
 {
@@ -140,20 +74,6 @@ static bool skip_asm_cast(const_tree arg)
 	if (is_size_overflow_asm(def_stmt))
 		return false;
 	return def_stmt && gimple_code(def_stmt) == GIMPLE_ASM;
-}
-
-/* If there is a mark_turn_off intentional attribute on the caller or the callee then there is no duplication and missing size_overflow attribute check anywhere.
- * There is only missing size_overflow attribute checking if the intentional_overflow attribute is the mark_no type.
- * Stmt duplication is unnecessary if there are no binary/ternary assignements or if the unary assignment isn't a cast.
- */
-static bool skip_unnecessary_insertation(const_tree node)
-{
-	bool interesting_conditions[2] = {false, false};
-
-	search_interesting_conditions(node, interesting_conditions);
-
-	// unnecessary overflow check
-	return !interesting_conditions[CAST] && !interesting_conditions[NOT_UNARY];
 }
 
 struct interesting_stmts {
@@ -190,13 +110,16 @@ static void free_interesting_stmts(struct interesting_stmts *head)
  */
 static struct interesting_stmts *search_interesting_stmt(struct interesting_stmts *head, gimple first_stmt, tree orig_node, unsigned int num)
 {
+	enum tree_code orig_code;
+
 	gcc_assert(orig_node != NULL_TREE);
 
 	if (is_gimple_constant(orig_node))
 		return head;
 
-	if (skip_types(orig_node))
-		return head;
+	orig_code = TREE_CODE(orig_node);
+	gcc_assert(orig_code != FIELD_DECL && orig_code != FUNCTION_DECL);
+	gcc_assert(!skip_types(orig_node));
 
 	if (check_intentional_asm(first_stmt, num) != MARK_NO)
 		return head;
@@ -205,9 +128,6 @@ static struct interesting_stmts *search_interesting_stmt(struct interesting_stmt
 		return head;
 
 	if (skip_asm_cast(orig_node))
-		return head;
-
-	if (skip_unnecessary_insertation(orig_node))
 		return head;
 
 	return create_interesting_stmts(head, orig_node, first_stmt, num);
@@ -231,27 +151,121 @@ static void handle_interesting_stmt(struct visited *visited, struct interesting_
 
 static bool is_interesting_function(const_tree decl, unsigned int num)
 {
-	const struct size_overflow_hash *hash;
+	const struct size_overflow_hash *so_hash;
 
-	hash = get_function_hash(get_orig_fndecl(decl));
-	if (hash && hash->param & (1U << num))
+	if (get_global_next_interesting_function_entry_with_hash(decl, DECL_NAME_POINTER(decl), num, YES_SO_MARK))
 		return true;
-	return get_next_interesting_function(global_next_interesting_function_head, decl, num, YES_SO_MARK) != NULL;
+
+	if (made_by_compiler(decl))
+		return false;
+
+	so_hash = get_size_overflow_hash_entry_tree(decl, num);
+	return so_hash != NULL;
+}
+
+tree handle_fnptr_assign(const_gimple stmt)
+{
+	tree field, rhs, op0;
+	const_tree op0_type;
+	enum tree_code rhs_code;
+
+	// TODO skip binary assignments for now (fs/sync.c _591 = __bpf_call_base + _590;)
+	if (gimple_num_ops(stmt) != 2)
+		return NULL_TREE;
+
+	gcc_assert(gimple_num_ops(stmt) == 2);
+	// TODO skip asm_stmt for now
+	if (gimple_code(stmt) == GIMPLE_ASM)
+		return NULL_TREE;
+	rhs = gimple_assign_rhs1(stmt);
+	if (is_gimple_constant(rhs))
+		return NULL_TREE;
+
+	rhs_code = TREE_CODE(rhs);
+	if (rhs_code == VAR_DECL)
+		return rhs;
+
+	switch (rhs_code) {
+	case ADDR_EXPR:
+		op0 = TREE_OPERAND(rhs, 0);
+		gcc_assert(TREE_CODE(op0) == FUNCTION_DECL);
+		return op0;
+	case COMPONENT_REF:
+		break;
+	// TODO skip array_ref for now
+	case ARRAY_REF:
+		return NULL_TREE;
+	// TODO skip ssa_name because it can lead to parm_decl
+	case SSA_NAME:
+		return NULL_TREE;
+#if BUILDING_GCC_VERSION >= 4006
+	// TODO skip mem_ref for now
+	case MEM_REF:
+		return NULL_TREE;
+#endif
+	default:
+		debug_tree(rhs);
+		debug_gimple_stmt((gimple)stmt);
+		gcc_unreachable();
+	}
+
+	op0 = TREE_OPERAND(rhs, 0);
+	switch (TREE_CODE(op0)) {
+	// TODO skip array_ref and parm_decl for now
+	case ARRAY_REF:
+	case PARM_DECL:
+		return NULL_TREE;
+	case COMPONENT_REF:
+#if BUILDING_GCC_VERSION >= 4006
+	case MEM_REF:
+#endif
+	case VAR_DECL:
+		break;
+	default:
+		debug_tree(op0);
+		gcc_unreachable();
+	}
+
+	op0_type = TREE_TYPE(op0);
+	// TODO skip unions for now
+	if (TREE_CODE(op0_type) == UNION_TYPE)
+		return NULL_TREE;
+	gcc_assert(TREE_CODE(op0_type) == RECORD_TYPE);
+
+	field = TREE_OPERAND(rhs, 1);
+	gcc_assert(TREE_CODE(field) == FIELD_DECL);
+	return field;
+}
+
+static tree get_fn_or_fnptr_decl(const_gimple call_stmt)
+{
+	const_tree fnptr;
+	const_gimple def_stmt;
+	tree decl = gimple_call_fndecl(call_stmt);
+
+	if (decl != NULL_TREE)
+		return decl;
+
+	fnptr = gimple_call_fn(call_stmt);
+	// !!! assertot kell irni 0-ra, mert csak az lehet ott
+	if (is_gimple_constant(fnptr))
+		return NULL_TREE;
+	def_stmt = get_fnptr_def_stmt(fnptr);
+	return handle_fnptr_assign(def_stmt);
 }
 
 // Start stmt duplication on marked function parameters
 static struct interesting_stmts *search_interesting_calls(struct interesting_stmts *head, gimple call_stmt)
 {
-	const_tree fndecl;
+	tree decl;
 	unsigned int i, len;
 
 	len = gimple_call_num_args(call_stmt);
 	if (len == 0)
 		return head;
 
-	fndecl = gimple_call_fndecl(call_stmt);
-	// !!! fnptrs
-	if (fndecl == NULL_TREE)
+	decl = get_fn_or_fnptr_decl(call_stmt);
+	if (decl == NULL_TREE)
 		return head;
 
 	for (i = 0; i < len; i++) {
@@ -262,7 +276,7 @@ static struct interesting_stmts *search_interesting_calls(struct interesting_stm
 			continue;
 		if (skip_types(arg))
 			continue;
-		if (is_interesting_function(fndecl, i + 1))
+		if (is_interesting_function(decl, i + 1))
 			head = search_interesting_stmt(head, call_stmt, arg, i + 1);
 	}
 
@@ -296,6 +310,8 @@ static void search_interesting_stmts(struct visited *visited)
 				if (!search_ret)
 					continue;
 				first_node = gimple_return_retval(stmt);
+				if (first_node == NULL_TREE)
+					break;
 				head = search_interesting_stmt(head, stmt, first_node, 0);
 				break;
 			case GIMPLE_CALL:
