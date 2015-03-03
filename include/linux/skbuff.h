@@ -2657,7 +2657,7 @@ unsigned int datagram_poll(struct file *file, struct socket *sock,
 			   struct poll_table_struct *wait);
 int __intentional_overflow(0) skb_copy_datagram_iter(const struct sk_buff *from, int offset,
 			   struct iov_iter *to, int size);
-static inline int skb_copy_datagram_msg(const struct sk_buff *from, int offset,
+static inline int __intentional_overflow(2,4) skb_copy_datagram_msg(const struct sk_buff *from, int offset,
 					struct msghdr *msg, int size)
 {
 	return skb_copy_datagram_iter(from, offset, &msg->msg_iter, size);

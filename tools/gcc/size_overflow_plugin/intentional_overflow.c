@@ -285,14 +285,9 @@ enum intentional_mark get_so_asm_type(const_gimple stmt)
 static enum intentional_mark walk_use_def(struct pointer_set_t *visited, const_tree lhs)
 {
 	const_gimple def_stmt;
-	const_tree ssa_var;
 
 	if (TREE_CODE(lhs) != SSA_NAME)
 		return get_intentional_attr_type(lhs);
-
-	ssa_var = SSA_NAME_VAR(lhs);
-	if (ssa_var != NULL_TREE && TREE_CODE(ssa_var) == PARM_DECL)
-		return walk_use_def(visited, SSA_NAME_VAR(lhs));
 
 	def_stmt = get_def_stmt(lhs);
 	gcc_assert(def_stmt);
