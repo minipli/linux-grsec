@@ -36,7 +36,7 @@ struct bfa_iotag_s {
 
 struct bfa_itn_s {
 	bfa_isr_func_t isr;
-};
+} __no_const;
 
 void bfa_itn_create(struct bfa_s *bfa, struct bfa_rport_s *rport,
 		void (*isr)(struct bfa_s *bfa, struct bfi_msg_s *m));

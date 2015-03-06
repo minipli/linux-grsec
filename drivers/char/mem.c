@@ -117,7 +117,8 @@ static ssize_t read_mem(struct file *file, char __user *buf,
 #endif
 
 	while (count > 0) {
-		unsigned long remaining;
+		unsigned long remaining = 0;
+		char *temp;
 
 		sz = size_inside_page(p, count);
 
@@ -133,7 +134,24 @@ static ssize_t read_mem(struct file *file, char __user *buf,
 		if (!ptr)
 			return -EFAULT;
 
-		remaining = copy_to_user(buf, ptr, sz);
+#ifdef CONFIG_PAX_USERCOPY
+		temp = kmalloc(sz, GFP_KERNEL|GFP_USERCOPY);
+		if (!temp) {
+			unxlate_dev_mem_ptr(p, ptr);
+			return -ENOMEM;
+		}
+		remaining = probe_kernel_read(temp, ptr, sz);
+#else
+		temp = ptr;
+#endif
+
+		if (!remaining)
+			remaining = copy_to_user(buf, temp, sz);
+
+#ifdef CONFIG_PAX_USERCOPY
+		kfree(temp);
+#endif
+
 		unxlate_dev_mem_ptr(p, ptr);
 		if (remaining)
 			return -EFAULT;
@@ -376,7 +394,7 @@ static ssize_t read_oldmem(struct file *file, char __user *buf,
 		else
 			csize = count;
 
-		rc = copy_oldmem_page(pfn, buf, csize, offset, 1);
+		rc = copy_oldmem_page(pfn, (char __force_kernel *)buf, csize, offset, 1);
 		if (rc < 0)
 			return rc;
 		buf += csize;
@@ -396,9 +414,8 @@ static ssize_t read_kmem(struct file *file, char __user *buf,
 			 size_t count, loff_t *ppos)
 {
 	unsigned long p = *ppos;
-	ssize_t low_count, read, sz;
+	ssize_t low_count, read, sz, err = 0;
 	char * kbuf; /* k-addr because vread() takes vmlist_lock rwlock */
-	int err = 0;
 
 	read = 0;
 	if (p < (unsigned long) high_memory) {
@@ -420,6 +437,8 @@ static ssize_t read_kmem(struct file *file, char __user *buf,
 		}
 #endif
 		while (low_count > 0) {
+			char *temp;
+
 			sz = size_inside_page(p, low_count);
 
 			/*
@@ -429,7 +448,23 @@ static ssize_t read_kmem(struct file *file, char __user *buf,
 			 */
 			kbuf = xlate_dev_kmem_ptr((char *)p);
 
-			if (copy_to_user(buf, kbuf, sz))
+#ifdef CONFIG_PAX_USERCOPY
+			temp = kmalloc(sz, GFP_KERNEL|GFP_USERCOPY);
+			if (!temp)
+				return -ENOMEM;
+			err = probe_kernel_read(temp, kbuf, sz);
+#else
+			temp = kbuf;
+#endif
+
+			if (!err)
+				err = copy_to_user(buf, temp, sz);
+
+#ifdef CONFIG_PAX_USERCOPY
+			kfree(temp);
+#endif
+
+			if (err)
 				return -EFAULT;
 			buf += sz;
 			p += sz;
@@ -931,7 +966,7 @@ static int __init chr_dev_init(void)
 		if (!devlist[minor].name)
 			continue;
 		device_create(mem_class, NULL, MKDEV(MEM_MAJOR, minor),
-			      NULL, devlist[minor].name);
+			      NULL, "%s", devlist[minor].name);
 	}
 
 	return tty_init();
