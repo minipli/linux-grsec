@@ -1060,6 +1060,10 @@ long arch_ptrace(struct task_struct *child, long request,
 	return ret;
 }
 
+#ifdef CONFIG_GRKERNSEC_SETXID
+extern void gr_delayed_cred_worker(void);
+#endif
+
 asmlinkage int syscall_trace_enter(struct pt_regs *regs)
 {
 	int ret = 0;
@@ -1069,6 +1073,11 @@ asmlinkage int syscall_trace_enter(struct pt_regs *regs)
 
 	if (test_thread_flag(TIF_NOHZ))
 		user_exit();
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
 
 	if (test_thread_flag(TIF_SYSCALL_TRACE))
 		ret = tracehook_report_syscall_entry(regs);
@@ -1092,6 +1101,11 @@ asmlinkage void syscall_trace_leave(struct pt_regs *regs)
 {
 	if (test_thread_flag(TIF_NOHZ))
 		user_exit();
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
 
 	audit_syscall_exit(regs);
 

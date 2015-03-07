@@ -95,8 +95,6 @@
 #include "audit.h"
 #include "avc_ss.h"
 
-extern struct security_operations *security_ops;
-
 /* SECMARK reference count */
 static atomic_t selinux_secmark_refcount = ATOMIC_INIT(0);
 
@@ -5759,7 +5757,7 @@ static int selinux_key_getsecurity(struct key *key, char **_buffer)
 
 #endif
 
-static struct security_operations selinux_ops = {
+static struct security_operations selinux_ops __read_only = {
 	.name =				"selinux",
 
 	.ptrace_access_check =		selinux_ptrace_access_check,
@@ -6112,6 +6110,9 @@ static void selinux_nf_ip_exit(void)
 #ifdef CONFIG_SECURITY_SELINUX_DISABLE
 static int selinux_disabled;
 
+extern struct security_operations *security_ops;
+extern struct security_operations default_security_ops;
+
 int selinux_disable(void)
 {
 	if (ss_initialized) {
@@ -6129,7 +6130,9 @@ int selinux_disable(void)
 	selinux_disabled = 1;
 	selinux_enabled = 0;
 
-	reset_security_ops();
+	pax_open_kernel();
+	security_ops = &default_security_ops;
+	pax_close_kernel();
 
 	/* Try to destroy the avc node cache */
 	avc_disable();
