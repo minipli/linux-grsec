@@ -132,6 +132,9 @@ struct dentry {
 	unsigned long d_time;		/* used by d_revalidate */
 	void *d_fsdata;			/* fs-specific data */
 
+#ifdef CONFIG_GRKERNSEC_CHROOT_RENAME
+	atomic_t chroot_refcnt;		/* tracks use of directory in chroot */
+#endif
 	struct list_head d_lru;		/* LRU list */
 	struct list_head d_child;	/* child of parent list */
 	struct list_head d_subdirs;	/* our children */
@@ -142,7 +145,7 @@ struct dentry {
 		struct list_head d_alias;	/* inode alias list */
 	 	struct rcu_head d_rcu;
 	} d_u;
-};
+} __randomize_layout;
 
 /*
  * dentry->d_lock spinlock nesting subclasses:
