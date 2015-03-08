@@ -1217,7 +1217,7 @@ static int tse_shutdown(struct net_device *dev)
 	return 0;
 }
 
-static struct net_device_ops altera_tse_netdev_ops = {
+static net_device_ops_no_const altera_tse_netdev_ops __read_only = {
 	.ndo_open		= tse_open,
 	.ndo_stop		= tse_shutdown,
 	.ndo_start_xmit		= tse_start_xmit,
@@ -1454,11 +1454,13 @@ static int altera_tse_probe(struct platform_device *pdev)
 	ndev->netdev_ops = &altera_tse_netdev_ops;
 	altera_tse_set_ethtool_ops(ndev);
 
+	pax_open_kernel();
 	altera_tse_netdev_ops.ndo_set_rx_mode = tse_set_rx_mode;
 
 	if (priv->hash_filter)
 		altera_tse_netdev_ops.ndo_set_rx_mode =
 			tse_set_rx_mode_hashfilter;
+	pax_close_kernel();
 
 	/* Scatter/gather IO is not supported,
 	 * so it is turned off

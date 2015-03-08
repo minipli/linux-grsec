@@ -2089,7 +2089,7 @@ void task_numa_fault(int last_cpupid, int mem_node, int pages, int flags)
 
 static void reset_ptenuma_scan(struct task_struct *p)
 {
-	ACCESS_ONCE(p->mm->numa_scan_seq)++;
+	ACCESS_ONCE_RW(p->mm->numa_scan_seq)++;
 	p->mm->numa_scan_offset = 0;
 }
 
@@ -7651,7 +7651,7 @@ static void nohz_idle_balance(struct rq *this_rq, enum cpu_idle_type idle) { }
  * run_rebalance_domains is triggered when needed from the scheduler tick.
  * Also triggered for nohz idle balancing (with nohz_balancing_kick set).
  */
-static void run_rebalance_domains(struct softirq_action *h)
+static __latent_entropy void run_rebalance_domains(void)
 {
 	struct rq *this_rq = this_rq();
 	enum cpu_idle_type idle = this_rq->idle_balance ?

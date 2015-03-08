@@ -405,14 +405,17 @@ extern const char *__elf_platform;
 #define ELF_ET_DYN_BASE		(TASK_SIZE / 3 * 2)
 #endif
 
+#ifdef CONFIG_PAX_ASLR
+#define PAX_ELF_ET_DYN_BASE	(TASK_IS_32BIT_ADDR ? 0x00400000UL : 0x00400000UL)
+
+#define PAX_DELTA_MMAP_LEN	(TASK_IS_32BIT_ADDR ? 27-PAGE_SHIFT : 36-PAGE_SHIFT)
+#define PAX_DELTA_STACK_LEN	(TASK_IS_32BIT_ADDR ? 27-PAGE_SHIFT : 36-PAGE_SHIFT)
+#endif
+
 #define ARCH_HAS_SETUP_ADDITIONAL_PAGES 1
 struct linux_binprm;
 extern int arch_setup_additional_pages(struct linux_binprm *bprm,
 				       int uses_interp);
-
-struct mm_struct;
-extern unsigned long arch_randomize_brk(struct mm_struct *mm);
-#define arch_randomize_brk arch_randomize_brk
 
 struct arch_elf_state {
 	int fp_abi;

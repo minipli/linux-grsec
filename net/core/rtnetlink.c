@@ -60,7 +60,7 @@ struct rtnl_link {
 	rtnl_doit_func		doit;
 	rtnl_dumpit_func	dumpit;
 	rtnl_calcit_func 	calcit;
-};
+} __no_const;
 
 static DEFINE_MUTEX(rtnl_mutex);
 
@@ -306,10 +306,13 @@ int __rtnl_link_register(struct rtnl_link_ops *ops)
 	 * to use the ops for creating device. So do not
 	 * fill up dellink as well. That disables rtnl_dellink.
 	 */
-	if (ops->setup && !ops->dellink)
-		ops->dellink = unregister_netdevice_queue;
+	if (ops->setup && !ops->dellink) {
+		pax_open_kernel();
+		*(void **)&ops->dellink = unregister_netdevice_queue;
+		pax_close_kernel();
+	}
 
-	list_add_tail(&ops->list, &link_ops);
+	pax_list_add_tail((struct list_head *)&ops->list, &link_ops);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(__rtnl_link_register);
@@ -356,7 +359,7 @@ void __rtnl_link_unregister(struct rtnl_link_ops *ops)
 	for_each_net(net) {
 		__rtnl_kill_links(net, ops);
 	}
-	list_del(&ops->list);
+	pax_list_del((struct list_head *)&ops->list);
 }
 EXPORT_SYMBOL_GPL(__rtnl_link_unregister);
 
@@ -1035,7 +1038,7 @@ static int rtnl_fill_ifinfo(struct sk_buff *skb, struct net_device *dev,
 	    (dev->ifalias &&
 	     nla_put_string(skb, IFLA_IFALIAS, dev->ifalias)) ||
 	    nla_put_u32(skb, IFLA_CARRIER_CHANGES,
-			atomic_read(&dev->carrier_changes)))
+			atomic_read_unchecked(&dev->carrier_changes)))
 		goto nla_put_failure;
 
 	if (1) {

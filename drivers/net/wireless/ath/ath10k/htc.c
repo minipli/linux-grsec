@@ -851,7 +851,10 @@ int ath10k_htc_start(struct ath10k_htc *htc)
 /* registered target arrival callback from the HIF layer */
 int ath10k_htc_init(struct ath10k *ar)
 {
-	struct ath10k_hif_cb htc_callbacks;
+	static struct ath10k_hif_cb htc_callbacks = {
+		.rx_completion = ath10k_htc_rx_completion_handler,
+		.tx_completion = ath10k_htc_tx_completion_handler,
+	};
 	struct ath10k_htc_ep *ep = NULL;
 	struct ath10k_htc *htc = &ar->htc;
 
@@ -860,8 +863,6 @@ int ath10k_htc_init(struct ath10k *ar)
 	ath10k_htc_reset_endpoint_states(htc);
 
 	/* setup HIF layer callbacks */
-	htc_callbacks.rx_completion = ath10k_htc_rx_completion_handler;
-	htc_callbacks.tx_completion = ath10k_htc_tx_completion_handler;
 	htc->ar = ar;
 
 	/* Get HIF default pipe for HTC message exchange */
