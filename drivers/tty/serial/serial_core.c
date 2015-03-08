@@ -1339,7 +1339,7 @@ static void uart_close(struct tty_struct *tty, struct file *filp)
 
 	pr_debug("uart_close(%d) called\n", uport ? uport->line : -1);
 
-	if (!port->count || tty_port_close_start(port, tty, filp) == 0)
+	if (!atomic_read(&port->count) || tty_port_close_start(port, tty, filp) == 0)
 		return;
 
 	/*
@@ -1466,7 +1466,7 @@ static void uart_hangup(struct tty_struct *tty)
 		uart_flush_buffer(tty);
 		uart_shutdown(tty, state);
 		spin_lock_irqsave(&port->lock, flags);
-		port->count = 0;
+		atomic_set(&port->count, 0);
 		clear_bit(ASYNCB_NORMAL_ACTIVE, &port->flags);
 		spin_unlock_irqrestore(&port->lock, flags);
 		tty_port_tty_set(port, NULL);
@@ -1564,7 +1564,7 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 		goto end;
 	}
 
-	port->count++;
+	atomic_inc(&port->count);
 	if (!state->uart_port || state->uart_port->flags & UPF_DEAD) {
 		retval = -ENXIO;
 		goto err_dec_count;
@@ -1596,7 +1596,7 @@ static int uart_open(struct tty_struct *tty, struct file *filp)
 end:
 	return retval;
 err_dec_count:
-	port->count--;
+	atomic_dec(&port->count);
 	mutex_unlock(&port->mutex);
 	goto end;
 }
