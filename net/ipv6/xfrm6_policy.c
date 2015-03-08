@@ -130,8 +130,8 @@ _decode_session6(struct sk_buff *skb, struct flowi *fl, int reverse)
 {
 	struct flowi6 *fl6 = &fl->u.ip6;
 	int onlyproto = 0;
-	u16 offset = skb_network_header_len(skb);
 	const struct ipv6hdr *hdr = ipv6_hdr(skb);
+	u16 offset = sizeof(*hdr);
 	struct ipv6_opt_hdr *exthdr;
 	const unsigned char *nh = skb_network_header(skb);
 	u8 nexthdr = nh[IP6CB(skb)->nhoff];
@@ -212,11 +212,11 @@ _decode_session6(struct sk_buff *skb, struct flowi *fl, int reverse)
 	}
 }
 
-static inline int xfrm6_garbage_collect(struct dst_ops *ops)
+static int xfrm6_garbage_collect(struct dst_ops *ops)
 {
 	struct net *net = container_of(ops, struct net, xfrm.xfrm6_dst_ops);
 
-	xfrm6_policy_afinfo.garbage_collect(net);
+	xfrm_garbage_collect_deferred(net);
 	return dst_entries_get_fast(ops) > ops->gc_thresh * 2;
 }
 
@@ -329,19 +329,19 @@ static struct ctl_table xfrm6_policy_table[] = {
 
 static int __net_init xfrm6_net_init(struct net *net)
 {
-	struct ctl_table *table;
+	ctl_table_no_const *table = NULL;
 	struct ctl_table_header *hdr;
 
-	table = xfrm6_policy_table;
 	if (!net_eq(net, &init_net)) {
-		table = kmemdup(table, sizeof(xfrm6_policy_table), GFP_KERNEL);
+		table = kmemdup(xfrm6_policy_table, sizeof(xfrm6_policy_table), GFP_KERNEL);
 		if (!table)
 			goto err_alloc;
 
 		table[0].data = &net->xfrm.xfrm6_dst_ops.gc_thresh;
-	}
+		hdr = register_net_sysctl(net, "net/ipv6", table);
+	} else
+		hdr = register_net_sysctl(net, "net/ipv6", xfrm6_policy_table);
 
-	hdr = register_net_sysctl(net, "net/ipv6", table);
 	if (!hdr)
 		goto err_reg;
 
@@ -349,8 +349,7 @@ static int __net_init xfrm6_net_init(struct net *net)
 	return 0;
 
 err_reg:
-	if (!net_eq(net, &init_net))
-		kfree(table);
+	kfree(table);
 err_alloc:
 	return -ENOMEM;
 }

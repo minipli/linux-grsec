@@ -1259,12 +1259,12 @@ char *pointer(const char *fmt, char *buf, char *end, void *ptr,
 
 	if (!ptr && *fmt != 'K') {
 		/*
-		 * Print (null) with the same width as a pointer so it makes
+		 * Print (nil) with the same width as a pointer so it makes
 		 * tabular output look nice.
 		 */
 		if (spec.field_width == -1)
 			spec.field_width = default_width;
-		return string(buf, end, "(null)", spec);
+		return string(buf, end, "(nil)", spec);
 	}
 
 	switch (*fmt) {
@@ -2107,11 +2107,11 @@ int bstr_printf(char *buf, size_t size, const char *fmt, const u32 *bin_buf)
 	typeof(type) value;						\
 	if (sizeof(type) == 8) {					\
 		args = PTR_ALIGN(args, sizeof(u32));			\
-		*(u32 *)&value = *(u32 *)args;				\
-		*((u32 *)&value + 1) = *(u32 *)(args + 4);		\
+		*(u32 *)&value = *(const u32 *)args;			\
+		*((u32 *)&value + 1) = *(const u32 *)(args + 4);	\
 	} else {							\
 		args = PTR_ALIGN(args, sizeof(type));			\
-		value = *(typeof(type) *)args;				\
+		value = *(const typeof(type) *)args;			\
 	}								\
 	args += sizeof(type);						\
 	value;								\
@@ -2174,7 +2174,7 @@ int bstr_printf(char *buf, size_t size, const char *fmt, const u32 *bin_buf)
 		case FORMAT_TYPE_STR: {
 			const char *str_arg = args;
 			args += strlen(str_arg) + 1;
-			str = string(str, end, (char *)str_arg, spec);
+			str = string(str, end, str_arg, spec);
 			break;
 		}
 
