@@ -1028,8 +1028,8 @@ EXPORT_SYMBOL(start_tty);
 /* We limit tty time update visibility to every 8 seconds or so. */
 static void tty_update_time(struct timespec *time)
 {
-	unsigned long sec = get_seconds() & ~7;
-	if ((long)(sec - time->tv_sec) > 0)
+	unsigned long sec = get_seconds();
+	if (abs(sec - time->tv_sec) & ~7)
 		time->tv_sec = sec;
 }
 
@@ -3503,7 +3503,7 @@ EXPORT_SYMBOL(tty_devnum);
 
 void tty_default_fops(struct file_operations *fops)
 {
-	*fops = tty_fops;
+	memcpy((void *)fops, &tty_fops, sizeof(tty_fops));
 }
 
 /*
