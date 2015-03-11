@@ -239,7 +239,7 @@ static int xgbe_maybe_stop_tx_queue(struct xgbe_channel *channel,
 		 * support, tell it now
 		 */
 		if (ring->tx.xmit_more)
-			pdata->hw_if.tx_start_xmit(channel, ring);
+			pdata->hw_if->tx_start_xmit(channel, ring);
 
 		return NETDEV_TX_BUSY;
 	}
