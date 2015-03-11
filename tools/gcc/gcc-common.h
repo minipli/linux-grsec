@@ -64,7 +64,7 @@
 #include "gimple-pretty-print.h"
 #endif
 
-#if BUILDING_GCC_VERSION >= 4007
+#if BUILDING_GCC_VERSION >= 4006
 //#include "c-tree.h"
 //#include "cp/cp-tree.h"
 #include "c-family/c-common.h"
@@ -218,7 +218,7 @@ static inline bool is_simple_builtin(tree decl)
 
 #define int_const_binop(code, arg1, arg2) int_const_binop((code), (arg1), (arg2), 0)
 
-static inline bool gimple_clobber_p(gimple s)
+static inline bool gimple_clobber_p(gimple s __unused)
 {
 	return false;
 }

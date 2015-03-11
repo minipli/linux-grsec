@@ -513,6 +513,7 @@ edac_device_alloc_ctl_info_5941 edac_device_alloc_ctl_info 1 5941 NULL
 ll_statahead_one_5962 ll_statahead_one 3 5962 NULL
 __apu_get_register_5967 __apu_get_register 0 5967 NULL
 ieee80211_if_fmt_rc_rateidx_mask_5ghz_5971 ieee80211_if_fmt_rc_rateidx_mask_5ghz 3 5971 NULL
+SyS_semop_5980 SyS_semop 3 5980 NULL
 alloc_msg_6072 alloc_msg 1 6072 NULL
 sctp_setsockopt_connectx_6073 sctp_setsockopt_connectx 3 6073 NULL
 rts51x_ms_rw_multi_sector_6076 rts51x_ms_rw_multi_sector 3-4 6076 NULL
@@ -911,6 +912,7 @@ rx_out_of_mem_read_10157 rx_out_of_mem_read 3 10157 NULL
 hidg_alloc_ep_req_10159 hidg_alloc_ep_req 2 10159 NULL
 asd_store_update_bios_10165 asd_store_update_bios 4 10165 NULL
 kstrtol_from_user_10168 kstrtol_from_user 2 10168 NULL
+persistent_ram_vmap_10169 persistent_ram_vmap 2-1 10169 NULL
 proc_pid_attr_read_10173 proc_pid_attr_read 3 10173 NULL
 jffs2_user_setxattr_10182 jffs2_user_setxattr 4 10182 NULL
 xfs_attr_rmtval_copyout_10222 xfs_attr_rmtval_copyout 0 10222 NULL nohasharray
@@ -965,6 +967,7 @@ vhost_add_used_n_10760 vhost_add_used_n 3 10760 NULL
 rd_build_prot_space_10761 rd_build_prot_space 2-3 10761 NULL
 kvm_read_guest_atomic_10765 kvm_read_guest_atomic 4 10765 NULL
 __qp_memcpy_to_queue_10779 __qp_memcpy_to_queue 2-4 10779 NULL
+ttm_dma_page_pool_free_10796 ttm_dma_page_pool_free 2-0 10796 NULL
 diva_set_trace_filter_10820 diva_set_trace_filter 0-1 10820 NULL
 lbs_sleepparams_read_10840 lbs_sleepparams_read 3 10840 NULL
 ida_get_new_above_10853 ida_get_new_above 0 10853 NULL
@@ -1718,6 +1721,7 @@ read_file_dump_nfcal_18766 read_file_dump_nfcal 3 18766 NULL
 ffs_epfile_read_18775 ffs_epfile_read 3 18775 NULL
 SyS_lsetxattr_18776 SyS_lsetxattr 4 18776 NULL
 alloc_fcdev_18780 alloc_fcdev 1 18780 NULL
+prealloc_18800 prealloc 0 18800 NULL
 dm_stats_print_18815 dm_stats_print 7 18815 NULL
 sys_modify_ldt_18824 sys_modify_ldt 3 18824 NULL
 mtf_test_write_18844 mtf_test_write 3 18844 NULL
@@ -1725,6 +1729,7 @@ sctp_setsockopt_events_18862 sctp_setsockopt_events 3 18862 NULL
 ieee80211_if_read_element_ttl_18869 ieee80211_if_read_element_ttl 3 18869 NULL
 xlog_find_verify_log_record_18870 xlog_find_verify_log_record 2 18870 NULL
 ceph_setxattr_18913 ceph_setxattr 4 18913 NULL
+page_cache_tree_insert_18916 page_cache_tree_insert 0 18916 NULL
 ieee80211_rx_mgmt_disassoc_18927 ieee80211_rx_mgmt_disassoc 3 18927 NULL
 snapshot_write_next_18937 snapshot_write_next 0 18937 NULL
 clean_journal_18955 clean_journal 0 18955 NULL
@@ -2074,6 +2079,7 @@ ext4_ext_direct_IO_22679 ext4_ext_direct_IO 4 22679 NULL
 l2tp_ip_recvmsg_22681 l2tp_ip_recvmsg 4 22681 NULL
 bch_dump_read_22685 bch_dump_read 3 22685 NULL
 reg_umr_22686 reg_umr 5 22686 NULL
+nr_cpusets_22705 nr_cpusets 0 22705 NULL
 alloc_libipw_22708 alloc_libipw 1 22708 NULL
 cx18_copy_buf_to_user_22735 cx18_copy_buf_to_user 4-0 22735 NULL
 ceph_decode_32_22738 ceph_decode_32 0 22738 NULL nohasharray
@@ -2270,6 +2276,7 @@ rtw_set_wps_assoc_resp_24440 rtw_set_wps_assoc_resp 3 24440 &smk_user_access_244
 evdev_do_ioctl_24459 evdev_do_ioctl 2 24459 NULL
 lbs_highsnr_write_24460 lbs_highsnr_write 3 24460 NULL
 skb_copy_and_csum_datagram_iovec_24466 skb_copy_and_csum_datagram_iovec 2 24466 NULL
+ttm_page_pool_free_24486 ttm_page_pool_free 2-0 24486 NULL
 dut_mode_read_24489 dut_mode_read 3 24489 NULL
 read_file_spec_scan_ctl_24491 read_file_spec_scan_ctl 3 24491 NULL
 pd_video_read_24510 pd_video_read 3 24510 NULL
@@ -2726,6 +2733,7 @@ probes_write_29711 probes_write 3 29711 NULL
 read_cis_cache_29735 read_cis_cache 4 29735 NULL
 xfs_new_eof_29737 xfs_new_eof 2 29737 NULL
 std_nic_write_29752 std_nic_write 3 29752 NULL
+static_key_count_29771 static_key_count 0 29771 NULL
 dbAlloc_29794 dbAlloc 0 29794 NULL
 tcp_sendpage_29829 tcp_sendpage 4 29829 NULL
 __probe_kernel_write_29842 __probe_kernel_write 3 29842 NULL
@@ -2808,6 +2816,7 @@ disk_expand_part_tbl_30561 disk_expand_part_tbl 2 30561 NULL
 set_le_30581 set_le 4 30581 NULL
 blk_init_tags_30592 blk_init_tags 1 30592 NULL
 sgl_map_user_pages_30610 sgl_map_user_pages 2 30610 NULL
+SyS_msgrcv_30611 SyS_msgrcv 3 30611 NULL
 macvtap_sendmsg_30629 macvtap_sendmsg 4 30629 NULL
 ieee80211_if_read_dot11MeshAwakeWindowDuration_30631 ieee80211_if_read_dot11MeshAwakeWindowDuration 3 30631 NULL
 compat_raw_setsockopt_30634 compat_raw_setsockopt 5 30634 NULL
@@ -3218,6 +3227,7 @@ rx_rx_hdr_overflow_read_35002 rx_rx_hdr_overflow_read 3 35002 NULL
 l2cap_skbuff_fromiovec_35003 l2cap_skbuff_fromiovec 4-3 35003 NULL
 sisusb_copy_memory_35016 sisusb_copy_memory 4 35016 NULL
 coda_psdev_read_35029 coda_psdev_read 3 35029 NULL
+proc_setgroups_write_35039 proc_setgroups_write 3 35039 NULL
 xfs_rtallocate_extent_35052 xfs_rtallocate_extent 0 35052 NULL
 pwr_connection_out_of_sync_read_35061 pwr_connection_out_of_sync_read 3 35061 NULL
 ntfs_attr_extend_initialized_35084 ntfs_attr_extend_initialized 0 35084 NULL
@@ -3653,6 +3663,7 @@ do_surface_dirty_sou_39678 do_surface_dirty_sou 7 39678 NULL
 sd_completed_bytes_39705 sd_completed_bytes 0 39705 NULL
 ftrace_pid_write_39710 ftrace_pid_write 3 39710 NULL
 adt7316_spi_multi_read_39765 adt7316_spi_multi_read 3 39765 NULL
+persistent_ram_buffer_map_39776 persistent_ram_buffer_map 1-2 39776 NULL
 security_inode_listsecurity_39812 security_inode_listsecurity 0 39812 NULL
 snd_pcm_oss_writev3_39818 snd_pcm_oss_writev3 3 39818 NULL
 get_priv_size_39828 get_priv_size 0-1 39828 NULL
@@ -5766,6 +5777,7 @@ rx_rx_timeout_read_62389 rx_rx_timeout_read 3 62389 NULL
 altera_irscan_62396 altera_irscan 2 62396 NULL
 set_ssp_62411 set_ssp 4 62411 NULL
 udf_expand_file_adinicb_62470 udf_expand_file_adinicb 0 62470 NULL
+persistent_ram_new_62493 persistent_ram_new 1-2 62493 NULL
 ext_rts51x_sd_execute_read_data_62501 ext_rts51x_sd_execute_read_data 9 62501 NULL
 pep_sendmsg_62524 pep_sendmsg 4 62524 NULL
 test_iso_queue_62534 test_iso_queue 5 62534 NULL
