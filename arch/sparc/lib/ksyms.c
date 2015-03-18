@@ -101,7 +101,9 @@ EXPORT_SYMBOL(__clear_user);
 /* Atomic counter implementation. */
 #define ATOMIC_OP(op)							\
 EXPORT_SYMBOL(atomic_##op);						\
-EXPORT_SYMBOL(atomic64_##op);
+EXPORT_SYMBOL(atomic_##op##_unchecked);					\
+EXPORT_SYMBOL(atomic64_##op);						\
+EXPORT_SYMBOL(atomic64_##op##_unchecked);
 
 #define ATOMIC_OP_RETURN(op)						\
 EXPORT_SYMBOL(atomic_##op##_return);					\
@@ -110,6 +112,8 @@ EXPORT_SYMBOL(atomic64_##op##_return);
 #define ATOMIC_OPS(op) ATOMIC_OP(op) ATOMIC_OP_RETURN(op)
 
 ATOMIC_OPS(add)
+EXPORT_SYMBOL(atomic_add_ret_unchecked);
+EXPORT_SYMBOL(atomic64_add_ret_unchecked);
 ATOMIC_OPS(sub)
 
 #undef ATOMIC_OPS
