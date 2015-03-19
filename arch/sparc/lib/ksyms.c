@@ -100,12 +100,18 @@ EXPORT_SYMBOL(__clear_user);
 
 /* Atomic counter implementation. */
 EXPORT_SYMBOL(atomic_add);
+EXPORT_SYMBOL(atomic_add_unchecked);
 EXPORT_SYMBOL(atomic_add_ret);
+EXPORT_SYMBOL(atomic_add_ret_unchecked);
 EXPORT_SYMBOL(atomic_sub);
+EXPORT_SYMBOL(atomic_sub_unchecked);
 EXPORT_SYMBOL(atomic_sub_ret);
 EXPORT_SYMBOL(atomic64_add);
+EXPORT_SYMBOL(atomic64_add_unchecked);
 EXPORT_SYMBOL(atomic64_add_ret);
+EXPORT_SYMBOL(atomic64_add_ret_unchecked);
 EXPORT_SYMBOL(atomic64_sub);
+EXPORT_SYMBOL(atomic64_sub_unchecked);
 EXPORT_SYMBOL(atomic64_sub_ret);
 EXPORT_SYMBOL(atomic64_dec_if_positive);
 

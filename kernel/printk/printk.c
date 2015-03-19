@@ -385,6 +385,11 @@ static int check_syslog_permissions(int type, bool from_file)
 	if (from_file && type != SYSLOG_ACTION_OPEN)
 		return 0;
 
+#ifdef CONFIG_GRKERNSEC_DMESG
+	if (grsec_enable_dmesg && !capable(CAP_SYSLOG) && !capable_nolog(CAP_SYS_ADMIN))
+		return -EPERM;
+#endif
+
 	if (syslog_action_restricted(type)) {
 		if (capable(CAP_SYSLOG))
 			return 0;
@@ -2280,6 +2285,7 @@ void register_console(struct console *newcon)
 	for (i = 0, c = console_cmdline;
 	     i < MAX_CMDLINECONSOLES && c->name[0];
 	     i++, c++) {
+		BUILD_BUG_ON(sizeof(c->name) != sizeof(newcon->name));
 		if (strcmp(c->name, newcon->name) != 0)
 			continue;
 		if (newcon->index >= 0 &&
