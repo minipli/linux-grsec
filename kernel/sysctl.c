@@ -94,7 +94,6 @@
 
 
 #if defined(CONFIG_SYSCTL)
-
 /* External variables not in a header file. */
 extern int max_threads;
 extern int suid_dumpable;
@@ -115,19 +114,20 @@ extern int sysctl_nr_trim_pages;
 
 /* Constants used for minimum and  maximum */
 #ifdef CONFIG_LOCKUP_DETECTOR
-static int sixty = 60;
+static int sixty __read_only = 60;
 #endif
 
-static int __maybe_unused neg_one = -1;
+static int __maybe_unused neg_one __read_only = -1;
 
-static int zero;
-static int __maybe_unused one = 1;
-static int __maybe_unused two = 2;
-static int __maybe_unused four = 4;
-static unsigned long one_ul = 1;
-static int one_hundred = 100;
+static int zero __read_only = 0;
+static int __maybe_unused one __read_only = 1;
+static int __maybe_unused two __read_only = 2;
+static int __maybe_unused three __read_only = 3;
+static int __maybe_unused four __read_only = 4;
+static unsigned long one_ul __read_only = 1;
+static int one_hundred __read_only = 100;
 #ifdef CONFIG_PRINTK
-static int ten_thousand = 10000;
+static int ten_thousand __read_only = 10000;
 #endif
 
 /* this is needed for the proc_doulongvec_minmax of vm_dirty_bytes */
@@ -181,10 +181,8 @@ static int proc_taint(struct ctl_table *table, int write,
 			       void __user *buffer, size_t *lenp, loff_t *ppos);
 #endif
 
-#ifdef CONFIG_PRINTK
 static int proc_dointvec_minmax_sysadmin(struct ctl_table *table, int write,
 				void __user *buffer, size_t *lenp, loff_t *ppos);
-#endif
 
 static int proc_dointvec_minmax_coredump(struct ctl_table *table, int write,
 		void __user *buffer, size_t *lenp, loff_t *ppos);
@@ -215,6 +213,8 @@ static int sysrq_sysctl_handler(struct ctl_table *table, int write,
 
 #endif
 
+extern struct ctl_table grsecurity_table[];
+
 static struct ctl_table kern_table[];
 static struct ctl_table vm_table[];
 static struct ctl_table fs_table[];
@@ -227,6 +227,20 @@ extern struct ctl_table epoll_table[];
 
 #ifdef HAVE_ARCH_PICK_MMAP_LAYOUT
 int sysctl_legacy_va_layout;
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+static struct ctl_table pax_table[] = {
+	{
+		.procname	= "softmode",
+		.data		= &pax_softmode,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0600,
+		.proc_handler	= &proc_dointvec,
+	},
+
+	{ }
+};
 #endif
 
 /* The default sysctl tables: */
@@ -277,6 +291,22 @@ static int max_extfrag_threshold = 1000;
 #endif
 
 static struct ctl_table kern_table[] = {
+#if defined(CONFIG_GRKERNSEC_SYSCTL) || defined(CONFIG_GRKERNSEC_ROFS)
+	{
+		.procname	= "grsecurity",
+		.mode		= 0500,
+		.child		= grsecurity_table,
+	},
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+	{
+		.procname	= "pax",
+		.mode		= 0500,
+		.child		= pax_table,
+	},
+#endif
+
 	{
 		.procname	= "sched_child_runs_first",
 		.data		= &sysctl_sched_child_runs_first,
@@ -649,7 +679,7 @@ static struct ctl_table kern_table[] = {
 		.data		= &modprobe_path,
 		.maxlen		= KMOD_PATH_LEN,
 		.mode		= 0644,
-		.proc_handler	= proc_dostring,
+		.proc_handler	= proc_dostring_modpriv,
 	},
 	{
 		.procname	= "modules_disabled",
@@ -816,16 +846,20 @@ static struct ctl_table kern_table[] = {
 		.extra1		= &zero,
 		.extra2		= &one,
 	},
+#endif
 	{
 		.procname	= "kptr_restrict",
 		.data		= &kptr_restrict,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec_minmax_sysadmin,
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+		.extra1		= &two,
+#else
 		.extra1		= &zero,
+#endif
 		.extra2		= &two,
 	},
-#endif
 	{
 		.procname	= "ngroups_max",
 		.data		= &ngroups_max,
@@ -1072,10 +1106,17 @@ static struct ctl_table kern_table[] = {
 	 */
 	{
 		.procname	= "perf_event_paranoid",
-		.data		= &sysctl_perf_event_paranoid,
-		.maxlen		= sizeof(sysctl_perf_event_paranoid),
+		.data		= &sysctl_perf_event_legitimately_concerned,
+		.maxlen		= sizeof(sysctl_perf_event_legitimately_concerned),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec,
+		/* go ahead, be a hero */
+		.proc_handler	= proc_dointvec_minmax_sysadmin,
+		.extra1		= &neg_one,
+#ifdef CONFIG_GRKERNSEC_PERF_HARDEN
+		.extra2		= &three,
+#else
+		.extra2		= &two,
+#endif
 	},
 	{
 		.procname	= "perf_event_mlock_kb",
@@ -1339,6 +1380,13 @@ static struct ctl_table vm_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= &zero,
+	},
+	{
+		.procname	= "heap_stack_gap",
+		.data		= &sysctl_heap_stack_gap,
+		.maxlen		= sizeof(sysctl_heap_stack_gap),
+		.mode		= 0644,
+		.proc_handler	= proc_doulongvec_minmax,
 	},
 #else
 	{
@@ -1822,6 +1870,16 @@ int proc_dostring(struct ctl_table *table, int write,
 			       (char __user *)buffer, lenp, ppos);
 }
 
+int proc_dostring_modpriv(struct ctl_table *table, int write,
+		  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	if (write && !capable(CAP_SYS_MODULE))
+		return -EPERM;
+
+	return _proc_do_string(table->data, table->maxlen, write,
+			       buffer, lenp, ppos);
+}
+
 static size_t proc_skip_spaces(char **buf)
 {
 	size_t ret;
@@ -1927,6 +1985,8 @@ static int proc_put_long(void __user **buf, size_t *size, unsigned long val,
 	len = strlen(tmp);
 	if (len > *size)
 		len = *size;
+	if (len > sizeof(tmp))
+		len = sizeof(tmp);
 	if (copy_to_user(*buf, tmp, len))
 		return -EFAULT;
 	*size -= len;
@@ -2104,7 +2164,7 @@ int proc_dointvec(struct ctl_table *table, int write,
 static int proc_taint(struct ctl_table *table, int write,
 			       void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table t;
+	ctl_table_no_const t;
 	unsigned long tmptaint = get_taint();
 	int err;
 
@@ -2132,7 +2192,6 @@ static int proc_taint(struct ctl_table *table, int write,
 	return err;
 }
 
-#ifdef CONFIG_PRINTK
 static int proc_dointvec_minmax_sysadmin(struct ctl_table *table, int write,
 				void __user *buffer, size_t *lenp, loff_t *ppos)
 {
@@ -2141,7 +2200,6 @@ static int proc_dointvec_minmax_sysadmin(struct ctl_table *table, int write,
 
 	return proc_dointvec_minmax(table, write, buffer, lenp, ppos);
 }
-#endif
 
 struct do_proc_dointvec_minmax_conv_param {
 	int *min;
@@ -2701,6 +2759,12 @@ int proc_dostring(struct ctl_table *table, int write,
 	return -ENOSYS;
 }
 
+int proc_dostring_modpriv(struct ctl_table *table, int write,
+		  void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	return -ENOSYS;
+}
+
 int proc_dointvec(struct ctl_table *table, int write,
 		  void __user *buffer, size_t *lenp, loff_t *ppos)
 {
@@ -2757,5 +2821,6 @@ EXPORT_SYMBOL(proc_dointvec_minmax);
 EXPORT_SYMBOL(proc_dointvec_userhz_jiffies);
 EXPORT_SYMBOL(proc_dointvec_ms_jiffies);
 EXPORT_SYMBOL(proc_dostring);
+EXPORT_SYMBOL(proc_dostring_modpriv);
 EXPORT_SYMBOL(proc_doulongvec_minmax);
 EXPORT_SYMBOL(proc_doulongvec_ms_jiffies_minmax);

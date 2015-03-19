@@ -516,7 +516,7 @@ void tcp_retransmit_timer(struct sock *sk);
 void tcp_xmit_retransmit_queue(struct sock *);
 void tcp_simple_retransmit(struct sock *);
 int tcp_trim_head(struct sock *, struct sk_buff *, u32);
-int tcp_fragment(struct sock *, struct sk_buff *, u32, unsigned int, gfp_t);
+int __intentional_overflow(3) tcp_fragment(struct sock *, struct sk_buff *, u32, unsigned int, gfp_t);
 
 void tcp_send_probe0(struct sock *);
 void tcp_send_partial(struct sock *);
@@ -689,8 +689,8 @@ static inline u32 tcp_skb_timestamp(const struct sk_buff *skb)
  * If this grows please adjust skbuff.h:skbuff->cb[xxx] size appropriately.
  */
 struct tcp_skb_cb {
-	__u32		seq;		/* Starting sequence number	*/
-	__u32		end_seq;	/* SEQ + FIN + SYN + datalen	*/
+	__u32		seq __intentional_overflow(0);	/* Starting sequence number	*/
+	__u32		end_seq __intentional_overflow(0);	/* SEQ + FIN + SYN + datalen	*/
 	union {
 		/* Note : tcp_tw_isn is used in input path only
 		 *	  (isn chosen by tcp_timewait_state_process())
@@ -715,7 +715,7 @@ struct tcp_skb_cb {
 
 	__u8		ip_dsfield;	/* IPv4 tos or IPv6 dsfield	*/
 	/* 1 byte hole */
-	__u32		ack_seq;	/* Sequence number ACK'd	*/
+	__u32		ack_seq __intentional_overflow(0);	/* Sequence number ACK'd	*/
 	union {
 		struct inet_skb_parm	h4;
 #if IS_ENABLED(CONFIG_IPV6)

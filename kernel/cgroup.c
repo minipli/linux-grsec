@@ -5343,6 +5343,9 @@ static void cgroup_release_agent(struct work_struct *work)
 	if (!pathbuf || !agentbuf)
 		goto out;
 
+	if (agentbuf[0] == '\0')
+		goto out;
+
 	path = cgroup_path(cgrp, pathbuf, PATH_MAX);
 	if (!path)
 		goto out;
@@ -5528,7 +5531,7 @@ static int cgroup_css_links_read(struct seq_file *seq, void *v)
 		struct task_struct *task;
 		int count = 0;
 
-		seq_printf(seq, "css_set %p\n", cset);
+		seq_printf(seq, "css_set %pK\n", cset);
 
 		list_for_each_entry(task, &cset->tasks, cg_list) {
 			if (count++ > MAX_TASKS_SHOWN_PER_CSS)

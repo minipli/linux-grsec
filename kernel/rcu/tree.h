@@ -87,11 +87,11 @@ struct rcu_dynticks {
 	long long dynticks_nesting; /* Track irq/process nesting level. */
 				    /* Process level is worth LLONG_MAX/2. */
 	int dynticks_nmi_nesting;   /* Track NMI nesting level. */
-	atomic_t dynticks;	    /* Even value for idle, else odd. */
+	atomic_unchecked_t dynticks;/* Even value for idle, else odd. */
 #ifdef CONFIG_NO_HZ_FULL_SYSIDLE
 	long long dynticks_idle_nesting;
 				    /* irq/process nesting level from idle. */
-	atomic_t dynticks_idle;	    /* Even value for idle, else odd. */
+	atomic_unchecked_t dynticks_idle;/* Even value for idle, else odd. */
 				    /*  "Idle" excludes userspace execution. */
 	unsigned long dynticks_idle_jiffies;
 				    /* End of last non-NMI non-idle period. */
@@ -466,17 +466,17 @@ struct rcu_state {
 						/*  _rcu_barrier(). */
 	/* End of fields guarded by barrier_mutex. */
 
-	atomic_long_t expedited_start;		/* Starting ticket. */
-	atomic_long_t expedited_done;		/* Done ticket. */
-	atomic_long_t expedited_wrap;		/* # near-wrap incidents. */
-	atomic_long_t expedited_tryfail;	/* # acquisition failures. */
-	atomic_long_t expedited_workdone1;	/* # done by others #1. */
-	atomic_long_t expedited_workdone2;	/* # done by others #2. */
-	atomic_long_t expedited_normal;		/* # fallbacks to normal. */
-	atomic_long_t expedited_stoppedcpus;	/* # successful stop_cpus. */
-	atomic_long_t expedited_done_tries;	/* # tries to update _done. */
-	atomic_long_t expedited_done_lost;	/* # times beaten to _done. */
-	atomic_long_t expedited_done_exit;	/* # times exited _done loop. */
+	atomic_long_unchecked_t expedited_start;	/* Starting ticket. */
+	atomic_long_t expedited_done;			/* Done ticket. */
+	atomic_long_unchecked_t expedited_wrap;		/* # near-wrap incidents. */
+	atomic_long_unchecked_t expedited_tryfail;	/* # acquisition failures. */
+	atomic_long_unchecked_t expedited_workdone1;	/* # done by others #1. */
+	atomic_long_unchecked_t expedited_workdone2;	/* # done by others #2. */
+	atomic_long_unchecked_t expedited_normal;	/* # fallbacks to normal. */
+	atomic_long_unchecked_t expedited_stoppedcpus;	/* # successful stop_cpus. */
+	atomic_long_unchecked_t expedited_done_tries;	/* # tries to update _done. */
+	atomic_long_unchecked_t expedited_done_lost;	/* # times beaten to _done. */
+	atomic_long_unchecked_t expedited_done_exit;	/* # times exited _done loop. */
 
 	unsigned long jiffies_force_qs;		/* Time at which to invoke */
 						/*  force_quiescent_state(). */

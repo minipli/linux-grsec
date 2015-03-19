@@ -259,6 +259,9 @@ int can_send(struct sk_buff *skb, int loop)
 		goto inval_skb;
 	}
 
+	skb->ip_summed = CHECKSUM_UNNECESSARY;
+
+	skb_reset_mac_header(skb);
 	skb_reset_network_header(skb);
 	skb_reset_transport_header(skb);
 
@@ -881,7 +884,7 @@ static const struct net_proto_family can_family_ops = {
 };
 
 /* notifier block for netdevice event */
-static struct notifier_block can_netdev_notifier __read_mostly = {
+static struct notifier_block can_netdev_notifier = {
 	.notifier_call = can_notifier,
 };
 
