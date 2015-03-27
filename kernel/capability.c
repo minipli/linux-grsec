@@ -192,6 +192,9 @@ SYSCALL_DEFINE2(capget, cap_user_header_t, header, cap_user_data_t, dataptr)
 		 * before modification is attempted and the application
 		 * fails.
 		 */
+		if (tocopy > ARRAY_SIZE(kdata))
+			return -EFAULT;
+
 		if (copy_to_user(dataptr, kdata, tocopy
 				 * sizeof(struct __user_cap_data_struct))) {
 			return -EFAULT;

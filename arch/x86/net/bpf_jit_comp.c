@@ -174,7 +174,9 @@ static u8 add_2reg(u8 byte, u32 dst_reg, u32 src_reg)
 static void jit_fill_hole(void *area, unsigned int size)
 {
 	/* fill whole space with int3 instructions */
+	pax_open_kernel();
 	memset(area, 0xcc, size);
+	pax_close_kernel();
 }
 
 struct jit_context {
@@ -896,7 +898,9 @@ common_load:
 				pr_err("bpf_jit_compile fatal error\n");
 				return -EFAULT;
 			}
+			pax_open_kernel();
 			memcpy(image + proglen, temp, ilen);
+			pax_close_kernel();
 		}
 		proglen += ilen;
 		addrs[i] = proglen;
@@ -968,7 +972,6 @@ void bpf_int_jit_compile(struct bpf_prog *prog)
 
 	if (image) {
 		bpf_flush_icache(header, image + proglen);
-		set_memory_ro((unsigned long)header, header->pages);
 		prog->bpf_func = (void *)image;
 		prog->jited = true;
 	}
@@ -981,12 +984,8 @@ void bpf_jit_free(struct bpf_prog *fp)
 	unsigned long addr = (unsigned long)fp->bpf_func & PAGE_MASK;
 	struct bpf_binary_header *header = (void *)addr;
 
-	if (!fp->jited)
-		goto free_filter;
+	if (fp->jited)
+		bpf_jit_binary_free(header);
 
-	set_memory_rw(addr, header->pages);
-	bpf_jit_binary_free(header);
-
-free_filter:
 	bpf_prog_unlock_free(fp);
 }

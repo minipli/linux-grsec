@@ -2097,7 +2097,7 @@ int generic_file_mmap(struct file * file, struct vm_area_struct * vma)
 	struct address_space *mapping = file->f_mapping;
 
 	if (!mapping->a_ops->readpage)
-		return -ENOEXEC;
+		return -ENODEV;
 	file_accessed(file);
 	vma->vm_ops = &generic_file_vm_ops;
 	return 0;

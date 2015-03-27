@@ -515,7 +515,7 @@ int ptrace_readdata(struct task_struct *tsk, unsigned long src, char __user *dst
 				break;
 			return -EIO;
 		}
-		if (copy_to_user(dst, buf, retval))
+		if (retval > sizeof(buf) || copy_to_user(dst, buf, retval))
 			return -EFAULT;
 		copied += retval;
 		src += retval;
@@ -783,7 +783,7 @@ int ptrace_request(struct task_struct *child, long request,
 	bool seized = child->ptrace & PT_SEIZED;
 	int ret = -EIO;
 	siginfo_t siginfo, *si;
-	void __user *datavp = (void __user *) data;
+	void __user *datavp = (__force void __user *) data;
 	unsigned long __user *datalp = datavp;
 	unsigned long flags;
 
@@ -1064,7 +1064,7 @@ int generic_ptrace_peekdata(struct task_struct *tsk, unsigned long addr,
 	copied = access_process_vm(tsk, addr, &tmp, sizeof(tmp), 0);
 	if (copied != sizeof(tmp))
 		return -EIO;
-	return put_user(tmp, (unsigned long __user *)data);
+	return put_user(tmp, (__force unsigned long __user *)data);
 }
 
 int generic_ptrace_pokedata(struct task_struct *tsk, unsigned long addr,
@@ -1158,7 +1158,7 @@ int compat_ptrace_request(struct task_struct *child, compat_long_t request,
 }
 
 COMPAT_SYSCALL_DEFINE4(ptrace, compat_long_t, request, compat_long_t, pid,
-		       compat_long_t, addr, compat_long_t, data)
+		       compat_ulong_t, addr, compat_ulong_t, data)
 {
 	struct task_struct *child;
 	long ret;

@@ -1169,7 +1169,7 @@ struct bio *bio_copy_user_iov(struct request_queue *q,
 		/*
 		 * Overflow, abort
 		 */
-		if (end < start)
+		if (end < start || end - start > INT_MAX - nr_pages)
 			return ERR_PTR(-EINVAL);
 
 		nr_pages += end - start;
@@ -1303,7 +1303,7 @@ static struct bio *__bio_map_user_iov(struct request_queue *q,
 		/*
 		 * Overflow, abort
 		 */
-		if (end < start)
+		if (end < start || end - start > INT_MAX - nr_pages)
 			return ERR_PTR(-EINVAL);
 
 		nr_pages += end - start;
@@ -1565,7 +1565,7 @@ static void bio_copy_kern_endio(struct bio *bio, int err)
 	const int read = bio_data_dir(bio) == READ;
 	struct bio_map_data *bmd = bio->bi_private;
 	int i;
-	char *p = bmd->sgvecs[0].iov_base;
+	char *p = (char __force_kernel *)bmd->sgvecs[0].iov_base;
 
 	bio_for_each_segment_all(bvec, bio, i) {
 		char *addr = page_address(bvec->bv_page);

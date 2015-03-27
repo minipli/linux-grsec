@@ -1393,7 +1393,7 @@ void update_process_times(int user_tick)
 /*
  * This function runs timers and the timer-tq in bottom half context.
  */
-static void run_timer_softirq(struct softirq_action *h)
+static __latent_entropy void run_timer_softirq(void)
 {
 	struct tvec_base *base = __this_cpu_read(tvec_bases);
 
@@ -1456,7 +1456,7 @@ static void process_timeout(unsigned long __data)
  *
  * In all cases the return value is guaranteed to be non-negative.
  */
-signed long __sched schedule_timeout(signed long timeout)
+signed long __sched __intentional_overflow(-1) schedule_timeout(signed long timeout)
 {
 	struct timer_list timer;
 	unsigned long expire;

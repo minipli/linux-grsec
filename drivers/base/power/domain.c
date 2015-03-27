@@ -1725,7 +1725,7 @@ int pm_genpd_attach_cpuidle(struct generic_pm_domain *genpd, int state)
 {
 	struct cpuidle_driver *cpuidle_drv;
 	struct gpd_cpuidle_data *cpuidle_data;
-	struct cpuidle_state *idle_state;
+	cpuidle_state_no_const *idle_state;
 	int ret = 0;
 
 	if (IS_ERR_OR_NULL(genpd) || state < 0)
@@ -1793,7 +1793,7 @@ int pm_genpd_name_attach_cpuidle(const char *name, int state)
 int pm_genpd_detach_cpuidle(struct generic_pm_domain *genpd)
 {
 	struct gpd_cpuidle_data *cpuidle_data;
-	struct cpuidle_state *idle_state;
+	cpuidle_state_no_const *idle_state;
 	int ret = 0;
 
 	if (IS_ERR_OR_NULL(genpd))
@@ -2222,7 +2222,10 @@ int genpd_dev_pm_attach(struct device *dev)
 		return ret;
 	}
 
-	dev->pm_domain->detach = genpd_dev_pm_detach;
+	pax_open_kernel();
+	*(void **)&dev->pm_domain->detach = genpd_dev_pm_detach;
+	pax_close_kernel();
+
 	pm_genpd_poweron(pd);
 
 	return 0;

@@ -305,10 +305,10 @@ void ovs_vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
 	 * netdev-stats can be directly read over netlink-ioctl.
 	 */
 
-	stats->rx_errors  = atomic_long_read(&vport->err_stats.rx_errors);
-	stats->tx_errors  = atomic_long_read(&vport->err_stats.tx_errors);
-	stats->tx_dropped = atomic_long_read(&vport->err_stats.tx_dropped);
-	stats->rx_dropped = atomic_long_read(&vport->err_stats.rx_dropped);
+	stats->rx_errors  = atomic_long_read_unchecked(&vport->err_stats.rx_errors);
+	stats->tx_errors  = atomic_long_read_unchecked(&vport->err_stats.tx_errors);
+	stats->tx_dropped = atomic_long_read_unchecked(&vport->err_stats.tx_dropped);
+	stats->rx_dropped = atomic_long_read_unchecked(&vport->err_stats.rx_dropped);
 
 	for_each_possible_cpu(i) {
 		const struct pcpu_sw_netstats *percpu_stats;
@@ -539,19 +539,19 @@ static void ovs_vport_record_error(struct vport *vport,
 {
 	switch (err_type) {
 	case VPORT_E_RX_DROPPED:
-		atomic_long_inc(&vport->err_stats.rx_dropped);
+		atomic_long_inc_unchecked(&vport->err_stats.rx_dropped);
 		break;
 
 	case VPORT_E_RX_ERROR:
-		atomic_long_inc(&vport->err_stats.rx_errors);
+		atomic_long_inc_unchecked(&vport->err_stats.rx_errors);
 		break;
 
 	case VPORT_E_TX_DROPPED:
-		atomic_long_inc(&vport->err_stats.tx_dropped);
+		atomic_long_inc_unchecked(&vport->err_stats.tx_dropped);
 		break;
 
 	case VPORT_E_TX_ERROR:
-		atomic_long_inc(&vport->err_stats.tx_errors);
+		atomic_long_inc_unchecked(&vport->err_stats.tx_errors);
 		break;
 	}
 

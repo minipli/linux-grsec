@@ -52,7 +52,7 @@ static unsigned long stack_maxrandom_size(void)
  * Leave an at least ~128 MB hole with possible stack randomization.
  */
 #define MIN_GAP (128*1024*1024UL + stack_maxrandom_size())
-#define MAX_GAP (TASK_SIZE/6*5)
+#define MAX_GAP (pax_task_size/6*5)
 
 static int mmap_is_legacy(void)
 {
@@ -82,27 +82,40 @@ static unsigned long mmap_rnd(void)
 	return rnd << PAGE_SHIFT;
 }
 
-static unsigned long mmap_base(void)
+static unsigned long mmap_base(struct mm_struct *mm)
 {
 	unsigned long gap = rlimit(RLIMIT_STACK);
+	unsigned long pax_task_size = TASK_SIZE;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	if (mm->pax_flags & MF_PAX_SEGMEXEC)
+		pax_task_size = SEGMEXEC_TASK_SIZE;
+#endif
 
 	if (gap < MIN_GAP)
 		gap = MIN_GAP;
 	else if (gap > MAX_GAP)
 		gap = MAX_GAP;
 
-	return PAGE_ALIGN(TASK_SIZE - gap - mmap_rnd());
+	return PAGE_ALIGN(pax_task_size - gap - mmap_rnd());
 }
 
 /*
  * Bottom-up (legacy) layout on X86_32 did not support randomization, X86_64
  * does, but not when emulating X86_32
  */
-static unsigned long mmap_legacy_base(void)
+static unsigned long mmap_legacy_base(struct mm_struct *mm)
 {
-	if (mmap_is_ia32())
+	if (mmap_is_ia32()) {
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if (mm->pax_flags & MF_PAX_SEGMEXEC)
+			return SEGMEXEC_TASK_UNMAPPED_BASE;
+		else
+#endif
+
 		return TASK_UNMAPPED_BASE;
-	else
+	} else
 		return TASK_UNMAPPED_BASE + mmap_rnd();
 }
 
@@ -112,8 +125,15 @@ static unsigned long mmap_legacy_base(void)
  */
 void arch_pick_mmap_layout(struct mm_struct *mm)
 {
-	mm->mmap_legacy_base = mmap_legacy_base();
-	mm->mmap_base = mmap_base();
+	mm->mmap_legacy_base = mmap_legacy_base(mm);
+	mm->mmap_base = mmap_base(mm);
+
+#ifdef CONFIG_PAX_RANDMMAP
+	if (mm->pax_flags & MF_PAX_RANDMMAP) {
+		mm->mmap_legacy_base += mm->delta_mmap;
+		mm->mmap_base -= mm->delta_mmap + mm->delta_stack;
+	}
+#endif
 
 	if (mmap_is_legacy()) {
 		mm->mmap_base = mm->mmap_legacy_base;

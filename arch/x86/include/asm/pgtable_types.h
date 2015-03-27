@@ -110,8 +110,10 @@
 
 #if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
 #define _PAGE_NX	(_AT(pteval_t, 1) << _PAGE_BIT_NX)
-#else
+#elif defined(CONFIG_KMEMCHECK) || defined(CONFIG_MEM_SOFT_DIRTY)
 #define _PAGE_NX	(_AT(pteval_t, 0))
+#else
+#define _PAGE_NX	(_AT(pteval_t, 1) << _PAGE_BIT_HIDDEN)
 #endif
 
 #define _PAGE_FILE	(_AT(pteval_t, 1) << _PAGE_BIT_FILE)
@@ -167,6 +169,9 @@ enum page_cache_mode {
 #define PAGE_READONLY_EXEC	__pgprot(_PAGE_PRESENT | _PAGE_USER |	\
 					 _PAGE_ACCESSED)
 
+#define PAGE_READONLY_NOEXEC PAGE_READONLY
+#define PAGE_SHARED_NOEXEC PAGE_SHARED
+
 #define __PAGE_KERNEL_EXEC						\
 	(_PAGE_PRESENT | _PAGE_RW | _PAGE_DIRTY | _PAGE_ACCESSED | _PAGE_GLOBAL)
 #define __PAGE_KERNEL		(__PAGE_KERNEL_EXEC | _PAGE_NX)
@@ -174,7 +179,7 @@ enum page_cache_mode {
 #define __PAGE_KERNEL_RO		(__PAGE_KERNEL & ~_PAGE_RW)
 #define __PAGE_KERNEL_RX		(__PAGE_KERNEL_EXEC & ~_PAGE_RW)
 #define __PAGE_KERNEL_NOCACHE		(__PAGE_KERNEL | _PAGE_NOCACHE)
-#define __PAGE_KERNEL_VSYSCALL		(__PAGE_KERNEL_RX | _PAGE_USER)
+#define __PAGE_KERNEL_VSYSCALL		(__PAGE_KERNEL_RO | _PAGE_USER)
 #define __PAGE_KERNEL_VVAR		(__PAGE_KERNEL_RO | _PAGE_USER)
 #define __PAGE_KERNEL_LARGE		(__PAGE_KERNEL | _PAGE_PSE)
 #define __PAGE_KERNEL_LARGE_EXEC	(__PAGE_KERNEL_EXEC | _PAGE_PSE)
@@ -220,7 +225,7 @@ enum page_cache_mode {
 #ifdef CONFIG_X86_64
 #define __PAGE_KERNEL_IDENT_LARGE_EXEC	__PAGE_KERNEL_LARGE_EXEC
 #else
-#define PTE_IDENT_ATTR	 0x003		/* PRESENT+RW */
+#define PTE_IDENT_ATTR	 0x063		/* PRESENT+RW+DIRTY+ACCESSED */
 #define PDE_IDENT_ATTR	 0x063		/* PRESENT+RW+DIRTY+ACCESSED */
 #define PGD_IDENT_ATTR	 0x001		/* PRESENT (no other attributes) */
 #endif
@@ -259,7 +264,17 @@ static inline pgdval_t pgd_flags(pgd_t pgd)
 {
 	return native_pgd_val(pgd) & PTE_FLAGS_MASK;
 }
+#endif
 
+#if PAGETABLE_LEVELS == 3
+#include <asm-generic/pgtable-nopud.h>
+#endif
+
+#if PAGETABLE_LEVELS == 2
+#include <asm-generic/pgtable-nopmd.h>
+#endif
+
+#ifndef __ASSEMBLY__
 #if PAGETABLE_LEVELS > 3
 typedef struct { pudval_t pud; } pud_t;
 
@@ -273,8 +288,6 @@ static inline pudval_t native_pud_val(pud_t pud)
 	return pud.pud;
 }
 #else
-#include <asm-generic/pgtable-nopud.h>
-
 static inline pudval_t native_pud_val(pud_t pud)
 {
 	return native_pgd_val(pud.pgd);
@@ -294,8 +307,6 @@ static inline pmdval_t native_pmd_val(pmd_t pmd)
 	return pmd.pmd;
 }
 #else
-#include <asm-generic/pgtable-nopmd.h>
-
 static inline pmdval_t native_pmd_val(pmd_t pmd)
 {
 	return native_pgd_val(pmd.pud.pgd);
@@ -402,7 +413,6 @@ typedef struct page *pgtable_t;
 
 extern pteval_t __supported_pte_mask;
 extern void set_nx(void);
-extern int nx_enabled;
 
 #define pgprot_writecombine	pgprot_writecombine
 extern pgprot_t pgprot_writecombine(pgprot_t prot);

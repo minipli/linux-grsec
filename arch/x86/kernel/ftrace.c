@@ -89,7 +89,7 @@ static unsigned long text_ip_addr(unsigned long ip)
 	 * kernel identity mapping to modify code.
 	 */
 	if (within(ip, (unsigned long)_text, (unsigned long)_etext))
-		ip = (unsigned long)__va(__pa_symbol(ip));
+		ip = (unsigned long)__va(__pa_symbol(ktla_ktva(ip)));
 
 	return ip;
 }
@@ -104,6 +104,8 @@ ftrace_modify_code_direct(unsigned long ip, unsigned const char *old_code,
 		   unsigned const char *new_code)
 {
 	unsigned char replaced[MCOUNT_INSN_SIZE];
+
+	ip = ktla_ktva(ip);
 
 	/*
 	 * Note: Due to modules and __init, code can
@@ -230,7 +232,7 @@ static int update_ftrace_func(unsigned long ip, void *new)
 	unsigned char old[MCOUNT_INSN_SIZE];
 	int ret;
 
-	memcpy(old, (void *)ip, MCOUNT_INSN_SIZE);
+	memcpy(old, (void *)ktla_ktva(ip), MCOUNT_INSN_SIZE);
 
 	ftrace_update_func = ip;
 	/* Make sure the breakpoints see the ftrace_update_func update */
@@ -311,7 +313,7 @@ static int add_break(unsigned long ip, const char *old)
 	unsigned char replaced[MCOUNT_INSN_SIZE];
 	unsigned char brk = BREAKPOINT_INSTRUCTION;
 
-	if (probe_kernel_read(replaced, (void *)ip, MCOUNT_INSN_SIZE))
+	if (probe_kernel_read(replaced, (void *)ktla_ktva(ip), MCOUNT_INSN_SIZE))
 		return -EFAULT;
 
 	/* Make sure it is what we expect it to be */

@@ -766,7 +766,7 @@ static void tcp_update_pacing_rate(struct sock *sk)
 	 * without any lock. We want to make sure compiler wont store
 	 * intermediate values in this location.
 	 */
-	ACCESS_ONCE(sk->sk_pacing_rate) = min_t(u64, rate,
+	ACCESS_ONCE_RW(sk->sk_pacing_rate) = min_t(u64, rate,
 						sk->sk_max_pacing_rate);
 }
 
@@ -4528,7 +4528,7 @@ static struct sk_buff *tcp_collapse_one(struct sock *sk, struct sk_buff *skb,
  * simplifies code)
  */
 static void
-tcp_collapse(struct sock *sk, struct sk_buff_head *list,
+__intentional_overflow(5,6) tcp_collapse(struct sock *sk, struct sk_buff_head *list,
 	     struct sk_buff *head, struct sk_buff *tail,
 	     u32 start, u32 end)
 {

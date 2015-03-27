@@ -19,10 +19,7 @@
 #include <asm/page.h>
 #include <asm/hpet.h>
 #include <asm/desc.h>
-
-#if defined(CONFIG_X86_64)
-unsigned int __read_mostly vdso64_enabled = 1;
-#endif
+#include <asm/mman.h>
 
 void __init init_vdso_image(const struct vdso_image *image)
 {
@@ -101,6 +98,11 @@ static int map_vdso(const struct vdso_image *image, bool calculate_addr)
 		.pages = no_pages,
 	};
 
+#ifdef CONFIG_PAX_RANDMMAP
+	if (mm->pax_flags & MF_PAX_RANDMMAP)
+		calculate_addr = false;
+#endif
+
 	if (calculate_addr) {
 		addr = vdso_addr(current->mm->start_stack,
 				 image->size - image->sym_vvar_start);
@@ -111,14 +113,14 @@ static int map_vdso(const struct vdso_image *image, bool calculate_addr)
 	down_write(&mm->mmap_sem);
 
 	addr = get_unmapped_area(NULL, addr,
-				 image->size - image->sym_vvar_start, 0, 0);
+				 image->size - image->sym_vvar_start, 0, MAP_EXECUTABLE);
 	if (IS_ERR_VALUE(addr)) {
 		ret = addr;
 		goto up_fail;
 	}
 
 	text_start = addr - image->sym_vvar_start;
-	current->mm->context.vdso = (void __user *)text_start;
+	mm->context.vdso = text_start;
 
 	/*
 	 * MAYWRITE to allow gdb to COW and set breakpoints
@@ -163,15 +165,12 @@ static int map_vdso(const struct vdso_image *image, bool calculate_addr)
 			hpet_address >> PAGE_SHIFT,
 			PAGE_SIZE,
 			pgprot_noncached(PAGE_READONLY));
-
-		if (ret)
-			goto up_fail;
 	}
 #endif
 
 up_fail:
 	if (ret)
-		current->mm->context.vdso = NULL;
+		current->mm->context.vdso = 0;
 
 	up_write(&mm->mmap_sem);
 	return ret;
@@ -191,8 +190,8 @@ static int load_vdso32(void)
 
 	if (selected_vdso32->sym_VDSO32_SYSENTER_RETURN)
 		current_thread_info()->sysenter_return =
-			current->mm->context.vdso +
-			selected_vdso32->sym_VDSO32_SYSENTER_RETURN;
+			(void __force_user *)(current->mm->context.vdso +
+			selected_vdso32->sym_VDSO32_SYSENTER_RETURN);
 
 	return 0;
 }
@@ -201,9 +200,6 @@ static int load_vdso32(void)
 #ifdef CONFIG_X86_64
 int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 {
-	if (!vdso64_enabled)
-		return 0;
-
 	return map_vdso(&vdso_image_64, true);
 }
 
@@ -212,12 +208,8 @@ int compat_arch_setup_additional_pages(struct linux_binprm *bprm,
 				       int uses_interp)
 {
 #ifdef CONFIG_X86_X32_ABI
-	if (test_thread_flag(TIF_X32)) {
-		if (!vdso64_enabled)
-			return 0;
-
+	if (test_thread_flag(TIF_X32))
 		return map_vdso(&vdso_image_x32, true);
-	}
 #endif
 
 	return load_vdso32();
@@ -228,15 +220,6 @@ int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 {
 	return load_vdso32();
 }
-#endif
-
-#ifdef CONFIG_X86_64
-static __init int vdso_setup(char *s)
-{
-	vdso64_enabled = simple_strtoul(s, NULL, 0);
-	return 0;
-}
-__setup("vdso=", vdso_setup);
 #endif
 
 #ifdef CONFIG_X86_64

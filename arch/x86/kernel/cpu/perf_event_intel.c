@@ -2353,10 +2353,10 @@ __init int intel_pmu_init(void)
 		x86_pmu.num_counters_fixed = max((int)edx.split.num_counters_fixed, 3);
 
 	if (boot_cpu_has(X86_FEATURE_PDCM)) {
-		u64 capabilities;
+		u64 capabilities = x86_pmu.intel_cap.capabilities;
 
-		rdmsrl(MSR_IA32_PERF_CAPABILITIES, capabilities);
-		x86_pmu.intel_cap.capabilities = capabilities;
+		if (rdmsrl_safe(MSR_IA32_PERF_CAPABILITIES, &x86_pmu.intel_cap.capabilities))
+			x86_pmu.intel_cap.capabilities = capabilities;
 	}
 
 	intel_ds_init();
