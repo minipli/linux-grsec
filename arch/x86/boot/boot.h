@@ -84,7 +84,7 @@ static inline void io_delay(void)
 static inline u16 ds(void)
 {
 	u16 seg;
-	asm("movw %%ds,%0" : "=rm" (seg));
+	asm volatile("movw %%ds,%0" : "=rm" (seg));
 	return seg;
 }
 
@@ -180,7 +180,7 @@ static inline void wrgs32(u32 v, addr_t addr)
 static inline int memcmp(const void *s1, const void *s2, size_t len)
 {
 	u8 diff;
-	asm("repe; cmpsb; setnz %0"
+	asm volatile("repe; cmpsb; setnz %0"
 	    : "=qm" (diff), "+D" (s1), "+S" (s2), "+c" (len));
 	return diff;
 }

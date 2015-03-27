@@ -1695,14 +1695,14 @@ int dev_forward_skb(struct net_device *dev, struct sk_buff *skb)
 {
 	if (skb_shinfo(skb)->tx_flags & SKBTX_DEV_ZEROCOPY) {
 		if (skb_copy_ubufs(skb, GFP_ATOMIC)) {
-			atomic_long_inc(&dev->rx_dropped);
+			atomic_long_inc_unchecked(&dev->rx_dropped);
 			kfree_skb(skb);
 			return NET_RX_DROP;
 		}
 	}
 
 	if (unlikely(!is_skb_forwardable(dev, skb))) {
-		atomic_long_inc(&dev->rx_dropped);
+		atomic_long_inc_unchecked(&dev->rx_dropped);
 		kfree_skb(skb);
 		return NET_RX_DROP;
 	}
@@ -2461,7 +2461,7 @@ static int illegal_highdma(const struct net_device *dev, struct sk_buff *skb)
 
 struct dev_gso_cb {
 	void (*destructor)(struct sk_buff *skb);
-};
+} __no_const;
 
 #define DEV_GSO_CB(skb) ((struct dev_gso_cb *)(skb)->cb)
 
@@ -3238,7 +3238,7 @@ enqueue:
 
 	local_irq_restore(flags);
 
-	atomic_long_inc(&skb->dev->rx_dropped);
+	atomic_long_inc_unchecked(&skb->dev->rx_dropped);
 	kfree_skb(skb);
 	return NET_RX_DROP;
 }
@@ -3319,7 +3319,7 @@ int netif_rx_ni(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(netif_rx_ni);
 
-static void net_tx_action(struct softirq_action *h)
+static __latent_entropy void net_tx_action(void)
 {
 	struct softnet_data *sd = &__get_cpu_var(softnet_data);
 
@@ -3656,7 +3656,7 @@ ncls:
 			ret = pt_prev->func(skb, skb->dev, pt_prev, orig_dev);
 	} else {
 drop:
-		atomic_long_inc(&skb->dev->rx_dropped);
+		atomic_long_inc_unchecked(&skb->dev->rx_dropped);
 		kfree_skb(skb);
 		/* Jamal, now you will not able to escape explaining
 		 * me how you were going to use this. :-)
@@ -4346,7 +4346,7 @@ void netif_napi_del(struct napi_struct *napi)
 }
 EXPORT_SYMBOL(netif_napi_del);
 
-static void net_rx_action(struct softirq_action *h)
+static __latent_entropy void net_rx_action(void)
 {
 	struct softnet_data *sd = &__get_cpu_var(softnet_data);
 	unsigned long time_limit = jiffies + 2;
@@ -5066,7 +5066,7 @@ void netdev_upper_dev_unlink(struct net_device *dev,
 }
 EXPORT_SYMBOL(netdev_upper_dev_unlink);
 
-void netdev_adjacent_add_links(struct net_device *dev)
+static void netdev_adjacent_add_links(struct net_device *dev)
 {
 	struct netdev_adjacent *iter;
 
@@ -5091,7 +5091,7 @@ void netdev_adjacent_add_links(struct net_device *dev)
 	}
 }
 
-void netdev_adjacent_del_links(struct net_device *dev)
+static void netdev_adjacent_del_links(struct net_device *dev)
 {
 	struct netdev_adjacent *iter;
 
@@ -6376,7 +6376,7 @@ struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
 	} else {
 		netdev_stats_to_stats64(storage, &dev->stats);
 	}
-	storage->rx_dropped += atomic_long_read(&dev->rx_dropped);
+	storage->rx_dropped += atomic_long_read_unchecked(&dev->rx_dropped);
 	return storage;
 }
 EXPORT_SYMBOL(dev_get_stats);
@@ -6392,7 +6392,7 @@ struct netdev_queue *dev_ingress_queue_create(struct net_device *dev)
 	if (!queue)
 		return NULL;
 	netdev_init_one_queue(dev, queue, NULL);
-	queue->qdisc = &noop_qdisc;
+	RCU_INIT_POINTER(queue->qdisc, &noop_qdisc);
 	queue->qdisc_sleeping = &noop_qdisc;
 	rcu_assign_pointer(dev->ingress_queue, queue);
 #endif

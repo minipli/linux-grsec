@@ -865,7 +865,9 @@ static int arasan_cf_probe(struct platform_device *pdev)
 	/* Handle platform specific quirks */
 	if (quirk) {
 		if (quirk & CF_BROKEN_PIO) {
-			ap->ops->set_piomode = NULL;
+			pax_open_kernel();
+			*(void **)&ap->ops->set_piomode = NULL;
+			pax_close_kernel();
 			ap->pio_mask = 0;
 		}
 		if (quirk & CF_BROKEN_MWDMA)
