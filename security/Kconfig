@@ -490,7 +490,7 @@ menu "Miscellaneous hardening features"
 
 config PAX_MEMORY_SANITIZE
 	bool "Sanitize all freed memory"
-	depends on !HIBERNATION
+	depends on !HIBERNATION && !DEBUG_PAGEALLOC
 	help
 	  By saying Y here the kernel will erase memory pages and slab objects
 	  as soon as they are freed.  This in turn reduces the lifetime of data
