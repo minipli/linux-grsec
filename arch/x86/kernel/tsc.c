@@ -150,7 +150,7 @@ static void cyc2ns_write_end(int cpu, struct cyc2ns_data *data)
 	 */
 	smp_wmb();
 
-	ACCESS_ONCE(c2n->head) = data;
+	ACCESS_ONCE_RW(c2n->head) = data;
 }
 
 /*

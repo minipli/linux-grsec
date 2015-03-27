@@ -713,7 +713,7 @@ static int i915_interrupt_info(struct seq_file *m, void *data)
 			   I915_READ(GTIMR));
 	}
 	seq_printf(m, "Interrupts received: %d\n",
-		   atomic_read(&dev_priv->irq_received));
+		   atomic_read_unchecked(&dev_priv->irq_received));
 	for_each_ring(ring, dev_priv, i) {
 		if (INTEL_INFO(dev)->gen >= 6) {
 			seq_printf(m,

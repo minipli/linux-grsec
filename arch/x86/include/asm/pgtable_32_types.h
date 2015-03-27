@@ -8,7 +8,7 @@
  */
 #ifdef CONFIG_X86_PAE
 # include <asm/pgtable-3level_types.h>
-# define PMD_SIZE	(1UL << PMD_SHIFT)
+# define PMD_SIZE	(_AC(1, UL) << PMD_SHIFT)
 # define PMD_MASK	(~(PMD_SIZE - 1))
 #else
 # include <asm/pgtable-2level_types.h>
@@ -44,6 +44,19 @@ extern bool __vmalloc_start_set; /* set once high_memory is set */
 # define VMALLOC_END	(PKMAP_BASE - 2 * PAGE_SIZE)
 #else
 # define VMALLOC_END	(FIXADDR_START - 2 * PAGE_SIZE)
+#endif
+
+#ifdef CONFIG_PAX_KERNEXEC
+#ifndef __ASSEMBLY__
+extern unsigned char MODULES_EXEC_VADDR[];
+extern unsigned char MODULES_EXEC_END[];
+#endif
+#include <asm/boot.h>
+#define ktla_ktva(addr)		(addr + LOAD_PHYSICAL_ADDR + PAGE_OFFSET)
+#define ktva_ktla(addr)		(addr - LOAD_PHYSICAL_ADDR - PAGE_OFFSET)
+#else
+#define ktla_ktva(addr)		(addr)
+#define ktva_ktla(addr)		(addr)
 #endif
 
 #define MODULES_VADDR	VMALLOC_START
