@@ -1757,7 +1757,7 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 	}
 #endif
 	/* everything else happens only if HW was up & running */
-	if (!local->open_count)
+	if (!local_read(&local->open_count))
 		goto wake_up;
 
 	/*
@@ -1987,7 +1987,7 @@ int ieee80211_reconfig(struct ieee80211_local *local)
 	local->in_reconfig = false;
 	barrier();
 
-	if (local->monitors == local->open_count && local->monitors > 0)
+	if (local->monitors == local_read(&local->open_count) && local->monitors > 0)
 		ieee80211_add_virtual_monitor(local);
 
 	/*

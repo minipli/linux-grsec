@@ -48,13 +48,13 @@
 void lockref_get(struct lockref *lockref)
 {
 	CMPXCHG_LOOP(
-		new.count++;
+		__lockref_inc(&new);
 	,
 		return;
 	);
 
 	spin_lock(&lockref->lock);
-	lockref->count++;
+	__lockref_inc(lockref);
 	spin_unlock(&lockref->lock);
 }
 EXPORT_SYMBOL(lockref_get);
@@ -69,7 +69,7 @@ int lockref_get_not_zero(struct lockref *lockref)
 	int retval;
 
 	CMPXCHG_LOOP(
-		new.count++;
+		__lockref_inc(&new);
 		if (!old.count)
 			return 0;
 	,
@@ -79,7 +79,7 @@ int lockref_get_not_zero(struct lockref *lockref)
 	spin_lock(&lockref->lock);
 	retval = 0;
 	if (lockref->count) {
-		lockref->count++;
+		__lockref_inc(lockref);
 		retval = 1;
 	}
 	spin_unlock(&lockref->lock);
@@ -96,7 +96,7 @@ EXPORT_SYMBOL(lockref_get_not_zero);
 int lockref_get_or_lock(struct lockref *lockref)
 {
 	CMPXCHG_LOOP(
-		new.count++;
+		__lockref_inc(&new);
 		if (!old.count)
 			break;
 	,
@@ -106,7 +106,7 @@ int lockref_get_or_lock(struct lockref *lockref)
 	spin_lock(&lockref->lock);
 	if (!lockref->count)
 		return 0;
-	lockref->count++;
+	__lockref_inc(lockref);
 	spin_unlock(&lockref->lock);
 	return 1;
 }
@@ -120,7 +120,7 @@ EXPORT_SYMBOL(lockref_get_or_lock);
 int lockref_put_or_lock(struct lockref *lockref)
 {
 	CMPXCHG_LOOP(
-		new.count--;
+		__lockref_dec(&new);
 		if (old.count <= 1)
 			break;
 	,
@@ -130,7 +130,7 @@ int lockref_put_or_lock(struct lockref *lockref)
 	spin_lock(&lockref->lock);
 	if (lockref->count <= 1)
 		return 0;
-	lockref->count--;
+	__lockref_dec(lockref);
 	spin_unlock(&lockref->lock);
 	return 1;
 }
@@ -157,7 +157,7 @@ int lockref_get_not_dead(struct lockref *lockref)
 	int retval;
 
 	CMPXCHG_LOOP(
-		new.count++;
+		__lockref_inc(&new);
 		if ((int)old.count < 0)
 			return 0;
 	,
@@ -167,7 +167,7 @@ int lockref_get_not_dead(struct lockref *lockref)
 	spin_lock(&lockref->lock);
 	retval = 0;
 	if ((int) lockref->count >= 0) {
-		lockref->count++;
+		__lockref_inc(lockref);
 		retval = 1;
 	}
 	spin_unlock(&lockref->lock);

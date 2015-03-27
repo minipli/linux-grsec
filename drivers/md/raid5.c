@@ -1730,6 +1730,10 @@ static int grow_one_stripe(struct r5conf *conf, int hash)
 	return 1;
 }
 
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+static atomic_unchecked_t raid5_cache_id = ATOMIC_INIT(0);
+#endif
+
 static int grow_stripes(struct r5conf *conf, int num)
 {
 	struct kmem_cache *sc;
@@ -1741,7 +1745,11 @@ static int grow_stripes(struct r5conf *conf, int num)
 			"raid%d-%s", conf->level, mdname(conf->mddev));
 	else
 		sprintf(conf->cache_name[0],
+#ifdef CONFIG_GRKERNSEC_HIDESYM
+			"raid%d-%08lx", conf->level, atomic_inc_return_unchecked(&raid5_cache_id));
+#else
 			"raid%d-%p", conf->level, conf->mddev);
+#endif
 	sprintf(conf->cache_name[1], "%s-alt", conf->cache_name[0]);
 
 	conf->active_name = 0;
@@ -2017,21 +2025,21 @@ static void raid5_end_read_request(struct bio * bi, int error)
 				mdname(conf->mddev), STRIPE_SECTORS,
 				(unsigned long long)s,
 				bdevname(rdev->bdev, b));
-			atomic_add(STRIPE_SECTORS, &rdev->corrected_errors);
+			atomic_add_unchecked(STRIPE_SECTORS, &rdev->corrected_errors);
 			clear_bit(R5_ReadError, &sh->dev[i].flags);
 			clear_bit(R5_ReWrite, &sh->dev[i].flags);
 		} else if (test_bit(R5_ReadNoMerge, &sh->dev[i].flags))
 			clear_bit(R5_ReadNoMerge, &sh->dev[i].flags);
 
-		if (atomic_read(&rdev->read_errors))
-			atomic_set(&rdev->read_errors, 0);
+		if (atomic_read_unchecked(&rdev->read_errors))
+			atomic_set_unchecked(&rdev->read_errors, 0);
 	} else {
 		const char *bdn = bdevname(rdev->bdev, b);
 		int retry = 0;
 		int set_bad = 0;
 
 		clear_bit(R5_UPTODATE, &sh->dev[i].flags);
-		atomic_inc(&rdev->read_errors);
+		atomic_inc_unchecked(&rdev->read_errors);
 		if (test_bit(R5_ReadRepl, &sh->dev[i].flags))
 			printk_ratelimited(
 				KERN_WARNING
@@ -2059,7 +2067,7 @@ static void raid5_end_read_request(struct bio * bi, int error)
 				mdname(conf->mddev),
 				(unsigned long long)s,
 				bdn);
-		} else if (atomic_read(&rdev->read_errors)
+		} else if (atomic_read_unchecked(&rdev->read_errors)
 			 > conf->max_nr_stripes)
 			printk(KERN_WARNING
 			       "md/raid:%s: Too many read errors, failing device %s.\n",

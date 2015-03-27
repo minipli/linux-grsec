@@ -791,6 +791,12 @@ static struct sock *unix_find_other(struct net *net,
 		err = -ECONNREFUSED;
 		if (!S_ISSOCK(inode->i_mode))
 			goto put_fail;
+
+		if (!gr_acl_handle_unix(path.dentry, path.mnt)) {
+			err = -EACCES;
+			goto put_fail;
+		}
+
 		u = unix_find_socket_byinode(inode);
 		if (!u)
 			goto put_fail;
@@ -811,6 +817,13 @@ static struct sock *unix_find_other(struct net *net,
 		if (u) {
 			struct dentry *dentry;
 			dentry = unix_sk(u)->path.dentry;
+
+			if (!gr_handle_chroot_unix(pid_vnr(u->sk_peer_pid))) {
+				err = -EPERM;
+				sock_put(u);
+				goto fail;
+			}
+
 			if (dentry)
 				touch_atime(&unix_sk(u)->path);
 		} else
@@ -844,12 +857,18 @@ static int unix_mknod(const char *sun_path, umode_t mode, struct path *res)
 	 */
 	err = security_path_mknod(&path, dentry, mode, 0);
 	if (!err) {
+		if (!gr_acl_handle_mknod(dentry, path.dentry, path.mnt, mode)) {
+			err = -EACCES;
+			goto out;
+		}
 		err = vfs_mknod(path.dentry->d_inode, dentry, mode, 0);
 		if (!err) {
 			res->mnt = mntget(path.mnt);
 			res->dentry = dget(dentry);
+			gr_handle_create(dentry, path.mnt);
 		}
 	}
+out:
 	done_path_create(&path, dentry);
 	return err;
 }
@@ -2248,11 +2267,14 @@ static unsigned int unix_dgram_poll(struct file *file, struct socket *sock,
 	writable = unix_writable(sk);
 	other = unix_peer_get(sk);
 	if (other) {
-		if (unix_peer(other) != sk) {
+		unix_state_lock(other);
+		if (!sock_flag(other, SOCK_DEAD) && unix_peer(other) != sk) {
+			unix_state_unlock(other);
 			sock_poll_wait(file, &unix_sk(other)->peer_wait, wait);
 			if (unix_recvq_full(other))
 				writable = 0;
-		}
+		} else
+			unix_state_unlock(other);
 		sock_put(other);
 	}
 
@@ -2349,9 +2371,13 @@ static int unix_seq_show(struct seq_file *seq, void *v)
 		seq_puts(seq, "Num       RefCount Protocol Flags    Type St "
 			 "Inode Path\n");
 	else {
-		struct sock *s = v;
+		struct sock *s = v, *peer;
 		struct unix_sock *u = unix_sk(s);
 		unix_state_lock(s);
+		peer = unix_peer(s);
+		unix_state_unlock(s);
+
+		unix_state_double_lock(s, peer);
 
 		seq_printf(seq, "%pK: %08X %08X %08X %04X %02X %5lu",
 			s,
@@ -2378,8 +2404,10 @@ static int unix_seq_show(struct seq_file *seq, void *v)
 			}
 			for ( ; i < len; i++)
 				seq_putc(seq, u->addr->name->sun_path[i]);
-		}
-		unix_state_unlock(s);
+		} else if (peer)
+			seq_printf(seq, " P%lu", sock_i_ino(peer));
+
+		unix_state_double_unlock(s, peer);
 		seq_putc(seq, '\n');
 	}
 

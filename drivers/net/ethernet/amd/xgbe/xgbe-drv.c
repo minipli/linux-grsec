@@ -239,7 +239,7 @@ static int xgbe_maybe_stop_tx_queue(struct xgbe_channel *channel,
 		 * support, tell it now
 		 */
 		if (ring->tx.xmit_more)
-			pdata->hw_if.tx_start_xmit(channel, ring);
+			pdata->hw_if->tx_start_xmit(channel, ring);
 
 		return NETDEV_TX_BUSY;
 	}
@@ -267,7 +267,7 @@ static int xgbe_calc_rx_buf_size(struct net_device *netdev, unsigned int mtu)
 
 static void xgbe_enable_rx_tx_ints(struct xgbe_prv_data *pdata)
 {
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	struct xgbe_channel *channel;
 	enum xgbe_int int_id;
 	unsigned int i;
@@ -289,7 +289,7 @@ static void xgbe_enable_rx_tx_ints(struct xgbe_prv_data *pdata)
 
 static void xgbe_disable_rx_tx_ints(struct xgbe_prv_data *pdata)
 {
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	struct xgbe_channel *channel;
 	enum xgbe_int int_id;
 	unsigned int i;
@@ -312,7 +312,7 @@ static void xgbe_disable_rx_tx_ints(struct xgbe_prv_data *pdata)
 static irqreturn_t xgbe_isr(int irq, void *data)
 {
 	struct xgbe_prv_data *pdata = data;
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	struct xgbe_channel *channel;
 	unsigned int dma_isr, dma_ch_isr;
 	unsigned int mac_isr, mac_tssr;
@@ -611,7 +611,7 @@ static void xgbe_napi_disable(struct xgbe_prv_data *pdata, unsigned int del)
 
 void xgbe_init_tx_coalesce(struct xgbe_prv_data *pdata)
 {
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 
 	DBGPR("-->xgbe_init_tx_coalesce\n");
 
@@ -625,7 +625,7 @@ void xgbe_init_tx_coalesce(struct xgbe_prv_data *pdata)
 
 void xgbe_init_rx_coalesce(struct xgbe_prv_data *pdata)
 {
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 
 	DBGPR("-->xgbe_init_rx_coalesce\n");
 
@@ -639,7 +639,7 @@ void xgbe_init_rx_coalesce(struct xgbe_prv_data *pdata)
 
 static void xgbe_free_tx_data(struct xgbe_prv_data *pdata)
 {
-	struct xgbe_desc_if *desc_if = &pdata->desc_if;
+	struct xgbe_desc_if *desc_if = pdata->desc_if;
 	struct xgbe_channel *channel;
 	struct xgbe_ring *ring;
 	struct xgbe_ring_data *rdata;
@@ -664,7 +664,7 @@ static void xgbe_free_tx_data(struct xgbe_prv_data *pdata)
 
 static void xgbe_free_rx_data(struct xgbe_prv_data *pdata)
 {
-	struct xgbe_desc_if *desc_if = &pdata->desc_if;
+	struct xgbe_desc_if *desc_if = pdata->desc_if;
 	struct xgbe_channel *channel;
 	struct xgbe_ring *ring;
 	struct xgbe_ring_data *rdata;
@@ -690,7 +690,7 @@ static void xgbe_free_rx_data(struct xgbe_prv_data *pdata)
 static void xgbe_adjust_link(struct net_device *netdev)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	struct phy_device *phydev = pdata->phydev;
 	int new_state = 0;
 
@@ -798,7 +798,7 @@ static void xgbe_phy_exit(struct xgbe_prv_data *pdata)
 int xgbe_powerdown(struct net_device *netdev, unsigned int caller)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	unsigned long flags;
 
 	DBGPR("-->xgbe_powerdown\n");
@@ -836,7 +836,7 @@ int xgbe_powerdown(struct net_device *netdev, unsigned int caller)
 int xgbe_powerup(struct net_device *netdev, unsigned int caller)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	unsigned long flags;
 
 	DBGPR("-->xgbe_powerup\n");
@@ -873,7 +873,7 @@ int xgbe_powerup(struct net_device *netdev, unsigned int caller)
 
 static int xgbe_start(struct xgbe_prv_data *pdata)
 {
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	struct net_device *netdev = pdata->netdev;
 
 	DBGPR("-->xgbe_start\n");
@@ -899,7 +899,7 @@ static int xgbe_start(struct xgbe_prv_data *pdata)
 
 static void xgbe_stop(struct xgbe_prv_data *pdata)
 {
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	struct xgbe_channel *channel;
 	struct net_device *netdev = pdata->netdev;
 	struct netdev_queue *txq;
@@ -932,7 +932,7 @@ static void xgbe_stop(struct xgbe_prv_data *pdata)
 static void xgbe_restart_dev(struct xgbe_prv_data *pdata, unsigned int reset)
 {
 	struct xgbe_channel *channel;
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	unsigned int i;
 
 	DBGPR("-->xgbe_restart_dev\n");
@@ -1135,7 +1135,7 @@ static int xgbe_set_hwtstamp_settings(struct xgbe_prv_data *pdata,
 		return -ERANGE;
 	}
 
-	pdata->hw_if.config_tstamp(pdata, mac_tscr);
+	pdata->hw_if->config_tstamp(pdata, mac_tscr);
 
 	memcpy(&pdata->tstamp_config, &config, sizeof(config));
 
@@ -1284,8 +1284,8 @@ static void xgbe_packet_info(struct xgbe_prv_data *pdata,
 static int xgbe_open(struct net_device *netdev)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
-	struct xgbe_desc_if *desc_if = &pdata->desc_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
+	struct xgbe_desc_if *desc_if = pdata->desc_if;
 	struct xgbe_channel *channel = NULL;
 	unsigned int i = 0;
 	int ret;
@@ -1400,8 +1400,8 @@ err_phy_init:
 static int xgbe_close(struct net_device *netdev)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
-	struct xgbe_desc_if *desc_if = &pdata->desc_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
+	struct xgbe_desc_if *desc_if = pdata->desc_if;
 	struct xgbe_channel *channel;
 	unsigned int i;
 
@@ -1442,8 +1442,8 @@ static int xgbe_close(struct net_device *netdev)
 static int xgbe_xmit(struct sk_buff *skb, struct net_device *netdev)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
-	struct xgbe_desc_if *desc_if = &pdata->desc_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
+	struct xgbe_desc_if *desc_if = pdata->desc_if;
 	struct xgbe_channel *channel;
 	struct xgbe_ring *ring;
 	struct xgbe_packet_data *packet;
@@ -1518,7 +1518,7 @@ tx_netdev_return:
 static void xgbe_set_rx_mode(struct net_device *netdev)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	unsigned int pr_mode, am_mode;
 
 	DBGPR("-->xgbe_set_rx_mode\n");
@@ -1537,7 +1537,7 @@ static void xgbe_set_rx_mode(struct net_device *netdev)
 static int xgbe_set_mac_address(struct net_device *netdev, void *addr)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	struct sockaddr *saddr = addr;
 
 	DBGPR("-->xgbe_set_mac_address\n");
@@ -1604,7 +1604,7 @@ static struct rtnl_link_stats64 *xgbe_get_stats64(struct net_device *netdev,
 
 	DBGPR("-->%s\n", __func__);
 
-	pdata->hw_if.read_mmc_stats(pdata);
+	pdata->hw_if->read_mmc_stats(pdata);
 
 	s->rx_packets = pstats->rxframecount_gb;
 	s->rx_bytes = pstats->rxoctetcount_gb;
@@ -1631,7 +1631,7 @@ static int xgbe_vlan_rx_add_vid(struct net_device *netdev, __be16 proto,
 				u16 vid)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 
 	DBGPR("-->%s\n", __func__);
 
@@ -1647,7 +1647,7 @@ static int xgbe_vlan_rx_kill_vid(struct net_device *netdev, __be16 proto,
 				 u16 vid)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 
 	DBGPR("-->%s\n", __func__);
 
@@ -1713,7 +1713,7 @@ static int xgbe_set_features(struct net_device *netdev,
 			     netdev_features_t features)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	netdev_features_t rxhash, rxcsum, rxvlan, rxvlan_filter;
 	int ret = 0;
 
@@ -1778,7 +1778,7 @@ struct net_device_ops *xgbe_get_netdev_ops(void)
 static void xgbe_rx_refresh(struct xgbe_channel *channel)
 {
 	struct xgbe_prv_data *pdata = channel->pdata;
-	struct xgbe_desc_if *desc_if = &pdata->desc_if;
+	struct xgbe_desc_if *desc_if = pdata->desc_if;
 	struct xgbe_ring *ring = channel->rx_ring;
 	struct xgbe_ring_data *rdata;
 
@@ -1819,8 +1819,8 @@ static struct sk_buff *xgbe_create_skb(struct xgbe_prv_data *pdata,
 static int xgbe_tx_poll(struct xgbe_channel *channel)
 {
 	struct xgbe_prv_data *pdata = channel->pdata;
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
-	struct xgbe_desc_if *desc_if = &pdata->desc_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
+	struct xgbe_desc_if *desc_if = pdata->desc_if;
 	struct xgbe_ring *ring = channel->tx_ring;
 	struct xgbe_ring_data *rdata;
 	struct xgbe_ring_desc *rdesc;
@@ -1891,7 +1891,7 @@ unlock:
 static int xgbe_rx_poll(struct xgbe_channel *channel, int budget)
 {
 	struct xgbe_prv_data *pdata = channel->pdata;
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	struct xgbe_ring *ring = channel->rx_ring;
 	struct xgbe_ring_data *rdata;
 	struct xgbe_packet_data *packet;

@@ -2205,11 +2205,13 @@ static int sctp_setsockopt_events(struct sock *sk, char __user *optval,
 {
 	struct sctp_association *asoc;
 	struct sctp_ulpevent *event;
+	struct sctp_event_subscribe subscribe;
 
 	if (optlen > sizeof(struct sctp_event_subscribe))
 		return -EINVAL;
-	if (copy_from_user(&sctp_sk(sk)->subscribe, optval, optlen))
+	if (copy_from_user(&subscribe, optval, optlen))
 		return -EFAULT;
+	sctp_sk(sk)->subscribe = subscribe;
 
 	if (sctp_sk(sk)->subscribe.sctp_data_io_event)
 		pr_warn_ratelimited(DEPRECATED "%s (pid %d) "
@@ -4378,13 +4380,16 @@ static int sctp_getsockopt_disable_fragments(struct sock *sk, int len,
 static int sctp_getsockopt_events(struct sock *sk, int len, char __user *optval,
 				  int __user *optlen)
 {
+	struct sctp_event_subscribe subscribe;
+
 	if (len <= 0)
 		return -EINVAL;
 	if (len > sizeof(struct sctp_event_subscribe))
 		len = sizeof(struct sctp_event_subscribe);
 	if (put_user(len, optlen))
 		return -EFAULT;
-	if (copy_to_user(optval, &sctp_sk(sk)->subscribe, len))
+	subscribe = sctp_sk(sk)->subscribe;
+	if (copy_to_user(optval, &subscribe, len))
 		return -EFAULT;
 	return 0;
 }
@@ -4402,6 +4407,8 @@ static int sctp_getsockopt_events(struct sock *sk, int len, char __user *optval,
  */
 static int sctp_getsockopt_autoclose(struct sock *sk, int len, char __user *optval, int __user *optlen)
 {
+	__u32 autoclose;
+
 	/* Applicable to UDP-style socket only */
 	if (sctp_style(sk, TCP))
 		return -EOPNOTSUPP;
@@ -4410,7 +4417,8 @@ static int sctp_getsockopt_autoclose(struct sock *sk, int len, char __user *optv
 	len = sizeof(int);
 	if (put_user(len, optlen))
 		return -EFAULT;
-	if (copy_to_user(optval, &sctp_sk(sk)->autoclose, sizeof(int)))
+	autoclose = sctp_sk(sk)->autoclose;
+	if (copy_to_user(optval, &autoclose, sizeof(int)))
 		return -EFAULT;
 	return 0;
 }
@@ -4784,12 +4792,15 @@ static int sctp_getsockopt_delayed_ack(struct sock *sk, int len,
  */
 static int sctp_getsockopt_initmsg(struct sock *sk, int len, char __user *optval, int __user *optlen)
 {
+	struct sctp_initmsg initmsg;
+
 	if (len < sizeof(struct sctp_initmsg))
 		return -EINVAL;
 	len = sizeof(struct sctp_initmsg);
 	if (put_user(len, optlen))
 		return -EFAULT;
-	if (copy_to_user(optval, &sctp_sk(sk)->initmsg, len))
+	initmsg = sctp_sk(sk)->initmsg;
+	if (copy_to_user(optval, &initmsg, len))
 		return -EFAULT;
 	return 0;
 }
@@ -4830,6 +4841,8 @@ static int sctp_getsockopt_peer_addrs(struct sock *sk, int len,
 			      ->addr_to_user(sp, &temp);
 		if (space_left < addrlen)
 			return -ENOMEM;
+		if (addrlen > sizeof(temp) || addrlen < 0)
+			return -EFAULT;
 		if (copy_to_user(to, &temp, addrlen))
 			return -EFAULT;
 		to += addrlen;

@@ -12,7 +12,7 @@ struct mnt_namespace {
 	u64			seq;	/* Sequence number to prevent loops */
 	wait_queue_head_t poll;
 	u64 event;
-};
+} __randomize_layout;
 
 struct mnt_pcp {
 	int mnt_count;
@@ -63,7 +63,7 @@ struct mount {
 	int mnt_expiry_mark;		/* true if marked for expiry */
 	struct hlist_head mnt_pins;
 	struct path mnt_ex_mountpoint;
-};
+} __randomize_layout;
 
 #define MNT_NS_INTERNAL ERR_PTR(-EINVAL) /* distinct from any mnt_namespace */
 

@@ -2374,7 +2374,7 @@ void locks_remove_file(struct file *filp)
 	locks_remove_posix(filp, filp);
 
 	if (filp->f_op->flock) {
-		struct file_lock fl = {
+		struct file_lock flock = {
 			.fl_owner = filp,
 			.fl_pid = current->tgid,
 			.fl_file = filp,
@@ -2382,9 +2382,9 @@ void locks_remove_file(struct file *filp)
 			.fl_type = F_UNLCK,
 			.fl_end = OFFSET_MAX,
 		};
-		filp->f_op->flock(filp, F_SETLKW, &fl);
-		if (fl.fl_ops && fl.fl_ops->fl_release_private)
-			fl.fl_ops->fl_release_private(&fl);
+		filp->f_op->flock(filp, F_SETLKW, &flock);
+		if (flock.fl_ops && flock.fl_ops->fl_release_private)
+			flock.fl_ops->fl_release_private(&flock);
 	}
 
 	spin_lock(&inode->i_lock);

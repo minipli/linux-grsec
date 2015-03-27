@@ -18,31 +18,7 @@
 #include <asm/alternative-asm.h>
 #include <asm/asm.h>
 #include <asm/smap.h>
-
-/*
- * By placing feature2 after feature1 in altinstructions section, we logically
- * implement:
- * If CPU has feature2, jmp to alt2 is used
- * else if CPU has feature1, jmp to alt1 is used
- * else jmp to orig is used.
- */
-	.macro ALTERNATIVE_JUMP feature1,feature2,orig,alt1,alt2
-0:
-	.byte 0xe9	/* 32bit jump */
-	.long \orig-1f	/* by default jump to orig */
-1:
-	.section .altinstr_replacement,"ax"
-2:	.byte 0xe9			/* near jump with 32bit immediate */
-	.long \alt1-1b /* offset */   /* or alternatively to alt1 */
-3:	.byte 0xe9			/* near jump with 32bit immediate */
-	.long \alt2-1b /* offset */   /* or alternatively to alt2 */
-	.previous
-
-	.section .altinstructions,"a"
-	altinstruction_entry 0b,2b,\feature1,5,5
-	altinstruction_entry 0b,3b,\feature2,5,5
-	.previous
-	.endm
+#include <asm/pgtable.h>
 
 	.macro ALIGN_DESTINATION
 #ifdef FIX_ALIGNMENT
@@ -70,52 +46,6 @@
 #endif
 	.endm
 
-/* Standard copy_to_user with segment limit checking */
-ENTRY(_copy_to_user)
-	CFI_STARTPROC
-	GET_THREAD_INFO(%rax)
-	movq %rdi,%rcx
-	addq %rdx,%rcx
-	jc bad_to_user
-	cmpq TI_addr_limit(%rax),%rcx
-	ja bad_to_user
-	ALTERNATIVE_JUMP X86_FEATURE_REP_GOOD,X86_FEATURE_ERMS,	\
-		copy_user_generic_unrolled,copy_user_generic_string,	\
-		copy_user_enhanced_fast_string
-	CFI_ENDPROC
-ENDPROC(_copy_to_user)
-
-/* Standard copy_from_user with segment limit checking */
-ENTRY(_copy_from_user)
-	CFI_STARTPROC
-	GET_THREAD_INFO(%rax)
-	movq %rsi,%rcx
-	addq %rdx,%rcx
-	jc bad_from_user
-	cmpq TI_addr_limit(%rax),%rcx
-	ja bad_from_user
-	ALTERNATIVE_JUMP X86_FEATURE_REP_GOOD,X86_FEATURE_ERMS,	\
-		copy_user_generic_unrolled,copy_user_generic_string,	\
-		copy_user_enhanced_fast_string
-	CFI_ENDPROC
-ENDPROC(_copy_from_user)
-
-	.section .fixup,"ax"
-	/* must zero dest */
-ENTRY(bad_from_user)
-bad_from_user:
-	CFI_STARTPROC
-	movl %edx,%ecx
-	xorl %eax,%eax
-	rep
-	stosb
-bad_to_user:
-	movl %edx,%eax
-	ret
-	CFI_ENDPROC
-ENDPROC(bad_from_user)
-	.previous
-
 /*
  * copy_user_generic_unrolled - memory copy with exception handling.
  * This version is for CPUs like P4 that don't have efficient micro
@@ -131,6 +61,7 @@ ENDPROC(bad_from_user)
  */
 ENTRY(copy_user_generic_unrolled)
 	CFI_STARTPROC
+	ASM_PAX_OPEN_USERLAND
 	ASM_STAC
 	cmpl $8,%edx
 	jb 20f		/* less then 8 bytes, go to byte copy loop */
@@ -180,6 +111,8 @@ ENTRY(copy_user_generic_unrolled)
 	jnz 21b
 23:	xor %eax,%eax
 	ASM_CLAC
+	ASM_PAX_CLOSE_USERLAND
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"
@@ -235,6 +168,7 @@ ENDPROC(copy_user_generic_unrolled)
  */
 ENTRY(copy_user_generic_string)
 	CFI_STARTPROC
+	ASM_PAX_OPEN_USERLAND
 	ASM_STAC
 	cmpl $8,%edx
 	jb 2f		/* less than 8 bytes, go to byte copy loop */
@@ -249,6 +183,8 @@ ENTRY(copy_user_generic_string)
 	movsb
 	xorl %eax,%eax
 	ASM_CLAC
+	ASM_PAX_CLOSE_USERLAND
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"
@@ -276,12 +212,15 @@ ENDPROC(copy_user_generic_string)
  */
 ENTRY(copy_user_enhanced_fast_string)
 	CFI_STARTPROC
+	ASM_PAX_OPEN_USERLAND
 	ASM_STAC
 	movl %edx,%ecx
 1:	rep
 	movsb
 	xorl %eax,%eax
 	ASM_CLAC
+	ASM_PAX_CLOSE_USERLAND
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"

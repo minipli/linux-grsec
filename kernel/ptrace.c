@@ -321,7 +321,7 @@ static int ptrace_attach(struct task_struct *task, long request,
 	if (seize)
 		flags |= PT_SEIZED;
 	rcu_read_lock();
-	if (ns_capable(__task_cred(task)->user_ns, CAP_SYS_PTRACE))
+	if (ns_capable_nolog(__task_cred(task)->user_ns, CAP_SYS_PTRACE))
 		flags |= PT_PTRACE_CAP;
 	rcu_read_unlock();
 	task->ptrace = flags;
@@ -515,7 +515,7 @@ int ptrace_readdata(struct task_struct *tsk, unsigned long src, char __user *dst
 				break;
 			return -EIO;
 		}
-		if (copy_to_user(dst, buf, retval))
+		if (retval > sizeof(buf) || copy_to_user(dst, buf, retval))
 			return -EFAULT;
 		copied += retval;
 		src += retval;
@@ -783,7 +783,7 @@ int ptrace_request(struct task_struct *child, long request,
 	bool seized = child->ptrace & PT_SEIZED;
 	int ret = -EIO;
 	siginfo_t siginfo, *si;
-	void __user *datavp = (void __user *) data;
+	void __user *datavp = (__force void __user *) data;
 	unsigned long __user *datalp = datavp;
 	unsigned long flags;
 
@@ -1029,14 +1029,21 @@ SYSCALL_DEFINE4(ptrace, long, request, long, pid, unsigned long, addr,
 		goto out;
 	}
 
+	if (gr_handle_ptrace(child, request)) {
+		ret = -EPERM;
+		goto out_put_task_struct;
+	}
+
 	if (request == PTRACE_ATTACH || request == PTRACE_SEIZE) {
 		ret = ptrace_attach(child, request, addr, data);
 		/*
 		 * Some architectures need to do book-keeping after
 		 * a ptrace attach.
 		 */
-		if (!ret)
+		if (!ret) {
 			arch_ptrace_attach(child);
+			gr_audit_ptrace(child);
+		}
 		goto out_put_task_struct;
 	}
 
@@ -1064,7 +1071,7 @@ int generic_ptrace_peekdata(struct task_struct *tsk, unsigned long addr,
 	copied = access_process_vm(tsk, addr, &tmp, sizeof(tmp), 0);
 	if (copied != sizeof(tmp))
 		return -EIO;
-	return put_user(tmp, (unsigned long __user *)data);
+	return put_user(tmp, (__force unsigned long __user *)data);
 }
 
 int generic_ptrace_pokedata(struct task_struct *tsk, unsigned long addr,
@@ -1158,7 +1165,7 @@ int compat_ptrace_request(struct task_struct *child, compat_long_t request,
 }
 
 COMPAT_SYSCALL_DEFINE4(ptrace, compat_long_t, request, compat_long_t, pid,
-		       compat_long_t, addr, compat_long_t, data)
+		       compat_ulong_t, addr, compat_ulong_t, data)
 {
 	struct task_struct *child;
 	long ret;
@@ -1174,14 +1181,21 @@ COMPAT_SYSCALL_DEFINE4(ptrace, compat_long_t, request, compat_long_t, pid,
 		goto out;
 	}
 
+	if (gr_handle_ptrace(child, request)) {
+		ret = -EPERM;
+		goto out_put_task_struct;
+	}
+
 	if (request == PTRACE_ATTACH || request == PTRACE_SEIZE) {
 		ret = ptrace_attach(child, request, addr, data);
 		/*
 		 * Some architectures need to do book-keeping after
 		 * a ptrace attach.
 		 */
-		if (!ret)
+		if (!ret) {
 			arch_ptrace_attach(child);
+			gr_audit_ptrace(child);
+		}
 		goto out_put_task_struct;
 	}
 
