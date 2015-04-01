@@ -12691,7 +12691,8 @@ set_eeprom1_29863 set_eeprom1 4-0 29863 NULL nohasharray
 __dev_pm_qos_update_request_29863 __dev_pm_qos_update_request 0 29863 &set_eeprom1_29863
 acpi_device_modalias_show_29864 acpi_device_modalias_show 0 29864 NULL
 xfs_rtfind_forw_29866 xfs_rtfind_forw 0 29866 NULL
-write_file_bool_bmps_29870 write_file_bool_bmps 3-0 29870 NULL
+write_file_bool_bmps_29870 write_file_bool_bmps 3-0 29870 NULL nohasharray
+extract_icmp6_fields_29870 extract_icmp6_fields 2 29870 &write_file_bool_bmps_29870
 ipv6_setsockopt_29871 ipv6_setsockopt 5-0 29871 NULL nohasharray
 itd_submit_29871 itd_submit 0 29871 &ipv6_setsockopt_29871
 dma_map_xdr_29874 dma_map_xdr 0-3 29874 NULL
