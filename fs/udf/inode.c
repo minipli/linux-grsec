@@ -51,7 +51,6 @@ MODULE_LICENSE("GPL");
 
 static umode_t udf_convert_permissions(struct fileEntry *);
 static int udf_update_inode(struct inode *, int);
-static void udf_fill_inode(struct inode *, struct buffer_head *);
 static int udf_sync_inode(struct inode *inode);
 static int udf_alloc_i_data(struct inode *inode, size_t size);
 static sector_t inode_getblk(struct inode *, sector_t, int *, int *);
@@ -1278,15 +1277,27 @@ update_time:
  */
 #define UDF_MAX_ICB_NESTING 1024
 
-static void __udf_read_inode(struct inode *inode)
+static int udf_read_inode(struct inode *inode)
 {
 	struct buffer_head *bh = NULL;
 	struct fileEntry *fe;
+	struct extendedFileEntry *efe;
 	uint16_t ident;
 	struct udf_inode_info *iinfo = UDF_I(inode);
+	struct udf_sb_info *sbi = UDF_SB(inode->i_sb);
+	struct kernel_lb_addr *iloc = &iinfo->i_location;
+	unsigned int link_count;
 	unsigned int indirections = 0;
+	int ret = -EIO;
 
 reread:
+	if (iloc->logicalBlockNum >=
+	    sbi->s_partmaps[iloc->partitionReferenceNum].s_partition_len) {
+		udf_debug("block=%d, partition=%d out of range\n",
+			  iloc->logicalBlockNum, iloc->partitionReferenceNum);
+		return -EIO;
+	}
+
 	/*
 	 * Set defaults, but the inode is still incomplete!
 	 * Note: get_new_inode() sets the following on a new inode:
@@ -1299,29 +1310,26 @@ reread:
 	 *      i_nlink = 1
 	 *      i_op = NULL;
 	 */
-	bh = udf_read_ptagged(inode->i_sb, &iinfo->i_location, 0, &ident);
+	bh = udf_read_ptagged(inode->i_sb, iloc, 0, &ident);
 	if (!bh) {
 		udf_err(inode->i_sb, "(ino %ld) failed !bh\n", inode->i_ino);
-		make_bad_inode(inode);
-		return;
+		return -EIO;
 	}
 
 	if (ident != TAG_IDENT_FE && ident != TAG_IDENT_EFE &&
 	    ident != TAG_IDENT_USE) {
 		udf_err(inode->i_sb, "(ino %ld) failed ident=%d\n",
 			inode->i_ino, ident);
-		brelse(bh);
-		make_bad_inode(inode);
-		return;
+		goto out;
 	}
 
 	fe = (struct fileEntry *)bh->b_data;
+	efe = (struct extendedFileEntry *)bh->b_data;
 
 	if (fe->icbTag.strategyType == cpu_to_le16(4096)) {
 		struct buffer_head *ibh;
 
-		ibh = udf_read_ptagged(inode->i_sb, &iinfo->i_location, 1,
-					&ident);
+		ibh = udf_read_ptagged(inode->i_sb, iloc, 1, &ident);
 		if (ident == TAG_IDENT_IE && ibh) {
 			struct kernel_lb_addr loc;
 			struct indirectEntry *ie;
@@ -1330,7 +1338,6 @@ reread:
 			loc = lelb_to_cpu(ie->indirectICB.extLocation);
 
 			if (ie->indirectICB.extLength) {
-				brelse(bh);
 				brelse(ibh);
 				memcpy(&iinfo->i_location, &loc,
 				       sizeof(struct kernel_lb_addr));
@@ -1339,9 +1346,9 @@ reread:
 						"too many ICBs in ICB hierarchy"
 						" (max %d supported)\n",
 						UDF_MAX_ICB_NESTING);
-					make_bad_inode(inode);
-					return;
+					goto out;
 				}
+				brelse(bh);
 				goto reread;
 			}
 		}
@@ -1349,26 +1356,8 @@ reread:
 	} else if (fe->icbTag.strategyType != cpu_to_le16(4)) {
 		udf_err(inode->i_sb, "unsupported strategy type: %d\n",
 			le16_to_cpu(fe->icbTag.strategyType));
-		brelse(bh);
-		make_bad_inode(inode);
-		return;
+		goto out;
 	}
-	udf_fill_inode(inode, bh);
-
-	brelse(bh);
-}
-
-static void udf_fill_inode(struct inode *inode, struct buffer_head *bh)
-{
-	struct fileEntry *fe;
-	struct extendedFileEntry *efe;
-	struct udf_sb_info *sbi = UDF_SB(inode->i_sb);
-	struct udf_inode_info *iinfo = UDF_I(inode);
-	unsigned int link_count;
-
-	fe = (struct fileEntry *)bh->b_data;
-	efe = (struct extendedFileEntry *)bh->b_data;
-
 	if (fe->icbTag.strategyType == cpu_to_le16(4))
 		iinfo->i_strat4096 = 0;
 	else /* if (fe->icbTag.strategyType == cpu_to_le16(4096)) */
@@ -1385,11 +1374,10 @@ static void udf_fill_inode(struct inode *inode, struct buffer_head *bh)
 	if (fe->descTag.tagIdent == cpu_to_le16(TAG_IDENT_EFE)) {
 		iinfo->i_efe = 1;
 		iinfo->i_use = 0;
-		if (udf_alloc_i_data(inode, inode->i_sb->s_blocksize -
-					sizeof(struct extendedFileEntry))) {
-			make_bad_inode(inode);
-			return;
-		}
+		ret = udf_alloc_i_data(inode, inode->i_sb->s_blocksize -
+					sizeof(struct extendedFileEntry));
+		if (ret)
+			goto out;
 		memcpy(iinfo->i_ext.i_data,
 		       bh->b_data + sizeof(struct extendedFileEntry),
 		       inode->i_sb->s_blocksize -
@@ -1397,11 +1385,10 @@ static void udf_fill_inode(struct inode *inode, struct buffer_head *bh)
 	} else if (fe->descTag.tagIdent == cpu_to_le16(TAG_IDENT_FE)) {
 		iinfo->i_efe = 0;
 		iinfo->i_use = 0;
-		if (udf_alloc_i_data(inode, inode->i_sb->s_blocksize -
-						sizeof(struct fileEntry))) {
-			make_bad_inode(inode);
-			return;
-		}
+		ret = udf_alloc_i_data(inode, inode->i_sb->s_blocksize -
+						sizeof(struct fileEntry));
+		if (ret)
+			goto out;
 		memcpy(iinfo->i_ext.i_data,
 		       bh->b_data + sizeof(struct fileEntry),
 		       inode->i_sb->s_blocksize - sizeof(struct fileEntry));
@@ -1411,18 +1398,18 @@ static void udf_fill_inode(struct inode *inode, struct buffer_head *bh)
 		iinfo->i_lenAlloc = le32_to_cpu(
 				((struct unallocSpaceEntry *)bh->b_data)->
 				 lengthAllocDescs);
-		if (udf_alloc_i_data(inode, inode->i_sb->s_blocksize -
-					sizeof(struct unallocSpaceEntry))) {
-			make_bad_inode(inode);
-			return;
-		}
+		ret = udf_alloc_i_data(inode, inode->i_sb->s_blocksize -
+					sizeof(struct unallocSpaceEntry));
+		if (ret)
+			goto out;
 		memcpy(iinfo->i_ext.i_data,
 		       bh->b_data + sizeof(struct unallocSpaceEntry),
 		       inode->i_sb->s_blocksize -
 					sizeof(struct unallocSpaceEntry));
-		return;
+		return 0;
 	}
 
+	ret = -EIO;
 	read_lock(&sbi->s_cred_lock);
 	i_uid_write(inode, le32_to_cpu(fe->uid));
 	if (!uid_valid(inode->i_uid) ||
@@ -1496,6 +1483,20 @@ static void udf_fill_inode(struct inode *inode, struct buffer_head *bh)
 		iinfo->i_checkpoint = le32_to_cpu(efe->checkpoint);
 	}
 
+	/* Sanity checks for files in ICB so that we don't get confused later */
+	if (iinfo->i_alloc_type == ICBTAG_FLAG_AD_IN_ICB) {
+		/*
+		 * For file in ICB data is stored in allocation descriptor
+		 * so sizes should match
+		 */
+		if (iinfo->i_lenAlloc != inode->i_size)
+			goto out;
+		/* File in ICB has to fit in there... */
+		if (inode->i_size > inode->i_sb->s_blocksize -
+					udf_file_entry_alloc_offset(inode))
+			goto out;
+	}
+
 	switch (fe->icbTag.fileType) {
 	case ICBTAG_FILE_TYPE_DIRECTORY:
 		inode->i_op = &udf_dir_inode_operations;
@@ -1544,8 +1545,7 @@ static void udf_fill_inode(struct inode *inode, struct buffer_head *bh)
 	default:
 		udf_err(inode->i_sb, "(ino %ld) failed unknown file type=%d\n",
 			inode->i_ino, fe->icbTag.fileType);
-		make_bad_inode(inode);
-		return;
+		goto out;
 	}
 	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
 		struct deviceSpec *dsea =
@@ -1556,8 +1556,12 @@ static void udf_fill_inode(struct inode *inode, struct buffer_head *bh)
 				      le32_to_cpu(dsea->minorDeviceIdent)));
 			/* Developer ID ??? */
 		} else
-			make_bad_inode(inode);
+			goto out;
 	}
+	ret = 0;
+out:
+	brelse(bh);
+	return ret;
 }
 
 static int udf_alloc_i_data(struct inode *inode, size_t size)
@@ -1671,7 +1675,7 @@ static int udf_update_inode(struct inode *inode, int do_sync)
 		     FE_PERM_U_DELETE | FE_PERM_U_CHATTR));
 	fe->permissions = cpu_to_le32(udfperms);
 
-	if (S_ISDIR(inode->i_mode))
+	if (S_ISDIR(inode->i_mode) && inode->i_nlink > 0)
 		fe->fileLinkCount = cpu_to_le16(inode->i_nlink - 1);
 	else
 		fe->fileLinkCount = cpu_to_le16(inode->i_nlink);
@@ -1837,32 +1841,23 @@ struct inode *udf_iget(struct super_block *sb, struct kernel_lb_addr *ino)
 {
 	unsigned long block = udf_get_lb_pblock(sb, ino, 0);
 	struct inode *inode = iget_locked(sb, block);
+	int err;
 
 	if (!inode)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 
-	if (inode->i_state & I_NEW) {
-		memcpy(&UDF_I(inode)->i_location, ino, sizeof(struct kernel_lb_addr));
-		__udf_read_inode(inode);
-		unlock_new_inode(inode);
+	if (!(inode->i_state & I_NEW))
+		return inode;
+
+	memcpy(&UDF_I(inode)->i_location, ino, sizeof(struct kernel_lb_addr));
+	err = udf_read_inode(inode);
+	if (err < 0) {
+		iget_failed(inode);
+		return ERR_PTR(err);
 	}
-
-	if (is_bad_inode(inode))
-		goto out_iput;
-
-	if (ino->logicalBlockNum >= UDF_SB(sb)->
-			s_partmaps[ino->partitionReferenceNum].s_partition_len) {
-		udf_debug("block=%d, partition=%d out of range\n",
-			  ino->logicalBlockNum, ino->partitionReferenceNum);
-		make_bad_inode(inode);
-		goto out_iput;
-	}
+	unlock_new_inode(inode);
 
 	return inode;
-
- out_iput:
-	iput(inode);
-	return NULL;
 }
 
 int udf_add_aext(struct inode *inode, struct extent_position *epos,

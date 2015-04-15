@@ -1317,7 +1317,7 @@ static int _drbd_send_ack(struct drbd_conf *mdev, enum drbd_packet cmd,
 	p->sector = sector;
 	p->block_id = block_id;
 	p->blksize = blksize;
-	p->seq_num = cpu_to_be32(atomic_inc_return(&mdev->packet_seq));
+	p->seq_num = cpu_to_be32(atomic_inc_return_unchecked(&mdev->packet_seq));
 	return drbd_send_command(mdev, sock, cmd, sizeof(*p), NULL, 0);
 }
 
@@ -1622,7 +1622,7 @@ int drbd_send_dblock(struct drbd_conf *mdev, struct drbd_request *req)
 		return -EIO;
 	p->sector = cpu_to_be64(req->i.sector);
 	p->block_id = (unsigned long)req;
-	p->seq_num = cpu_to_be32(atomic_inc_return(&mdev->packet_seq));
+	p->seq_num = cpu_to_be32(atomic_inc_return_unchecked(&mdev->packet_seq));
 	dp_flags = bio_flags_to_wire(mdev, req->master_bio->bi_rw);
 	if (mdev->state.conn >= C_SYNC_SOURCE &&
 	    mdev->state.conn <= C_PAUSED_SYNC_T)
@@ -1886,8 +1886,8 @@ void drbd_init_set_defaults(struct drbd_conf *mdev)
 	atomic_set(&mdev->unacked_cnt, 0);
 	atomic_set(&mdev->local_cnt, 0);
 	atomic_set(&mdev->pp_in_use_by_net, 0);
-	atomic_set(&mdev->rs_sect_in, 0);
-	atomic_set(&mdev->rs_sect_ev, 0);
+	atomic_set_unchecked(&mdev->rs_sect_in, 0);
+	atomic_set_unchecked(&mdev->rs_sect_ev, 0);
 	atomic_set(&mdev->ap_in_flight, 0);
 	atomic_set(&mdev->md_io_in_use, 0);
 
@@ -2577,8 +2577,8 @@ void conn_destroy(struct kref *kref)
 {
 	struct drbd_tconn *tconn = container_of(kref, struct drbd_tconn, kref);
 
-	if (atomic_read(&tconn->current_epoch->epoch_size) !=  0)
-		conn_err(tconn, "epoch_size:%d\n", atomic_read(&tconn->current_epoch->epoch_size));
+	if (atomic_read_unchecked(&tconn->current_epoch->epoch_size) !=  0)
+		conn_err(tconn, "epoch_size:%d\n", atomic_read_unchecked(&tconn->current_epoch->epoch_size));
 	kfree(tconn->current_epoch);
 
 	idr_destroy(&tconn->volumes);

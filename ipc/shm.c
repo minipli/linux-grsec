@@ -72,6 +72,14 @@ static void shm_destroy(struct ipc_namespace *ns, struct shmid_kernel *shp);
 static int sysvipc_shm_proc_show(struct seq_file *s, void *it);
 #endif
 
+#ifdef CONFIG_GRKERNSEC
+extern int gr_handle_shmat(const pid_t shm_cprid, const pid_t shm_lapid,
+			   const time_t shm_createtime, const kuid_t cuid,
+			   const int shmid);
+extern int gr_chroot_shmat(const pid_t shm_cprid, const pid_t shm_lapid,
+			   const time_t shm_createtime);
+#endif
+
 void shm_init_ns(struct ipc_namespace *ns)
 {
 	ns->shm_ctlmax = SHMMAX;
@@ -553,6 +561,14 @@ static int newseg(struct ipc_namespace *ns, struct ipc_params *params)
 	shp->shm_lprid = 0;
 	shp->shm_atim = shp->shm_dtim = 0;
 	shp->shm_ctim = get_seconds();
+#ifdef CONFIG_GRKERNSEC
+	{
+		struct timespec timeval;
+		do_posix_clock_monotonic_gettime(&timeval);
+
+		shp->shm_createtime = timeval.tv_sec;
+	}
+#endif
 	shp->shm_segsz = size;
 	shp->shm_nattch = 0;
 	shp->shm_file = file;
@@ -606,17 +622,18 @@ static inline int shm_more_checks(struct kern_ipc_perm *ipcp,
 	return 0;
 }
 
+static struct ipc_ops shm_ops = {
+	.getnew		= newseg,
+	.associate	= shm_security,
+	.more_checks	= shm_more_checks
+};
+
 SYSCALL_DEFINE3(shmget, key_t, key, size_t, size, int, shmflg)
 {
 	struct ipc_namespace *ns;
-	struct ipc_ops shm_ops;
 	struct ipc_params shm_params;
 
 	ns = current->nsproxy->ipc_ns;
-
-	shm_ops.getnew = newseg;
-	shm_ops.associate = shm_security;
-	shm_ops.more_checks = shm_more_checks;
 
 	shm_params.key = key;
 	shm_params.flg = shmflg;
@@ -1088,6 +1105,12 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg, ulong *raddr,
 		f_mode = FMODE_READ | FMODE_WRITE;
 	}
 	if (shmflg & SHM_EXEC) {
+
+#ifdef CONFIG_PAX_MPROTECT
+		if (current->mm->pax_flags & MF_PAX_MPROTECT)
+			goto out;
+#endif
+
 		prot |= PROT_EXEC;
 		acc_mode |= S_IXUGO;
 	}
@@ -1112,6 +1135,15 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg, ulong *raddr,
 	if (err)
 		goto out_unlock;
 
+#ifdef CONFIG_GRKERNSEC
+	if (!gr_handle_shmat(shp->shm_cprid, shp->shm_lapid, shp->shm_createtime,
+			     shp->shm_perm.cuid, shmid) ||
+	    !gr_chroot_shmat(shp->shm_cprid, shp->shm_lapid, shp->shm_createtime)) {
+		err = -EACCES;
+		goto out_unlock;
+	}
+#endif
+
 	ipc_lock_object(&shp->shm_perm);
 
 	/* check if shm_destroy() is tearing down shp */
@@ -1124,6 +1156,9 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg, ulong *raddr,
 	path = shp->shm_file->f_path;
 	path_get(&path);
 	shp->shm_nattch++;
+#ifdef CONFIG_GRKERNSEC
+	shp->shm_lapid = current->pid;
+#endif
 	size = i_size_read(path.dentry->d_inode);
 	ipc_unlock_object(&shp->shm_perm);
 	rcu_read_unlock();
