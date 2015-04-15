@@ -288,17 +288,13 @@ static void __init xen_smp_prepare_boot_cpu(void)
 
 	if (xen_pv_domain()) {
 		if (!xen_feature(XENFEAT_writable_page_tables))
-			/* We've switched to the "real" per-cpu gdt, so make
-			 * sure the old memory can be recycled. */
-			make_lowmem_page_readwrite(xen_initial_gdt);
-
 #ifdef CONFIG_X86_32
 		/*
 		 * Xen starts us with XEN_FLAT_RING1_DS, but linux code
 		 * expects __USER_DS
 		 */
-		loadsegment(ds, __USER_DS);
-		loadsegment(es, __USER_DS);
+		loadsegment(ds, __KERNEL_DS);
+		loadsegment(es, __KERNEL_DS);
 #endif
 
 		xen_filter_cpu_maps();
@@ -379,7 +375,7 @@ cpu_initialize_context(unsigned int cpu, struct task_struct *idle)
 #ifdef CONFIG_X86_32
 	/* Note: PVH is not yet supported on x86_32. */
 	ctxt->user_regs.fs = __KERNEL_PERCPU;
-	ctxt->user_regs.gs = __KERNEL_STACK_CANARY;
+	savesegment(gs, ctxt->user_regs.gs);
 #endif
 	memset(&ctxt->fpu_ctxt, 0, sizeof(ctxt->fpu_ctxt));
 
@@ -387,8 +383,8 @@ cpu_initialize_context(unsigned int cpu, struct task_struct *idle)
 		ctxt->user_regs.eip = (unsigned long)cpu_bringup_and_idle;
 		ctxt->flags = VGCF_IN_KERNEL;
 		ctxt->user_regs.eflags = 0x1000; /* IOPL_RING1 */
-		ctxt->user_regs.ds = __USER_DS;
-		ctxt->user_regs.es = __USER_DS;
+		ctxt->user_regs.ds = __KERNEL_DS;
+		ctxt->user_regs.es = __KERNEL_DS;
 		ctxt->user_regs.ss = __KERNEL_DS;
 
 		xen_copy_trap_info(ctxt->trap_ctxt);
@@ -446,14 +442,13 @@ static int xen_cpu_up(unsigned int cpu, struct task_struct *idle)
 	int rc;
 
 	per_cpu(current_task, cpu) = idle;
+	per_cpu(current_tinfo, cpu) = &idle->tinfo;
 #ifdef CONFIG_X86_32
 	irq_ctx_init(cpu);
 #else
 	clear_tsk_thread_flag(idle, TIF_FORK);
 #endif
-	per_cpu(kernel_stack, cpu) =
-		(unsigned long)task_stack_page(idle) -
-		KERNEL_STACK_OFFSET + THREAD_SIZE;
+	per_cpu(kernel_stack, cpu) = (unsigned long)task_stack_page(idle) - 16 + THREAD_SIZE;
 
 	xen_setup_runstate_info(cpu);
 	xen_setup_timer(cpu);
@@ -732,7 +727,7 @@ static const struct smp_ops xen_smp_ops __initconst = {
 
 void __init xen_smp_init(void)
 {
-	smp_ops = xen_smp_ops;
+	memcpy((void *)&smp_ops, &xen_smp_ops, sizeof smp_ops);
 	xen_fill_possible_map();
 }
 
