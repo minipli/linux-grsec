@@ -1255,7 +1255,6 @@ static int fsl_ssi_probe(struct platform_device *pdev)
 {
 	struct fsl_ssi_private *ssi_private;
 	int ret = 0;
-	struct device_attribute *dev_attr = NULL;
 	struct device_node *np = pdev->dev.of_node;
 	const struct of_device_id *of_id;
 	enum fsl_ssi_type hw_type;
@@ -1481,7 +1480,7 @@ static int fsl_ssi_probe(struct platform_device *pdev)
 					 &ssi_private->cpu_dai_drv, 1);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to register DAI: %d\n", ret);
-		goto error_dev;
+		goto error_clk;
 	}
 
 	ret = fsl_ssi_debugfs_create(ssi_private, &pdev->dev);
@@ -1561,9 +1560,6 @@ error_pcm:
 
 error_dbgfs:
 	snd_soc_unregister_component(&pdev->dev);
-
-error_dev:
-	device_remove_file(&pdev->dev, dev_attr);
 
 error_clk:
 	if (ssi_private->ssi_on_imx) {
