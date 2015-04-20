@@ -1182,7 +1182,7 @@ struct sched_class {
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	void (*task_move_group) (struct task_struct *p, int on_rq);
 #endif
-};
+} __do_const;
 
 static inline void put_prev_task(struct rq *rq, struct task_struct *prev)
 {

@@ -4869,7 +4869,7 @@ struct rate_control_ops {
 	void (*remove_sta_debugfs)(void *priv, void *priv_sta);
 
 	u32 (*get_expected_throughput)(void *priv_sta);
-};
+} __do_const;
 
 static inline int rate_supported(struct ieee80211_sta *sta,
 				 enum ieee80211_band band,
