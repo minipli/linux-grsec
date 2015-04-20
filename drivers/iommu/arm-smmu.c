@@ -968,7 +968,7 @@ static int arm_smmu_init_domain_context(struct iommu_domain *domain,
 		cfg->irptndx = cfg->cbndx;
 	}
 
-	ACCESS_ONCE(smmu_domain->smmu) = smmu;
+	ACCESS_ONCE_RW(smmu_domain->smmu) = smmu;
 	arm_smmu_init_context_bank(smmu_domain);
 	spin_unlock_irqrestore(&smmu_domain->lock, flags);
 

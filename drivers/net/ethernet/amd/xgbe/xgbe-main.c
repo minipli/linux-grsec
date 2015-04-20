@@ -155,12 +155,6 @@ static void xgbe_default_config(struct xgbe_prv_data *pdata)
 	DBGPR("<--xgbe_default_config\n");
 }
 
-static void xgbe_init_all_fptrs(struct xgbe_prv_data *pdata)
-{
-	xgbe_init_function_ptrs_dev(&pdata->hw_if);
-	xgbe_init_function_ptrs_desc(&pdata->desc_if);
-}
-
 static int xgbe_probe(struct platform_device *pdev)
 {
 	struct xgbe_prv_data *pdata;
@@ -281,9 +275,8 @@ static int xgbe_probe(struct platform_device *pdev)
 	netdev->base_addr = (unsigned long)pdata->xgmac_regs;
 
 	/* Set all the function pointers */
-	xgbe_init_all_fptrs(pdata);
-	hw_if = &pdata->hw_if;
-	desc_if = &pdata->desc_if;
+	hw_if = pdata->hw_if = &default_xgbe_hw_if;
+	desc_if = pdata->desc_if = &default_xgbe_desc_if;
 
 	/* Issue software reset to device */
 	hw_if->exit(pdata);

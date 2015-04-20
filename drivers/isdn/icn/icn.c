@@ -1045,7 +1045,7 @@ icn_writecmd(const u_char *buf, int len, int user, icn_card *card)
 		if (count > len)
 			count = len;
 		if (user) {
-			if (copy_from_user(msg, buf, count))
+			if (count > sizeof msg || copy_from_user(msg, buf, count))
 				return -EFAULT;
 		} else
 			memcpy(msg, buf, count);
@@ -1609,7 +1609,7 @@ icn_setup(char *line)
 	if (ints[0] > 1)
 		membase = (unsigned long)ints[2];
 	if (str && *str) {
-		strcpy(sid, str);
+		strlcpy(sid, str, sizeof(sid));
 		icn_id = sid;
 		if ((p = strchr(sid, ','))) {
 			*p++ = 0;
