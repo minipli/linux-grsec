@@ -21,22 +21,25 @@
 
 static enum intentional_mark walk_use_def(struct pointer_set_t *visited, const_tree lhs);
 
-static const char *get_asm_string(const gasm *stmt)
+static const char *get_asm_string(const_gimple stmt)
 {
-	gcc_assert(stmt);
+	if (!stmt)
+		return NULL;
+	if (gimple_code(stmt) != GIMPLE_ASM)
+		return NULL;
+
 	return gimple_asm_string(stmt);
 }
 
-tree get_size_overflow_asm_input(const gasm *stmt)
+tree get_size_overflow_asm_input(const_gimple stmt)
 {
 	gcc_assert(gimple_asm_ninputs(stmt) != 0);
 	return TREE_VALUE(gimple_asm_input_op(stmt, 0));
 }
 
-bool is_size_overflow_insert_check_asm(const gasm *stmt)
+bool is_size_overflow_insert_check_asm(const_gimple stmt)
 {
 	const char *str;
-	const gasm *asm_stmt;
 
 	if (!is_size_overflow_asm(stmt))
 		return false;
@@ -47,11 +50,13 @@ bool is_size_overflow_insert_check_asm(const gasm *stmt)
 	return !strncmp(str, OK_ASM_STR, sizeof(OK_ASM_STR) - 1);
 }
 
-bool is_size_overflow_asm(const gasm *stmt)
+bool is_size_overflow_asm(const_gimple stmt)
 {
 	const char *str;
 
 	if (!stmt)
+		return false;
+	if (gimple_code(stmt) != GIMPLE_ASM)
 		return false;
 
 	str = get_asm_string(stmt);
@@ -60,7 +65,7 @@ bool is_size_overflow_asm(const gasm *stmt)
 	return !strncmp(str, SO_ASM_STR, sizeof(SO_ASM_STR) - 1);
 }
 
-static bool is_size_overflow_intentional_asm_turn_off(const gasm *stmt)
+static bool is_size_overflow_intentional_asm_turn_off(const_gimple stmt)
 {
 	const char *str;
 
@@ -73,7 +78,7 @@ static bool is_size_overflow_intentional_asm_turn_off(const gasm *stmt)
 	return !strncmp(str, TURN_OFF_ASM_STR, sizeof(TURN_OFF_ASM_STR) - 1);
 }
 
-static bool is_size_overflow_intentional_asm_end(const gasm *stmt)
+static bool is_size_overflow_intentional_asm_end(const_gimple stmt)
 {
 	const char *str;
 
@@ -113,7 +118,7 @@ static bool is_turn_off_intentional_attr(const_tree decl)
 	if (param_head == NULL_TREE)
 		return false;
 
-	if (TREE_INT_CST_LOW(TREE_VALUE(param_head)) == -1)
+	if (TREE_INT_CST_HIGH(TREE_VALUE(param_head)) == -1)
 		return true;
 	return false;
 }
@@ -262,7 +267,7 @@ static enum intentional_mark walk_use_def_binary(struct pointer_set_t *visited, 
 	return mark;
 }
 
-enum intentional_mark get_so_asm_type(const gasm *stmt)
+enum intentional_mark get_so_asm_type(const_gimple stmt)
 {
 	if (!stmt)
 		return MARK_NO;

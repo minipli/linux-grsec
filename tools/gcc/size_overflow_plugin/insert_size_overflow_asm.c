@@ -24,7 +24,7 @@ struct asm_data {
 	// call or return stmt with our attributes
 	gimple target_stmt;
 	// def_stmt of the marked arg
-	gasm *def_stmt;
+	gimple def_stmt;
 	// size_overflow asm rhs
 	tree input;
 	// the output (lhs) of the size_overflow asm is the marked arg
@@ -108,7 +108,7 @@ static void create_so_asm_stmt(struct asm_data *asm_data)
 {
 	char *asm_comment;
 	const char *mark_str;
-	gasm *asm_stmt;
+	gimple asm_stmt;
 	gimple_stmt_iterator gsi;
 	tree str_input, str_output;
 #if BUILDING_GCC_VERSION <= 4007
@@ -158,7 +158,7 @@ static tree get_so_asm_output(struct asm_data *asm_data)
 	switch (gimple_code(stmt)) {
 	case GIMPLE_RETURN:
 		gcc_assert(argnum == 0);
-		return gimple_return_retval(as_a_greturn(stmt));
+		return gimple_return_retval(stmt);
 	case GIMPLE_CALL:
 		gcc_assert(argnum != 0);
 		gcc_assert(gimple_call_num_args(stmt) >= argnum);
@@ -199,7 +199,7 @@ static void set_so_asm_input_target_stmt(struct asm_data *asm_data)
 		gimple_call_set_arg(asm_data->target_stmt, asm_data->argnum - 1, asm_data->output);
 		break;
 	case GIMPLE_RETURN:
-		gimple_return_set_retval(as_a_greturn(asm_data->target_stmt), asm_data->output);
+		gimple_return_set_retval(asm_data->target_stmt, asm_data->output);
 		break;
 	default:
 		debug_gimple_stmt(asm_data->target_stmt);
@@ -362,8 +362,7 @@ static struct gimple_opt_pass insert_size_overflow_asm_pass = {
 #if BUILDING_GCC_VERSION >= 4008
 		.optinfo_flags		= OPTGROUP_NONE,
 #endif
-#if BUILDING_GCC_VERSION >= 5000
-#elif BUILDING_GCC_VERSION == 4009
+#if BUILDING_GCC_VERSION >= 4009
 		.has_gate		= false,
 		.has_execute		= true,
 #else
@@ -389,11 +388,7 @@ namespace {
 class insert_size_overflow_asm_pass : public gimple_opt_pass {
 public:
 	insert_size_overflow_asm_pass() : gimple_opt_pass(insert_size_overflow_asm_pass_data, g) {}
-#if BUILDING_GCC_VERSION >= 5000
-	virtual unsigned int execute(function *) { return search_interesting_functions(); }
-#else
 	unsigned int execute() { return search_interesting_functions(); }
-#endif
 };
 }
 

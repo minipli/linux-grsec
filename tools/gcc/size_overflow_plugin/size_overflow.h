@@ -112,11 +112,11 @@ extern const struct size_overflow_hash *get_size_overflow_hash_entry(unsigned in
 
 
 // intentional_overflow.c
-extern tree get_size_overflow_asm_input(const gasm *stmt);
+extern tree get_size_overflow_asm_input(const_gimple stmt);
 extern enum intentional_mark check_intentional_asm(const_gimple stmt, unsigned int argnum);
-extern bool is_size_overflow_insert_check_asm(const gasm *stmt);
+extern bool is_size_overflow_insert_check_asm(const_gimple stmt);
 extern enum intentional_mark check_intentional_attribute(const_gimple stmt, unsigned int argnum);
-extern enum intentional_mark get_so_asm_type(const gasm *stmt);
+extern enum intentional_mark get_so_asm_type(const_gimple stmt);
 extern const_tree get_attribute(const char* attr_name, const_tree decl);
 extern bool is_a_cast_and_const_overflow(const_tree no_const_rhs);
 extern bool is_const_plus_unsigned_signed_truncation(const_tree lhs);
