@@ -2647,7 +2647,7 @@ static void irq_remap_modify_chip_defaults(struct irq_chip *chip)
 }
 #endif /* CONFIG_IRQ_REMAP */
 
-static const struct irq_chip ioapic_chip = {
+static struct irq_chip ioapic_chip = {
 	.name			= "IO-APIC",
 	.irq_startup		= startup_ioapic_irq,
 	.irq_mask		= mask_ioapic_irq,
@@ -2718,7 +2718,7 @@ static void ack_lapic_irq(struct irq_data *data)
 	ack_APIC_irq();
 }
 
-static const struct irq_chip lapic_chip = {
+static struct irq_chip lapic_chip = {
 	.name		= "local-APIC",
 	.irq_mask	= mask_lapic_irq,
 	.irq_unmask	= unmask_lapic_irq,
