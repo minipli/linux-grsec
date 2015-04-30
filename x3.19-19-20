@@ -1,0 +1,882 @@
+diff -u linux-3.19.5-pax/arch/x86/kernel/apic/io_apic.c linux-3.19.5-pax/arch/x86/kernel/apic/io_apic.c
+--- linux-3.19.5-pax/arch/x86/kernel/apic/io_apic.c	2015-02-09 22:45:41.414041547 +0100
++++ linux-3.19.5-pax/arch/x86/kernel/apic/io_apic.c	2015-04-30 00:07:19.748214307 +0200
+@@ -2008,7 +2008,7 @@
+ 	ioapic_irqd_unmask(data, cfg, masked);
+ }
+ 
+-static struct irq_chip ioapic_chip __read_mostly = {
++static const struct irq_chip ioapic_chip = {
+ 	.name			= "IO-APIC",
+ 	.irq_startup		= startup_ioapic_irq,
+ 	.irq_mask		= mask_ioapic_irq,
+@@ -2067,7 +2067,7 @@
+ 	ack_APIC_irq();
+ }
+ 
+-static struct irq_chip lapic_chip __read_mostly = {
++static const struct irq_chip lapic_chip = {
+ 	.name		= "local-APIC",
+ 	.irq_mask	= mask_lapic_irq,
+ 	.irq_unmask	= unmask_lapic_irq,
+diff -u linux-3.19.5-pax/arch/x86/kernel/apm_32.c linux-3.19.5-pax/arch/x86/kernel/apm_32.c
+--- linux-3.19.5-pax/arch/x86/kernel/apm_32.c	2015-02-09 21:15:08.085605860 +0100
++++ linux-3.19.5-pax/arch/x86/kernel/apm_32.c	2015-04-30 00:07:19.748214307 +0200
+@@ -2053,7 +2053,7 @@
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id __initdata apm_dmi_table[] = {
++static const struct dmi_system_id __initconst apm_dmi_table[] = {
+ 	{
+ 		print_if_true,
+ 		KERN_WARNING "IBM T23 - BIOS 1.03b+ and controller firmware 1.02+ may be needed for Linux APM.",
+diff -u linux-3.19.5-pax/arch/x86/kernel/reboot.c linux-3.19.5-pax/arch/x86/kernel/reboot.c
+--- linux-3.19.5-pax/arch/x86/kernel/reboot.c	2015-04-19 12:52:03.577224928 +0200
++++ linux-3.19.5-pax/arch/x86/kernel/reboot.c	2015-04-30 00:07:19.748214307 +0200
+@@ -164,7 +164,7 @@
+ /*
+  * This is a single dmi_table handling all reboot quirks.
+  */
+-static struct dmi_system_id __initdata reboot_dmi_table[] = {
++static const struct dmi_system_id __initconst reboot_dmi_table[] = {
+ 
+ 	/* Acer */
+ 	{	/* Handle reboot issue on Acer Aspire one */
+diff -u linux-3.19.5-pax/drivers/char/sonypi.c linux-3.19.5-pax/drivers/char/sonypi.c
+--- linux-3.19.5-pax/drivers/char/sonypi.c	2015-02-09 21:15:08.545605933 +0100
++++ linux-3.19.5-pax/drivers/char/sonypi.c	2015-04-30 00:07:19.816214309 +0200
+@@ -1492,7 +1492,7 @@
+ 
+ static struct platform_device *sonypi_platform_device;
+ 
+-static struct dmi_system_id __initdata sonypi_dmi_table[] = {
++static const struct dmi_system_id __initconst sonypi_dmi_table[] = {
+ 	{
+ 		.ident = "Sony Vaio",
+ 		.matches = {
+diff -u linux-3.19.5-pax/drivers/firmware/google/memconsole.c linux-3.19.5-pax/drivers/firmware/google/memconsole.c
+--- linux-3.19.5-pax/drivers/firmware/google/memconsole.c	2015-02-09 21:15:08.565605937 +0100
++++ linux-3.19.5-pax/drivers/firmware/google/memconsole.c	2015-04-30 00:07:19.828214310 +0200
+@@ -136,7 +136,7 @@
+ 	return false;
+ }
+ 
+-static struct dmi_system_id memconsole_dmi_table[] __initdata = {
++static const struct dmi_system_id memconsole_dmi_table[] __initconst = {
+ 	{
+ 		.ident = "Google Board",
+ 		.matches = {
+diff -u linux-3.19.5-pax/drivers/hwmon/acpi_power_meter.c linux-3.19.5-pax/drivers/hwmon/acpi_power_meter.c
+--- linux-3.19.5-pax/drivers/hwmon/acpi_power_meter.c	2015-02-09 21:15:08.593605941 +0100
++++ linux-3.19.5-pax/drivers/hwmon/acpi_power_meter.c	2015-04-30 00:07:19.844214310 +0200
+@@ -973,7 +973,7 @@
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id __initdata pm_dmi_table[] = {
++static const struct dmi_system_id __initconst pm_dmi_table[] = {
+ 	{
+ 		enable_cap_knobs, "IBM Active Energy Manager",
+ 		{
+diff -u linux-3.19.5-pax/drivers/platform/x86/msi-laptop.c linux-3.19.5-pax/drivers/platform/x86/msi-laptop.c
+--- linux-3.19.5-pax/drivers/platform/x86/msi-laptop.c	2015-02-09 21:15:08.697605957 +0100
++++ linux-3.19.5-pax/drivers/platform/x86/msi-laptop.c	2015-04-30 00:07:19.908214312 +0200
+@@ -604,7 +604,7 @@
+ 	return 1;
+ }
+ 
+-static struct dmi_system_id __initdata msi_dmi_table[] = {
++static const struct dmi_system_id __initconst msi_dmi_table[] = {
+ 	{
+ 		.ident = "MSI S270",
+ 		.matches = {
+diff -u linux-3.19.5-pax/drivers/platform/x86/sony-laptop.c linux-3.19.5-pax/drivers/platform/x86/sony-laptop.c
+--- linux-3.19.5-pax/drivers/platform/x86/sony-laptop.c	2015-02-09 21:15:08.697605957 +0100
++++ linux-3.19.5-pax/drivers/platform/x86/sony-laptop.c	2015-04-30 00:07:19.908214312 +0200
+@@ -4854,7 +4854,7 @@
+ 	.drv.pm = &sony_pic_pm,
+ };
+ 
+-static struct dmi_system_id __initdata sonypi_dmi_table[] = {
++static const struct dmi_system_id __initconst sonypi_dmi_table[] = {
+ 	{
+ 		.ident = "Sony Vaio",
+ 		.matches = {
+diff -u linux-3.19.5-pax/include/linux/compiler-gcc5.h linux-3.19.5-pax/include/linux/compiler-gcc5.h
+--- linux-3.19.5-pax/include/linux/compiler-gcc5.h	2015-04-25 00:01:30.112030939 +0200
++++ linux-3.19.5-pax/include/linux/compiler-gcc5.h	2015-04-30 00:46:41.260283740 +0200
+@@ -39,7 +39,6 @@
+ #endif
+ 
+ #ifdef SIZE_OVERFLOW_PLUGIN
+-#error not yet
+ #define __size_overflow(...) __attribute__((size_overflow(__VA_ARGS__)))
+ #define __intentional_overflow(...) __attribute__((intentional_overflow(__VA_ARGS__)))
+ #endif
+diff -u linux-3.19.5-pax/tools/gcc/gcc-common.h linux-3.19.5-pax/tools/gcc/gcc-common.h
+--- linux-3.19.5-pax/tools/gcc/gcc-common.h	2015-04-25 00:01:30.112030939 +0200
++++ linux-3.19.5-pax/tools/gcc/gcc-common.h	2015-04-28 22:05:31.683873745 +0200
+@@ -320,13 +320,6 @@
+ }
+ #endif
+ 
+-#if BUILDING_GCC_VERSION >= 4007
+-#define cgraph_create_edge(caller, callee, call_stmt, count, freq, nest) \
+-	cgraph_create_edge((caller), (callee), (call_stmt), (count), (freq))
+-#define cgraph_create_edge_including_clones(caller, callee, old_call_stmt, call_stmt, count, freq, nest, reason) \
+-	cgraph_create_edge_including_clones((caller), (callee), (old_call_stmt), (call_stmt), (count), (freq), (reason))
+-#endif
+-
+ #if BUILDING_GCC_VERSION == 4007 || BUILDING_GCC_VERSION == 4008
+ static inline struct cgraph_node *cgraph_alias_target(struct cgraph_node *n)
+ {
+@@ -334,6 +327,13 @@
+ }
+ #endif
+ 
++#if BUILDING_GCC_VERSION >= 4007 && BUILDING_GCC_VERSION <= 4009
++#define cgraph_create_edge(caller, callee, call_stmt, count, freq, nest) \
++	cgraph_create_edge((caller), (callee), (call_stmt), (count), (freq))
++#define cgraph_create_edge_including_clones(caller, callee, old_call_stmt, call_stmt, count, freq, nest, reason) \
++	cgraph_create_edge_including_clones((caller), (callee), (old_call_stmt), (call_stmt), (count), (freq), (reason))
++#endif
++
+ #if BUILDING_GCC_VERSION <= 4008
+ #define ENTRY_BLOCK_PTR_FOR_FN(FN)	ENTRY_BLOCK_PTR_FOR_FUNCTION(FN)
+ #define EXIT_BLOCK_PTR_FOR_FN(FN)	EXIT_BLOCK_PTR_FOR_FUNCTION(FN)
+@@ -346,6 +346,40 @@
+ #define BASIC_BLOCK_FOR_FN(FN, N)	BASIC_BLOCK_FOR_FUNCTION((FN), (N))
+ #define NODE_IMPLICIT_ALIAS(node)	(node)->same_body_alias
+ 
++static inline bool tree_fits_shwi_p(const_tree t)
++{
++	if (t == NULL_TREE || TREE_CODE(t) != INTEGER_CST)
++		return false;
++
++	if (TREE_INT_CST_HIGH(t) == 0 && (HOST_WIDE_INT)TREE_INT_CST_LOW(t) >= 0)
++		return true;
++
++	if (TREE_INT_CST_HIGH(t) == -1 && (HOST_WIDE_INT)TREE_INT_CST_LOW(t) < 0 && !TYPE_UNSIGNED(TREE_TYPE(t)))
++		return true;
++
++	return false;
++}
++
++static inline bool tree_fits_uhwi_p(const_tree t)
++{
++	if (t == NULL_TREE || TREE_CODE(t) != INTEGER_CST)
++		return false;
++
++	return TREE_INT_CST_HIGH(t) == 0;
++}
++
++static inline HOST_WIDE_INT tree_to_shwi(const_tree t)
++{
++	gcc_assert(tree_fits_shwi_p(t));
++	return TREE_INT_CST_LOW(t);
++}
++
++static inline unsigned HOST_WIDE_INT tree_to_uhwi(const_tree t)
++{
++	gcc_assert(tree_fits_uhwi_p(t));
++	return TREE_INT_CST_LOW(t);
++}
++
+ static inline const char *get_tree_code_name(enum tree_code code)
+ {
+ 	gcc_assert(code < MAX_TREE_CODES);
+@@ -356,6 +390,7 @@
+ typedef union gimple_statement_d gasm;
+ typedef union gimple_statement_d gassign;
+ typedef union gimple_statement_d gcall;
++typedef union gimple_statement_d gcond;
+ typedef union gimple_statement_d gdebug;
+ typedef union gimple_statement_d gphi;
+ typedef union gimple_statement_d greturn;
+@@ -383,6 +418,7 @@
+ typedef struct gimple_statement_base gasm;
+ typedef struct gimple_statement_base gassign;
+ typedef struct gimple_statement_base gcall;
++typedef struct gimple_statement_base gcond;
+ typedef struct gimple_statement_base gdebug;
+ typedef struct gimple_statement_base gphi;
+ typedef struct gimple_statement_base greturn;
+@@ -396,15 +432,50 @@
+ 	return stmt;
+ }
+ 
++static inline const gasm *as_a_const_gasm(const_gimple stmt)
++{
++	return stmt;
++}
++
++static inline gassign *as_a_gassign(gimple stmt)
++{
++	return stmt;
++}
++
++static inline const gassign *as_a_const_gassign(const_gimple stmt)
++{
++	return stmt;
++}
++
+ static inline gcall *as_a_gcall(gimple stmt)
+ {
+ 	return stmt;
+ }
+ 
++static inline const gcall *as_a_const_gcall(const_gimple stmt)
++{
++	return stmt;
++}
++
++static inline gphi *as_a_gphi(gimple stmt)
++{
++	return stmt;
++}
++
++static inline const gphi *as_a_const_gphi(const_gimple stmt)
++{
++	return stmt;
++}
++
+ static inline greturn *as_a_greturn(gimple stmt)
+ {
+ 	return stmt;
+ }
++
++static inline const greturn *as_a_const_greturn(const_gimple stmt)
++{
++	return stmt;
++}
+ #endif
+ 
+ #if BUILDING_GCC_VERSION >= 4009
+@@ -421,17 +492,23 @@
+ #define TODO_verify_stmts TODO_verify_il
+ #define TODO_verify_rtl_sharing TODO_verify_il
+ 
+-#define TREE_INT_CST_HIGH(NODE) ({ TREE_INT_CST_EXT_NUNITS(NODE) > 1 ? (unsigned HOST_WIDE_INT)TREE_INT_CST_ELT(NODE, 1) : 0; })
++//#define TREE_INT_CST_HIGH(NODE) ({ TREE_INT_CST_EXT_NUNITS(NODE) > 1 ? (unsigned HOST_WIDE_INT)TREE_INT_CST_ELT(NODE, 1) : 0; })
+ 
+ #define INSN_DELETED_P(insn) (insn)->deleted()
+ 
+ // symtab/cgraph related
+ #define debug_cgraph_node(node) (node)->debug()
+ #define cgraph_get_node(decl) cgraph_node::get(decl)
++#define cgraph_get_create_node(decl) cgraph_node::get_create(decl)
+ #define cgraph_n_nodes symtab->cgraph_count
+ #define cgraph_max_uid symtab->cgraph_max_uid
+ #define varpool_get_node(decl) varpool_node::get(decl)
+ 
++#define cgraph_create_edge(caller, callee, call_stmt, count, freq, nest) \
++	(caller)->create_edge((callee), (call_stmt), (count), (freq))
++#define cgraph_create_edge_including_clones(caller, callee, old_call_stmt, call_stmt, count, freq, nest, reason) \
++	(caller)->create_edge_including_clones((callee), (old_call_stmt), (call_stmt), (count), (freq), (reason))
++
+ typedef struct cgraph_node *cgraph_node_ptr;
+ typedef struct cgraph_edge *cgraph_edge_p;
+ typedef struct varpool_node *varpool_node_ptr;
+@@ -507,26 +584,70 @@
+ 	return gimple_build_assign(lhs, subcode, op1, op2 PASS_MEM_STAT);
+ }
+ 
++template <>
++template <>
++inline bool is_a_helper<const gassign *>::test(const_gimple gs)
++{
++	return gs->code == GIMPLE_ASSIGN;
++}
++
++template <>
++template <>
++inline bool is_a_helper<const greturn *>::test(const_gimple gs)
++{
++	return gs->code == GIMPLE_RETURN;
++}
++
+ static inline gasm *as_a_gasm(gimple stmt)
+ {
+ 	return as_a<gasm *>(stmt);
+ }
+ 
+-static inline const gasm *as_a_gasm(const_gimple stmt)
++static inline const gasm *as_a_const_gasm(const_gimple stmt)
+ {
+ 	return as_a<const gasm *>(stmt);
+ }
+ 
++static inline gassign *as_a_gassign(gimple stmt)
++{
++	return as_a<gassign *>(stmt);
++}
++
++static inline const gassign *as_a_const_gassign(const_gimple stmt)
++{
++	return as_a<const gassign *>(stmt);
++}
++
+ static inline gcall *as_a_gcall(gimple stmt)
+ {
+ 	return as_a<gcall *>(stmt);
+ }
+ 
++static inline const gcall *as_a_const_gcall(const_gimple stmt)
++{
++	return as_a<const gcall *>(stmt);
++}
++
++static inline gphi *as_a_gphi(gimple stmt)
++{
++	return as_a<gphi *>(stmt);
++}
++
++static inline const gphi *as_a_const_gphi(const_gimple stmt)
++{
++	return as_a<const gphi *>(stmt);
++}
++
+ static inline greturn *as_a_greturn(gimple stmt)
+ {
+ 	return as_a<greturn *>(stmt);
+ }
+ 
++static inline const greturn *as_a_const_greturn(const_gimple stmt)
++{
++	return as_a<const greturn *>(stmt);
++}
++
+ // IPA/LTO related
+ #define ipa_ref_list_referring_iterate(L,I,P) (L)->referring.iterate((I), &(P))
+ #define ipa_ref_list_reference_iterate(L,I,P) (L)->reference.iterate((I), &(P))
+@@ -535,6 +656,11 @@
+ {
+ 	return dyn_cast<cgraph_node_ptr>(ref->referring);
+ }
++
++static inline void ipa_remove_stmt_references(symtab_node *referring_node, gimple stmt)
++{
++	referring_node->remove_stmt_references(stmt);
++}
+ #endif
+ 
+ #endif
+diff -u linux-3.19.5-pax/tools/gcc/kernexec_plugin.c linux-3.19.5-pax/tools/gcc/kernexec_plugin.c
+--- linux-3.19.5-pax/tools/gcc/kernexec_plugin.c	2015-04-25 00:01:30.116030939 +0200
++++ linux-3.19.5-pax/tools/gcc/kernexec_plugin.c	2015-04-29 00:42:00.620149796 +0200
+@@ -149,9 +149,9 @@
+ 	new_fptr = make_ssa_name(new_fptr, NULL);
+ 
+ 	// build asm volatile("orq %%r12, %0\n\t" : "=r"(new_fptr) : "0"(old_fptr));
+-	input = build_tree_list(NULL_TREE, build_string(1, "0"));
++	input = build_tree_list(NULL_TREE, build_string(2, "0"));
+ 	input = chainon(NULL_TREE, build_tree_list(input, old_fptr));
+-	output = build_tree_list(NULL_TREE, build_string(2, "=r"));
++	output = build_tree_list(NULL_TREE, build_string(3, "=r"));
+ 	output = chainon(NULL_TREE, build_tree_list(output, new_fptr));
+ #if BUILDING_GCC_VERSION <= 4007
+ 	VEC_safe_push(tree, gc, inputs, input);
+diff -u linux-3.19.5-pax/tools/gcc/latent_entropy_plugin.c linux-3.19.5-pax/tools/gcc/latent_entropy_plugin.c
+--- linux-3.19.5-pax/tools/gcc/latent_entropy_plugin.c	2015-04-25 00:01:30.116030939 +0200
++++ linux-3.19.5-pax/tools/gcc/latent_entropy_plugin.c	2015-04-29 00:41:08.420148261 +0200
+@@ -16,7 +16,7 @@
+  * - more instrumentation control via attribute parameters
+  *
+  * BUGS:
+- * - LTO needs -flto-partition=none for now
++ * - none known
+  */
+ 
+ #include "gcc-common.h"
+@@ -26,7 +26,7 @@
+ static GTY(()) tree latent_entropy_decl;
+ 
+ static struct plugin_info latent_entropy_plugin_info = {
+-	.version	= "201409101820",
++	.version	= "201504282240",
+ 	.help		= NULL
+ };
+ 
+@@ -304,6 +304,8 @@
+ 		FOR_EACH_VARIABLE(node) {
+ 			tree var = NODE_DECL(node);
+ 
++			if (DECL_NAME_LENGTH(var) < sizeof("latent_entropy") - 1)
++				continue;
+ 			if (strcmp(IDENTIFIER_POINTER(DECL_NAME(var)), "latent_entropy"))
+ 				continue;
+ 			latent_entropy_decl = var;
+@@ -464,8 +466,7 @@
+ 
+ 	register_callback(plugin_name, PLUGIN_INFO, NULL, &latent_entropy_plugin_info);
+ 	register_callback(plugin_name, PLUGIN_START_UNIT, &latent_entropy_start_unit, NULL);
+-	if (!in_lto_p)
+-		register_callback(plugin_name, PLUGIN_REGISTER_GGC_ROOTS, NULL, (void *)&gt_ggc_r_gt_latent_entropy);
++	register_callback(plugin_name, PLUGIN_REGISTER_GGC_ROOTS, NULL, (void *)&gt_ggc_r_gt_latent_entropy);
+ 	register_callback(plugin_name, PLUGIN_PASS_MANAGER_SETUP, NULL, &latent_entropy_pass_info);
+ 	register_callback(plugin_name, PLUGIN_ATTRIBUTES, register_attributes, NULL);
+ 
+diff -u linux-3.19.5-pax/tools/gcc/Makefile linux-3.19.5-pax/tools/gcc/Makefile
+--- linux-3.19.5-pax/tools/gcc/Makefile	2015-02-09 21:15:10.541606255 +0100
++++ linux-3.19.5-pax/tools/gcc/Makefile	2015-04-29 00:40:05.396146408 +0200
+@@ -10,7 +10,7 @@
+ export HOST_EXTRACFLAGS
+ else
+ HOSTLIBS := hostcxxlibs
+-HOST_EXTRACXXFLAGS += -I$(GCCPLUGINS_DIR)/include -I$(src) -std=gnu++98 -fno-rtti -ggdb -Wno-unused-parameter -Wno-narrowing -Wno-unused-variable
++HOST_EXTRACXXFLAGS += -I$(GCCPLUGINS_DIR)/include -I$(src) -std=gnu++98 -fno-rtti -fno-exceptions -fasynchronous-unwind-tables -ggdb -Wno-unused-parameter -Wno-narrowing -Wno-unused-variable
+ export HOST_EXTRACXXFLAGS
+ endif
+ 
+diff -u linux-3.19.5-pax/tools/gcc/stackleak_plugin.c linux-3.19.5-pax/tools/gcc/stackleak_plugin.c
+--- linux-3.19.5-pax/tools/gcc/stackleak_plugin.c	2015-04-25 00:01:30.116030939 +0200
++++ linux-3.19.5-pax/tools/gcc/stackleak_plugin.c	2015-04-29 00:45:59.200156811 +0200
+@@ -30,29 +30,49 @@
+ static bool init_locals;
+ 
+ static struct plugin_info stackleak_plugin_info = {
+-	.version	= "201408011900",
++	.version	= "201504282245",
+ 	.help		= "track-lowest-sp=nn\ttrack sp in functions whose frame size is at least nn bytes\n"
+ //			  "initialize-locals\t\tforcibly initialize all stack frames\n"
+ };
+ 
+ static void stackleak_check_alloca(gimple_stmt_iterator *gsi)
+ {
+-	gimple check_alloca;
++	gcall *check_alloca;
+ 	tree alloca_size;
++	cgraph_node_ptr node;
++	int frequency;
++	basic_block bb;
+ 
+ 	// insert call to void pax_check_alloca(unsigned long size)
+ 	alloca_size = gimple_call_arg(gsi_stmt(*gsi), 0);
+ 	check_alloca = gimple_build_call(check_function_decl, 1, alloca_size);
+ 	gsi_insert_before(gsi, check_alloca, GSI_SAME_STMT);
++
++	// update the cgraph
++	bb = gimple_bb(check_alloca);
++	node = cgraph_get_create_node(check_function_decl);
++	gcc_assert(node);
++	frequency = compute_call_stmt_bb_frequency(current_function_decl, bb);
++	cgraph_create_edge(cgraph_get_node(current_function_decl), node, check_alloca, bb->count, frequency, bb->loop_depth);
+ }
+ 
+ static void stackleak_add_instrumentation(gimple_stmt_iterator *gsi)
+ {
+-	gimple track_stack;
++	gcall *track_stack;
++	cgraph_node_ptr node;
++	int frequency;
++	basic_block bb;
+ 
+ 	// insert call to void pax_track_stack(void)
+ 	track_stack = gimple_build_call(track_function_decl, 0);
+ 	gsi_insert_after(gsi, track_stack, GSI_CONTINUE_LINKING);
++
++	// update the cgraph
++	bb = gimple_bb(track_stack);
++	node = cgraph_get_create_node(track_function_decl);
++	gcc_assert(node);
++	frequency = compute_call_stmt_bb_frequency(current_function_decl, bb);
++	cgraph_create_edge(cgraph_get_node(current_function_decl), node, track_stack, bb->count, frequency, bb->loop_depth);
+ }
+ 
+ static bool is_alloca(gimple stmt)
+@@ -207,16 +227,20 @@
+ 	track_function_decl = build_fn_decl(track_function, fntype);
+ 	DECL_ASSEMBLER_NAME(track_function_decl); // for LTO
+ 	TREE_PUBLIC(track_function_decl) = 1;
++	TREE_USED(track_function_decl) = 1;
+ 	DECL_EXTERNAL(track_function_decl) = 1;
+ 	DECL_ARTIFICIAL(track_function_decl) = 1;
++	DECL_PRESERVE_P(track_function_decl) = 1;
+ 
+ 	// void pax_check_alloca(unsigned long)
+ 	fntype = build_function_type_list(void_type_node, long_unsigned_type_node, NULL_TREE);
+ 	check_function_decl = build_fn_decl(check_function, fntype);
+ 	DECL_ASSEMBLER_NAME(check_function_decl); // for LTO
+ 	TREE_PUBLIC(check_function_decl) = 1;
++	TREE_USED(check_function_decl) = 1;
+ 	DECL_EXTERNAL(check_function_decl) = 1;
+ 	DECL_ARTIFICIAL(check_function_decl) = 1;
++	DECL_PRESERVE_P(check_function_decl) = 1;
+ }
+ 
+ #if BUILDING_GCC_VERSION >= 4009
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/acpi/bus.c	2014-10-05 21:52:06.123977131 +0200
++++ linux-3.19.5-pax/drivers/acpi/bus.c	2015-04-30 00:07:19.748214307 +0200
+@@ -67,7 +67,7 @@ static int set_copy_dsdt(const struct dm
+ }
+ #endif
+ 
+-static struct dmi_system_id dsdt_dmi_table[] __initdata = {
++static const struct dmi_system_id dsdt_dmi_table[] __initconst = {
+ 	/*
+ 	 * Invoke DSDT corruption work-around on all Toshiba Satellite.
+ 	 * https://bugzilla.kernel.org/show_bug.cgi?id=14679
+@@ -83,7 +83,7 @@ static struct dmi_system_id dsdt_dmi_tab
+ 	{}
+ };
+ #else
+-static struct dmi_system_id dsdt_dmi_table[] __initdata = {
++static const struct dmi_system_id dsdt_dmi_table[] __initconst = {
+ 	{}
+ };
+ #endif
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/acpi/ec.c	2015-02-09 21:11:58.373574306 +0100
++++ linux-3.19.5-pax/drivers/acpi/ec.c	2015-04-30 00:07:19.804214309 +0200
+@@ -1045,7 +1045,7 @@ static int ec_clear_on_resume(const stru
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id ec_dmi_table[] __initdata = {
++static const struct dmi_system_id ec_dmi_table[] __initconst = {
+ 	{
+ 	ec_skip_dsdt_scan, "Compal JFL92", {
+ 	DMI_MATCH(DMI_BIOS_VENDOR, "COMPAL"),
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/acpi/pci_slot.c	2014-03-31 12:47:57.743131295 +0200
++++ linux-3.19.5-pax/drivers/acpi/pci_slot.c	2015-04-30 00:07:19.804214309 +0200
+@@ -195,7 +195,7 @@ static int do_sta_before_sun(const struc
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id acpi_pci_slot_dmi_table[] __initdata = {
++static const struct dmi_system_id acpi_pci_slot_dmi_table[] __initconst = {
+ 	/*
+ 	 * Fujitsu Primequest machines will return 1023 to indicate an
+ 	 * error if the _SUN method is evaluated on SxFy objects that
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/acpi/processor_driver.c	2014-10-05 21:52:06.127977133 +0200
++++ linux-3.19.5-pax/drivers/acpi/processor_driver.c	2015-04-29 23:25:49.276141083 +0200
+@@ -159,7 +159,7 @@ static int acpi_cpu_soft_notify(struct n
+ 	return NOTIFY_OK;
+ }
+ 
+-static struct notifier_block __refdata acpi_cpu_notifier = {
++static struct notifier_block __refconst acpi_cpu_notifier = {
+ 	    .notifier_call = acpi_cpu_soft_notify,
+ };
+ 
+--- linux-3.19.5/drivers/acpi/sleep.c	2015-02-09 21:11:58.441574317 +0100
++++ linux-3.19.5-pax/drivers/acpi/sleep.c	2015-04-30 00:07:19.804214309 +0200
+@@ -148,7 +148,7 @@ static int __init init_nvs_nosave(const
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id acpisleep_dmi_table[] __initdata = {
++static const struct dmi_system_id acpisleep_dmi_table[] __initconst = {
+ 	{
+ 	.callback = init_old_suspend_ordering,
+ 	.ident = "Abit KN9 (nForce4 variant)",
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/acpi/thermal.c	2014-12-08 21:49:30.088815332 +0100
++++ linux-3.19.5-pax/drivers/acpi/thermal.c	2015-04-30 00:07:19.804214309 +0200
+@@ -1209,7 +1209,7 @@ static int thermal_psv(const struct dmi_
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id thermal_dmi_table[] __initdata = {
++static const struct dmi_system_id thermal_dmi_table[] __initconst = {
+ 	/*
+ 	 * Award BIOS on this AOpen makes thermal control almost worthless.
+ 	 * http://bugzilla.kernel.org/show_bug.cgi?id=8842
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/acpi/video.c	2015-03-18 15:23:18.180349529 +0100
++++ linux-3.19.5-pax/drivers/acpi/video.c	2015-04-30 00:07:19.804214309 +0200
+@@ -418,7 +418,7 @@ static int __init video_disable_native_b
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id video_dmi_table[] __initdata = {
++static const struct dmi_system_id video_dmi_table[] __initconst = {
+ 	/*
+ 	 * Broken _BQC workaround http://bugzilla.kernel.org/show_bug.cgi?id=13121
+ 	 */
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/char/i8k.c	2015-02-09 21:11:59.713574537 +0100
++++ linux-3.19.5-pax/drivers/char/i8k.c	2015-04-30 00:07:19.804214309 +0200
+@@ -684,7 +684,7 @@ static const struct i8k_config_data i8k_
+ 	},
+ };
+ 
+-static struct dmi_system_id i8k_dmi_table[] __initdata = {
++static const struct dmi_system_id i8k_dmi_table[] __initconst = {
+ 	{
+ 		.ident = "Dell Inspiron",
+ 		.matches = {
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/firmware/efi/runtime-map.c	2015-03-18 15:23:18.180349529 +0100
++++ linux-3.19.5-pax/drivers/firmware/efi/runtime-map.c	2015-04-30 00:07:19.816214309 +0200
+@@ -97,7 +97,7 @@ static void map_release(struct kobject *
+ 	kfree(entry);
+ }
+ 
+-static struct kobj_type __refdata map_ktype = {
++static const struct kobj_type __refconst map_ktype = {
+ 	.sysfs_ops	= &map_attr_ops,
+ 	.default_attrs	= def_attrs,
+ 	.release	= map_release,
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/firmware/google/gsmi.c	2014-06-09 12:45:18.037124840 +0200
++++ linux-3.19.5-pax/drivers/firmware/google/gsmi.c	2015-04-30 00:07:19.828214310 +0200
+@@ -709,7 +709,7 @@ static u32 __init hash_oem_table_id(char
+ 	return local_hash_64(input, 32);
+ }
+ 
+-static struct dmi_system_id gsmi_dmi_table[] __initdata = {
++static const struct dmi_system_id gsmi_dmi_table[] __initconst = {
+ 	{
+ 		.ident = "Google Board",
+ 		.matches = {
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/firmware/memmap.c	2014-12-08 21:49:31.708819157 +0100
++++ linux-3.19.5-pax/drivers/firmware/memmap.c	2015-04-30 00:07:19.844214310 +0200
+@@ -124,7 +124,7 @@ static void __meminit release_firmware_m
+ 	kfree(entry);
+ }
+ 
+-static struct kobj_type __refdata memmap_ktype = {
++static const struct kobj_type __refconst memmap_ktype = {
+ 	.release	= release_firmware_map_entry,
+ 	.sysfs_ops	= &memmap_attr_ops,
+ 	.default_attrs	= def_attrs,
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/input/touchscreen/htcpen.c	2014-01-20 12:36:17.388999727 +0100
++++ linux-3.19.5-pax/drivers/input/touchscreen/htcpen.c	2015-04-30 00:07:19.868214311 +0200
+@@ -219,7 +219,7 @@ static struct isa_driver htcpen_isa_driv
+ 	}
+ };
+ 
+-static struct dmi_system_id htcshift_dmi_table[] __initdata = {
++static const struct dmi_system_id htcshift_dmi_table[] __initconst = {
+ 	{
+ 		.ident = "Shift",
+ 		.matches = {
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/mfd/kempld-core.c	2015-04-14 15:33:52.689337124 +0200
++++ linux-3.19.5-pax/drivers/mfd/kempld-core.c	2015-04-30 00:07:19.904214312 +0200
+@@ -499,7 +499,7 @@ static struct platform_driver kempld_dri
+ 	.remove		= kempld_remove,
+ };
+ 
+-static struct dmi_system_id kempld_dmi_table[] __initdata = {
++static const struct dmi_system_id kempld_dmi_table[] __initconst = {
+ 	{
+ 		.ident = "BHL6",
+ 		.matches = {
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/net/ethernet/via/via-rhine.c	2015-02-09 21:12:28.657579494 +0100
++++ linux-3.19.5-pax/drivers/net/ethernet/via/via-rhine.c	2015-04-30 00:07:19.904214312 +0200
+@@ -2513,7 +2513,7 @@ static struct platform_driver rhine_driv
+ 	}
+ };
+ 
+-static struct dmi_system_id rhine_dmi_table[] __initdata = {
++static const struct dmi_system_id rhine_dmi_table[] __initconst = {
+ 	{
+ 		.ident = "EPIA-M",
+ 		.matches = {
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/pci/pcie/portdrv_pci.c	2014-12-08 21:49:57.820880688 +0100
++++ linux-3.19.5-pax/drivers/pci/pcie/portdrv_pci.c	2015-04-30 00:07:19.904214312 +0200
+@@ -324,7 +324,7 @@ static int __init dmi_pcie_pme_disable_m
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id __initdata pcie_portdrv_dmi_table[] = {
++static const struct dmi_system_id __initconst pcie_portdrv_dmi_table[] = {
+ 	/*
+ 	 * Boxes that should not use MSI for PCIe PME signaling.
+ 	 */
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/platform/chrome/chromeos_pstore.c	2014-10-05 21:52:14.803981496 +0200
++++ linux-3.19.5-pax/drivers/platform/chrome/chromeos_pstore.c	2015-04-30 00:07:19.908214312 +0200
+@@ -13,7 +13,7 @@
+ #include <linux/platform_device.h>
+ #include <linux/pstore_ram.h>
+ 
+-static struct dmi_system_id chromeos_pstore_dmi_table[] __initdata = {
++static const struct dmi_system_id chromeos_pstore_dmi_table[] __initconst = {
+ 	{
+ 		/*
+ 		 * Today all Chromebooks/boxes ship with Google_* as version and
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/platform/x86/compal-laptop.c	2015-02-09 21:12:36.577580841 +0100
++++ linux-3.19.5-pax/drivers/platform/x86/compal-laptop.c	2015-04-30 00:07:19.908214312 +0200
+@@ -766,7 +766,7 @@ static int dmi_check_cb_extra(const stru
+ 	return 1;
+ }
+ 
+-static struct dmi_system_id __initdata compal_dmi_table[] = {
++static const struct dmi_system_id __initconst compal_dmi_table[] = {
+ 	{
+ 		.ident = "FL90/IFL90",
+ 		.matches = {
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/platform/x86/hdaps.c	2015-02-09 21:12:36.641580851 +0100
++++ linux-3.19.5-pax/drivers/platform/x86/hdaps.c	2015-04-30 00:07:19.908214312 +0200
+@@ -514,7 +514,7 @@ static int __init hdaps_dmi_match_invert
+    "ThinkPad T42p", so the order of the entries matters.
+    If your ThinkPad is not recognized, please update to latest
+    BIOS. This is especially the case for some R52 ThinkPads. */
+-static struct dmi_system_id __initdata hdaps_whitelist[] = {
++static const struct dmi_system_id __initconst hdaps_whitelist[] = {
+ 	HDAPS_DMI_MATCH_INVERT("IBM", "ThinkPad R50p", HDAPS_BOTH_AXES),
+ 	HDAPS_DMI_MATCH_NORMAL("IBM", "ThinkPad R50"),
+ 	HDAPS_DMI_MATCH_NORMAL("IBM", "ThinkPad R51"),
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/platform/x86/ibm_rtl.c	2013-02-19 01:13:10.377767664 +0100
++++ linux-3.19.5-pax/drivers/platform/x86/ibm_rtl.c	2015-04-30 00:07:19.908214312 +0200
+@@ -227,7 +227,7 @@ static void rtl_teardown_sysfs(void) {
+ }
+ 
+ 
+-static struct dmi_system_id __initdata ibm_rtl_dmi_table[] = {
++static const struct dmi_system_id __initconst ibm_rtl_dmi_table[] = {
+ 	{                                                  \
+ 		.matches = {                               \
+ 			DMI_MATCH(DMI_SYS_VENDOR, "IBM"),  \
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/platform/x86/intel_oaktrail.c	2015-02-09 21:12:36.701580861 +0100
++++ linux-3.19.5-pax/drivers/platform/x86/intel_oaktrail.c	2015-04-30 00:07:19.908214312 +0200
+@@ -298,7 +298,7 @@ static int dmi_check_cb(const struct dmi
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id __initdata oaktrail_dmi_table[] = {
++static const struct dmi_system_id __initconst oaktrail_dmi_table[] = {
+ 	{
+ 		.ident = "OakTrail platform",
+ 		.matches = {
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/platform/x86/samsung-laptop.c	2015-03-08 00:35:29.869775666 +0100
++++ linux-3.19.5-pax/drivers/platform/x86/samsung-laptop.c	2015-04-30 00:07:19.908214312 +0200
+@@ -1465,7 +1465,7 @@ static int __init samsung_dmi_matched(co
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id __initdata samsung_dmi_table[] = {
++static const struct dmi_system_id __initconst samsung_dmi_table[] = {
+ 	{
+ 		.matches = {
+ 			DMI_MATCH(DMI_SYS_VENDOR,
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/platform/x86/samsung-q10.c	2015-02-09 21:12:36.745580869 +0100
++++ linux-3.19.5-pax/drivers/platform/x86/samsung-q10.c	2015-04-30 00:07:19.908214312 +0200
+@@ -95,7 +95,7 @@ static int __init dmi_check_callback(con
+ 	return 1;
+ }
+ 
+-static struct dmi_system_id __initdata samsungq10_dmi_table[] = {
++static const struct dmi_system_id __initconst samsungq10_dmi_table[] = {
+ 	{
+ 		.ident = "Samsung Q10",
+ 		.matches = {
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/pnp/pnpbios/core.c	2014-03-31 12:48:17.763130226 +0200
++++ linux-3.19.5-pax/drivers/pnp/pnpbios/core.c	2015-04-30 00:07:19.908214312 +0200
+@@ -493,7 +493,7 @@ static int __init exploding_pnp_bios(con
+ 	return 0;
+ }
+ 
+-static struct dmi_system_id pnpbios_dmi_table[] __initdata = {
++static const struct dmi_system_id pnpbios_dmi_table[] __initconst = {
+ 	{			/* PnPBIOS GPF on boot */
+ 	 .callback = exploding_pnp_bios,
+ 	 .ident = "Higraded P14H",
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/thermal/x86_pkg_temp_thermal.c	2014-06-09 12:45:42.861124785 +0200
++++ linux-3.19.5-pax/drivers/thermal/x86_pkg_temp_thermal.c	2015-04-29 23:23:14.192136523 +0200
+@@ -567,7 +567,7 @@ static int pkg_temp_thermal_cpu_callback
+ 	return NOTIFY_OK;
+ }
+ 
+-static struct notifier_block pkg_temp_thermal_notifier __refdata = {
++static struct notifier_block pkg_temp_thermal_notifier __refconst = {
+ 	.notifier_call = pkg_temp_thermal_cpu_callback,
+ };
+ 
+only in patch2:
+unchanged:
+--- linux-3.19.5/drivers/xen/events/events_base.c	2015-03-26 16:53:22.344724474 +0100
++++ linux-3.19.5-pax/drivers/xen/events/events_base.c	2015-04-30 00:07:19.908214312 +0200
+@@ -1563,7 +1563,7 @@ void xen_irq_resume(void)
+ 	restore_pirqs();
+ }
+ 
+-static struct irq_chip xen_dynamic_chip __read_mostly = {
++static const struct irq_chip xen_dynamic_chip = {
+ 	.name			= "xen-dyn",
+ 
+ 	.irq_disable		= disable_dynirq,
+@@ -1577,7 +1577,7 @@ static struct irq_chip xen_dynamic_chip
+ 	.irq_retrigger		= retrigger_dynirq,
+ };
+ 
+-static struct irq_chip xen_pirq_chip __read_mostly = {
++static const struct irq_chip xen_pirq_chip = {
+ 	.name			= "xen-pirq",
+ 
+ 	.irq_startup		= startup_pirq,
+@@ -1597,7 +1597,7 @@ static struct irq_chip xen_pirq_chip __r
+ 	.irq_retrigger		= retrigger_dynirq,
+ };
+ 
+-static struct irq_chip xen_percpu_chip __read_mostly = {
++static const struct irq_chip xen_percpu_chip = {
+ 	.name			= "xen-percpu",
+ 
+ 	.irq_disable		= disable_dynirq,
+--- linux-3.19.5/net/l2tp/l2tp_ip6.c	2015-02-09 21:13:12.457586888 +0100
++++ linux-3.19.5-pax/net/l2tp/l2tp_ip6.c	2015-04-29 23:15:15.056122436 +0200
+@@ -757,7 +757,7 @@ static struct inet_protosw l2tp_ip6_prot
+ 	.ops		= &l2tp_ip6_ops,
+ };
+ 
+-static struct inet6_protocol l2tp_ip6_protocol __read_mostly = {
++static const struct inet6_protocol l2tp_ip6_protocol = {
+ 	.handler	= l2tp_ip6_recv,
+ };
+ 
+only in patch2:
+unchanged:
+--- linux-3.19.5/net/l2tp/l2tp_ip.c	2015-02-09 21:13:12.457586888 +0100
++++ linux-3.19.5-pax/net/l2tp/l2tp_ip.c	2015-04-29 23:13:41.360119681 +0200
+@@ -608,7 +608,7 @@ static struct inet_protosw l2tp_ip_proto
+ 	.ops		= &l2tp_ip_ops,
+ };
+ 
+-static struct net_protocol l2tp_ip_protocol __read_mostly = {
++static const struct net_protocol l2tp_ip_protocol = {
+ 	.handler	= l2tp_ip_recv,
+ 	.netns_ok	= 1,
+ };
