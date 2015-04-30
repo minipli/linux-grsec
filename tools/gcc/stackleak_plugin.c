@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2014 by the PaX Team <pageexec@freemail.hu>
+ * Copyright 2011-2015 by the PaX Team <pageexec@freemail.hu>
  * Licensed under the GPL v2
  *
  * Note: the choice of the license means that the compilation process is
@@ -30,29 +30,49 @@ static GTY(()) tree check_function_decl;
 static bool init_locals;
 
 static struct plugin_info stackleak_plugin_info = {
-	.version	= "201408011900",
+	.version	= "201504282245",
 	.help		= "track-lowest-sp=nn\ttrack sp in functions whose frame size is at least nn bytes\n"
 //			  "initialize-locals\t\tforcibly initialize all stack frames\n"
 };
 
 static void stackleak_check_alloca(gimple_stmt_iterator *gsi)
 {
-	gimple check_alloca;
+	gcall *check_alloca;
 	tree alloca_size;
+	cgraph_node_ptr node;
+	int frequency;
+	basic_block bb;
 
 	// insert call to void pax_check_alloca(unsigned long size)
 	alloca_size = gimple_call_arg(gsi_stmt(*gsi), 0);
 	check_alloca = gimple_build_call(check_function_decl, 1, alloca_size);
 	gsi_insert_before(gsi, check_alloca, GSI_SAME_STMT);
+
+	// update the cgraph
+	bb = gimple_bb(check_alloca);
+	node = cgraph_get_create_node(check_function_decl);
+	gcc_assert(node);
+	frequency = compute_call_stmt_bb_frequency(current_function_decl, bb);
+	cgraph_create_edge(cgraph_get_node(current_function_decl), node, check_alloca, bb->count, frequency, bb->loop_depth);
 }
 
 static void stackleak_add_instrumentation(gimple_stmt_iterator *gsi)
 {
-	gimple track_stack;
+	gcall *track_stack;
+	cgraph_node_ptr node;
+	int frequency;
+	basic_block bb;
 
 	// insert call to void pax_track_stack(void)
 	track_stack = gimple_build_call(track_function_decl, 0);
 	gsi_insert_after(gsi, track_stack, GSI_CONTINUE_LINKING);
+
+	// update the cgraph
+	bb = gimple_bb(track_stack);
+	node = cgraph_get_create_node(track_function_decl);
+	gcc_assert(node);
+	frequency = compute_call_stmt_bb_frequency(current_function_decl, bb);
+	cgraph_create_edge(cgraph_get_node(current_function_decl), node, track_stack, bb->count, frequency, bb->loop_depth);
 }
 
 static bool is_alloca(gimple stmt)
@@ -126,7 +146,7 @@ static unsigned int execute_stackleak_tree_instrument(void)
 
 static unsigned int execute_stackleak_final(void)
 {
-	rtx insn, next;
+	rtx_insn *insn, *next;
 
 	if (cfun->calls_alloca)
 		return 0;
@@ -207,19 +227,24 @@ static void stackleak_start_unit(void *gcc_data, void *user_data)
 	track_function_decl = build_fn_decl(track_function, fntype);
 	DECL_ASSEMBLER_NAME(track_function_decl); // for LTO
 	TREE_PUBLIC(track_function_decl) = 1;
+	TREE_USED(track_function_decl) = 1;
 	DECL_EXTERNAL(track_function_decl) = 1;
 	DECL_ARTIFICIAL(track_function_decl) = 1;
+	DECL_PRESERVE_P(track_function_decl) = 1;
 
 	// void pax_check_alloca(unsigned long)
 	fntype = build_function_type_list(void_type_node, long_unsigned_type_node, NULL_TREE);
 	check_function_decl = build_fn_decl(check_function, fntype);
 	DECL_ASSEMBLER_NAME(check_function_decl); // for LTO
 	TREE_PUBLIC(check_function_decl) = 1;
+	TREE_USED(check_function_decl) = 1;
 	DECL_EXTERNAL(check_function_decl) = 1;
 	DECL_ARTIFICIAL(check_function_decl) = 1;
+	DECL_PRESERVE_P(check_function_decl) = 1;
 }
 
 #if BUILDING_GCC_VERSION >= 4009
+namespace {
 static const struct pass_data stackleak_tree_instrument_pass_data = {
 #else
 static struct gimple_opt_pass stackleak_tree_instrument_pass = {
@@ -230,7 +255,8 @@ static struct gimple_opt_pass stackleak_tree_instrument_pass = {
 #if BUILDING_GCC_VERSION >= 4008
 		.optinfo_flags		= OPTGROUP_NONE,
 #endif
-#if BUILDING_GCC_VERSION >= 4009
+#if BUILDING_GCC_VERSION >= 5000
+#elif BUILDING_GCC_VERSION == 4009
 		.has_gate		= true,
 		.has_execute		= true,
 #else
@@ -262,7 +288,8 @@ static struct rtl_opt_pass stackleak_final_rtl_opt_pass = {
 #if BUILDING_GCC_VERSION >= 4008
 		.optinfo_flags		= OPTGROUP_NONE,
 #endif
-#if BUILDING_GCC_VERSION >= 4009
+#if BUILDING_GCC_VERSION >= 5000
+#elif BUILDING_GCC_VERSION == 4009
 		.has_gate		= true,
 		.has_execute		= true,
 #else
@@ -284,19 +311,28 @@ static struct rtl_opt_pass stackleak_final_rtl_opt_pass = {
 };
 
 #if BUILDING_GCC_VERSION >= 4009
-namespace {
 class stackleak_tree_instrument_pass : public gimple_opt_pass {
 public:
 	stackleak_tree_instrument_pass() : gimple_opt_pass(stackleak_tree_instrument_pass_data, g) {}
+#if BUILDING_GCC_VERSION >= 5000
+	virtual bool gate(function *) { return gate_stackleak_track_stack(); }
+	virtual unsigned int execute(function *) { return execute_stackleak_tree_instrument(); }
+#else
 	bool gate() { return gate_stackleak_track_stack(); }
 	unsigned int execute() { return execute_stackleak_tree_instrument(); }
+#endif
 };
 
 class stackleak_final_rtl_opt_pass : public rtl_opt_pass {
 public:
 	stackleak_final_rtl_opt_pass() : rtl_opt_pass(stackleak_final_rtl_opt_pass_data, g) {}
+#if BUILDING_GCC_VERSION >= 5000
+	virtual bool gate(function *) { return gate_stackleak_track_stack(); }
+	virtual unsigned int execute(function *) { return execute_stackleak_final(); }
+#else
 	bool gate() { return gate_stackleak_track_stack(); }
 	unsigned int execute() { return execute_stackleak_final(); }
+#endif
 };
 }
 
