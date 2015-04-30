@@ -2258,6 +2258,7 @@ static int hugetlb_sysctl_handler_common(bool obey_mempolicy,
 			 struct ctl_table *table, int write,
 			 void __user *buffer, size_t *length, loff_t *ppos)
 {
+	ctl_table_no_const t;
 	struct hstate *h = &default_hstate;
 	unsigned long tmp = h->max_huge_pages;
 	int ret;
@@ -2265,9 +2266,10 @@ static int hugetlb_sysctl_handler_common(bool obey_mempolicy,
 	if (!hugepages_supported())
 		return -ENOTSUPP;
 
-	table->data = &tmp;
-	table->maxlen = sizeof(unsigned long);
-	ret = proc_doulongvec_minmax(table, write, buffer, length, ppos);
+	t = *table;
+	t.data = &tmp;
+	t.maxlen = sizeof(unsigned long);
+	ret = proc_doulongvec_minmax(&t, write, buffer, length, ppos);
 	if (ret)
 		goto out;
 
@@ -2302,6 +2304,7 @@ int hugetlb_overcommit_handler(struct ctl_table *table, int write,
 	struct hstate *h = &default_hstate;
 	unsigned long tmp;
 	int ret;
+	ctl_table_no_const hugetlb_table;
 
 	if (!hugepages_supported())
 		return -ENOTSUPP;
@@ -2311,9 +2314,10 @@ int hugetlb_overcommit_handler(struct ctl_table *table, int write,
 	if (write && hstate_is_gigantic(h))
 		return -EINVAL;
 
-	table->data = &tmp;
-	table->maxlen = sizeof(unsigned long);
-	ret = proc_doulongvec_minmax(table, write, buffer, length, ppos);
+	hugetlb_table = *table;
+	hugetlb_table.data = &tmp;
+	hugetlb_table.maxlen = sizeof(unsigned long);
+	ret = proc_doulongvec_minmax(&hugetlb_table, write, buffer, length, ppos);
 	if (ret)
 		goto out;
 
@@ -2798,6 +2802,27 @@ static void unmap_ref_private(struct mm_struct *mm, struct vm_area_struct *vma,
 	i_mmap_unlock_write(mapping);
 }
 
+#ifdef CONFIG_PAX_SEGMEXEC
+static void pax_mirror_huge_pte(struct vm_area_struct *vma, unsigned long address, struct page *page_m)
+{
+	struct mm_struct *mm = vma->vm_mm;
+	struct vm_area_struct *vma_m;
+	unsigned long address_m;
+	pte_t *ptep_m;
+
+	vma_m = pax_find_mirror_vma(vma);
+	if (!vma_m)
+		return;
+
+	BUG_ON(address >= SEGMEXEC_TASK_SIZE);
+	address_m = address + SEGMEXEC_TASK_SIZE;
+	ptep_m = huge_pte_offset(mm, address_m & HPAGE_MASK);
+	get_page(page_m);
+	hugepage_add_anon_rmap(page_m, vma_m, address_m);
+	set_huge_pte_at(mm, address_m, ptep_m, make_huge_pte(vma_m, page_m, 0));
+}
+#endif
+
 /*
  * Hugetlb_cow() should be called with page lock of the original hugepage held.
  * Called with hugetlb_instantiation_mutex held and pte_page locked so we
@@ -2910,6 +2935,11 @@ retry_avoidcopy:
 				make_huge_pte(vma, new_page, 1));
 		page_remove_rmap(old_page);
 		hugepage_add_new_anon_rmap(new_page, vma, address);
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		pax_mirror_huge_pte(vma, address, new_page);
+#endif
+
 		/* Make the old page be freed below */
 		new_page = old_page;
 	}
@@ -3070,6 +3100,10 @@ retry:
 				&& (vma->vm_flags & VM_SHARED)));
 	set_huge_pte_at(mm, address, ptep, new_pte);
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	pax_mirror_huge_pte(vma, address, page);
+#endif
+
 	if ((flags & FAULT_FLAG_WRITE) && !(vma->vm_flags & VM_SHARED)) {
 		/* Optimization, do the COW without a second fault */
 		ret = hugetlb_cow(mm, vma, address, ptep, new_pte, page, ptl);
@@ -3137,6 +3171,10 @@ int hugetlb_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 	struct address_space *mapping;
 	int need_wait_lock = 0;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	struct vm_area_struct *vma_m;
+#endif
+
 	address &= huge_page_mask(h);
 
 	ptep = huge_pte_offset(mm, address);
@@ -3149,6 +3187,26 @@ int hugetlb_fault(struct mm_struct *mm, struct vm_area_struct *vma,
 			return VM_FAULT_HWPOISON_LARGE |
 				VM_FAULT_SET_HINDEX(hstate_index(h));
 	}
+
+#ifdef CONFIG_PAX_SEGMEXEC
+	vma_m = pax_find_mirror_vma(vma);
+	if (vma_m) {
+		unsigned long address_m;
+
+		if (vma->vm_start > vma_m->vm_start) {
+			address_m = address;
+			address -= SEGMEXEC_TASK_SIZE;
+			vma = vma_m;
+			h = hstate_vma(vma);
+		} else
+			address_m = address + SEGMEXEC_TASK_SIZE;
+
+		if (!huge_pte_alloc(mm, address_m, huge_page_size(h)))
+			return VM_FAULT_OOM;
+		address_m &= HPAGE_MASK;
+		unmap_hugepage_range(vma, address_m, address_m + HPAGE_SIZE, NULL);
+	}
+#endif
 
 	ptep = huge_pte_alloc(mm, address, huge_page_size(h));
 	if (!ptep)
