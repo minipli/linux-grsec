@@ -84,14 +84,14 @@ ENTRY(xen_iret)
 	ESP_OFFSET=4	# bytes pushed onto stack
 
 	/*
-	 * Store vcpu_info pointer for easy access.  Do it this way to
-	 * avoid having to reload %fs
+	 * Store vcpu_info pointer for easy access.
 	 */
 #ifdef CONFIG_SMP
-	GET_THREAD_INFO(%eax)
-	movl %ss:TI_cpu(%eax), %eax
-	movl %ss:__per_cpu_offset(,%eax,4), %eax
-	mov %ss:xen_vcpu(%eax), %eax
+	push %fs
+	mov $(__KERNEL_PERCPU), %eax
+	mov %eax, %fs
+	mov PER_CPU_VAR(xen_vcpu), %eax
+	pop %fs
 #else
 	movl %ss:xen_vcpu, %eax
 #endif
