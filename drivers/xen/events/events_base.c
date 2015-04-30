@@ -1587,7 +1587,7 @@ void xen_irq_resume(void)
 	restore_pirqs();
 }
 
-static const struct irq_chip xen_dynamic_chip = {
+static struct irq_chip xen_dynamic_chip = {
 	.name			= "xen-dyn",
 
 	.irq_disable		= disable_dynirq,
@@ -1601,7 +1601,7 @@ static const struct irq_chip xen_dynamic_chip = {
 	.irq_retrigger		= retrigger_dynirq,
 };
 
-static const struct irq_chip xen_pirq_chip = {
+static struct irq_chip xen_pirq_chip = {
 	.name			= "xen-pirq",
 
 	.irq_startup		= startup_pirq,
@@ -1621,7 +1621,7 @@ static const struct irq_chip xen_pirq_chip = {
 	.irq_retrigger		= retrigger_dynirq,
 };
 
-static const struct irq_chip xen_percpu_chip = {
+static struct irq_chip xen_percpu_chip = {
 	.name			= "xen-percpu",
 
 	.irq_disable		= disable_dynirq,
