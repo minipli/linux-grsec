@@ -798,8 +798,8 @@ struct xgbe_prv_data {
 #endif
 };
 
-extern struct xgbe_hw_if default_xgbe_hw_if;
-extern struct xgbe_desc_if default_xgbe_desc_if;
+extern const struct xgbe_hw_if default_xgbe_hw_if;
+extern const struct xgbe_desc_if default_xgbe_desc_if;
 
 /* Function prototypes*/
 
