@@ -264,6 +264,27 @@ static int load_aout_binary(struct linux_binprm * bprm)
 
 	install_exec_creds(bprm);
 
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+	current->mm->pax_flags = 0UL;
+#endif
+
+#ifdef CONFIG_PAX_PAGEEXEC
+	if (!(N_FLAGS(ex) & F_PAX_PAGEEXEC)) {
+		current->mm->pax_flags |= MF_PAX_PAGEEXEC;
+
+#ifdef CONFIG_PAX_EMUTRAMP
+		if (N_FLAGS(ex) & F_PAX_EMUTRAMP)
+			current->mm->pax_flags |= MF_PAX_EMUTRAMP;
+#endif
+
+#ifdef CONFIG_PAX_MPROTECT
+		if (!(N_FLAGS(ex) & F_PAX_MPROTECT))
+			current->mm->pax_flags |= MF_PAX_MPROTECT;
+#endif
+
+	}
+#endif
+
 	if (N_MAGIC(ex) == OMAGIC) {
 		unsigned long text_addr, map_size;
 		loff_t pos;
@@ -321,7 +342,7 @@ static int load_aout_binary(struct linux_binprm * bprm)
 		}
 
 		error = vm_mmap(bprm->file, N_DATADDR(ex), ex.a_data,
-				PROT_READ | PROT_WRITE | PROT_EXEC,
+				PROT_READ | PROT_WRITE,
 				MAP_FIXED | MAP_PRIVATE | MAP_DENYWRITE | MAP_EXECUTABLE,
 				fd_offset + ex.a_text);
 		if (error != N_DATADDR(ex)) {
