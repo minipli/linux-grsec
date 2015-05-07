@@ -1324,7 +1324,7 @@ static int do_ip_getsockopt(struct sock *sk, int level, int optname,
 		if (sk->sk_type != SOCK_STREAM)
 			return -ENOPROTOOPT;
 
-		msg.msg_control = (__force void *) optval;
+		msg.msg_control = (__force_kernel void *) optval;
 		msg.msg_controllen = len;
 		msg.msg_flags = flags;
 

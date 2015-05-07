@@ -2120,7 +2120,9 @@ static int omap_hsmmc_probe(struct platform_device *pdev)
 
 	if (host->pdata->controller_flags & OMAP_HSMMC_BROKEN_MULTIBLOCK_READ) {
 		dev_info(&pdev->dev, "multiblock reads disabled due to 35xx erratum 2.1.1.128; MMC read performance may suffer\n");
-		omap_hsmmc_ops.multi_io_quirk = omap_hsmmc_multi_io_quirk;
+		pax_open_kernel();
+		*(void **)&omap_hsmmc_ops.multi_io_quirk = omap_hsmmc_multi_io_quirk;
+		pax_close_kernel();
 	}
 
 	pm_runtime_enable(host->dev);
