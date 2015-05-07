@@ -271,5 +271,5 @@ struct dw_mci_drv_data {
 	void		(*set_ios)(struct dw_mci *host, struct mmc_ios *ios);
 	int		(*parse_dt)(struct dw_mci *host);
 	int		(*execute_tuning)(struct dw_mci_slot *slot);
-};
+} __do_const;
 #endif /* _DW_MMC_H_ */
