@@ -58,7 +58,7 @@ struct rtnl_link {
 	rtnl_doit_func		doit;
 	rtnl_dumpit_func	dumpit;
 	rtnl_calcit_func 	calcit;
-};
+} __no_const;
 
 static DEFINE_MUTEX(rtnl_mutex);
 
@@ -299,10 +299,13 @@ int __rtnl_link_register(struct rtnl_link_ops *ops)
 	if (rtnl_link_ops_get(ops->kind))
 		return -EEXIST;
 
-	if (!ops->dellink)
-		ops->dellink = unregister_netdevice_queue;
+	if (!ops->dellink) {
+		pax_open_kernel();
+		*(void **)&ops->dellink = unregister_netdevice_queue;
+		pax_close_kernel();
+	}
 
-	list_add_tail(&ops->list, &link_ops);
+	pax_list_add_tail((struct list_head *)&ops->list, &link_ops);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(__rtnl_link_register);
@@ -349,7 +352,7 @@ void __rtnl_link_unregister(struct rtnl_link_ops *ops)
 	for_each_net(net) {
 		__rtnl_kill_links(net, ops);
 	}
-	list_del(&ops->list);
+	pax_list_del((struct list_head *)&ops->list);
 }
 EXPORT_SYMBOL_GPL(__rtnl_link_unregister);
 
@@ -2006,6 +2009,10 @@ replay:
 		if (IS_ERR(dest_net))
 			return PTR_ERR(dest_net);
 
+		err = -EPERM;
+		if (!netlink_ns_capable(skb, dest_net->user_ns, CAP_NET_ADMIN))
+			goto out;
+
 		dev = rtnl_create_link(dest_net, ifname, ops, tb);
 		if (IS_ERR(dev)) {
 			err = PTR_ERR(dev);
@@ -2693,6 +2700,9 @@ static int rtnl_bridge_setlink(struct sk_buff *skb, struct nlmsghdr *nlh)
 	if (br_spec) {
 		nla_for_each_nested(attr, br_spec, rem) {
 			if (nla_type(attr) == IFLA_BRIDGE_FLAGS) {
+				if (nla_len(attr) < sizeof(flags))
+					return -EINVAL;
+
 				have_flags = true;
 				flags = nla_get_u16(attr);
 				break;
@@ -2763,6 +2773,9 @@ static int rtnl_bridge_dellink(struct sk_buff *skb, struct nlmsghdr *nlh)
 	if (br_spec) {
 		nla_for_each_nested(attr, br_spec, rem) {
 			if (nla_type(attr) == IFLA_BRIDGE_FLAGS) {
+				if (nla_len(attr) < sizeof(flags))
+					return -EINVAL;
+
 				have_flags = true;
 				flags = nla_get_u16(attr);
 				break;

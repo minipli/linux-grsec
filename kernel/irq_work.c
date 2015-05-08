@@ -189,12 +189,13 @@ static int irq_work_cpu_notify(struct notifier_block *self,
 	return NOTIFY_OK;
 }
 
-static struct notifier_block cpu_notify;
+static struct notifier_block cpu_notify = {
+	.notifier_call = irq_work_cpu_notify,
+	.priority = 0,
+};
 
 static __init int irq_work_init_cpu_notifier(void)
 {
-	cpu_notify.notifier_call = irq_work_cpu_notify;
-	cpu_notify.priority = 0;
 	register_cpu_notifier(&cpu_notify);
 	return 0;
 }

@@ -1972,7 +1972,7 @@ int generic_file_mmap(struct file * file, struct vm_area_struct * vma)
 	struct address_space *mapping = file->f_mapping;
 
 	if (!mapping->a_ops->readpage)
-		return -ENOEXEC;
+		return -ENODEV;
 	file_accessed(file);
 	vma->vm_ops = &generic_file_vm_ops;
 	return 0;
@@ -2136,7 +2136,7 @@ static size_t __iovec_copy_from_user_inatomic(char *vaddr,
 
 	while (bytes) {
 		char __user *buf = iov->iov_base + base;
-		int copy = min(bytes, iov->iov_len - base);
+		size_t copy = min(bytes, iov->iov_len - base);
 
 		base = 0;
 		left = __copy_from_user_inatomic(vaddr, buf, copy);
@@ -2164,7 +2164,7 @@ size_t iov_iter_copy_from_user_atomic(struct page *page,
 
 	kaddr = kmap_atomic(page);
 	if (likely(i->nr_segs == 1)) {
-		int left;
+		size_t left;
 		char __user *buf = i->iov->iov_base + i->iov_offset;
 		left = __copy_from_user_inatomic(kaddr + offset, buf, bytes);
 		copied = bytes - left;
@@ -2192,7 +2192,7 @@ size_t iov_iter_copy_from_user(struct page *page,
 
 	kaddr = kmap(page);
 	if (likely(i->nr_segs == 1)) {
-		int left;
+		size_t left;
 		char __user *buf = i->iov->iov_base + i->iov_offset;
 		left = __copy_from_user(kaddr + offset, buf, bytes);
 		copied = bytes - left;
@@ -2222,7 +2222,7 @@ void iov_iter_advance(struct iov_iter *i, size_t bytes)
 		 * zero-length segments (without overruning the iovec).
 		 */
 		while (bytes || unlikely(i->count && !iov->iov_len)) {
-			int copy;
+			size_t copy;
 
 			copy = min(bytes, iov->iov_len - base);
 			BUG_ON(!i->count || i->count < copy);
@@ -2293,6 +2293,7 @@ inline int generic_write_checks(struct file *file, loff_t *pos, size_t *count, i
                         *pos = i_size_read(inode);
 
 		if (limit != RLIM_INFINITY) {
+			gr_learn_resource(current, RLIMIT_FSIZE,*pos, 0);
 			if (*pos >= limit) {
 				send_sig(SIGXFSZ, current, 0);
 				return -EFBIG;
