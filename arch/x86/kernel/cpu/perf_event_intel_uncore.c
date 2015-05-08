@@ -733,7 +733,7 @@ static void __init uncore_types_exit(struct intel_uncore_type **types)
 static int __init uncore_type_init(struct intel_uncore_type *type)
 {
 	struct intel_uncore_pmu *pmus;
-	struct attribute_group *attr_group;
+	attribute_group_no_const *attr_group;
 	struct attribute **attrs;
 	int i, j;
 

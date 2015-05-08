@@ -60,7 +60,7 @@ static int ipv4_local_port_range(struct ctl_table *table, int write,
 		container_of(table->data, struct net, ipv4.ip_local_ports.range);
 	int ret;
 	int range[2];
-	struct ctl_table tmp = {
+	ctl_table_no_const tmp = {
 		.data = &range,
 		.maxlen = sizeof(range),
 		.mode = table->mode,
@@ -118,7 +118,7 @@ static int ipv4_ping_group_range(struct ctl_table *table, int write,
 	int ret;
 	gid_t urange[2];
 	kgid_t low, high;
-	struct ctl_table tmp = {
+	ctl_table_no_const tmp = {
 		.data = &urange,
 		.maxlen = sizeof(urange),
 		.mode = table->mode,
@@ -149,7 +149,7 @@ static int proc_tcp_congestion_control(struct ctl_table *ctl, int write,
 				       void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	char val[TCP_CA_NAME_MAX];
-	struct ctl_table tbl = {
+	ctl_table_no_const tbl = {
 		.data = val,
 		.maxlen = TCP_CA_NAME_MAX,
 	};
@@ -168,7 +168,7 @@ static int proc_tcp_available_congestion_control(struct ctl_table *ctl,
 						 void __user *buffer, size_t *lenp,
 						 loff_t *ppos)
 {
-	struct ctl_table tbl = { .maxlen = TCP_CA_BUF_MAX, };
+	ctl_table_no_const tbl = { .maxlen = TCP_CA_BUF_MAX, };
 	int ret;
 
 	tbl.data = kmalloc(tbl.maxlen, GFP_USER);
@@ -185,7 +185,7 @@ static int proc_allowed_congestion_control(struct ctl_table *ctl,
 					   void __user *buffer, size_t *lenp,
 					   loff_t *ppos)
 {
-	struct ctl_table tbl = { .maxlen = TCP_CA_BUF_MAX };
+	ctl_table_no_const tbl = { .maxlen = TCP_CA_BUF_MAX };
 	int ret;
 
 	tbl.data = kmalloc(tbl.maxlen, GFP_USER);
@@ -204,7 +204,7 @@ static int proc_tcp_fastopen_key(struct ctl_table *ctl, int write,
 				 void __user *buffer, size_t *lenp,
 				 loff_t *ppos)
 {
-	struct ctl_table tbl = { .maxlen = (TCP_FASTOPEN_KEY_LENGTH * 2 + 10) };
+	ctl_table_no_const tbl = { .maxlen = (TCP_FASTOPEN_KEY_LENGTH * 2 + 10) };
 	struct tcp_fastopen_context *ctxt;
 	int ret;
 	u32  user_key[4]; /* 16 bytes, matching TCP_FASTOPEN_KEY_LENGTH */
@@ -888,13 +888,12 @@ static struct ctl_table ipv4_net_table[] = {
 
 static __net_init int ipv4_sysctl_init_net(struct net *net)
 {
-	struct ctl_table *table;
+	ctl_table_no_const *table = NULL;
 
-	table = ipv4_net_table;
 	if (!net_eq(net, &init_net)) {
 		int i;
 
-		table = kmemdup(table, sizeof(ipv4_net_table), GFP_KERNEL);
+		table = kmemdup(ipv4_net_table, sizeof(ipv4_net_table), GFP_KERNEL);
 		if (table == NULL)
 			goto err_alloc;
 
@@ -903,7 +902,10 @@ static __net_init int ipv4_sysctl_init_net(struct net *net)
 			table[i].data += (void *)net - (void *)&init_net;
 	}
 
-	net->ipv4.ipv4_hdr = register_net_sysctl(net, "net/ipv4", table);
+	if (!net_eq(net, &init_net))
+		net->ipv4.ipv4_hdr = register_net_sysctl(net, "net/ipv4", table);
+	else
+		net->ipv4.ipv4_hdr = register_net_sysctl(net, "net/ipv4", ipv4_net_table);
 	if (net->ipv4.ipv4_hdr == NULL)
 		goto err_reg;
 

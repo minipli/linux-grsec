@@ -126,7 +126,7 @@
 static int xgbe_mdio_read(struct mii_bus *mii, int prtad, int mmd_reg)
 {
 	struct xgbe_prv_data *pdata = mii->priv;
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	int mmd_data;
 
 	DBGPR_MDIO("-->xgbe_mdio_read: prtad=%#x mmd_reg=%#x\n",
@@ -143,7 +143,7 @@ static int xgbe_mdio_write(struct mii_bus *mii, int prtad, int mmd_reg,
 			   u16 mmd_val)
 {
 	struct xgbe_prv_data *pdata = mii->priv;
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	int mmd_data = mmd_val;
 
 	DBGPR_MDIO("-->xgbe_mdio_write: prtad=%#x mmd_reg=%#x mmd_data=%#x\n",
