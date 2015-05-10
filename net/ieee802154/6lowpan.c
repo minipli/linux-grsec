@@ -329,7 +329,7 @@ static int lowpan_header_create(struct sk_buff *skb,
 			hc06_ptr += 3;
 		} else {
 			/* compress nothing */
-			memcpy(hc06_ptr, &hdr, 4);
+			memcpy(hc06_ptr, hdr, 4);
 			/* replace the top byte with new ECN | DSCP format */
 			*hc06_ptr = tmp;
 			hc06_ptr += 4;
@@ -837,7 +837,7 @@ static void lowpan_dellink(struct net_device *dev, struct list_head *head)
 	dev_put(real_dev);
 }
 
-static struct rtnl_link_ops lowpan_link_ops __read_mostly = {
+static struct rtnl_link_ops lowpan_link_ops = {
 	.kind		= "lowpan",
 	.priv_size	= sizeof(struct lowpan_dev_info),
 	.setup		= lowpan_setup,
