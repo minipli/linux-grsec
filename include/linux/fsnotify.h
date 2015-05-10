@@ -196,6 +196,9 @@ static inline void fsnotify_access(struct file *file)
 	struct inode *inode = path->dentry->d_inode;
 	__u32 mask = FS_ACCESS;
 
+	if (is_sidechannel_device(inode))
+		return;
+
 	if (S_ISDIR(inode->i_mode))
 		mask |= FS_ISDIR;
 
@@ -213,6 +216,9 @@ static inline void fsnotify_modify(struct file *file)
 	struct path *path = &file->f_path;
 	struct inode *inode = path->dentry->d_inode;
 	__u32 mask = FS_MODIFY;
+
+	if (is_sidechannel_device(inode))
+		return;
 
 	if (S_ISDIR(inode->i_mode))
 		mask |= FS_ISDIR;
@@ -316,7 +322,7 @@ static inline void fsnotify_change(struct dentry *dentry, unsigned int ia_valid)
  */
 static inline const unsigned char *fsnotify_oldname_init(const unsigned char *name)
 {
-	return kstrdup(name, GFP_KERNEL);
+	return (const unsigned char *)kstrdup((const char *)name, GFP_KERNEL);
 }
 
 /*
