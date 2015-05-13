@@ -524,6 +524,12 @@ static void arm_lpae_restrict_pgsizes(struct io_pgtable_cfg *cfg)
 	}
 }
 
+static struct io_pgtable_ops arm_lpae_io_pgtable_ops = {
+	.map		= arm_lpae_map,
+	.unmap		= arm_lpae_unmap,
+	.iova_to_phys	= arm_lpae_iova_to_phys,
+};
+
 static struct arm_lpae_io_pgtable *
 arm_lpae_alloc_pgtable(struct io_pgtable_cfg *cfg)
 {
@@ -555,11 +561,7 @@ arm_lpae_alloc_pgtable(struct io_pgtable_cfg *cfg)
 	pgd_bits = va_bits - (data->bits_per_level * (data->levels - 1));
 	data->pgd_size = 1UL << (pgd_bits + ilog2(sizeof(arm_lpae_iopte)));
 
-	data->iop.ops = &(struct io_pgtable_ops) {
-		.map		= arm_lpae_map,
-		.unmap		= arm_lpae_unmap,
-		.iova_to_phys	= arm_lpae_iova_to_phys,
-	};
+	data->iop.ops = &arm_lpae_io_pgtable_ops;
 
 	return data;
 }
