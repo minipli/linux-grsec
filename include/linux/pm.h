@@ -608,6 +608,7 @@ struct dev_pm_domain {
 	struct dev_pm_ops	ops;
 	void (*detach)(struct device *dev, bool power_off);
 };
+typedef struct dev_pm_domain __no_const dev_pm_domain_no_const;
 
 /*
  * The PM_EVENT_ messages are also used by drivers implementing the legacy
