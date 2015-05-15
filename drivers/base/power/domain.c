@@ -1809,9 +1809,9 @@ int __pm_genpd_remove_callbacks(struct device *dev, bool clear_td)
 
 	if (dev->power.subsys_data->domain_data) {
 		gpd_data = to_gpd_data(dev->power.subsys_data->domain_data);
-		gpd_data->ops = (struct gpd_dev_ops){ NULL };
+		memset(&gpd_data->ops, 0, sizeof(gpd_data->ops));
 		if (clear_td)
-			gpd_data->td = (struct gpd_timing_data){ 0 };
+			memset(&gpd_data->td, 0, sizeof(gpd_data->td));
 
 		if (--gpd_data->refcount == 0) {
 			dev->power.subsys_data->domain_data = NULL;
@@ -1850,7 +1850,7 @@ int pm_genpd_attach_cpuidle(struct generic_pm_domain *genpd, int state)
 {
 	struct cpuidle_driver *cpuidle_drv;
 	struct gpd_cpu_data *cpu_data;
-	struct cpuidle_state *idle_state;
+	cpuidle_state_no_const *idle_state;
 	int ret = 0;
 
 	if (IS_ERR_OR_NULL(genpd) || state < 0)
@@ -1918,7 +1918,7 @@ int pm_genpd_name_attach_cpuidle(const char *name, int state)
 int pm_genpd_detach_cpuidle(struct generic_pm_domain *genpd)
 {
 	struct gpd_cpu_data *cpu_data;
-	struct cpuidle_state *idle_state;
+	cpuidle_state_no_const *idle_state;
 	int ret = 0;
 
 	if (IS_ERR_OR_NULL(genpd))

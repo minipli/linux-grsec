@@ -235,7 +235,7 @@ static int do_ipv6_setsockopt(struct sock *sk, int level, int optname,
 		if (optlen < sizeof(int) ||
 		    inet_sk(sk)->inet_num)
 			goto e_inval;
-		np->ipv6only = valbool;
+		sk->sk_ipv6only = valbool;
 		retv = 0;
 		break;
 
@@ -991,7 +991,7 @@ static int do_ipv6_getsockopt(struct sock *sk, int level, int optname,
 		if (sk->sk_type != SOCK_STREAM)
 			return -ENOPROTOOPT;
 
-		msg.msg_control = optval;
+		msg.msg_control = (void __force_kernel *)optval;
 		msg.msg_controllen = len;
 		msg.msg_flags = flags;
 
@@ -1058,7 +1058,7 @@ static int do_ipv6_getsockopt(struct sock *sk, int level, int optname,
 	}
 
 	case IPV6_V6ONLY:
-		val = np->ipv6only;
+		val = sk->sk_ipv6only;
 		break;
 
 	case IPV6_RECVPKTINFO:

@@ -128,7 +128,7 @@ struct cpuinfo_x86 {
 	/* Index into per_cpu list: */
 	u16			cpu_index;
 	u32			microcode;
-} __attribute__((__aligned__(SMP_CACHE_BYTES)));
+} __attribute__((__aligned__(SMP_CACHE_BYTES))) __randomize_layout;
 
 #define X86_VENDOR_INTEL	0
 #define X86_VENDOR_CYRIX	1
@@ -199,9 +199,21 @@ static inline void native_cpuid(unsigned int *eax, unsigned int *ebx,
 	    : "memory");
 }
 
+/* invpcid (%rdx),%rax */
+#define __ASM_INVPCID ".byte 0x66,0x0f,0x38,0x82,0x02"
+
+#define INVPCID_SINGLE_ADDRESS	0UL
+#define INVPCID_SINGLE_CONTEXT	1UL
+#define INVPCID_ALL_GLOBAL	2UL
+#define INVPCID_ALL_NONGLOBAL	3UL
+
+#define PCID_KERNEL		0UL
+#define PCID_USER		1UL
+#define PCID_NOFLUSH		(1UL << 63)
+
 static inline void load_cr3(pgd_t *pgdir)
 {
-	write_cr3(__pa(pgdir));
+	write_cr3(__pa(pgdir) | PCID_KERNEL);
 }
 
 #ifdef CONFIG_X86_32
@@ -283,7 +295,7 @@ struct tss_struct {
 
 } ____cacheline_aligned;
 
-DECLARE_PER_CPU_SHARED_ALIGNED(struct tss_struct, init_tss);
+extern struct tss_struct init_tss[NR_CPUS];
 
 /*
  * Save the original ist values for checking stack pointers during debugging
@@ -470,6 +482,7 @@ struct thread_struct {
 	unsigned short		ds;
 	unsigned short		fsindex;
 	unsigned short		gsindex;
+	unsigned short		ss;
 #endif
 #ifdef CONFIG_X86_32
 	unsigned long		ip;
@@ -579,29 +592,8 @@ static inline void load_sp0(struct tss_struct *tss,
 extern unsigned long mmu_cr4_features;
 extern u32 *trampoline_cr4_features;
 
-static inline void set_in_cr4(unsigned long mask)
-{
-	unsigned long cr4;
-
-	mmu_cr4_features |= mask;
-	if (trampoline_cr4_features)
-		*trampoline_cr4_features = mmu_cr4_features;
-	cr4 = read_cr4();
-	cr4 |= mask;
-	write_cr4(cr4);
-}
-
-static inline void clear_in_cr4(unsigned long mask)
-{
-	unsigned long cr4;
-
-	mmu_cr4_features &= ~mask;
-	if (trampoline_cr4_features)
-		*trampoline_cr4_features = mmu_cr4_features;
-	cr4 = read_cr4();
-	cr4 &= ~mask;
-	write_cr4(cr4);
-}
+extern void set_in_cr4(unsigned long mask);
+extern void clear_in_cr4(unsigned long mask);
 
 typedef struct {
 	unsigned long		seg;
@@ -827,11 +819,18 @@ static inline void spin_lock_prefetch(const void *x)
  */
 #define TASK_SIZE		PAGE_OFFSET
 #define TASK_SIZE_MAX		TASK_SIZE
+
+#ifdef CONFIG_PAX_SEGMEXEC
+#define SEGMEXEC_TASK_SIZE	(TASK_SIZE / 2)
+#define STACK_TOP		((current->mm->pax_flags & MF_PAX_SEGMEXEC)?SEGMEXEC_TASK_SIZE:TASK_SIZE)
+#else
 #define STACK_TOP		TASK_SIZE
-#define STACK_TOP_MAX		STACK_TOP
+#endif
+
+#define STACK_TOP_MAX		TASK_SIZE
 
 #define INIT_THREAD  {							  \
-	.sp0			= sizeof(init_stack) + (long)&init_stack, \
+	.sp0			= sizeof(init_stack) + (long)&init_stack - 8, \
 	.vm86_info		= NULL,					  \
 	.sysenter_cs		= __KERNEL_CS,				  \
 	.io_bitmap_ptr		= NULL,					  \
@@ -845,7 +844,7 @@ static inline void spin_lock_prefetch(const void *x)
  */
 #define INIT_TSS  {							  \
 	.x86_tss = {							  \
-		.sp0		= sizeof(init_stack) + (long)&init_stack, \
+		.sp0		= sizeof(init_stack) + (long)&init_stack - 8, \
 		.ss0		= __KERNEL_DS,				  \
 		.ss1		= __KERNEL_CS,				  \
 		.io_bitmap_base	= INVALID_IO_BITMAP_OFFSET,		  \
@@ -856,11 +855,7 @@ static inline void spin_lock_prefetch(const void *x)
 extern unsigned long thread_saved_pc(struct task_struct *tsk);
 
 #define THREAD_SIZE_LONGS      (THREAD_SIZE/sizeof(unsigned long))
-#define KSTK_TOP(info)                                                 \
-({                                                                     \
-       unsigned long *__ptr = (unsigned long *)(info);                 \
-       (unsigned long)(&__ptr[THREAD_SIZE_LONGS]);                     \
-})
+#define KSTK_TOP(info)         ((container_of(info, struct task_struct, tinfo))->thread.sp0)
 
 /*
  * The below -8 is to reserve 8 bytes on top of the ring0 stack.
@@ -875,7 +870,7 @@ extern unsigned long thread_saved_pc(struct task_struct *tsk);
 #define task_pt_regs(task)                                             \
 ({                                                                     \
        struct pt_regs *__regs__;                                       \
-       __regs__ = (struct pt_regs *)(KSTK_TOP(task_stack_page(task))-8); \
+       __regs__ = (struct pt_regs *)((task)->thread.sp0);              \
        __regs__ - 1;                                                   \
 })
 
@@ -885,13 +880,13 @@ extern unsigned long thread_saved_pc(struct task_struct *tsk);
 /*
  * User space process size. 47bits minus one guard page.
  */
-#define TASK_SIZE_MAX	((1UL << 47) - PAGE_SIZE)
+#define TASK_SIZE_MAX	((1UL << TASK_SIZE_MAX_SHIFT) - PAGE_SIZE)
 
 /* This decides where the kernel will search for a free chunk of vm
  * space during mmap's.
  */
 #define IA32_PAGE_OFFSET	((current->personality & ADDR_LIMIT_3GB) ? \
-					0xc0000000 : 0xFFFFe000)
+					0xc0000000 : 0xFFFFf000)
 
 #define TASK_SIZE		(test_thread_flag(TIF_ADDR32) ? \
 					IA32_PAGE_OFFSET : TASK_SIZE_MAX)
@@ -902,11 +897,11 @@ extern unsigned long thread_saved_pc(struct task_struct *tsk);
 #define STACK_TOP_MAX		TASK_SIZE_MAX
 
 #define INIT_THREAD  { \
-	.sp0 = (unsigned long)&init_stack + sizeof(init_stack) \
+	.sp0 = (unsigned long)&init_stack + sizeof(init_stack) - 16 \
 }
 
 #define INIT_TSS  { \
-	.x86_tss.sp0 = (unsigned long)&init_stack + sizeof(init_stack) \
+	.x86_tss.sp0 = (unsigned long)&init_stack + sizeof(init_stack) - 16 \
 }
 
 /*
@@ -934,6 +929,10 @@ extern void start_thread(struct pt_regs *regs, unsigned long new_ip,
  */
 #define TASK_UNMAPPED_BASE	(PAGE_ALIGN(TASK_SIZE / 3))
 
+#ifdef CONFIG_PAX_SEGMEXEC
+#define SEGMEXEC_TASK_UNMAPPED_BASE	(PAGE_ALIGN(SEGMEXEC_TASK_SIZE / 3))
+#endif
+
 #define KSTK_EIP(task)		(task_pt_regs(task)->ip)
 
 /* Get/set a process' ability to use the timestamp counter instruction */
@@ -960,7 +959,7 @@ static inline uint32_t hypervisor_cpuid_base(const char *sig, uint32_t leaves)
 	return 0;
 }
 
-extern unsigned long arch_align_stack(unsigned long sp);
+#define arch_align_stack(x) ((x) & ~0xfUL)
 extern void free_init_pages(char *what, unsigned long begin, unsigned long end);
 
 void default_idle(void);
@@ -970,6 +969,6 @@ bool xen_set_default_idle(void);
 #define xen_set_default_idle 0
 #endif
 
-void stop_this_cpu(void *dummy);
+void stop_this_cpu(void *dummy) __noreturn;
 void df_debug(struct pt_regs *regs, long error_code);
 #endif /* _ASM_X86_PROCESSOR_H */

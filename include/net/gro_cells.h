@@ -29,7 +29,7 @@ static inline void gro_cells_receive(struct gro_cells *gcells, struct sk_buff *s
 		cell += skb_get_rx_queue(skb) & gcells->gro_cells_mask;
 
 	if (skb_queue_len(&cell->napi_skbs) > netdev_max_backlog) {
-		atomic_long_inc(&dev->rx_dropped);
+		atomic_long_inc_unchecked(&dev->rx_dropped);
 		kfree_skb(skb);
 		return;
 	}

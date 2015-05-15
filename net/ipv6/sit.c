@@ -74,7 +74,7 @@ static void ipip6_tunnel_setup(struct net_device *dev);
 static void ipip6_dev_free(struct net_device *dev);
 static bool check_6rd(struct ip_tunnel *tunnel, const struct in6_addr *v6dst,
 		      __be32 *v4dst);
-static struct rtnl_link_ops sit_link_ops __read_mostly;
+static struct rtnl_link_ops sit_link_ops;
 
 static int sit_net_id __read_mostly;
 struct sit_net {
@@ -483,11 +483,11 @@ static void ipip6_tunnel_uninit(struct net_device *dev)
  */
 static int ipip6_err_gen_icmpv6_unreach(struct sk_buff *skb)
 {
-	const struct iphdr *iph = (const struct iphdr *) skb->data;
+	int ihl = ((const struct iphdr *)skb->data)->ihl*4;
 	struct rt6_info *rt;
 	struct sk_buff *skb2;
 
-	if (!pskb_may_pull(skb, iph->ihl * 4 + sizeof(struct ipv6hdr) + 8))
+	if (!pskb_may_pull(skb, ihl + sizeof(struct ipv6hdr) + 8))
 		return 1;
 
 	skb2 = skb_clone(skb, GFP_ATOMIC);
@@ -496,7 +496,7 @@ static int ipip6_err_gen_icmpv6_unreach(struct sk_buff *skb)
 		return 1;
 
 	skb_dst_drop(skb2);
-	skb_pull(skb2, iph->ihl * 4);
+	skb_pull(skb2, ihl);
 	skb_reset_network_header(skb2);
 
 	rt = rt6_lookup(dev_net(skb->dev), &ipv6_hdr(skb2)->saddr, NULL, 0, 0);
@@ -1680,7 +1680,7 @@ static void ipip6_dellink(struct net_device *dev, struct list_head *head)
 		unregister_netdevice_queue(dev, head);
 }
 
-static struct rtnl_link_ops sit_link_ops __read_mostly = {
+static struct rtnl_link_ops sit_link_ops = {
 	.kind		= "sit",
 	.maxtype	= IFLA_IPTUN_MAX,
 	.policy		= ipip6_policy,
