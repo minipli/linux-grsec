@@ -57,7 +57,7 @@ static unsigned long hyp_default_vectors;
 static DEFINE_PER_CPU(struct kvm_vcpu *, kvm_arm_running_vcpu);
 
 /* The VMID used in the VTTBR */
-static atomic64_t kvm_vmid_gen = ATOMIC64_INIT(1);
+static atomic64_unchecked_t kvm_vmid_gen = ATOMIC64_INIT(1);
 static u8 kvm_next_vmid;
 static DEFINE_SPINLOCK(kvm_vmid_lock);
 
@@ -358,7 +358,7 @@ void force_vm_exit(const cpumask_t *mask)
  */
 static bool need_new_vmid_gen(struct kvm *kvm)
 {
-	return unlikely(kvm->arch.vmid_gen != atomic64_read(&kvm_vmid_gen));
+	return unlikely(kvm->arch.vmid_gen != atomic64_read_unchecked(&kvm_vmid_gen));
 }
 
 /**
@@ -391,7 +391,7 @@ static void update_vttbr(struct kvm *kvm)
 
 	/* First user of a new VMID generation? */
 	if (unlikely(kvm_next_vmid == 0)) {
-		atomic64_inc(&kvm_vmid_gen);
+		atomic64_inc_unchecked(&kvm_vmid_gen);
 		kvm_next_vmid = 1;
 
 		/*
@@ -408,7 +408,7 @@ static void update_vttbr(struct kvm *kvm)
 		kvm_call_hyp(__kvm_flush_vm_context);
 	}
 
-	kvm->arch.vmid_gen = atomic64_read(&kvm_vmid_gen);
+	kvm->arch.vmid_gen = atomic64_read_unchecked(&kvm_vmid_gen);
 	kvm->arch.vmid = kvm_next_vmid;
 	kvm_next_vmid++;
 
@@ -1087,7 +1087,7 @@ struct kvm_vcpu *kvm_mpidr_to_vcpu(struct kvm *kvm, unsigned long mpidr)
 /**
  * Initialize Hyp-mode and memory mappings on all CPUs.
  */
-int kvm_arch_init(void *opaque)
+int kvm_arch_init(const void *opaque)
 {
 	int err;
 	int ret, cpu;

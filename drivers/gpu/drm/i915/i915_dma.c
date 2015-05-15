@@ -149,6 +149,9 @@ static int i915_getparam(struct drm_device *dev, void *data,
 	case I915_PARAM_MMAP_VERSION:
 		value = 1;
 		break;
+	case I915_PARAM_HAS_LEGACY_CONTEXT:
+		value = drm_core_check_feature(dev, DRIVER_KMS_LEGACY_CONTEXT);
+		break;
 	default:
 		DRM_DEBUG("Unknown parameter %d\n", param->param);
 		return -EINVAL;
@@ -362,7 +365,7 @@ static bool i915_switcheroo_can_switch(struct pci_dev *pdev)
 	 * locking inversion with the driver load path. And the access here is
 	 * completely racy anyway. So don't bother with locking for now.
 	 */
-	return dev->open_count == 0;
+	return local_read(&dev->open_count) == 0;
 }
 
 static const struct vga_switcheroo_client_ops i915_switcheroo_ops = {
