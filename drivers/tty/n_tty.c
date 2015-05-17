@@ -115,7 +115,7 @@ struct n_tty_data {
 	int minimum_to_wake;
 
 	/* consumer-published */
-	size_t read_tail;
+	size_t read_tail __intentional_overflow(-1);
 	size_t line_start;
 
 	/* protected by output lock */
@@ -2578,6 +2578,7 @@ void n_tty_inherit_ops(struct tty_ldisc_ops *ops)
 {
 	*ops = tty_ldisc_N_TTY;
 	ops->owner = NULL;
-	ops->refcount = ops->flags = 0;
+	atomic_set(&ops->refcount, 0);
+	ops->flags = 0;
 }
 EXPORT_SYMBOL_GPL(n_tty_inherit_ops);

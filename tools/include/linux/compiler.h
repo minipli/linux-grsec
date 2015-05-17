@@ -35,4 +35,12 @@
 # define unlikely(x)		__builtin_expect(!!(x), 0)
 #endif
 
+#ifndef __size_overflow
+# define __size_overflow(...)
+#endif
+
+#ifndef __intentional_overflow
+# define __intentional_overflow(...)
+#endif
+
 #endif /* _TOOLS_LINUX_COMPILER_H */
