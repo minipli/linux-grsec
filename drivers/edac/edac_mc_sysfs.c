@@ -154,7 +154,7 @@ static const char * const edac_caps[] = {
 struct dev_ch_attribute {
 	struct device_attribute attr;
 	int channel;
-};
+} __do_const;
 
 #define DEVICE_CHANNEL(_name, _mode, _show, _store, _var) \
 	static struct dev_ch_attribute dev_attr_legacy_##_name = \
@@ -1009,15 +1009,17 @@ int edac_create_sysfs_mci_device(struct mem_ctl_info *mci)
 	}
 
 	if (mci->set_sdram_scrub_rate || mci->get_sdram_scrub_rate) {
+		pax_open_kernel();
 		if (mci->get_sdram_scrub_rate) {
-			dev_attr_sdram_scrub_rate.attr.mode |= S_IRUGO;
-			dev_attr_sdram_scrub_rate.show = &mci_sdram_scrub_rate_show;
+			*(umode_t *)&dev_attr_sdram_scrub_rate.attr.mode |= S_IRUGO;
+			*(void **)&dev_attr_sdram_scrub_rate.show = &mci_sdram_scrub_rate_show;
 		}
 
 		if (mci->set_sdram_scrub_rate) {
-			dev_attr_sdram_scrub_rate.attr.mode |= S_IWUSR;
-			dev_attr_sdram_scrub_rate.store = &mci_sdram_scrub_rate_store;
+			*(umode_t *)&dev_attr_sdram_scrub_rate.attr.mode |= S_IWUSR;
+			*(void **)&dev_attr_sdram_scrub_rate.store = &mci_sdram_scrub_rate_store;
 		}
+		pax_close_kernel();
 
 		err = device_create_file(&mci->dev, &dev_attr_sdram_scrub_rate);
 		if (err) {

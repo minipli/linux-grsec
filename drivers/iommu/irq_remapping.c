@@ -329,7 +329,7 @@ int setup_hpet_msi_remapped(unsigned int irq, unsigned int id)
 void panic_if_irq_remap(const char *msg)
 {
 	if (irq_remapping_enabled)
-		panic(msg);
+		panic("%s", msg);
 }
 
 static void ir_ack_apic_edge(struct irq_data *data)
@@ -350,10 +350,12 @@ static void ir_print_prefix(struct irq_data *data, struct seq_file *p)
 
 void irq_remap_modify_chip_defaults(struct irq_chip *chip)
 {
-	chip->irq_print_chip = ir_print_prefix;
-	chip->irq_ack = ir_ack_apic_edge;
-	chip->irq_eoi = ir_ack_apic_level;
-	chip->irq_set_affinity = x86_io_apic_ops.set_affinity;
+	pax_open_kernel();
+	*(void **)&chip->irq_print_chip = ir_print_prefix;
+	*(void **)&chip->irq_ack = ir_ack_apic_edge;
+	*(void **)&chip->irq_eoi = ir_ack_apic_level;
+	*(void **)&chip->irq_set_affinity = x86_io_apic_ops.set_affinity;
+	pax_close_kernel();
 }
 
 bool setup_remapped_irq(int irq, struct irq_cfg *cfg, struct irq_chip *chip)
