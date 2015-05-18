@@ -62,7 +62,7 @@ static int compat_i915_batchbuffer(struct file *file, unsigned int cmd,
 	    || __put_user(batchbuffer32.DR4, &batchbuffer->DR4)
 	    || __put_user(batchbuffer32.num_cliprects,
 			  &batchbuffer->num_cliprects)
-	    || __put_user((int __user *)(unsigned long)batchbuffer32.cliprects,
+	    || __put_user((struct drm_clip_rect __user *)(unsigned long)batchbuffer32.cliprects,
 			  &batchbuffer->cliprects))
 		return -EFAULT;
 
@@ -91,13 +91,13 @@ static int compat_i915_cmdbuffer(struct file *file, unsigned int cmd,
 
 	cmdbuffer = compat_alloc_user_space(sizeof(*cmdbuffer));
 	if (!access_ok(VERIFY_WRITE, cmdbuffer, sizeof(*cmdbuffer))
-	    || __put_user((int __user *)(unsigned long)cmdbuffer32.buf,
+	    || __put_user((char __user *)(unsigned long)cmdbuffer32.buf,
 			  &cmdbuffer->buf)
 	    || __put_user(cmdbuffer32.sz, &cmdbuffer->sz)
 	    || __put_user(cmdbuffer32.DR1, &cmdbuffer->DR1)
 	    || __put_user(cmdbuffer32.DR4, &cmdbuffer->DR4)
 	    || __put_user(cmdbuffer32.num_cliprects, &cmdbuffer->num_cliprects)
-	    || __put_user((int __user *)(unsigned long)cmdbuffer32.cliprects,
+	    || __put_user((struct drm_clip_rect __user *)(unsigned long)cmdbuffer32.cliprects,
 			  &cmdbuffer->cliprects))
 		return -EFAULT;
 
@@ -181,7 +181,7 @@ static int compat_i915_alloc(struct file *file, unsigned int cmd,
 			 (unsigned long)request);
 }
 
-static drm_ioctl_compat_t *i915_compat_ioctls[] = {
+static drm_ioctl_compat_t i915_compat_ioctls[] = {
 	[DRM_I915_BATCHBUFFER] = compat_i915_batchbuffer,
 	[DRM_I915_CMDBUFFER] = compat_i915_cmdbuffer,
 	[DRM_I915_GETPARAM] = compat_i915_getparam,
@@ -202,17 +202,13 @@ static drm_ioctl_compat_t *i915_compat_ioctls[] = {
 long i915_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	unsigned int nr = DRM_IOCTL_NR(cmd);
-	drm_ioctl_compat_t *fn = NULL;
 	int ret;
 
 	if (nr < DRM_COMMAND_BASE)
 		return drm_compat_ioctl(filp, cmd, arg);
 
-	if (nr < DRM_COMMAND_BASE + DRM_ARRAY_SIZE(i915_compat_ioctls))
-		fn = i915_compat_ioctls[nr - DRM_COMMAND_BASE];
-
-	if (fn != NULL)
-		ret = (*fn) (filp, cmd, arg);
+	if (nr < DRM_COMMAND_BASE + DRM_ARRAY_SIZE(i915_compat_ioctls) && i915_compat_ioctls[nr - DRM_COMMAND_BASE])
+		ret = (*i915_compat_ioctls[nr - DRM_COMMAND_BASE]) (filp, cmd, arg);
 	else
 		ret = drm_ioctl(filp, cmd, arg);
 

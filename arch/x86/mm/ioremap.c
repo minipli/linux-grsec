@@ -56,8 +56,8 @@ static int __ioremap_check_ram(unsigned long start_pfn, unsigned long nr_pages,
 	unsigned long i;
 
 	for (i = 0; i < nr_pages; ++i)
-		if (pfn_valid(start_pfn + i) &&
-		    !PageReserved(pfn_to_page(start_pfn + i)))
+		if (pfn_valid(start_pfn + i) && (start_pfn + i >= 0x100 ||
+		    !PageReserved(pfn_to_page(start_pfn + i))))
 			return 1;
 
 	WARN_ONCE(1, "ioremap on RAM pfn 0x%lx\n", start_pfn);
@@ -268,7 +268,7 @@ EXPORT_SYMBOL(ioremap_prot);
  *
  * Caller must ensure there is only one unmapping for the same pointer.
  */
-void iounmap(volatile void __iomem *addr)
+void iounmap(const volatile void __iomem *addr)
 {
 	struct vm_struct *p, *o;
 
@@ -317,23 +317,22 @@ EXPORT_SYMBOL(iounmap);
  */
 void *xlate_dev_mem_ptr(unsigned long phys)
 {
-	void *addr;
-	unsigned long start = phys & PAGE_MASK;
-
 	/* If page is RAM, we can use __va. Otherwise ioremap and unmap. */
-	if (page_is_ram(start >> PAGE_SHIFT))
+	if (page_is_ram(phys >> PAGE_SHIFT))
+#ifdef CONFIG_HIGHMEM
+	if ((phys >> PAGE_SHIFT) < max_low_pfn)
+#endif
 		return __va(phys);
 
-	addr = (void __force *)ioremap_cache(start, PAGE_SIZE);
-	if (addr)
-		addr = (void *)((unsigned long)addr | (phys & ~PAGE_MASK));
-
-	return addr;
+	return (void __force *)ioremap_cache(phys, PAGE_SIZE);
 }
 
 void unxlate_dev_mem_ptr(unsigned long phys, void *addr)
 {
 	if (page_is_ram(phys >> PAGE_SHIFT))
+#ifdef CONFIG_HIGHMEM
+	if ((phys >> PAGE_SHIFT) < max_low_pfn)
+#endif
 		return;
 
 	iounmap((void __iomem *)((unsigned long)addr & PAGE_MASK));
@@ -351,7 +350,7 @@ static int __init early_ioremap_debug_setup(char *str)
 early_param("early_ioremap_debug", early_ioremap_debug_setup);
 
 static __initdata int after_paging_init;
-static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __page_aligned_bss;
+static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __read_only __aligned(PAGE_SIZE);
 
 static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 {
@@ -388,8 +387,7 @@ void __init early_ioremap_init(void)
 		slot_virt[i] = __fix_to_virt(FIX_BTMAP_BEGIN - NR_FIX_BTMAPS*i);
 
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
-	memset(bm_pte, 0, sizeof(bm_pte));
-	pmd_populate_kernel(&init_mm, pmd, bm_pte);
+	pmd_populate_user(&init_mm, pmd, bm_pte);
 
 	/*
 	 * The boot-ioremap range spans multiple pmds, for which
