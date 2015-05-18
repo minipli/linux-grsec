@@ -114,7 +114,7 @@ struct intel_uncore_box {
 struct uncore_event_desc {
 	struct kobj_attribute attr;
 	const char *config;
-};
+} __do_const;
 
 ssize_t uncore_event_show(struct kobject *kobj,
 			  struct kobj_attribute *attr, char *buf);

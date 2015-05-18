@@ -186,10 +186,10 @@ unsigned long kernel_stack_pointer(struct pt_regs *regs)
 	unsigned long sp = (unsigned long)&regs->sp;
 	u32 *prev_esp;
 
-	if (context == (sp & ~(THREAD_SIZE - 1)))
+	if (context == ((sp + 8) & ~(THREAD_SIZE - 1)))
 		return sp;
 
-	prev_esp = (u32 *)(context);
+	prev_esp = *(u32 **)(context);
 	if (prev_esp)
 		return (unsigned long)prev_esp;
 
@@ -452,6 +452,20 @@ static int putreg(struct task_struct *child,
 		if (child->thread.gs != value)
 			return do_arch_prctl(child, ARCH_SET_GS, value);
 		return 0;
+
+	case offsetof(struct user_regs_struct,ip):
+		/*
+		 * Protect against any attempt to set ip to an
+		 * impossible address.  There are dragons lurking if the
+		 * address is noncanonical.  (This explicitly allows
+		 * setting ip to TASK_SIZE_MAX, because user code can do
+		 * that all by itself by running off the end of its
+		 * address space.
+		 */
+		if (value > TASK_SIZE_MAX)
+			return -EIO;
+		break;
+
 #endif
 	}
 
@@ -588,7 +602,7 @@ static void ptrace_triggered(struct perf_event *bp,
 static unsigned long ptrace_get_dr7(struct perf_event *bp[])
 {
 	int i;
-	int dr7 = 0;
+	unsigned long dr7 = 0;
 	struct arch_hw_breakpoint *info;
 
 	for (i = 0; i < HBP_NUM; i++) {
@@ -822,7 +836,7 @@ long arch_ptrace(struct task_struct *child, long request,
 		 unsigned long addr, unsigned long data)
 {
 	int ret;
-	unsigned long __user *datap = (unsigned long __user *)data;
+	unsigned long __user *datap = (__force unsigned long __user *)data;
 
 	switch (request) {
 	/* read the word at location addr in the USER area. */
@@ -907,14 +921,14 @@ long arch_ptrace(struct task_struct *child, long request,
 		if ((int) addr < 0)
 			return -EIO;
 		ret = do_get_thread_area(child, addr,
-					(struct user_desc __user *)data);
+					(__force struct user_desc __user *) data);
 		break;
 
 	case PTRACE_SET_THREAD_AREA:
 		if ((int) addr < 0)
 			return -EIO;
 		ret = do_set_thread_area(child, addr,
-					(struct user_desc __user *)data, 0);
+					(__force struct user_desc __user *) data, 0);
 		break;
 #endif
 
@@ -1292,7 +1306,7 @@ long compat_arch_ptrace(struct task_struct *child, compat_long_t request,
 
 #ifdef CONFIG_X86_64
 
-static struct user_regset x86_64_regsets[] __read_mostly = {
+static user_regset_no_const x86_64_regsets[] __read_only = {
 	[REGSET_GENERAL] = {
 		.core_note_type = NT_PRSTATUS,
 		.n = sizeof(struct user_regs_struct) / sizeof(long),
@@ -1333,7 +1347,7 @@ static const struct user_regset_view user_x86_64_view = {
 #endif	/* CONFIG_X86_64 */
 
 #if defined CONFIG_X86_32 || defined CONFIG_IA32_EMULATION
-static struct user_regset x86_32_regsets[] __read_mostly = {
+static user_regset_no_const x86_32_regsets[] __read_only = {
 	[REGSET_GENERAL] = {
 		.core_note_type = NT_PRSTATUS,
 		.n = sizeof(struct user_regs_struct32) / sizeof(u32),
@@ -1386,7 +1400,7 @@ static const struct user_regset_view user_x86_32_view = {
  */
 u64 xstate_fx_sw_bytes[USER_XSTATE_FX_SW_WORDS];
 
-void update_regset_xstate_info(unsigned int size, u64 xstate_mask)
+void __init update_regset_xstate_info(unsigned int size, u64 xstate_mask)
 {
 #ifdef CONFIG_X86_64
 	x86_64_regsets[REGSET_XSTATE].n = size / sizeof(u64);
@@ -1421,7 +1435,7 @@ static void fill_sigtrap_info(struct task_struct *tsk,
 	memset(info, 0, sizeof(*info));
 	info->si_signo = SIGTRAP;
 	info->si_code = si_code;
-	info->si_addr = user_mode_vm(regs) ? (void __user *)regs->ip : NULL;
+	info->si_addr = user_mode(regs) ? (__force void __user *)regs->ip : NULL;
 }
 
 void user_single_step_siginfo(struct task_struct *tsk,
@@ -1454,6 +1468,10 @@ static void do_audit_syscall_entry(struct pt_regs *regs, u32 arch)
 				    regs->cx, regs->dx, regs->si);
 	}
 }
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+extern void gr_delayed_cred_worker(void);
+#endif
 
 /*
  * We can return 0 to resume the syscall or anything else to go to phase
@@ -1562,6 +1580,11 @@ long syscall_trace_enter_phase2(struct pt_regs *regs, u32 arch,
 
 	BUG_ON(regs != task_pt_regs(current));
 
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
+
 	/*
 	 * If we stepped into a sysenter/syscall insn, it trapped in
 	 * kernel mode; do_debug() cleared TF and set TIF_SINGLESTEP.
@@ -1619,6 +1642,11 @@ void syscall_trace_leave(struct pt_regs *regs)
 	 * user mode.
 	 */
 	user_exit();
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
 
 	audit_syscall_exit(regs);
 
