@@ -1727,9 +1727,9 @@ int soft_offline_page(struct page *page, int flags)
 				atomic_long_add_unchecked(1 << compound_order(hpage),
 					&num_poisoned_pages);
 		} else {
-		}
 			if (!TestSetPageHWPoison(page))
 				atomic_long_inc_unchecked(&num_poisoned_pages);
+		}
 	}
 	unset_migratetype_isolate(page, MIGRATE_MOVABLE);
 	return ret;
