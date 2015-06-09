@@ -216,7 +216,7 @@ target_dump_info(struct sk_buff *skb, const struct xt_target *t, const void *in)
 		/* We want to reuse existing compat_to_user */
 		old_fs = get_fs();
 		set_fs(KERNEL_DS);
-		t->compat_to_user(out, in);
+		t->compat_to_user((void __force_user *)out, in);
 		set_fs(old_fs);
 		ret = nla_put(skb, NFTA_TARGET_INFO, XT_ALIGN(t->targetsize), out);
 		kfree(out);
@@ -283,14 +283,7 @@ static void nft_match_eval(const struct nft_expr *expr,
 		return;
 	}
 
-	switch(ret) {
-	case true:
-		data[NFT_REG_VERDICT].verdict = NFT_CONTINUE;
-		break;
-	case false:
-		data[NFT_REG_VERDICT].verdict = NFT_BREAK;
-		break;
-	}
+	data[NFT_REG_VERDICT].verdict = ret ? NFT_CONTINUE : NFT_BREAK;
 }
 
 static const struct nla_policy nft_match_policy[NFTA_MATCH_MAX + 1] = {
@@ -403,7 +396,7 @@ match_dump_info(struct sk_buff *skb, const struct xt_match *m, const void *in)
 		/* We want to reuse existing compat_to_user */
 		old_fs = get_fs();
 		set_fs(KERNEL_DS);
-		m->compat_to_user(out, in);
+		m->compat_to_user((void __force_user *)out, in);
 		set_fs(old_fs);
 		ret = nla_put(skb, NFTA_MATCH_INFO, XT_ALIGN(m->matchsize), out);
 		kfree(out);

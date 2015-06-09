@@ -59,7 +59,7 @@ struct ping_table {
 };
 
 static struct ping_table ping_table;
-struct pingv6_ops pingv6_ops;
+struct pingv6_ops *pingv6_ops;
 EXPORT_SYMBOL_GPL(pingv6_ops);
 
 static u16 ping_port_rover;
@@ -260,10 +260,9 @@ int ping_init_sock(struct sock *sk)
 	kgid_t low, high;
 	int ret = 0;
 
-#if IS_ENABLED(CONFIG_IPV6)
 	if (sk->sk_family == AF_INET6)
-		inet6_sk(sk)->ipv6only = 1;
-#endif
+		sk->sk_ipv6only = 1;
+
 	inet_get_ping_group_range_net(net, &low, &high);
 	if (gid_lte(low, group) && gid_lte(group, high))
 		return 0;
@@ -360,7 +359,7 @@ static int ping_check_bind_addr(struct sock *sk, struct inet_sock *isk,
 				return -ENODEV;
 			}
 		}
-		has_addr = pingv6_ops.ipv6_chk_addr(net, &addr->sin6_addr, dev,
+		has_addr = pingv6_ops->ipv6_chk_addr(net, &addr->sin6_addr, dev,
 						    scoped);
 		rcu_read_unlock();
 
@@ -568,7 +567,7 @@ void ping_err(struct sk_buff *skb, int offset, u32 info)
 		}
 #if IS_ENABLED(CONFIG_IPV6)
 	} else if (skb->protocol == htons(ETH_P_IPV6)) {
-		harderr = pingv6_ops.icmpv6_err_convert(type, code, &err);
+		harderr = pingv6_ops->icmpv6_err_convert(type, code, &err);
 #endif
 	}
 
@@ -586,7 +585,7 @@ void ping_err(struct sk_buff *skb, int offset, u32 info)
 				      info, (u8 *)icmph);
 #if IS_ENABLED(CONFIG_IPV6)
 		} else if (family == AF_INET6) {
-			pingv6_ops.ipv6_icmp_error(sk, skb, err, 0,
+			pingv6_ops->ipv6_icmp_error(sk, skb, err, 0,
 						   info, (u8 *)icmph);
 #endif
 		}
@@ -870,7 +869,7 @@ int ping_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 			return ip_recv_error(sk, msg, len, addr_len);
 #if IS_ENABLED(CONFIG_IPV6)
 		} else if (family == AF_INET6) {
-			return pingv6_ops.ipv6_recv_error(sk, msg, len,
+			return pingv6_ops->ipv6_recv_error(sk, msg, len,
 							  addr_len);
 #endif
 		}
@@ -928,10 +927,10 @@ int ping_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 		}
 
 		if (inet6_sk(sk)->rxopt.all)
-			pingv6_ops.ip6_datagram_recv_common_ctl(sk, msg, skb);
+			pingv6_ops->ip6_datagram_recv_common_ctl(sk, msg, skb);
 		if (skb->protocol == htons(ETH_P_IPV6) &&
 		    inet6_sk(sk)->rxopt.all)
-			pingv6_ops.ip6_datagram_recv_specific_ctl(sk, msg, skb);
+			pingv6_ops->ip6_datagram_recv_specific_ctl(sk, msg, skb);
 		else if (skb->protocol == htons(ETH_P_IP) && isk->cmsg_flags)
 			ip_cmsg_recv(msg, skb);
 #endif
@@ -1126,7 +1125,7 @@ static void ping_v4_format_sock(struct sock *sp, struct seq_file *f,
 		from_kuid_munged(seq_user_ns(f), sock_i_uid(sp)),
 		0, sock_i_ino(sp),
 		atomic_read(&sp->sk_refcnt), sp,
-		atomic_read(&sp->sk_drops));
+		atomic_read_unchecked(&sp->sk_drops));
 }
 
 static int ping_v4_seq_show(struct seq_file *seq, void *v)

@@ -97,6 +97,8 @@ extern void radix_tree_init(void);
 static inline void mark_rodata_ro(void) { }
 #endif
 
+extern void grsecurity_init(void);
+
 /*
  * Debug helper: via this flag we know that we are in 'early bootup code'
  * where only the boot processor is running with IRQ disabled.  This means
@@ -157,6 +159,85 @@ static int __init set_reset_devices(char *str)
 }
 
 __setup("reset_devices", set_reset_devices);
+
+#ifdef CONFIG_GRKERNSEC_PROC_USERGROUP
+kgid_t grsec_proc_gid = KGIDT_INIT(CONFIG_GRKERNSEC_PROC_GID);
+static int __init setup_grsec_proc_gid(char *str)
+{
+	grsec_proc_gid = KGIDT_INIT(simple_strtol(str, NULL, 0));
+	return 1;
+}
+__setup("grsec_proc_gid=", setup_grsec_proc_gid);
+#endif
+#ifdef CONFIG_GRKERNSEC_SYSFS_RESTRICT
+int grsec_enable_sysfs_restrict = 1;
+static int __init setup_grsec_sysfs_restrict(char *str)
+{
+	if (!simple_strtol(str, NULL, 0))
+		grsec_enable_sysfs_restrict = 0;
+	return 1;
+}
+__setup("grsec_sysfs_restrict", setup_grsec_sysfs_restrict);
+#endif
+
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+unsigned long pax_user_shadow_base __read_only;
+EXPORT_SYMBOL(pax_user_shadow_base);
+extern char pax_enter_kernel_user[];
+extern char pax_exit_kernel_user[];
+#endif
+
+#if defined(CONFIG_X86) && defined(CONFIG_PAX_MEMORY_UDEREF)
+static int __init setup_pax_nouderef(char *str)
+{
+#ifdef CONFIG_X86_32
+	unsigned int cpu;
+	struct desc_struct *gdt;
+
+	for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
+		gdt = get_cpu_gdt_table(cpu);
+		gdt[GDT_ENTRY_KERNEL_DS].type = 3;
+		gdt[GDT_ENTRY_KERNEL_DS].limit = 0xf;
+		gdt[GDT_ENTRY_DEFAULT_USER_CS].limit = 0xf;
+		gdt[GDT_ENTRY_DEFAULT_USER_DS].limit = 0xf;
+	}
+	loadsegment(ds, __KERNEL_DS);
+	loadsegment(es, __KERNEL_DS);
+	loadsegment(ss, __KERNEL_DS);
+#else
+	memcpy(pax_enter_kernel_user, (unsigned char []){0xc3}, 1);
+	memcpy(pax_exit_kernel_user, (unsigned char []){0xc3}, 1);
+	clone_pgd_mask = ~(pgdval_t)0UL;
+	pax_user_shadow_base = 0UL;
+	setup_clear_cpu_cap(X86_FEATURE_PCID);
+	setup_clear_cpu_cap(X86_FEATURE_INVPCID);
+#endif
+
+	return 0;
+}
+early_param("pax_nouderef", setup_pax_nouderef);
+
+#ifdef CONFIG_X86_64
+static int __init setup_pax_weakuderef(char *str)
+{
+	if (clone_pgd_mask != ~(pgdval_t)0UL)
+		pax_user_shadow_base = 1UL << TASK_SIZE_MAX_SHIFT;
+	return 1;
+}
+__setup("pax_weakuderef", setup_pax_weakuderef);
+#endif
+#endif
+
+#ifdef CONFIG_PAX_SOFTMODE
+int pax_softmode;
+
+static int __init setup_pax_softmode(char *str)
+{
+	get_option(&str, &pax_softmode);
+	return 1;
+}
+__setup("pax_softmode=", setup_pax_softmode);
+#endif
 
 static const char * argv_init[MAX_INIT_ARGS+2] = { "init", NULL, };
 const char * envp_init[MAX_INIT_ENVS+2] = { "HOME=/", "TERM=linux", NULL, };
@@ -692,25 +773,24 @@ int __init_or_module do_one_initcall(initcall_t fn)
 {
 	int count = preempt_count();
 	int ret;
-	char msgbuf[64];
+	const char *msg1 = "", *msg2 = "";
 
 	if (initcall_debug)
 		ret = do_one_initcall_debug(fn);
 	else
 		ret = fn();
 
-	msgbuf[0] = 0;
-
 	if (preempt_count() != count) {
-		sprintf(msgbuf, "preemption imbalance ");
+		msg1 = " preemption imbalance";
 		preempt_count_set(count);
 	}
 	if (irqs_disabled()) {
-		strlcat(msgbuf, "disabled interrupts ", sizeof(msgbuf));
+		msg2 = " disabled interrupts";
 		local_irq_enable();
 	}
-	WARN(msgbuf[0], "initcall %pF returned with %s\n", fn, msgbuf);
+	WARN(*msg1 || *msg2, "initcall %pF returned with%s%s\n", fn, msg1, msg2);
 
+	add_latent_entropy();
 	return ret;
 }
 
@@ -817,8 +897,8 @@ static int run_init_process(const char *init_filename)
 {
 	argv_init[0] = init_filename;
 	return do_execve(getname_kernel(init_filename),
-		(const char __user *const __user *)argv_init,
-		(const char __user *const __user *)envp_init);
+		(const char __user *const __force_user *)argv_init,
+		(const char __user *const __force_user *)envp_init);
 }
 
 static int try_to_run_init_process(const char *init_filename)
@@ -834,6 +914,10 @@ static int try_to_run_init_process(const char *init_filename)
 
 	return ret;
 }
+
+#ifdef CONFIG_GRKERNSEC_CHROOT_INITRD
+extern int gr_init_ran;
+#endif
 
 static noinline void __init kernel_init_freeable(void);
 
@@ -858,6 +942,11 @@ static int __ref kernel_init(void *unused)
 		pr_err("Failed to execute %s (error %d)\n",
 		       ramdisk_execute_command, ret);
 	}
+
+#ifdef CONFIG_GRKERNSEC_CHROOT_INITRD
+	/* if no initrd was used, be extra sure we enforce chroot restrictions */
+	gr_init_ran = 1;
+#endif
 
 	/*
 	 * We try each of these until one succeeds.
@@ -914,7 +1003,7 @@ static noinline void __init kernel_init_freeable(void)
 	do_basic_setup();
 
 	/* Open the /dev/console on the rootfs, this should never fail */
-	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
+	if (sys_open((const char __force_user *) "/dev/console", O_RDWR, 0) < 0)
 		pr_err("Warning: unable to open an initial console.\n");
 
 	(void) sys_dup(0);
@@ -927,10 +1016,12 @@ static noinline void __init kernel_init_freeable(void)
 	if (!ramdisk_execute_command)
 		ramdisk_execute_command = "/init";
 
-	if (sys_access((const char __user *) ramdisk_execute_command, 0) != 0) {
+	if (sys_access((const char __force_user *) ramdisk_execute_command, 0) != 0) {
 		ramdisk_execute_command = NULL;
 		prepare_namespace();
 	}
+
+	grsecurity_init();
 
 	/*
 	 * Ok, we have completed the initial bootup, and

@@ -1401,8 +1401,8 @@ static int validate_new(const struct v4l2_ctrl *ctrl,
 		return 0;
 
 	case V4L2_CTRL_TYPE_STRING:
-		len = strlen(c->string);
-		if (len < ctrl->minimum)
+		len = strlen_user(c->string);
+		if (!len || len < ctrl->minimum)
 			return -ERANGE;
 		if ((len - ctrl->minimum) % ctrl->step)
 			return -ERANGE;

@@ -663,7 +663,7 @@ struct sk_buff *__alloc_skb(unsigned int size, gfp_t priority, int flags,
 			    int node);
 struct sk_buff *__build_skb(void *data, unsigned int frag_size);
 struct sk_buff *build_skb(void *data, unsigned int frag_size);
-static inline struct sk_buff *alloc_skb(unsigned int size,
+static inline struct sk_buff * __intentional_overflow(0) alloc_skb(unsigned int size,
 					gfp_t priority)
 {
 	return __alloc_skb(size, priority, 0, NUMA_NO_NODE);
@@ -1769,7 +1769,7 @@ static inline u32 skb_inner_network_header_len(const struct sk_buff *skb)
 	return skb->inner_transport_header - skb->inner_network_header;
 }
 
-static inline int skb_network_offset(const struct sk_buff *skb)
+static inline int __intentional_overflow(0) skb_network_offset(const struct sk_buff *skb)
 {
 	return skb_network_header(skb) - skb->data;
 }
@@ -1829,7 +1829,7 @@ static inline int pskb_network_may_pull(struct sk_buff *skb, unsigned int len)
  * NET_IP_ALIGN(2) + ethernet_header(14) + IP_header(20/40) + ports(8)
  */
 #ifndef NET_SKB_PAD
-#define NET_SKB_PAD	max(32, L1_CACHE_BYTES)
+#define NET_SKB_PAD	max(_AC(32,UL), L1_CACHE_BYTES)
 #endif
 
 int ___pskb_trim(struct sk_buff *skb, unsigned int len);
@@ -2428,7 +2428,7 @@ struct sk_buff *skb_recv_datagram(struct sock *sk, unsigned flags, int noblock,
 				  int *err);
 unsigned int datagram_poll(struct file *file, struct socket *sock,
 			   struct poll_table_struct *wait);
-int skb_copy_datagram_iovec(const struct sk_buff *from, int offset,
+int __intentional_overflow(0) skb_copy_datagram_iovec(const struct sk_buff *from, int offset,
 			    struct iovec *to, int size);
 int skb_copy_and_csum_datagram_iovec(struct sk_buff *skb, int hlen,
 				     struct iovec *iov);
@@ -2722,6 +2722,9 @@ static inline void nf_reset(struct sk_buff *skb)
 #ifdef CONFIG_BRIDGE_NETFILTER
 	nf_bridge_put(skb->nf_bridge);
 	skb->nf_bridge = NULL;
+#endif
+#if IS_ENABLED(CONFIG_NETFILTER_XT_TARGET_TRACE)
+	skb->nf_trace = 0;
 #endif
 }
 

@@ -385,6 +385,11 @@ static int check_syslog_permissions(int type, bool from_file)
 	if (from_file && type != SYSLOG_ACTION_OPEN)
 		return 0;
 
+#ifdef CONFIG_GRKERNSEC_DMESG
+	if (grsec_enable_dmesg && !capable(CAP_SYSLOG) && !capable_nolog(CAP_SYS_ADMIN))
+		return -EPERM;
+#endif
+
 	if (syslog_action_restricted(type)) {
 		if (capable(CAP_SYSLOG))
 			return 0;
