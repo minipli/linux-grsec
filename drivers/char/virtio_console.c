@@ -685,7 +685,7 @@ static ssize_t fill_readbuf(struct port *port, char __user *out_buf,
 	if (to_user) {
 		ssize_t ret;
 
-		ret = copy_to_user(out_buf, buf->buf + buf->offset, out_count);
+		ret = copy_to_user((char __force_user *)out_buf, buf->buf + buf->offset, out_count);
 		if (ret)
 			return -EFAULT;
 	} else {
@@ -789,7 +789,7 @@ static ssize_t port_fops_read(struct file *filp, char __user *ubuf,
 	if (!port_has_data(port) && !port->host_connected)
 		return 0;
 
-	return fill_readbuf(port, ubuf, count, true);
+	return fill_readbuf(port, (char __force_kernel *)ubuf, count, true);
 }
 
 static int wait_port_writable(struct port *port, bool nonblock)

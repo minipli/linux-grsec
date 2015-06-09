@@ -89,7 +89,7 @@ static inline enum page_cache_mode get_page_memtype(struct page *pg)
 	unsigned long pg_flags = pg->flags & _PGMT_MASK;
 
 	if (pg_flags == _PGMT_DEFAULT)
-		return -1;
+		return _PAGE_CACHE_MODE_NUM;
 	else if (pg_flags == _PGMT_WC)
 		return _PAGE_CACHE_MODE_WC;
 	else if (pg_flags == _PGMT_UC_MINUS)
@@ -346,7 +346,7 @@ static int reserve_ram_pages_type(u64 start, u64 end,
 
 		page = pfn_to_page(pfn);
 		type = get_page_memtype(page);
-		if (type != -1) {
+		if (type != _PAGE_CACHE_MODE_NUM) {
 			pr_info("reserve_ram_pages_type failed [mem %#010Lx-%#010Lx], track 0x%x, req 0x%x\n",
 				start, end - 1, type, req_type);
 			if (new_type)
@@ -498,7 +498,7 @@ int free_memtype(u64 start, u64 end)
 
 	if (!entry) {
 		printk(KERN_INFO "%s:%d freeing invalid memtype [mem %#010Lx-%#010Lx]\n",
-		       current->comm, current->pid, start, end - 1);
+			current->comm, task_pid_nr(current), start, end - 1);
 		return -EINVAL;
 	}
 
@@ -532,10 +532,10 @@ static enum page_cache_mode lookup_memtype(u64 paddr)
 		page = pfn_to_page(paddr >> PAGE_SHIFT);
 		rettype = get_page_memtype(page);
 		/*
-		 * -1 from get_page_memtype() implies RAM page is in its
+		 * _PAGE_CACHE_MODE_NUM from get_page_memtype() implies RAM page is in its
 		 * default state and not reserved, and hence of type WB
 		 */
-		if (rettype == -1)
+		if (rettype == _PAGE_CACHE_MODE_NUM)
 			rettype = _PAGE_CACHE_MODE_WB;
 
 		return rettype;
@@ -628,8 +628,8 @@ static inline int range_is_allowed(unsigned long pfn, unsigned long size)
 
 	while (cursor < to) {
 		if (!devmem_is_allowed(pfn)) {
-			printk(KERN_INFO "Program %s tried to access /dev/mem between [mem %#010Lx-%#010Lx]\n",
-				current->comm, from, to - 1);
+			printk(KERN_INFO "Program %s tried to access /dev/mem between [mem %#010Lx-%#010Lx] (%#010Lx)\n",
+				current->comm, from, to - 1, cursor);
 			return 0;
 		}
 		cursor += PAGE_SIZE;
@@ -700,7 +700,7 @@ int kernel_map_sync_memtype(u64 base, unsigned long size,
 	if (ioremap_change_attr((unsigned long)__va(base), id_sz, pcm) < 0) {
 		printk(KERN_INFO "%s:%d ioremap_change_attr failed %s "
 			"for [mem %#010Lx-%#010Lx]\n",
-			current->comm, current->pid,
+			current->comm, task_pid_nr(current),
 			cattr_name(pcm),
 			base, (unsigned long long)(base + size-1));
 		return -EINVAL;
@@ -735,7 +735,7 @@ static int reserve_pfn_range(u64 paddr, unsigned long size, pgprot_t *vma_prot,
 		pcm = lookup_memtype(paddr);
 		if (want_pcm != pcm) {
 			printk(KERN_WARNING "%s:%d map pfn RAM range req %s for [mem %#010Lx-%#010Lx], got %s\n",
-				current->comm, current->pid,
+				current->comm, task_pid_nr(current),
 				cattr_name(want_pcm),
 				(unsigned long long)paddr,
 				(unsigned long long)(paddr + size - 1),
@@ -757,7 +757,7 @@ static int reserve_pfn_range(u64 paddr, unsigned long size, pgprot_t *vma_prot,
 			free_memtype(paddr, paddr + size);
 			printk(KERN_ERR "%s:%d map pfn expected mapping type %s"
 				" for [mem %#010Lx-%#010Lx], got %s\n",
-				current->comm, current->pid,
+				current->comm, task_pid_nr(current),
 				cattr_name(want_pcm),
 				(unsigned long long)paddr,
 				(unsigned long long)(paddr + size - 1),

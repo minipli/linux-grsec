@@ -223,12 +223,16 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 	if (unlikely(err))
 		return -EFAULT;
 
+	pax_open_userland();
 	__asm__ __volatile__(ASM_STAC "\n"
-			     "1:"XSAVE"\n"
+			     "1:"
+			     __copyuser_seg
+			     XSAVE"\n"
 			     "2: " ASM_CLAC "\n"
 			     xstate_fault
 			     : "D" (buf), "a" (-1), "d" (-1), "0" (0)
 			     : "memory");
+	pax_close_userland();
 	return err;
 }
 
@@ -238,16 +242,20 @@ static inline int xsave_user(struct xsave_struct __user *buf)
 static inline int xrestore_user(struct xsave_struct __user *buf, u64 mask)
 {
 	int err = 0;
-	struct xsave_struct *xstate = ((__force struct xsave_struct *)buf);
+	struct xsave_struct *xstate = ((__force_kernel struct xsave_struct *)buf);
 	u32 lmask = mask;
 	u32 hmask = mask >> 32;
 
+	pax_open_userland();
 	__asm__ __volatile__(ASM_STAC "\n"
-			     "1:"XRSTOR"\n"
+			     "1:"
+			     __copyuser_seg
+			     XRSTOR"\n"
 			     "2: " ASM_CLAC "\n"
 			     xstate_fault
 			     : "D" (xstate), "a" (lmask), "d" (hmask), "0" (0)
 			     : "memory");	/* memory required? */
+	pax_close_userland();
 	return err;
 }
 

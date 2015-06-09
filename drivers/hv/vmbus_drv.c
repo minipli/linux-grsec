@@ -840,10 +840,10 @@ int vmbus_device_register(struct hv_device *child_device_obj)
 {
 	int ret = 0;
 
-	static atomic_t device_num = ATOMIC_INIT(0);
+	static atomic_unchecked_t device_num = ATOMIC_INIT(0);
 
 	dev_set_name(&child_device_obj->device, "vmbus_0_%d",
-		     atomic_inc_return(&device_num));
+		     atomic_inc_return_unchecked(&device_num));
 
 	child_device_obj->device.bus = &hv_bus;
 	child_device_obj->device.parent = &hv_acpi_dev->dev;

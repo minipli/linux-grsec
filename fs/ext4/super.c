@@ -1243,7 +1243,7 @@ static ext4_fsblk_t get_sb_block(void **data)
 }
 
 #define DEFAULT_JOURNAL_IOPRIO (IOPRIO_PRIO_VALUE(IOPRIO_CLASS_BE, 3))
-static char deprecated_msg[] = "Mount option \"%s\" will be removed by %s\n"
+static const char deprecated_msg[] = "Mount option \"%s\" will be removed by %s\n"
 	"Contact linux-ext4@vger.kernel.org if you think we should keep it.\n";
 
 #ifdef CONFIG_QUOTA
@@ -2443,7 +2443,7 @@ struct ext4_attr {
 		int offset;
 		int deprecated_val;
 	} u;
-};
+} __do_const;
 
 static int parse_strtoull(const char *buf,
 		unsigned long long max, unsigned long long *value)

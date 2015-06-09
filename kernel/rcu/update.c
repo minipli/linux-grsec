@@ -342,10 +342,10 @@ int rcu_jiffies_till_stall_check(void)
 	 * for CONFIG_RCU_CPU_STALL_TIMEOUT.
 	 */
 	if (till_stall_check < 3) {
-		ACCESS_ONCE(rcu_cpu_stall_timeout) = 3;
+		ACCESS_ONCE_RW(rcu_cpu_stall_timeout) = 3;
 		till_stall_check = 3;
 	} else if (till_stall_check > 300) {
-		ACCESS_ONCE(rcu_cpu_stall_timeout) = 300;
+		ACCESS_ONCE_RW(rcu_cpu_stall_timeout) = 300;
 		till_stall_check = 300;
 	}
 	return till_stall_check * HZ + RCU_STALL_DELAY_DELTA;
@@ -501,7 +501,7 @@ static void check_holdout_task(struct task_struct *t,
 	    !ACCESS_ONCE(t->on_rq) ||
 	    (IS_ENABLED(CONFIG_NO_HZ_FULL) &&
 	     !is_idle_task(t) && t->rcu_tasks_idle_cpu >= 0)) {
-		ACCESS_ONCE(t->rcu_tasks_holdout) = false;
+		ACCESS_ONCE_RW(t->rcu_tasks_holdout) = false;
 		list_del_init(&t->rcu_tasks_holdout_list);
 		put_task_struct(t);
 		return;
@@ -589,7 +589,7 @@ static int __noreturn rcu_tasks_kthread(void *arg)
 			    !is_idle_task(t)) {
 				get_task_struct(t);
 				t->rcu_tasks_nvcsw = ACCESS_ONCE(t->nvcsw);
-				ACCESS_ONCE(t->rcu_tasks_holdout) = true;
+				ACCESS_ONCE_RW(t->rcu_tasks_holdout) = true;
 				list_add(&t->rcu_tasks_holdout_list,
 					 &rcu_tasks_holdouts);
 			}
@@ -686,7 +686,7 @@ static void rcu_spawn_tasks_kthread(void)
 	t = kthread_run(rcu_tasks_kthread, NULL, "rcu_tasks_kthread");
 	BUG_ON(IS_ERR(t));
 	smp_mb(); /* Ensure others see full kthread. */
-	ACCESS_ONCE(rcu_tasks_kthread_ptr) = t;
+	ACCESS_ONCE_RW(rcu_tasks_kthread_ptr) = t;
 	mutex_unlock(&rcu_tasks_kthread_mutex);
 }
 

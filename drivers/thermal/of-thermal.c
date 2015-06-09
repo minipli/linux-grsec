@@ -31,6 +31,7 @@
 #include <linux/export.h>
 #include <linux/string.h>
 #include <linux/thermal.h>
+#include <linux/mm.h>
 
 #include "thermal_core.h"
 
@@ -412,9 +413,11 @@ thermal_zone_of_add_sensor(struct device_node *zone,
 	tz->ops = ops;
 	tz->sensor_data = data;
 
-	tzd->ops->get_temp = of_thermal_get_temp;
-	tzd->ops->get_trend = of_thermal_get_trend;
-	tzd->ops->set_emul_temp = of_thermal_set_emul_temp;
+	pax_open_kernel();
+	*(void **)&tzd->ops->get_temp = of_thermal_get_temp;
+	*(void **)&tzd->ops->get_trend = of_thermal_get_trend;
+	*(void **)&tzd->ops->set_emul_temp = of_thermal_set_emul_temp;
+	pax_close_kernel();
 	mutex_unlock(&tzd->lock);
 
 	return tzd;
@@ -544,9 +547,11 @@ void thermal_zone_of_sensor_unregister(struct device *dev,
 		return;
 
 	mutex_lock(&tzd->lock);
-	tzd->ops->get_temp = NULL;
-	tzd->ops->get_trend = NULL;
-	tzd->ops->set_emul_temp = NULL;
+	pax_open_kernel();
+	*(void **)&tzd->ops->get_temp = NULL;
+	*(void **)&tzd->ops->get_trend = NULL;
+	*(void **)&tzd->ops->set_emul_temp = NULL;
+	pax_close_kernel();
 
 	tz->ops = NULL;
 	tz->sensor_data = NULL;

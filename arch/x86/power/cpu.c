@@ -134,11 +134,8 @@ static void do_fpu_end(void)
 static void fix_processor_context(void)
 {
 	int cpu = smp_processor_id();
-	struct tss_struct *t = &per_cpu(init_tss, cpu);
-#ifdef CONFIG_X86_64
-	struct desc_struct *desc = get_cpu_gdt_table(cpu);
-	tss_desc tss;
-#endif
+	struct tss_struct *t = init_tss + cpu;
+
 	set_tss_desc(cpu, t);	/*
 				 * This just modifies memory; should not be
 				 * necessary. But... This is necessary, because
@@ -147,10 +144,6 @@ static void fix_processor_context(void)
 				 */
 
 #ifdef CONFIG_X86_64
-	memcpy(&tss, &desc[GDT_ENTRY_TSS], sizeof(tss_desc));
-	tss.type = 0x9; /* The available 64-bit TSS (see AMD vol 2, pg 91 */
-	write_gdt_entry(desc, GDT_ENTRY_TSS, &tss, DESC_TSS);
-
 	syscall_init();				/* This sets MSR_*STAR and related */
 #endif
 	load_TR_desc();				/* This does ltr */

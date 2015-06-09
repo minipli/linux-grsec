@@ -362,7 +362,7 @@ struct sock {
 	unsigned int		sk_napi_id;
 	unsigned int		sk_ll_usec;
 #endif
-	atomic_t		sk_drops;
+	atomic_unchecked_t	sk_drops;
 	int			sk_rcvbuf;
 
 	struct sk_filter __rcu	*sk_filter;
@@ -1039,7 +1039,7 @@ struct proto {
 	void			(*destroy_cgroup)(struct mem_cgroup *memcg);
 	struct cg_proto		*(*proto_cgroup)(struct mem_cgroup *memcg);
 #endif
-};
+} __randomize_layout;
 
 /*
  * Bits in struct cg_proto.flags
@@ -1212,7 +1212,7 @@ static inline void memcg_memory_allocated_sub(struct cg_proto *prot,
 	page_counter_uncharge(&prot->memory_allocated, amt);
 }
 
-static inline long
+static inline long __intentional_overflow(-1)
 sk_memory_allocated(const struct sock *sk)
 {
 	struct proto *prot = sk->sk_prot;
@@ -1778,7 +1778,7 @@ static inline void sk_nocaps_add(struct sock *sk, netdev_features_t flags)
 }
 
 static inline int skb_do_copy_data_nocache(struct sock *sk, struct sk_buff *skb,
-					   struct iov_iter *from, char *to,
+					   struct iov_iter *from, unsigned char *to,
 					   int copy, int offset)
 {
 	if (skb->ip_summed == CHECKSUM_NONE) {
@@ -2025,7 +2025,7 @@ static inline void sk_stream_moderate_sndbuf(struct sock *sk)
 	}
 }
 
-struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp);
+struct sk_buff * __intentional_overflow(0) sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp);
 
 /**
  * sk_page_frag - return an appropriate page_frag

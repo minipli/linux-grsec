@@ -126,17 +126,17 @@ static inline unsigned int cpumask_first(const struct cpumask *srcp)
 }
 
 /* Valid inputs for n are -1 and 0. */
-static inline unsigned int cpumask_next(int n, const struct cpumask *srcp)
+static inline unsigned int __intentional_overflow(-1) cpumask_next(int n, const struct cpumask *srcp)
 {
 	return n+1;
 }
 
-static inline unsigned int cpumask_next_zero(int n, const struct cpumask *srcp)
+static inline unsigned int __intentional_overflow(-1) cpumask_next_zero(int n, const struct cpumask *srcp)
 {
 	return n+1;
 }
 
-static inline unsigned int cpumask_next_and(int n,
+static inline unsigned int __intentional_overflow(-1) cpumask_next_and(int n,
 					    const struct cpumask *srcp,
 					    const struct cpumask *andp)
 {
@@ -182,7 +182,7 @@ static inline unsigned int cpumask_first(const struct cpumask *srcp)
  *
  * Returns >= nr_cpu_ids if no further cpus set.
  */
-static inline unsigned int cpumask_next(int n, const struct cpumask *srcp)
+static inline unsigned int __intentional_overflow(-1) cpumask_next(int n, const struct cpumask *srcp)
 {
 	/* -1 is a legal arg here. */
 	if (n != -1)
@@ -197,7 +197,7 @@ static inline unsigned int cpumask_next(int n, const struct cpumask *srcp)
  *
  * Returns >= nr_cpu_ids if no further cpus unset.
  */
-static inline unsigned int cpumask_next_zero(int n, const struct cpumask *srcp)
+static inline unsigned int __intentional_overflow(-1) cpumask_next_zero(int n, const struct cpumask *srcp)
 {
 	/* -1 is a legal arg here. */
 	if (n != -1)
@@ -205,7 +205,7 @@ static inline unsigned int cpumask_next_zero(int n, const struct cpumask *srcp)
 	return find_next_zero_bit(cpumask_bits(srcp), nr_cpumask_bits, n+1);
 }
 
-int cpumask_next_and(int n, const struct cpumask *, const struct cpumask *);
+int cpumask_next_and(int n, const struct cpumask *, const struct cpumask *) __intentional_overflow(-1);
 int cpumask_any_but(const struct cpumask *mask, unsigned int cpu);
 int cpumask_set_cpu_local_first(int i, int numa_node, cpumask_t *dstp);
 
@@ -472,7 +472,7 @@ static inline bool cpumask_full(const struct cpumask *srcp)
  * cpumask_weight - Count of bits in *srcp
  * @srcp: the cpumask to count bits (< nr_cpu_ids) in.
  */
-static inline unsigned int cpumask_weight(const struct cpumask *srcp)
+static inline unsigned int __intentional_overflow(-1) cpumask_weight(const struct cpumask *srcp)
 {
 	return bitmap_weight(cpumask_bits(srcp), nr_cpumask_bits);
 }

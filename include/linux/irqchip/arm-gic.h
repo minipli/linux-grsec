@@ -95,7 +95,7 @@
 
 struct device_node;
 
-extern struct irq_chip gic_arch_extn;
+extern irq_chip_no_const gic_arch_extn;
 
 void gic_init_bases(unsigned int, int, void __iomem *, void __iomem *,
 		    u32 offset, struct device_node *);

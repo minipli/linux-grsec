@@ -233,6 +233,12 @@ struct task_struct *task_of_stack(struct task_struct *task,
 void arch_pick_mmap_layout(struct mm_struct *mm)
 {
 	mm->mmap_base = TASK_UNMAPPED_BASE;
+
+#ifdef CONFIG_PAX_RANDMMAP
+	if (mm->pax_flags & MF_PAX_RANDMMAP)
+		mm->mmap_base += mm->delta_mmap;
+#endif
+
 	mm->get_unmapped_area = arch_get_unmapped_area;
 }
 #endif
@@ -402,6 +408,9 @@ int get_cmdline(struct task_struct *task, char *buffer, int buflen)
 		goto out;
 	if (!mm->arg_end)
 		goto out_mm;	/* Shh! No looking before we're done */
+
+	if (gr_acl_handle_procpidmem(task))
+		goto out_mm;
 
 	len = mm->arg_end - mm->arg_start;
 

@@ -118,7 +118,7 @@ struct device_queue_manager_ops {
 					   enum cache_policy alternate_policy,
 					   void __user *alternate_aperture_base,
 					   uint64_t alternate_aperture_size);
-};
+} __no_const;
 
 /**
  * struct device_queue_manager
