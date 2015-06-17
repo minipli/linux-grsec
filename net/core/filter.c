@@ -992,7 +992,7 @@ int bpf_prog_create(struct bpf_prog **pfp, struct sock_fprog_kern *fprog)
 	if (!fp)
 		return -ENOMEM;
 
-	memcpy(fp->insns, fprog->filter, fsize);
+	memcpy(fp->insns, (void __force_kernel *)fprog->filter, fsize);
 
 	fp->len = fprog->len;
 	/* Since unattached filters are not copied back to user

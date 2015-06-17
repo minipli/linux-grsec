@@ -378,7 +378,7 @@ static inline int __must_check kstrtos32_from_user(const char __user *s, size_t 
 /* Obsolete, do not use.  Use kstrto<foo> instead */
 
 extern unsigned long simple_strtoul(const char *,char **,unsigned int);
-extern long simple_strtol(const char *,char **,unsigned int);
+extern long simple_strtol(const char *,char **,unsigned int) __intentional_overflow(-1);
 extern unsigned long long simple_strtoull(const char *,char **,unsigned int);
 extern long long simple_strtoll(const char *,char **,unsigned int);
 
