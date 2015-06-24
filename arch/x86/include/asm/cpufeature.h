@@ -213,7 +213,7 @@
 #define X86_FEATURE_PAUSEFILTER ( 8*32+13) /* AMD filtered pause intercept */
 #define X86_FEATURE_PFTHRESHOLD ( 8*32+14) /* AMD pause filter threshold */
 #define X86_FEATURE_VMMCALL     ( 8*32+15) /* Prefer vmmcall to vmcall */
-
+#define X86_FEATURE_STRONGUDEREF (8*32+31) /* PaX PCID based strong UDEREF */
 
 /* Intel-defined CPU features, CPUID level 0x00000007:0 (ebx), word 9 */
 #define X86_FEATURE_FSGSBASE	( 9*32+ 0) /* {RD/WR}{FS/GS}BASE instructions*/
@@ -221,7 +221,7 @@
 #define X86_FEATURE_BMI1	( 9*32+ 3) /* 1st group bit manipulation extensions */
 #define X86_FEATURE_HLE		( 9*32+ 4) /* Hardware Lock Elision */
 #define X86_FEATURE_AVX2	( 9*32+ 5) /* AVX2 instructions */
-#define X86_FEATURE_SMEP	( 9*32+ 7) /* Supervisor Mode Execution Protection */
+#define X86_FEATURE_SMEP	( 9*32+ 7) /* Supervisor Mode Execution Prevention */
 #define X86_FEATURE_BMI2	( 9*32+ 8) /* 2nd group bit manipulation extensions */
 #define X86_FEATURE_ERMS	( 9*32+ 9) /* Enhanced REP MOVSB/STOSB */
 #define X86_FEATURE_INVPCID	( 9*32+10) /* Invalidate Processor Context ID */
@@ -390,6 +390,7 @@ extern const char * const x86_bug_flags[NBUGINTS*32];
 #define cpu_has_eager_fpu	boot_cpu_has(X86_FEATURE_EAGER_FPU)
 #define cpu_has_topoext		boot_cpu_has(X86_FEATURE_TOPOEXT)
 #define cpu_has_bpext		boot_cpu_has(X86_FEATURE_BPEXT)
+#define cpu_has_pcid		boot_cpu_has(X86_FEATURE_PCID)
 
 #if __GNUC__ >= 4
 extern void warn_pre_alternatives(void);
@@ -441,7 +442,8 @@ static __always_inline __pure bool __static_cpu_has(u16 bit)
 
 #ifdef CONFIG_X86_DEBUG_STATIC_CPU_HAS
 	t_warn:
-		warn_pre_alternatives();
+		if (bit != X86_FEATURE_PCID && bit != X86_FEATURE_INVPCID)
+			warn_pre_alternatives();
 		return false;
 #endif
 
@@ -461,7 +463,7 @@ static __always_inline __pure bool __static_cpu_has(u16 bit)
 			     ".section .discard,\"aw\",@progbits\n"
 			     " .byte 0xff + (4f-3f) - (2b-1b)\n" /* size check */
 			     ".previous\n"
-			     ".section .altinstr_replacement,\"ax\"\n"
+			     ".section .altinstr_replacement,\"a\"\n"
 			     "3: movb $1,%0\n"
 			     "4:\n"
 			     ".previous\n"
@@ -498,7 +500,7 @@ static __always_inline __pure bool _static_cpu_has_safe(u16 bit)
 			 " .byte 2b - 1b\n"		/* src len */
 			 " .byte 4f - 3f\n"		/* repl len */
 			 ".previous\n"
-			 ".section .altinstr_replacement,\"ax\"\n"
+			 ".section .altinstr_replacement,\"a\"\n"
 			 "3: .byte 0xe9\n .long %l[t_no] - 2b\n"
 			 "4:\n"
 			 ".previous\n"
@@ -531,7 +533,7 @@ static __always_inline __pure bool _static_cpu_has_safe(u16 bit)
 			     ".section .discard,\"aw\",@progbits\n"
 			     " .byte 0xff + (4f-3f) - (2b-1b)\n" /* size check */
 			     ".previous\n"
-			     ".section .altinstr_replacement,\"ax\"\n"
+			     ".section .altinstr_replacement,\"a\"\n"
 			     "3: movb $0,%0\n"
 			     "4:\n"
 			     ".previous\n"
@@ -545,7 +547,7 @@ static __always_inline __pure bool _static_cpu_has_safe(u16 bit)
 			     ".section .discard,\"aw\",@progbits\n"
 			     " .byte 0xff + (6f-5f) - (4b-3b)\n" /* size check */
 			     ".previous\n"
-			     ".section .altinstr_replacement,\"ax\"\n"
+			     ".section .altinstr_replacement,\"a\"\n"
 			     "5: movb $1,%0\n"
 			     "6:\n"
 			     ".previous\n"

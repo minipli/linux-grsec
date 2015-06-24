@@ -59,6 +59,7 @@
 
 #include <asm/mman.h>
 #include <asm/pgalloc.h>
+#include <asm/local.h>
 #include <asm/uaccess.h>
 
 #include <uapi/drm/drm.h>
@@ -133,17 +134,18 @@ void drm_err(const char *format, ...);
 /*@{*/
 
 /* driver capabilities and requirements mask */
-#define DRIVER_USE_AGP     0x1
-#define DRIVER_PCI_DMA     0x8
-#define DRIVER_SG          0x10
-#define DRIVER_HAVE_DMA    0x20
-#define DRIVER_HAVE_IRQ    0x40
-#define DRIVER_IRQ_SHARED  0x80
-#define DRIVER_GEM         0x1000
-#define DRIVER_MODESET     0x2000
-#define DRIVER_PRIME       0x4000
-#define DRIVER_RENDER      0x8000
-#define DRIVER_ATOMIC      0x10000
+#define DRIVER_USE_AGP			0x1
+#define DRIVER_PCI_DMA			0x8
+#define DRIVER_SG			0x10
+#define DRIVER_HAVE_DMA			0x20
+#define DRIVER_HAVE_IRQ			0x40
+#define DRIVER_IRQ_SHARED		0x80
+#define DRIVER_GEM			0x1000
+#define DRIVER_MODESET			0x2000
+#define DRIVER_PRIME			0x4000
+#define DRIVER_RENDER			0x8000
+#define DRIVER_ATOMIC			0x10000
+#define DRIVER_KMS_LEGACY_CONTEXT	0x20000
 
 /***********************************************************************/
 /** \name Macros to make printk easier */
@@ -224,10 +226,12 @@ void drm_err(const char *format, ...);
  * \param cmd command.
  * \param arg argument.
  */
-typedef int drm_ioctl_t(struct drm_device *dev, void *data,
+typedef int (* const drm_ioctl_t)(struct drm_device *dev, void *data,
+			struct drm_file *file_priv);
+typedef int (* drm_ioctl_no_const_t)(struct drm_device *dev, void *data,
 			struct drm_file *file_priv);
 
-typedef int drm_ioctl_compat_t(struct file *filp, unsigned int cmd,
+typedef int (* const drm_ioctl_compat_t)(struct file *filp, unsigned int cmd,
 			       unsigned long arg);
 
 #define DRM_IOCTL_NR(n)                _IOC_NR(n)
@@ -243,10 +247,10 @@ typedef int drm_ioctl_compat_t(struct file *filp, unsigned int cmd,
 struct drm_ioctl_desc {
 	unsigned int cmd;
 	int flags;
-	drm_ioctl_t *func;
+	drm_ioctl_t func;
 	unsigned int cmd_drv;
 	const char *name;
-};
+} __do_const;
 
 /**
  * Creates a driver or general drm_ioctl_desc array entry for the given
@@ -632,7 +636,8 @@ struct drm_info_list {
 	int (*show)(struct seq_file*, void*); /** show callback */
 	u32 driver_features; /**< Required driver features for this entry */
 	void *data;
-};
+} __do_const;
+typedef struct drm_info_list __no_const drm_info_list_no_const;
 
 /**
  * debugfs node structure. This structure represents a debugfs file.
@@ -716,7 +721,7 @@ struct drm_device {
 
 	/** \name Usage Counters */
 	/*@{ */
-	int open_count;			/**< Outstanding files open, protected by drm_global_mutex. */
+	local_t open_count;		/**< Outstanding files open, protected by drm_global_mutex. */
 	spinlock_t buf_lock;		/**< For drm_device::buf_use and a few other things. */
 	int buf_use;			/**< Buffers in use -- cannot alloc */
 	atomic_t buf_alloc;		/**< Buffer allocation in progress */

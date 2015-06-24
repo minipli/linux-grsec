@@ -110,6 +110,7 @@ struct rds_connection {
 	void			*c_transport_data;
 
 	atomic_t		c_state;
+	unsigned long		c_send_gen;
 	unsigned long		c_flags;
 	unsigned long		c_reconnect_jiffies;
 	struct delayed_work	c_send_w;
@@ -448,7 +449,7 @@ struct rds_transport {
 	void (*sync_mr)(void *trans_private, int direction);
 	void (*free_mr)(void *trans_private, int invalidate);
 	void (*flush_mrs)(void);
-};
+} __do_const;
 
 struct rds_sock {
 	struct sock		rs_sk;

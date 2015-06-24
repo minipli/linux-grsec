@@ -213,6 +213,7 @@ void machine_power_off(void)
 
 	if (pm_power_off)
 		pm_power_off();
+	BUG();
 }
 
 /*
@@ -226,7 +227,7 @@ void machine_power_off(void)
  * executing pre-reset code, and using RAM that the primary CPU's code wishes
  * to use. Implementing such co-ordination would be essentially impossible.
  */
-void machine_restart(char *cmd)
+__noreturn void machine_restart(char *cmd)
 {
 	local_irq_disable();
 	smp_send_stop();
@@ -252,8 +253,8 @@ void __show_regs(struct pt_regs *regs)
 
 	show_regs_print_info(KERN_DEFAULT);
 
-	print_symbol("PC is at %s\n", instruction_pointer(regs));
-	print_symbol("LR is at %s\n", regs->ARM_lr);
+	printk("PC is at %pA\n", (void *)instruction_pointer(regs));
+	printk("LR is at %pA\n", (void *)regs->ARM_lr);
 	printk("pc : [<%08lx>]    lr : [<%08lx>]    psr: %08lx\n"
 	       "sp : %08lx  ip : %08lx  fp : %08lx\n",
 		regs->ARM_pc, regs->ARM_lr, regs->ARM_cpsr,
@@ -430,12 +431,6 @@ unsigned long get_wchan(struct task_struct *p)
 	return 0;
 }
 
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long range_end = mm->brk + 0x02000000;
-	return randomize_range(mm->brk, range_end, 0) ? : mm->brk;
-}
-
 #ifdef CONFIG_MMU
 #ifdef CONFIG_KUSER_HELPERS
 /*
@@ -451,7 +446,7 @@ static struct vm_area_struct gate_vma = {
 
 static int __init gate_vma_init(void)
 {
-	gate_vma.vm_page_prot = PAGE_READONLY_EXEC;
+	gate_vma.vm_page_prot = vm_get_page_prot(gate_vma.vm_flags);
 	return 0;
 }
 arch_initcall(gate_vma_init);
@@ -480,81 +475,13 @@ const char *arch_vma_name(struct vm_area_struct *vma)
 	return is_gate_vma(vma) ? "[vectors]" : NULL;
 }
 
-/* If possible, provide a placement hint at a random offset from the
- * stack for the signal page.
- */
-static unsigned long sigpage_addr(const struct mm_struct *mm,
-				  unsigned int npages)
-{
-	unsigned long offset;
-	unsigned long first;
-	unsigned long last;
-	unsigned long addr;
-	unsigned int slots;
-
-	first = PAGE_ALIGN(mm->start_stack);
-
-	last = TASK_SIZE - (npages << PAGE_SHIFT);
-
-	/* No room after stack? */
-	if (first > last)
-		return 0;
-
-	/* Just enough room? */
-	if (first == last)
-		return first;
-
-	slots = ((last - first) >> PAGE_SHIFT) + 1;
-
-	offset = get_random_int() % slots;
-
-	addr = first + (offset << PAGE_SHIFT);
-
-	return addr;
-}
-
-static struct page *signal_page;
-extern struct page *get_signal_page(void);
-
-static const struct vm_special_mapping sigpage_mapping = {
-	.name = "[sigpage]",
-	.pages = &signal_page,
-};
-
 int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 {
 	struct mm_struct *mm = current->mm;
-	struct vm_area_struct *vma;
-	unsigned long addr;
-	unsigned long hint;
-	int ret = 0;
-
-	if (!signal_page)
-		signal_page = get_signal_page();
-	if (!signal_page)
-		return -ENOMEM;
 
 	down_write(&mm->mmap_sem);
-	hint = sigpage_addr(mm, 1);
-	addr = get_unmapped_area(NULL, hint, PAGE_SIZE, 0, 0);
-	if (IS_ERR_VALUE(addr)) {
-		ret = addr;
-		goto up_fail;
-	}
-
-	vma = _install_special_mapping(mm, addr, PAGE_SIZE,
-		VM_READ | VM_EXEC | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC,
-		&sigpage_mapping);
-
-	if (IS_ERR(vma)) {
-		ret = PTR_ERR(vma);
-		goto up_fail;
-	}
-
-	mm->context.sigpage = addr;
-
- up_fail:
+	mm->context.sigpage = (PAGE_OFFSET + (get_random_int() % 0x3FFEFFE0)) & 0xFFFFFFFC;
 	up_write(&mm->mmap_sem);
-	return ret;
+	return 0;
 }
 #endif

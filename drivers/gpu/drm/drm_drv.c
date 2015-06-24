@@ -448,7 +448,7 @@ void drm_unplug_dev(struct drm_device *dev)
 
 	drm_device_set_unplugged(dev);
 
-	if (dev->open_count == 0) {
+	if (local_read(&dev->open_count) == 0) {
 		drm_put_dev(dev);
 	}
 	mutex_unlock(&drm_global_mutex);
@@ -596,10 +596,13 @@ struct drm_device *drm_dev_alloc(struct drm_driver *driver,
 	if (drm_ht_create(&dev->map_hash, 12))
 		goto err_minors;
 
-	ret = drm_legacy_ctxbitmap_init(dev);
-	if (ret) {
-		DRM_ERROR("Cannot allocate memory for context bitmap.\n");
-		goto err_ht;
+	if (drm_core_check_feature(dev, DRIVER_KMS_LEGACY_CONTEXT)) {
+		ret = drm_legacy_ctxbitmap_init(dev);
+		if (ret) {
+			DRM_ERROR(
+				"Cannot allocate memory for context bitmap.\n");
+			goto err_ht;
+		}
 	}
 
 	if (drm_core_check_feature(dev, DRIVER_GEM)) {
