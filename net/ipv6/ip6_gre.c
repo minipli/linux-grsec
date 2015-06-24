@@ -71,7 +71,7 @@ struct ip6gre_net {
 	struct net_device *fb_tunnel_dev;
 };
 
-static struct rtnl_link_ops ip6gre_link_ops __read_mostly;
+static struct rtnl_link_ops ip6gre_link_ops;
 static int ip6gre_tunnel_init(struct net_device *dev);
 static void ip6gre_tunnel_setup(struct net_device *dev);
 static void ip6gre_tunnel_link(struct ip6gre_net *ign, struct ip6_tnl *t);
@@ -413,7 +413,7 @@ static void ip6gre_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
 		if (code == ICMPV6_HDR_FIELD)
 			teli = ip6_tnl_parse_tlv_enc_lim(skb, skb->data);
 
-		if (teli && teli == info - 2) {
+		if (teli && teli == be32_to_cpu(info) - 2) {
 			tel = (struct ipv6_tlv_tnl_enc_lim *) &skb->data[teli];
 			if (tel->encap_limit == 0) {
 				net_warn_ratelimited("%s: Too small encapsulation limit or routing loop in tunnel!\n",
@@ -425,7 +425,7 @@ static void ip6gre_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
 		}
 		break;
 	case ICMPV6_PKT_TOOBIG:
-		mtu = info - offset;
+		mtu = be32_to_cpu(info) - offset;
 		if (mtu < IPV6_MIN_MTU)
 			mtu = IPV6_MIN_MTU;
 		t->dev->mtu = mtu;
@@ -1290,7 +1290,7 @@ static void ip6gre_fb_tunnel_init(struct net_device *dev)
 }
 
 
-static struct inet6_protocol ip6gre_protocol __read_mostly = {
+static struct inet6_protocol ip6gre_protocol = {
 	.handler     = ip6gre_rcv,
 	.err_handler = ip6gre_err,
 	.flags       = INET6_PROTO_NOPOLICY|INET6_PROTO_FINAL,
@@ -1644,7 +1644,7 @@ static const struct nla_policy ip6gre_policy[IFLA_GRE_MAX + 1] = {
 	[IFLA_GRE_FLAGS]       = { .type = NLA_U32 },
 };
 
-static struct rtnl_link_ops ip6gre_link_ops __read_mostly = {
+static struct rtnl_link_ops ip6gre_link_ops = {
 	.kind		= "ip6gre",
 	.maxtype	= IFLA_GRE_MAX,
 	.policy		= ip6gre_policy,
@@ -1658,7 +1658,7 @@ static struct rtnl_link_ops ip6gre_link_ops __read_mostly = {
 	.fill_info	= ip6gre_fill_info,
 };
 
-static struct rtnl_link_ops ip6gre_tap_ops __read_mostly = {
+static struct rtnl_link_ops ip6gre_tap_ops = {
 	.kind		= "ip6gretap",
 	.maxtype	= IFLA_GRE_MAX,
 	.policy		= ip6gre_policy,

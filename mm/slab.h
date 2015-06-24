@@ -32,6 +32,20 @@ extern struct list_head slab_caches;
 /* The slab cache that manages slab cache information */
 extern struct kmem_cache *kmem_cache;
 
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+#ifdef CONFIG_X86_64
+#define PAX_MEMORY_SANITIZE_VALUE	'\xfe'
+#else
+#define PAX_MEMORY_SANITIZE_VALUE	'\xff'
+#endif
+enum pax_sanitize_mode {
+	PAX_SANITIZE_SLAB_OFF = 0,
+	PAX_SANITIZE_SLAB_FAST,
+	PAX_SANITIZE_SLAB_FULL,
+};
+extern enum pax_sanitize_mode pax_sanitize_slab;
+#endif
+
 unsigned long calculate_alignment(unsigned long flags,
 		unsigned long align, unsigned long size);
 
@@ -67,7 +81,8 @@ __kmem_cache_alias(struct mem_cgroup *memcg, const char *name, size_t size,
 
 /* Legal flag mask for kmem_cache_create(), for various configurations */
 #define SLAB_CORE_FLAGS (SLAB_HWCACHE_ALIGN | SLAB_CACHE_DMA | SLAB_PANIC | \
-			 SLAB_DESTROY_BY_RCU | SLAB_DEBUG_OBJECTS )
+			 SLAB_DESTROY_BY_RCU | SLAB_DEBUG_OBJECTS | \
+			 SLAB_USERCOPY | SLAB_NO_SANITIZE)
 
 #if defined(CONFIG_DEBUG_SLAB)
 #define SLAB_DEBUG_FLAGS (SLAB_RED_ZONE | SLAB_POISON | SLAB_STORE_USER)
@@ -257,6 +272,9 @@ static inline struct kmem_cache *cache_from_obj(struct kmem_cache *s, void *x)
 		return s;
 
 	page = virt_to_head_page(x);
+
+	BUG_ON(!PageSlab(page));
+
 	cachep = page->slab_cache;
 	if (slab_equal_or_root(cachep, s))
 		return cachep;
