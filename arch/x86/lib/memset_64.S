@@ -16,7 +16,7 @@
  * 
  * rax   original destination
  */	
-	.section .altinstr_replacement, "ax", @progbits
+	.section .altinstr_replacement, "a", @progbits
 .Lmemset_c:
 	movq %rdi,%r9
 	movq %rdx,%rcx
@@ -30,6 +30,7 @@
 	movl %edx,%ecx
 	rep stosb
 	movq %r9,%rax
+	pax_force_retaddr
 	ret
 .Lmemset_e:
 	.previous
@@ -45,13 +46,14 @@
  *
  * rax   original destination
  */
-	.section .altinstr_replacement, "ax", @progbits
+	.section .altinstr_replacement, "a", @progbits
 .Lmemset_c_e:
 	movq %rdi,%r9
 	movb %sil,%al
 	movq %rdx,%rcx
 	rep stosb
 	movq %r9,%rax
+	pax_force_retaddr
 	ret
 .Lmemset_e_e:
 	.previous
@@ -120,6 +122,7 @@ ENTRY(__memset)
 
 .Lende:
 	movq	%r10,%rax
+	pax_force_retaddr
 	ret
 
 	CFI_RESTORE_STATE

@@ -212,7 +212,7 @@ struct common_dbs_data {
 	void (*exit)(struct dbs_data *dbs_data);
 
 	/* Governor specific ops, see below */
-	void *gov_ops;
+	const void *gov_ops;
 };
 
 /* Governor Per policy data */
@@ -232,7 +232,7 @@ struct od_ops {
 	unsigned int (*powersave_bias_target)(struct cpufreq_policy *policy,
 			unsigned int freq_next, unsigned int relation);
 	void (*freq_increase)(struct cpufreq_policy *policy, unsigned int freq);
-};
+} __no_const;
 
 struct cs_ops {
 	struct notifier_block *notifier_block;

@@ -333,7 +333,7 @@ extern struct srcu_struct tasks_rcu_exit_srcu;
 	do { \
 		rcu_all_qs(); \
 		if (ACCESS_ONCE((t)->rcu_tasks_holdout)) \
-			ACCESS_ONCE((t)->rcu_tasks_holdout) = false; \
+			ACCESS_ONCE_RW((t)->rcu_tasks_holdout) = false; \
 	} while (0)
 #else /* #ifdef CONFIG_TASKS_RCU */
 #define TASKS_RCU(x) do { } while (0)
