@@ -660,7 +660,7 @@ show_fault_oops(struct pt_regs *regs, unsigned long error_code,
 
 #ifdef CONFIG_PAX_KERNEXEC
 	if (init_mm.start_code <= address && address < init_mm.end_code)
-		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code\n",
+		printk(KERN_EMERG "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code\n",
 				 current->comm, task_pid_nr(current), current_uid(), current_euid());
 #endif
 
@@ -1206,8 +1206,8 @@ do_page_fault(struct pt_regs *regs, unsigned long error_code)
 			return;
 		}
 		if (address < pax_user_shadow_base) {
-			printk(KERN_ERR "PAX: please report this to pageexec@freemail.hu\n");
-			printk(KERN_ERR "PAX: faulting IP: %pS\n", (void *)regs->ip);
+			printk(KERN_EMERG "PAX: please report this to pageexec@freemail.hu\n");
+			printk(KERN_EMERG "PAX: faulting IP: %pS\n", (void *)regs->ip);
 			show_trace_log_lvl(NULL, NULL, (void *)regs->sp, regs->bp, KERN_ERR);
 		} else
 			address -= pax_user_shadow_base;
