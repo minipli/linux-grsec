@@ -1836,9 +1836,9 @@ void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
 #ifdef CONFIG_PAX_REFCOUNT
 void pax_report_refcount_overflow(struct pt_regs *regs)
 {
-	printk(KERN_ERR "PAX: refcount overflow detected in: %s:%d, uid/euid: %u/%u\n", current->comm, task_pid_nr(current),
+	printk(KERN_EMERG "PAX: refcount overflow detected in: %s:%d, uid/euid: %u/%u\n", current->comm, task_pid_nr(current),
 			from_kuid_munged(&init_user_ns, current_uid()), from_kuid_munged(&init_user_ns, current_euid()));
-	print_symbol(KERN_ERR "PAX: refcount overflow occured at: %s\n", instruction_pointer(regs));
+	print_symbol(KERN_EMERG "PAX: refcount overflow occured at: %s\n", instruction_pointer(regs));
 	preempt_disable();
 	show_regs(regs);
 	preempt_enable();
@@ -1896,7 +1896,7 @@ static noinline int check_stack_object(const void *obj, unsigned long len)
 
 static __noreturn void pax_report_usercopy(const void *ptr, unsigned long len, bool to_user, const char *type)
 {
-	printk(KERN_ERR "PAX: kernel memory %s attempt detected %s %p (%s) (%lu bytes)\n",
+	printk(KERN_EMERG "PAX: kernel memory %s attempt detected %s %p (%s) (%lu bytes)\n",
 		to_user ? "leak" : "overwrite", to_user ? "from" : "to", ptr, type ? : "unknown", len);
 	dump_stack();
 	do_group_exit(SIGKILL);
@@ -1939,7 +1939,7 @@ EXPORT_SYMBOL(pax_track_stack);
 #ifdef CONFIG_PAX_SIZE_OVERFLOW
 void report_size_overflow(const char *file, unsigned int line, const char *func, const char *ssa_name)
 {
-	printk(KERN_ERR "PAX: size overflow detected in function %s %s:%u %s", func, file, line, ssa_name);
+	printk(KERN_EMERG "PAX: size overflow detected in function %s %s:%u %s", func, file, line, ssa_name);
 	dump_stack();
 	do_group_exit(SIGKILL);
 }

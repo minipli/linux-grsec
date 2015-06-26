@@ -141,7 +141,7 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
 	if (addr < TASK_SIZE)
-		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to access userland memory at %08lx\n", current->comm, task_pid_nr(current),
+		printk(KERN_EMERG "PAX: %s:%d, uid/euid: %u/%u, attempted to access userland memory at %08lx\n", current->comm, task_pid_nr(current),
 				from_kuid_munged(&init_user_ns, current_uid()), from_kuid_munged(&init_user_ns, current_euid()), addr);
 #endif
 
@@ -150,7 +150,7 @@ __do_kernel_fault(struct mm_struct *mm, unsigned long addr, unsigned int fsr,
 	    (((unsigned long)_stext <= addr && addr < init_mm.end_code) ||
 	     (MODULES_VADDR <= addr && addr < MODULES_END)))
 	{
-		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code\n", current->comm, task_pid_nr(current),
+		printk(KERN_EMERG "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code\n", current->comm, task_pid_nr(current),
 				from_kuid_munged(&init_user_ns, current_uid()), from_kuid_munged(&init_user_ns, current_euid()));
 	}
 #endif
@@ -601,7 +601,7 @@ do_DataAbort(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
 	if (addr < TASK_SIZE && is_domain_fault(fsr)) {
-		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to access userland memory at %08lx\n", current->comm, task_pid_nr(current),
+		printk(KERN_EMERG "PAX: %s:%d, uid/euid: %u/%u, attempted to access userland memory at %08lx\n", current->comm, task_pid_nr(current),
 				from_kuid_munged(&init_user_ns, current_uid()), from_kuid_munged(&init_user_ns, current_euid()), addr);
 		goto die;
 	}
@@ -696,7 +696,7 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 
 #if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
 	else if (is_domain_fault(ifsr) || is_xn_fault(ifsr)) {
-		printk(KERN_ERR "PAX: %s:%d, uid/euid: %u/%u, attempted to execute %s memory at %08lx\n",
+		printk(KERN_EMERG "PAX: %s:%d, uid/euid: %u/%u, attempted to execute %s memory at %08lx\n",
 				current->comm, task_pid_nr(current),
 				from_kuid_munged(&init_user_ns, current_uid()),
 				from_kuid_munged(&init_user_ns, current_euid()),
