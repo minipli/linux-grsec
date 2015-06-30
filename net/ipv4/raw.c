@@ -324,7 +324,7 @@ static int raw_rcv_skb(struct sock *sk, struct sk_buff *skb)
 int raw_rcv(struct sock *sk, struct sk_buff *skb)
 {
 	if (!xfrm4_policy_check(sk, XFRM_POLICY_IN, skb)) {
-		atomic_inc(&sk->sk_drops);
+		atomic_inc_unchecked(&sk->sk_drops);
 		kfree_skb(skb);
 		return NET_RX_DROP;
 	}
@@ -773,16 +773,20 @@ static int raw_init(struct sock *sk)
 
 static int raw_seticmpfilter(struct sock *sk, char __user *optval, int optlen)
 {
+	struct icmp_filter filter;
+
 	if (optlen > sizeof(struct icmp_filter))
 		optlen = sizeof(struct icmp_filter);
-	if (copy_from_user(&raw_sk(sk)->filter, optval, optlen))
+	if (copy_from_user(&filter, optval, optlen))
 		return -EFAULT;
+	raw_sk(sk)->filter = filter;
 	return 0;
 }
 
 static int raw_geticmpfilter(struct sock *sk, char __user *optval, int __user *optlen)
 {
 	int len, ret = -EFAULT;
+	struct icmp_filter filter;
 
 	if (get_user(len, optlen))
 		goto out;
@@ -792,8 +796,8 @@ static int raw_geticmpfilter(struct sock *sk, char __user *optval, int __user *o
 	if (len > sizeof(struct icmp_filter))
 		len = sizeof(struct icmp_filter);
 	ret = -EFAULT;
-	if (put_user(len, optlen) ||
-	    copy_to_user(optval, &raw_sk(sk)->filter, len))
+	filter = raw_sk(sk)->filter;
+	if (put_user(len, optlen) || len > sizeof filter || copy_to_user(optval, &filter, len))
 		goto out;
 	ret = 0;
 out:	return ret;
@@ -1022,7 +1026,7 @@ static void raw_sock_seq_show(struct seq_file *seq, struct sock *sp, int i)
 		0, 0L, 0,
 		from_kuid_munged(seq_user_ns(seq), sock_i_uid(sp)),
 		0, sock_i_ino(sp),
-		atomic_read(&sp->sk_refcnt), sp, atomic_read(&sp->sk_drops));
+		atomic_read(&sp->sk_refcnt), sp, atomic_read_unchecked(&sp->sk_drops));
 }
 
 static int raw_seq_show(struct seq_file *seq, void *v)

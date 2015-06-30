@@ -158,6 +158,12 @@ extern struct task_group root_task_group;
 
 #define INIT_TASK_COMM "swapper"
 
+#ifdef CONFIG_X86
+#define INIT_TASK_THREAD_INFO .tinfo = INIT_THREAD_INFO,
+#else
+#define INIT_TASK_THREAD_INFO
+#endif
+
 #ifdef CONFIG_RT_MUTEXES
 # define INIT_RT_MUTEXES(tsk)						\
 	.pi_waiters = RB_ROOT,						\
@@ -224,6 +230,7 @@ extern struct task_group root_task_group;
 	RCU_POINTER_INITIALIZER(cred, &init_cred),			\
 	.comm		= INIT_TASK_COMM,				\
 	.thread		= INIT_THREAD,					\
+	INIT_TASK_THREAD_INFO						\
 	.fs		= &init_fs,					\
 	.files		= &init_files,					\
 	.signal		= &init_signals,				\
