@@ -4564,7 +4564,7 @@ static void rebind_workers(struct worker_pool *pool)
 		WARN_ON_ONCE(!(worker_flags & WORKER_UNBOUND));
 		worker_flags |= WORKER_REBOUND;
 		worker_flags &= ~WORKER_UNBOUND;
-		ACCESS_ONCE(worker->flags) = worker_flags;
+		ACCESS_ONCE_RW(worker->flags) = worker_flags;
 	}
 
 	spin_unlock_irq(&pool->lock);

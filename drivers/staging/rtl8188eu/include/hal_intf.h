@@ -225,7 +225,7 @@ struct hal_ops {
 
 	void (*hal_notch_filter)(struct adapter *adapter, bool enable);
 	void (*hal_reset_security_engine)(struct adapter *adapter);
-};
+} __no_const;
 
 enum rt_eeprom_type {
 	EEPROM_93C46,
