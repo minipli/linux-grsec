@@ -976,6 +976,8 @@ int __neigh_event_send(struct neighbour *neigh, struct sk_buff *skb)
 	rc = 0;
 	if (neigh->nud_state & (NUD_CONNECTED | NUD_DELAY | NUD_PROBE))
 		goto out_unlock_bh;
+	if (neigh->dead)
+		goto out_dead;
 
 	if (!(neigh->nud_state & (NUD_STALE | NUD_INCOMPLETE))) {
 		if (NEIGH_VAR(neigh->parms, MCAST_PROBES) +
@@ -1032,6 +1034,13 @@ out_unlock_bh:
 		write_unlock(&neigh->lock);
 	local_bh_enable();
 	return rc;
+
+out_dead:
+	if (neigh->nud_state & NUD_STALE)
+		goto out_unlock_bh;
+	write_unlock_bh(&neigh->lock);
+	kfree_skb(skb);
+	return 1;
 }
 EXPORT_SYMBOL(__neigh_event_send);
 
@@ -1094,6 +1103,8 @@ int neigh_update(struct neighbour *neigh, const u8 *lladdr, u8 new,
 
 	if (!(flags & NEIGH_UPDATE_F_ADMIN) &&
 	    (old & (NUD_NOARP | NUD_PERMANENT)))
+		goto out;
+	if (neigh->dead)
 		goto out;
 
 	if (!(new & NUD_VALID)) {
@@ -1244,6 +1255,8 @@ EXPORT_SYMBOL(neigh_update);
  */
 void __neigh_set_probe_once(struct neighbour *neigh)
 {
+	if (neigh->dead)
+		return;
 	neigh->updated = jiffies;
 	if (!(neigh->nud_state & NUD_FAILED))
 		return;
@@ -2824,7 +2837,7 @@ static int proc_unres_qlen(struct ctl_table *ctl, int write,
 			   void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int size, ret;
-	struct ctl_table tmp = *ctl;
+	ctl_table_no_const tmp = *ctl;
 
 	tmp.extra1 = &zero;
 	tmp.extra2 = &unres_qlen_max;
@@ -2886,7 +2899,7 @@ static int neigh_proc_dointvec_zero_intmax(struct ctl_table *ctl, int write,
 					   void __user *buffer,
 					   size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table tmp = *ctl;
+	ctl_table_no_const tmp = *ctl;
 	int ret;
 
 	tmp.extra1 = &zero;
@@ -3058,11 +3071,12 @@ int neigh_sysctl_register(struct net_device *dev, struct neigh_parms *p,
 		memset(&t->neigh_vars[NEIGH_VAR_GC_INTERVAL], 0,
 		       sizeof(t->neigh_vars[NEIGH_VAR_GC_INTERVAL]));
 	} else {
+		struct neigh_table *ntable = container_of(p, struct neigh_table, parms);
 		dev_name_source = "default";
-		t->neigh_vars[NEIGH_VAR_GC_INTERVAL].data = (int *)(p + 1);
-		t->neigh_vars[NEIGH_VAR_GC_THRESH1].data = (int *)(p + 1) + 1;
-		t->neigh_vars[NEIGH_VAR_GC_THRESH2].data = (int *)(p + 1) + 2;
-		t->neigh_vars[NEIGH_VAR_GC_THRESH3].data = (int *)(p + 1) + 3;
+		t->neigh_vars[NEIGH_VAR_GC_INTERVAL].data = &ntable->gc_interval;
+		t->neigh_vars[NEIGH_VAR_GC_THRESH1].data = &ntable->gc_thresh1;
+		t->neigh_vars[NEIGH_VAR_GC_THRESH2].data = &ntable->gc_thresh2;
+		t->neigh_vars[NEIGH_VAR_GC_THRESH3].data = &ntable->gc_thresh3;
 	}
 
 	if (handler) {
