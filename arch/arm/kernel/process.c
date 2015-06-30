@@ -217,6 +217,7 @@ void machine_power_off(void)
 
 	if (pm_power_off)
 		pm_power_off();
+	BUG();
 }
 
 /*
@@ -230,7 +231,7 @@ void machine_power_off(void)
  * executing pre-reset code, and using RAM that the primary CPU's code wishes
  * to use. Implementing such co-ordination would be essentially impossible.
  */
-void machine_restart(char *cmd)
+__noreturn void machine_restart(char *cmd)
 {
 	local_irq_disable();
 	smp_send_stop();
@@ -427,12 +428,6 @@ unsigned long get_wchan(struct task_struct *p)
 	return 0;
 }
 
-unsigned long arch_randomize_brk(struct mm_struct *mm)
-{
-	unsigned long range_end = mm->brk + 0x02000000;
-	return randomize_range(mm->brk, range_end, 0) ? : mm->brk;
-}
-
 #ifdef CONFIG_MMU
 #ifdef CONFIG_KUSER_HELPERS
 /*
@@ -448,7 +443,7 @@ static struct vm_area_struct gate_vma = {
 
 static int __init gate_vma_init(void)
 {
-	gate_vma.vm_page_prot = PAGE_READONLY_EXEC;
+	gate_vma.vm_page_prot = vm_get_page_prot(gate_vma.vm_flags);
 	return 0;
 }
 arch_initcall(gate_vma_init);
@@ -474,41 +469,16 @@ int in_gate_area_no_mm(unsigned long addr)
 
 const char *arch_vma_name(struct vm_area_struct *vma)
 {
-	return is_gate_vma(vma) ? "[vectors]" :
-		(vma->vm_mm && vma->vm_start == vma->vm_mm->context.sigpage) ?
-		 "[sigpage]" : NULL;
+	return is_gate_vma(vma) ? "[vectors]" : NULL;
 }
-
-static struct page *signal_page;
-extern struct page *get_signal_page(void);
 
 int arch_setup_additional_pages(struct linux_binprm *bprm, int uses_interp)
 {
 	struct mm_struct *mm = current->mm;
-	unsigned long addr;
-	int ret;
-
-	if (!signal_page)
-		signal_page = get_signal_page();
-	if (!signal_page)
-		return -ENOMEM;
 
 	down_write(&mm->mmap_sem);
-	addr = get_unmapped_area(NULL, 0, PAGE_SIZE, 0, 0);
-	if (IS_ERR_VALUE(addr)) {
-		ret = addr;
-		goto up_fail;
-	}
-
-	ret = install_special_mapping(mm, addr, PAGE_SIZE,
-		VM_READ | VM_EXEC | VM_MAYREAD | VM_MAYWRITE | VM_MAYEXEC,
-		&signal_page);
-
-	if (ret == 0)
-		mm->context.sigpage = addr;
-
- up_fail:
+	mm->context.sigpage = (PAGE_OFFSET + (get_random_int() % 0x3FFEFFE0)) & 0xFFFFFFFC;
 	up_write(&mm->mmap_sem);
-	return ret;
+	return 0;
 }
 #endif
