@@ -988,7 +988,7 @@ struct ata_port_operations {
 	 * fields must be pointers.
 	 */
 	const struct ata_port_operations	*inherits;
-};
+} __do_const;
 
 struct ata_port_info {
 	unsigned long		flags;

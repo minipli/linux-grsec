@@ -370,7 +370,8 @@ struct irq_chip {
 	int		(*irq_set_irqchip_state)(struct irq_data *data, enum irqchip_irq_state which, bool state);
 
 	unsigned long	flags;
-};
+} __do_const;
+typedef struct irq_chip __no_const irq_chip_no_const;
 
 /*
  * irq_chip specific flags

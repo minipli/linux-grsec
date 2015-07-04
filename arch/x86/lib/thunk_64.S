@@ -9,6 +9,7 @@
 #include <asm/dwarf2.h>
 #include <asm/calling.h>
 #include <asm/asm.h>
+#include <asm/alternative-asm.h>
 
 	/* rdi:	arg1 ... normal C conventions. rax is saved/restored. */
 	.macro THUNK name, func, put_ret_addr_in_rdi=0
@@ -69,6 +70,7 @@ restore:
 	popq_cfi_reg rdx
 	popq_cfi_reg rsi
 	popq_cfi_reg rdi
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 	_ASM_NOKPROBE(restore)
