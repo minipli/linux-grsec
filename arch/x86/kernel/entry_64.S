@@ -104,7 +104,7 @@ ENTRY(pax_enter_kernel)
 
 #ifdef CONFIG_PAX_KERNEXEC
 	GET_CR0_INTO_RDI
-	bts $16,%rdi
+	bts $X86_CR0_WP_BIT,%rdi
 	jnc 3f
 	mov %cs,%edi
 	cmp $__KERNEL_CS,%edi
@@ -159,7 +159,7 @@ ENTRY(pax_exit_kernel)
 	cmp $__KERNEXEC_KERNEL_CS,%edi
 	jz 2f
 	GET_CR0_INTO_RDI
-	bts $16,%rdi
+	bts $X86_CR0_WP_BIT,%rdi
 	jnc 4f
 1:
 #endif
@@ -191,7 +191,7 @@ ENTRY(pax_exit_kernel)
 
 #ifdef CONFIG_PAX_KERNEXEC
 2:	GET_CR0_INTO_RDI
-	btr $16,%rdi
+	btr $X86_CR0_WP_BIT,%rdi
 	jnc 4f
 	ljmpq __KERNEL_CS,3f
 3:	SET_RDI_INTO_CR0
@@ -273,7 +273,7 @@ ENTRY(pax_enter_kernel_user)
 
 #ifdef CONFIG_PAX_KERNEXEC
 	GET_CR0_INTO_RDI
-	bts $16,%rdi
+	bts $X86_CR0_WP_BIT,%rdi
 	SET_RDI_INTO_CR0
 #endif
 
@@ -312,7 +312,7 @@ ENTRY(pax_exit_kernel_user)
 
 #ifdef CONFIG_PAX_KERNEXEC
 	GET_CR0_INTO_RDI
-	btr $16,%rdi
+	btr $X86_CR0_WP_BIT,%rdi
 	jnc 3f
 	SET_RDI_INTO_CR0
 #endif
@@ -359,7 +359,7 @@ ENDPROC(pax_exit_kernel_user)
 
 #ifdef CONFIG_PAX_KERNEXEC
 	GET_CR0_INTO_RDI
-	bts $16,%rdi
+	bts $X86_CR0_WP_BIT,%rdi
 	jc 110f
 	SET_RDI_INTO_CR0
 	or $2,%ebx
@@ -386,7 +386,7 @@ ENDPROC(pax_exit_kernel_user)
 	btr $1,%ebx
 	jnc 110f
 	GET_CR0_INTO_RDI
-	btr $16,%rdi
+	btr $X86_CR0_WP_BIT,%rdi
 	SET_RDI_INTO_CR0
 110:
 #endif

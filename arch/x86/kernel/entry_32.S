@@ -213,7 +213,7 @@ ENTRY(pax_enter_kernel)
 #else
 	mov %cr0, %esi
 #endif
-	bts $16, %esi
+	bts $X86_CR0_WP_BIT, %esi
 	jnc 1f
 	mov %cs, %esi
 	cmp $__KERNEL_CS, %esi
@@ -249,7 +249,7 @@ ENTRY(pax_exit_kernel)
 #else
 	mov %cr0, %esi
 #endif
-	btr $16, %esi
+	btr $X86_CR0_WP_BIT, %esi
 	ljmp $__KERNEL_CS, $1f
 1:
 #ifdef CONFIG_PARAVIRT
@@ -790,7 +790,7 @@ ldt_ss:
 
 #ifdef CONFIG_PAX_KERNEXEC
 	mov %cr0, %esi
-	btr $16, %esi
+	btr $X86_CR0_WP_BIT, %esi
 	mov %esi, %cr0
 #endif
 
@@ -798,7 +798,7 @@ ldt_ss:
 	mov %dh, 7 + GDT_ESPFIX_SS /* bits 24..31 */
 
 #ifdef CONFIG_PAX_KERNEXEC
-	bts $16, %esi
+	bts $X86_CR0_WP_BIT, %esi
 	mov %esi, %cr0
 #endif
 

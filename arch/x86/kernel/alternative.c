@@ -248,7 +248,9 @@ static void __init_or_module add_nops(void *insns, unsigned int len)
 		unsigned int noplen = len;
 		if (noplen > ASM_NOP_MAX)
 			noplen = ASM_NOP_MAX;
+		pax_open_kernel();
 		memcpy(insns, ideal_nops[noplen], noplen);
+		pax_close_kernel();
 		insns += noplen;
 		len -= noplen;
 	}
@@ -275,6 +277,11 @@ recompute_jump(struct alt_instr *a, u8 *orig_insn, u8 *repl_insn, u8 *insnbuf)
 
 	if (a->replacementlen != 5)
 		return;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if (orig_insn < (u8 *)_text || (u8 *)_einittext <= orig_insn)
+		orig_insn = ktva_ktla(orig_insn);
+#endif
 
 	o_dspl = *(s32 *)(insnbuf + 1);
 
@@ -364,14 +371,21 @@ void __init_or_module apply_alternatives(struct alt_instr *start,
 		instr = (u8 *)&a->instr_offset + a->instr_offset;
 
 #if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
-		instr += ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
-		if (instr < (u8 *)_text || (u8 *)_einittext <= instr)
-			instr -= ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
-		else
+		if ((u8 *)_text <= instr && instr < (u8 *)_einittext) {
+			instr += ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
 			instr = ktla_ktva(instr);
+		}
 #endif
 
 		replacement = (u8 *)&a->repl_offset + a->repl_offset;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		if ((u8 *)_text <= replacement && replacement < (u8 *)_einittext) {
+			replacement += ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+			replacement = ktla_ktva(replacement);
+		}
+#endif
+
 		BUG_ON(a->instrlen > sizeof(insnbuf));
 		BUG_ON(a->cpuid >= (NCAPINTS + NBUGINTS) * 32);
 		if (!boot_cpu_has(a->cpuid)) {
