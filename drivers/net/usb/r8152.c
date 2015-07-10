@@ -601,7 +601,7 @@ struct r8152 {
 		void (*unload)(struct r8152 *);
 		int (*eee_get)(struct r8152 *, struct ethtool_eee *);
 		int (*eee_set)(struct r8152 *, struct ethtool_eee *);
-	} rtl_ops;
+	} __no_const rtl_ops;
 
 	int intr_interval;
 	u32 saved_wolopts;

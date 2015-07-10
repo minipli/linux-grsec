@@ -436,7 +436,7 @@ static void macvtap_setup(struct net_device *dev)
 	dev->tx_queue_len = TUN_READQ_SIZE;
 }
 
-static struct rtnl_link_ops macvtap_link_ops __read_mostly = {
+static struct rtnl_link_ops macvtap_link_ops = {
 	.kind		= "macvtap",
 	.setup		= macvtap_setup,
 	.newlink	= macvtap_newlink,
@@ -1033,7 +1033,7 @@ static long macvtap_ioctl(struct file *file, unsigned int cmd,
 
 		ret = 0;
 		u = q->flags;
-		if (copy_to_user(&ifr->ifr_name, vlan->dev->name, IFNAMSIZ) ||
+		if (copy_to_user(ifr->ifr_name, vlan->dev->name, IFNAMSIZ) ||
 		    put_user(u, &ifr->ifr_flags))
 			ret = -EFAULT;
 		macvtap_put_vlan(vlan);
@@ -1217,7 +1217,7 @@ static int macvtap_device_event(struct notifier_block *unused,
 	return NOTIFY_DONE;
 }
 
-static struct notifier_block macvtap_notifier_block __read_mostly = {
+static struct notifier_block macvtap_notifier_block = {
 	.notifier_call	= macvtap_device_event,
 };
 

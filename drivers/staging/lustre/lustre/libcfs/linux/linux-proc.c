@@ -237,7 +237,7 @@ static int proc_console_max_delay_cs(struct ctl_table *table, int write,
 				     loff_t *ppos)
 {
 	int rc, max_delay_cs;
-	struct ctl_table dummy = *table;
+	ctl_table_no_const dummy = *table;
 	long d;
 
 	dummy.data = &max_delay_cs;
@@ -270,7 +270,7 @@ static int proc_console_min_delay_cs(struct ctl_table *table, int write,
 				     loff_t *ppos)
 {
 	int rc, min_delay_cs;
-	struct ctl_table dummy = *table;
+	ctl_table_no_const dummy = *table;
 	long d;
 
 	dummy.data = &min_delay_cs;
@@ -302,7 +302,7 @@ static int proc_console_backoff(struct ctl_table *table, int write,
 				void __user *buffer, size_t *lenp, loff_t *ppos)
 {
 	int rc, backoff;
-	struct ctl_table dummy = *table;
+	ctl_table_no_const dummy = *table;
 
 	dummy.data = &backoff;
 	dummy.proc_handler = &proc_dointvec;
