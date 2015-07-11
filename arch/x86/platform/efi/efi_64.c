@@ -97,6 +97,11 @@ void __init efi_call_phys_prelog(void)
 		vaddress = (unsigned long)__va(pgd * PGDIR_SIZE);
 		set_pgd(pgd_offset_k(pgd * PGDIR_SIZE), *pgd_offset_k(vaddress));
 	}
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	load_cr3(swapper_pg_dir);
+#endif
+
 	__flush_tlb_all();
 }
 
@@ -114,6 +119,11 @@ void __init efi_call_phys_epilog(void)
 	for (pgd = 0; pgd < n_pgds; pgd++)
 		set_pgd(pgd_offset_k(pgd * PGDIR_SIZE), save_pgd[pgd]);
 	kfree(save_pgd);
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	load_cr3(get_cpu_pgd(smp_processor_id(), kernel));
+#endif
+
 	__flush_tlb_all();
 	local_irq_restore(efi_flags);
 	early_code_mapping_set_exec(0);
@@ -141,8 +151,23 @@ int efi_setup_page_tables(unsigned long pa_memmap, unsigned num_pages)
 {
 	pgd_t *pgd;
 
-	if (efi_enabled(EFI_OLD_MEMMAP))
+	if (efi_enabled(EFI_OLD_MEMMAP)) {
+		/* PaX: We need to disable the NX bit in the PGD, otherwise we won't be
+		 * able to execute the EFI services.
+		 */
+		if (__supported_pte_mask & _PAGE_NX) {
+			unsigned long addr = (unsigned long) __va(0);
+			pgd_t pe = __pgd(pgd_val(*pgd_offset_k(addr)) &  ~_PAGE_NX);
+
+			pr_info("PAX: Disabling NX protection for low memory map. Try booting without \"efi=old_map\"\n");
+#ifdef CONFIG_PAX_PER_CPU_PGD
+			set_pgd(pgd_offset_cpu(0, kernel, addr), pe);
+#endif
+			set_pgd(pgd_offset_k(addr), pe);
+		}
+
 		return 0;
+	}
 
 	efi_scratch.efi_pgt = (pgd_t *)(unsigned long)real_mode_header->trampoline_pgd;
 	pgd = __va(efi_scratch.efi_pgt);

@@ -317,11 +317,11 @@ static int ircomm_tty_block_til_ready(struct ircomm_tty_cb *self,
 	add_wait_queue(&port->open_wait, &wait);
 
 	IRDA_DEBUG(2, "%s(%d):block_til_ready before block on %s open_count=%d\n",
-	      __FILE__, __LINE__, tty->driver->name, port->count);
+	      __FILE__, __LINE__, tty->driver->name, atomic_read(&port->count));
 
 	spin_lock_irqsave(&port->lock, flags);
 	if (!tty_hung_up_p(filp))
-		port->count--;
+		atomic_dec(&port->count);
 	port->blocked_open++;
 	spin_unlock_irqrestore(&port->lock, flags);
 
@@ -356,7 +356,7 @@ static int ircomm_tty_block_til_ready(struct ircomm_tty_cb *self,
 		}
 
 		IRDA_DEBUG(1, "%s(%d):block_til_ready blocking on %s open_count=%d\n",
-		      __FILE__, __LINE__, tty->driver->name, port->count);
+		      __FILE__, __LINE__, tty->driver->name, atomic_read(&port->count));
 
 		schedule();
 	}
@@ -366,12 +366,12 @@ static int ircomm_tty_block_til_ready(struct ircomm_tty_cb *self,
 
 	spin_lock_irqsave(&port->lock, flags);
 	if (!tty_hung_up_p(filp))
-		port->count++;
+		atomic_inc(&port->count);
 	port->blocked_open--;
 	spin_unlock_irqrestore(&port->lock, flags);
 
 	IRDA_DEBUG(1, "%s(%d):block_til_ready after blocking on %s open_count=%d\n",
-	      __FILE__, __LINE__, tty->driver->name, port->count);
+	      __FILE__, __LINE__, tty->driver->name, atomic_read(&port->count));
 
 	if (!retval)
 		port->flags |= ASYNC_NORMAL_ACTIVE;
@@ -445,12 +445,12 @@ static int ircomm_tty_open(struct tty_struct *tty, struct file *filp)
 
 	/* ++ is not atomic, so this should be protected - Jean II */
 	spin_lock_irqsave(&self->port.lock, flags);
-	self->port.count++;
+	atomic_inc(&self->port.count);
 	spin_unlock_irqrestore(&self->port.lock, flags);
 	tty_port_tty_set(&self->port, tty);
 
 	IRDA_DEBUG(1, "%s(), %s%d, count = %d\n", __func__ , tty->driver->name,
-		   self->line, self->port.count);
+		   self->line, atomic_read(&self->port.count));
 
 	/* Not really used by us, but lets do it anyway */
 	self->port.low_latency = (self->port.flags & ASYNC_LOW_LATENCY) ? 1 : 0;
@@ -989,7 +989,7 @@ static void ircomm_tty_hangup(struct tty_struct *tty)
 		tty_kref_put(port->tty);
 	}
 	port->tty = NULL;
-	port->count = 0;
+	atomic_set(&port->count, 0);
 	spin_unlock_irqrestore(&port->lock, flags);
 
 	wake_up_interruptible(&port->open_wait);
@@ -1346,7 +1346,7 @@ static void ircomm_tty_line_info(struct ircomm_tty_cb *self, struct seq_file *m)
 	seq_putc(m, '\n');
 
 	seq_printf(m, "Role: %s\n", self->client ? "client" : "server");
-	seq_printf(m, "Open count: %d\n", self->port.count);
+	seq_printf(m, "Open count: %d\n", atomic_read(&self->port.count));
 	seq_printf(m, "Max data size: %d\n", self->max_data_size);
 	seq_printf(m, "Max header size: %d\n", self->max_header_size);
 

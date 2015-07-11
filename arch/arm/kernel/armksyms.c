@@ -55,7 +55,7 @@ EXPORT_SYMBOL(arm_delay_ops);
 
 	/* networking */
 EXPORT_SYMBOL(csum_partial);
-EXPORT_SYMBOL(csum_partial_copy_from_user);
+EXPORT_SYMBOL(__csum_partial_copy_from_user);
 EXPORT_SYMBOL(csum_partial_copy_nocheck);
 EXPORT_SYMBOL(__csum_ipv6_magic);
 
@@ -91,9 +91,9 @@ EXPORT_SYMBOL(__memzero);
 #ifdef CONFIG_MMU
 EXPORT_SYMBOL(copy_page);
 
-EXPORT_SYMBOL(__copy_from_user);
-EXPORT_SYMBOL(__copy_to_user);
-EXPORT_SYMBOL(__clear_user);
+EXPORT_SYMBOL(___copy_from_user);
+EXPORT_SYMBOL(___copy_to_user);
+EXPORT_SYMBOL(___clear_user);
 
 EXPORT_SYMBOL(__get_user_1);
 EXPORT_SYMBOL(__get_user_2);

@@ -14,7 +14,7 @@ struct proc_ns_operations {
 	void (*put)(void *ns);
 	int (*install)(struct nsproxy *nsproxy, void *ns);
 	unsigned int (*inum)(void *ns);
-};
+} __do_const;
 
 struct proc_ns {
 	void *ns;

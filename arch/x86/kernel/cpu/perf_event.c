@@ -1354,7 +1354,7 @@ static void __init pmu_check_apic(void)
 	pr_info("no hardware sampling interrupt available.\n");
 }
 
-static struct attribute_group x86_pmu_format_group = {
+static attribute_group_no_const x86_pmu_format_group = {
 	.name = "format",
 	.attrs = NULL,
 };
@@ -1453,7 +1453,7 @@ static struct attribute *events_attr[] = {
 	NULL,
 };
 
-static struct attribute_group x86_pmu_events_group = {
+static attribute_group_no_const x86_pmu_events_group = {
 	.name = "events",
 	.attrs = events_attr,
 };
@@ -1974,7 +1974,7 @@ static unsigned long get_segment_base(unsigned int segment)
 		if (idx > GDT_ENTRIES)
 			return 0;
 
-		desc = __this_cpu_ptr(&gdt_page.gdt[0]);
+		desc = get_cpu_gdt_table(smp_processor_id());
 	}
 
 	return get_desc_base(desc + idx);
@@ -2064,7 +2064,7 @@ perf_callchain_user(struct perf_callchain_entry *entry, struct pt_regs *regs)
 			break;
 
 		perf_callchain_store(entry, frame.return_address);
-		fp = frame.next_frame;
+		fp = (const void __force_user *)frame.next_frame;
 	}
 }
 

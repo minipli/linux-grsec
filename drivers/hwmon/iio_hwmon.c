@@ -73,7 +73,7 @@ static int iio_hwmon_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct iio_hwmon_state *st;
-	struct sensor_device_attribute *a;
+	sensor_device_attribute_no_const *a;
 	int ret, i;
 	int in_i = 1, temp_i = 1, curr_i = 1;
 	enum iio_chan_type type;
