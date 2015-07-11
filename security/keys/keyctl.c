@@ -987,7 +987,7 @@ static int keyctl_change_reqkey_auth(struct key *key)
 /*
  * Copy the iovec data from userspace
  */
-static long copy_from_user_iovec(void *buffer, const struct iovec *iov,
+static long copy_from_user_iovec(void *buffer, const struct iovec __user *iov,
 				 unsigned ioc)
 {
 	for (; ioc > 0; ioc--) {
@@ -1009,7 +1009,7 @@ static long copy_from_user_iovec(void *buffer, const struct iovec *iov,
  * If successful, 0 will be returned.
  */
 long keyctl_instantiate_key_common(key_serial_t id,
-				   const struct iovec *payload_iov,
+				   const struct iovec __user *payload_iov,
 				   unsigned ioc,
 				   size_t plen,
 				   key_serial_t ringid)
@@ -1104,7 +1104,7 @@ long keyctl_instantiate_key(key_serial_t id,
 			[0].iov_len  = plen
 		};
 
-		return keyctl_instantiate_key_common(id, iov, 1, plen, ringid);
+		return keyctl_instantiate_key_common(id, (const struct iovec __force_user *)iov, 1, plen, ringid);
 	}
 
 	return keyctl_instantiate_key_common(id, NULL, 0, 0, ringid);
@@ -1137,7 +1137,7 @@ long keyctl_instantiate_key_iov(key_serial_t id,
 	if (ret == 0)
 		goto no_payload_free;
 
-	ret = keyctl_instantiate_key_common(id, iov, ioc, ret, ringid);
+	ret = keyctl_instantiate_key_common(id, (const struct iovec __force_user *)iov, ioc, ret, ringid);
 err:
 	if (iov != iovstack)
 		kfree(iov);

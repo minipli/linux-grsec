@@ -152,8 +152,8 @@ nf_tables_chain_type_lookup(const struct nft_af_info *afi,
 #ifdef CONFIG_MODULES
 	if (autoload) {
 		nfnl_unlock(NFNL_SUBSYS_NFTABLES);
-		request_module("nft-chain-%u-%*.s", afi->family,
-			       nla_len(nla)-1, (const char *)nla_data(nla));
+		request_module("nft-chain-%u-%.*s", afi->family,
+			       nla_len(nla), (const char *)nla_data(nla));
 		nfnl_lock(NFNL_SUBSYS_NFTABLES);
 		type = __nf_tables_chain_type_lookup(afi->family, nla);
 		if (type != NULL)
@@ -789,9 +789,11 @@ nf_tables_counters(struct nft_base_chain *chain, const struct nlattr *attr)
 	/* Restore old counters on this cpu, no problem. Per-cpu statistics
 	 * are not exposed to userspace.
 	 */
+	preempt_disable();
 	stats = this_cpu_ptr(newstats);
 	stats->bytes = be64_to_cpu(nla_get_be64(tb[NFTA_COUNTER_BYTES]));
 	stats->pkts = be64_to_cpu(nla_get_be64(tb[NFTA_COUNTER_PACKETS]));
+	preempt_enable();
 
 	if (chain->stats) {
 		/* nfnl_lock is held, add some nfnl function for this, later */

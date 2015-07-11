@@ -18,6 +18,7 @@
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/wait.h>
+#include <linux/security.h>
 
 #include <net/inet_connection_sock.h>
 #include <net/inet_hashtables.h>
@@ -48,6 +49,8 @@ static unsigned int inet_sk_ehashfn(const struct sock *sk)
 
 	return inet_ehashfn(net, laddr, lport, faddr, fport);
 }
+
+extern void gr_update_task_in_ip_table(const struct inet_sock *inet);
 
 /*
  * Allocate and initialize a new local port bind bucket.
@@ -553,6 +556,8 @@ ok:
 		if (tw)
 			twrefcnt += inet_twsk_bind_unhash(tw, hinfo);
 		spin_unlock(&head->lock);
+
+		gr_update_task_in_ip_table(inet_sk(sk));
 
 		if (tw) {
 			inet_twsk_deschedule(tw, death_row);

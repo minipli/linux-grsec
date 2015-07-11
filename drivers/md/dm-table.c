@@ -274,7 +274,7 @@ static struct dm_dev_internal *find_device(struct list_head *l, dev_t dev)
 static int open_dev(struct dm_dev_internal *d, dev_t dev,
 		    struct mapped_device *md)
 {
-	static char *_claim_ptr = "I belong to device-mapper";
+	static char _claim_ptr[] = "I belong to device-mapper";
 	struct block_device *bdev;
 
 	int r;
@@ -342,7 +342,7 @@ static int device_area_is_invalid(struct dm_target *ti, struct dm_dev *dev,
 	if (!dev_size)
 		return 0;
 
-	if ((start >= dev_size) || (start + len > dev_size)) {
+	if ((start >= dev_size) || (len > dev_size - start)) {
 		DMWARN("%s: %s too small for target: "
 		       "start=%llu, len=%llu, dev_size=%llu",
 		       dm_device_name(ti->table->md), bdevname(bdev, b),
