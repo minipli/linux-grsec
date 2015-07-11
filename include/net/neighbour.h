@@ -163,7 +163,7 @@ struct neigh_ops {
 	void			(*error_report)(struct neighbour *, struct sk_buff *);
 	int			(*output)(struct neighbour *, struct sk_buff *);
 	int			(*connected_output)(struct neighbour *, struct sk_buff *);
-};
+} __do_const;
 
 struct pneigh_entry {
 	struct pneigh_entry	*next;
@@ -217,7 +217,7 @@ struct neigh_table {
 	struct neigh_statistics	__percpu *stats;
 	struct neigh_hash_table __rcu *nht;
 	struct pneigh_entry	**phash_buckets;
-};
+} __randomize_layout;
 
 enum {
 	NEIGH_ARP_TABLE = 0,

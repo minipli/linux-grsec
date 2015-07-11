@@ -568,7 +568,7 @@ int ip_vs_leave(struct ip_vs_service *svc, struct sk_buff *skb,
 		ret = cp->packet_xmit(skb, cp, pd->pp, iph);
 		/* do not touch skb anymore */
 
-		atomic_inc(&cp->in_pkts);
+		atomic_inc_unchecked(&cp->in_pkts);
 		ip_vs_conn_put(cp);
 		return ret;
 	}
@@ -1723,7 +1723,7 @@ ip_vs_in(unsigned int hooknum, struct sk_buff *skb, int af)
 	if (cp->flags & IP_VS_CONN_F_ONE_PACKET)
 		pkts = sysctl_sync_threshold(ipvs);
 	else
-		pkts = atomic_add_return(1, &cp->in_pkts);
+		pkts = atomic_add_return_unchecked(1, &cp->in_pkts);
 
 	if (ipvs->sync_state & IP_VS_STATE_MASTER)
 		ip_vs_sync_conn(net, cp, pkts);
