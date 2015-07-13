@@ -76,6 +76,8 @@
 #include "tree-flow.h"
 #else
 #include "tree-cfgcleanup.h"
+#include "tree-ssa-operands.h"
+#include "tree-into-ssa.h"
 #endif
 
 #if BUILDING_GCC_VERSION >= 4008
@@ -406,44 +408,6 @@ typedef union gimple_statement_d gcond;
 typedef union gimple_statement_d gdebug;
 typedef union gimple_statement_d gphi;
 typedef union gimple_statement_d greturn;
-#endif
-
-#if BUILDING_GCC_VERSION == 4008
-#define NODE_SYMBOL(node) (&(node)->symbol)
-#define NODE_DECL(node) (node)->symbol.decl
-#endif
-
-#if BUILDING_GCC_VERSION >= 4008
-#define add_referenced_var(var)
-#define mark_sym_for_renaming(var)
-#define varpool_mark_needed_node(node)
-#define create_var_ann(var)
-#define TODO_dump_func 0
-#define TODO_dump_cgraph 0
-#endif
-
-#if BUILDING_GCC_VERSION <= 4009
-#define TODO_verify_il 0
-#define AVAIL_INTERPOSABLE AVAIL_OVERWRITABLE
-#endif
-
-#if BUILDING_GCC_VERSION == 4009
-typedef struct gimple_statement_base gasm;
-typedef struct gimple_statement_base gassign;
-typedef struct gimple_statement_base gcall;
-typedef struct gimple_statement_base gcond;
-typedef struct gimple_statement_base gdebug;
-typedef struct gimple_statement_base gphi;
-typedef struct gimple_statement_base greturn;
-#endif
-
-#if BUILDING_GCC_VERSION <= 4009
-typedef struct rtx_def rtx_insn;
-
-static inline void set_decl_section_name(tree node, const char *value)
-{
-	DECL_SECTION_NAME(node) = build_string(strlen(value) + 1, value);
-}
 
 static inline gasm *as_a_gasm(gimple stmt)
 {
@@ -475,6 +439,26 @@ static inline const gcall *as_a_const_gcall(const_gimple stmt)
 	return stmt;
 }
 
+static inline gcond *as_a_gcond(gimple stmt)
+{
+	return stmt;
+}
+
+static inline const gcond *as_a_const_gcond(const_gimple stmt)
+{
+	return stmt;
+}
+
+static inline gdebug *as_a_gdebug(gimple stmt)
+{
+	return stmt;
+}
+
+static inline const gdebug *as_a_const_gdebug(const_gimple stmt)
+{
+	return stmt;
+}
+
 static inline gphi *as_a_gphi(gimple stmt)
 {
 	return stmt;
@@ -493,6 +477,174 @@ static inline greturn *as_a_greturn(gimple stmt)
 static inline const greturn *as_a_const_greturn(const_gimple stmt)
 {
 	return stmt;
+}
+#endif
+
+#if BUILDING_GCC_VERSION == 4008
+#define NODE_SYMBOL(node) (&(node)->symbol)
+#define NODE_DECL(node) (node)->symbol.decl
+#endif
+
+#if BUILDING_GCC_VERSION >= 4008
+#define add_referenced_var(var)
+#define mark_sym_for_renaming(var)
+#define varpool_mark_needed_node(node)
+#define create_var_ann(var)
+#define TODO_dump_func 0
+#define TODO_dump_cgraph 0
+#endif
+
+#if BUILDING_GCC_VERSION <= 4009
+#define TODO_verify_il 0
+#define AVAIL_INTERPOSABLE AVAIL_OVERWRITABLE
+
+#define section_name_prefix LTO_SECTION_NAME_PREFIX
+#define fatal_error(loc, gmsgid, ...) fatal_error((gmsgid), __VA_ARGS__)
+
+typedef struct rtx_def rtx_insn;
+
+static inline void set_decl_section_name(tree node, const char *value)
+{
+	DECL_SECTION_NAME(node) = build_string(strlen(value) + 1, value);
+}
+
+static inline gasm *as_a_gasm(gimple stmt)
+{
+	return as_a<gasm>(stmt);
+}
+
+static inline const gasm *as_a_const_gasm(const_gimple stmt)
+{
+	return as_a<const gasm>(stmt);
+}
+
+static inline gassign *as_a_gassign(gimple stmt)
+{
+	return as_a<gassign>(stmt);
+}
+
+static inline const gassign *as_a_const_gassign(const_gimple stmt)
+{
+	return as_a<const gassign>(stmt);
+}
+
+static inline gcall *as_a_gcall(gimple stmt)
+{
+	return as_a<gcall>(stmt);
+}
+
+static inline const gcall *as_a_const_gcall(const_gimple stmt)
+{
+	return as_a<const gcall>(stmt);
+}
+
+static inline gcond *as_a_gcond(gimple stmt)
+{
+	return as_a<gcond>(stmt);
+}
+
+static inline const gcond *as_a_const_gcond(const_gimple stmt)
+{
+	return as_a<const gcond>(stmt);
+}
+
+static inline gdebug *as_a_gdebug(gimple stmt)
+{
+	return as_a<gdebug>(stmt);
+}
+
+static inline const gdebug *as_a_const_gdebug(const_gimple stmt)
+{
+	return as_a<const gdebug>(stmt);
+}
+
+static inline gphi *as_a_gphi(gimple stmt)
+{
+	return as_a<gphi>(stmt);
+}
+
+static inline const gphi *as_a_const_gphi(const_gimple stmt)
+{
+	return as_a<const gphi>(stmt);
+}
+
+static inline greturn *as_a_greturn(gimple stmt)
+{
+	return as_a<greturn>(stmt);
+}
+
+static inline const greturn *as_a_const_greturn(const_gimple stmt)
+{
+	return as_a<const greturn>(stmt);
+}
+
+static inline tree gimple_return_retval(const greturn *gs)
+{
+	return gimple_return_retval((const_gimple)gs);
+}
+
+template<>
+template<>
+inline bool
+is_a_helper<gimple_statement_assign>::test(gimple gs)
+{
+	return gs->code == GIMPLE_ASSIGN;
+}
+
+template<>
+template<>
+inline bool
+is_a_helper<const gimple_statement_assign>::test(const_gimple gs)
+{
+	return gs->code == GIMPLE_ASSIGN;
+}
+
+template<>
+template<>
+inline bool
+is_a_helper<gimple_statement_cond>::test(gimple gs)
+{
+	return gs->code == GIMPLE_COND;
+}
+
+template<>
+template<>
+inline bool
+is_a_helper<const gimple_statement_cond>::test(const_gimple gs)
+{
+	return gs->code == GIMPLE_COND;
+}
+
+template<>
+template<>
+inline bool
+is_a_helper<gimple_statement_debug>::test(gimple gs)
+{
+	return gs->code == GIMPLE_DEBUG;
+}
+
+template<>
+template<>
+inline bool
+is_a_helper<const gimple_statement_debug>::test(const_gimple gs)
+{
+	return gs->code == GIMPLE_DEBUG;
+}
+
+template<>
+template<>
+inline bool
+is_a_helper<gimple_statement_return>::test(gimple gs)
+{
+	return gs->code == GIMPLE_RETURN;
+}
+
+template<>
+template<>
+inline bool
+is_a_helper<const gimple_statement_return>::test(const_gimple gs)
+{
+	return gs->code == GIMPLE_RETURN;
 }
 #endif
 
@@ -544,6 +696,11 @@ static inline void varpool_finalize_decl(tree decl)
 static inline void varpool_add_new_variable(tree decl)
 {
 	varpool_node::add(decl);
+}
+
+static inline unsigned int rebuild_cgraph_edges(void)
+{
+	return cgraph_edge::rebuild_edges();
 }
 
 static inline cgraph_node_ptr cgraph_function_node(cgraph_node_ptr node, enum availability *availability)
