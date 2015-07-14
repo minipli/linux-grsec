@@ -507,6 +507,16 @@ static inline void set_decl_section_name(tree node, const char *value)
 {
 	DECL_SECTION_NAME(node) = build_string(strlen(value) + 1, value);
 }
+#endif
+
+#if BUILDING_GCC_VERSION == 4009
+typedef struct gimple_statement_asm gasm;
+typedef struct gimple_statement_base gassign;
+typedef struct gimple_statement_call gcall;
+typedef struct gimple_statement_base gcond;
+typedef struct gimple_statement_base gdebug;
+typedef struct gimple_statement_phi gphi;
+typedef struct gimple_statement_base greturn;
 
 static inline gasm *as_a_gasm(gimple stmt)
 {
@@ -520,12 +530,12 @@ static inline const gasm *as_a_const_gasm(const_gimple stmt)
 
 static inline gassign *as_a_gassign(gimple stmt)
 {
-	return as_a<gassign>(stmt);
+	return stmt;
 }
 
 static inline const gassign *as_a_const_gassign(const_gimple stmt)
 {
-	return as_a<const gassign>(stmt);
+	return stmt;
 }
 
 static inline gcall *as_a_gcall(gimple stmt)
@@ -540,22 +550,22 @@ static inline const gcall *as_a_const_gcall(const_gimple stmt)
 
 static inline gcond *as_a_gcond(gimple stmt)
 {
-	return as_a<gcond>(stmt);
+	return stmt;
 }
 
 static inline const gcond *as_a_const_gcond(const_gimple stmt)
 {
-	return as_a<const gcond>(stmt);
+	return stmt;
 }
 
 static inline gdebug *as_a_gdebug(gimple stmt)
 {
-	return as_a<gdebug>(stmt);
+	return stmt;
 }
 
 static inline const gdebug *as_a_const_gdebug(const_gimple stmt)
 {
-	return as_a<const gdebug>(stmt);
+	return stmt;
 }
 
 static inline gphi *as_a_gphi(gimple stmt)
@@ -570,81 +580,12 @@ static inline const gphi *as_a_const_gphi(const_gimple stmt)
 
 static inline greturn *as_a_greturn(gimple stmt)
 {
-	return as_a<greturn>(stmt);
+	return stmt;
 }
 
 static inline const greturn *as_a_const_greturn(const_gimple stmt)
 {
-	return as_a<const greturn>(stmt);
-}
-
-static inline tree gimple_return_retval(const greturn *gs)
-{
-	return gimple_return_retval((const_gimple)gs);
-}
-
-template<>
-template<>
-inline bool
-is_a_helper<gimple_statement_assign>::test(gimple gs)
-{
-	return gs->code == GIMPLE_ASSIGN;
-}
-
-template<>
-template<>
-inline bool
-is_a_helper<const gimple_statement_assign>::test(const_gimple gs)
-{
-	return gs->code == GIMPLE_ASSIGN;
-}
-
-template<>
-template<>
-inline bool
-is_a_helper<gimple_statement_cond>::test(gimple gs)
-{
-	return gs->code == GIMPLE_COND;
-}
-
-template<>
-template<>
-inline bool
-is_a_helper<const gimple_statement_cond>::test(const_gimple gs)
-{
-	return gs->code == GIMPLE_COND;
-}
-
-template<>
-template<>
-inline bool
-is_a_helper<gimple_statement_debug>::test(gimple gs)
-{
-	return gs->code == GIMPLE_DEBUG;
-}
-
-template<>
-template<>
-inline bool
-is_a_helper<const gimple_statement_debug>::test(const_gimple gs)
-{
-	return gs->code == GIMPLE_DEBUG;
-}
-
-template<>
-template<>
-inline bool
-is_a_helper<gimple_statement_return>::test(gimple gs)
-{
-	return gs->code == GIMPLE_RETURN;
-}
-
-template<>
-template<>
-inline bool
-is_a_helper<const gimple_statement_return>::test(const_gimple gs)
-{
-	return gs->code == GIMPLE_RETURN;
+	return stmt;
 }
 #endif
 
