@@ -299,7 +299,7 @@ ENTRY(pax_exit_kernel_user)
 #endif
 
 	GET_CR3_INTO_RDI
-	ALTERNATIVE "jmp 111f", "", X86_FEATURE_PCID
+	ALTERNATIVE "jmp 1f", "", X86_FEATURE_PCID
 	cmp $0,%dil
 	jnz 3f
 	add $4097,%rdi
