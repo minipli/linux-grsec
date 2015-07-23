@@ -248,7 +248,9 @@ static void __init_or_module add_nops(void *insns, unsigned int len)
 		unsigned int noplen = len;
 		if (noplen > ASM_NOP_MAX)
 			noplen = ASM_NOP_MAX;
+		pax_open_kernel();
 		memcpy(insns, ideal_nops[noplen], noplen);
+		pax_close_kernel();
 		insns += noplen;
 		len -= noplen;
 	}
@@ -275,6 +277,11 @@ recompute_jump(struct alt_instr *a, u8 *orig_insn, u8 *repl_insn, u8 *insnbuf)
 
 	if (a->replacementlen != 5)
 		return;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if (orig_insn < (u8 *)_text || (u8 *)_einittext <= orig_insn)
+		orig_insn = ktva_ktla(orig_insn);
+#endif
 
 	o_dspl = *(s32 *)(insnbuf + 1);
 
@@ -362,7 +369,23 @@ void __init_or_module apply_alternatives(struct alt_instr *start,
 		int insnbuf_sz = 0;
 
 		instr = (u8 *)&a->instr_offset + a->instr_offset;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		if ((u8 *)_text <= instr && instr < (u8 *)_einittext) {
+			instr += ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+			instr = ktla_ktva(instr);
+		}
+#endif
+
 		replacement = (u8 *)&a->repl_offset + a->repl_offset;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		if ((u8 *)_text <= replacement && replacement < (u8 *)_einittext) {
+			replacement += ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+			replacement = ktla_ktva(replacement);
+		}
+#endif
+
 		BUG_ON(a->instrlen > sizeof(insnbuf));
 		BUG_ON(a->cpuid >= (NCAPINTS + NBUGINTS) * 32);
 		if (!boot_cpu_has(a->cpuid)) {
@@ -402,6 +425,11 @@ void __init_or_module apply_alternatives(struct alt_instr *start,
 		}
 		DUMP_BYTES(insnbuf, insnbuf_sz, "%p: final_insn: ", instr);
 
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		if (instr < (u8 *)_text || (u8 *)_einittext <= instr)
+			instr = ktva_ktla(instr);
+#endif
+
 		text_poke_early(instr, insnbuf, insnbuf_sz);
 	}
 }
@@ -416,10 +444,16 @@ static void alternatives_smp_lock(const s32 *start, const s32 *end,
 	for (poff = start; poff < end; poff++) {
 		u8 *ptr = (u8 *)poff + *poff;
 
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		ptr += ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+		if (ptr < (u8 *)_text || (u8 *)_einittext <= ptr)
+			ptr -= ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
 		if (!*poff || ptr < text || ptr >= text_end)
 			continue;
 		/* turn DS segment override prefix into lock prefix */
-		if (*ptr == 0x3e)
+		if (*ktla_ktva(ptr) == 0x3e)
 			text_poke(ptr, ((unsigned char []){0xf0}), 1);
 	}
 	mutex_unlock(&text_mutex);
@@ -434,10 +468,16 @@ static void alternatives_smp_unlock(const s32 *start, const s32 *end,
 	for (poff = start; poff < end; poff++) {
 		u8 *ptr = (u8 *)poff + *poff;
 
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		ptr += ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+		if (ptr < (u8 *)_text || (u8 *)_einittext <= ptr)
+			ptr -= ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
 		if (!*poff || ptr < text || ptr >= text_end)
 			continue;
 		/* turn lock prefix into DS segment override prefix */
-		if (*ptr == 0xf0)
+		if (*ktla_ktva(ptr) == 0xf0)
 			text_poke(ptr, ((unsigned char []){0x3E}), 1);
 	}
 	mutex_unlock(&text_mutex);
@@ -574,7 +614,7 @@ void __init_or_module apply_paravirt(struct paravirt_patch_site *start,
 
 		BUG_ON(p->len > MAX_PATCH_LEN);
 		/* prep the buffer with the original instructions */
-		memcpy(insnbuf, p->instr, p->len);
+		memcpy(insnbuf, ktla_ktva(p->instr), p->len);
 		used = pv_init_ops.patch(p->instrtype, p->clobbers, insnbuf,
 					 (unsigned long)p->instr, p->len);
 
@@ -621,7 +661,7 @@ void __init alternative_instructions(void)
 	if (!uniproc_patched || num_possible_cpus() == 1)
 		free_init_pages("SMP alternatives",
 				(unsigned long)__smp_locks,
-				(unsigned long)__smp_locks_end);
+				PAGE_ALIGN((unsigned long)__smp_locks_end));
 #endif
 
 	apply_paravirt(__parainstructions, __parainstructions_end);
@@ -641,13 +681,17 @@ void __init alternative_instructions(void)
  * instructions. And on the local CPU you need to be protected again NMI or MCE
  * handlers seeing an inconsistent instruction while you patch.
  */
-void *__init_or_module text_poke_early(void *addr, const void *opcode,
+void *__kprobes text_poke_early(void *addr, const void *opcode,
 					      size_t len)
 {
 	unsigned long flags;
 	local_irq_save(flags);
-	memcpy(addr, opcode, len);
+
+	pax_open_kernel();
+	memcpy(ktla_ktva(addr), opcode, len);
 	sync_core();
+	pax_close_kernel();
+
 	local_irq_restore(flags);
 	/* Could also do a CLFLUSH here to speed up CPU recovery; but
 	   that causes hangs on some VIA CPUs. */
@@ -669,36 +713,22 @@ void *__init_or_module text_poke_early(void *addr, const void *opcode,
  */
 void *text_poke(void *addr, const void *opcode, size_t len)
 {
-	unsigned long flags;
-	char *vaddr;
+	unsigned char *vaddr = ktla_ktva(addr);
 	struct page *pages[2];
-	int i;
+	size_t i;
 
 	if (!core_kernel_text((unsigned long)addr)) {
-		pages[0] = vmalloc_to_page(addr);
-		pages[1] = vmalloc_to_page(addr + PAGE_SIZE);
+		pages[0] = vmalloc_to_page(vaddr);
+		pages[1] = vmalloc_to_page(vaddr + PAGE_SIZE);
 	} else {
-		pages[0] = virt_to_page(addr);
+		pages[0] = virt_to_page(vaddr);
 		WARN_ON(!PageReserved(pages[0]));
-		pages[1] = virt_to_page(addr + PAGE_SIZE);
+		pages[1] = virt_to_page(vaddr + PAGE_SIZE);
 	}
 	BUG_ON(!pages[0]);
-	local_irq_save(flags);
-	set_fixmap(FIX_TEXT_POKE0, page_to_phys(pages[0]));
-	if (pages[1])
-		set_fixmap(FIX_TEXT_POKE1, page_to_phys(pages[1]));
-	vaddr = (char *)fix_to_virt(FIX_TEXT_POKE0);
-	memcpy(&vaddr[(unsigned long)addr & ~PAGE_MASK], opcode, len);
-	clear_fixmap(FIX_TEXT_POKE0);
-	if (pages[1])
-		clear_fixmap(FIX_TEXT_POKE1);
-	local_flush_tlb();
-	sync_core();
-	/* Could also do a CLFLUSH here to speed up CPU recovery; but
-	   that causes hangs on some VIA CPUs. */
+	text_poke_early(addr, opcode, len);
 	for (i = 0; i < len; i++)
-		BUG_ON(((char *)addr)[i] != ((char *)opcode)[i]);
-	local_irq_restore(flags);
+		BUG_ON((vaddr)[i] != ((const unsigned char *)opcode)[i]);
 	return addr;
 }
 
@@ -752,7 +782,7 @@ int poke_int3_handler(struct pt_regs *regs)
  */
 void *text_poke_bp(void *addr, const void *opcode, size_t len, void *handler)
 {
-	unsigned char int3 = 0xcc;
+	const unsigned char int3 = 0xcc;
 
 	bp_int3_handler = handler;
 	bp_int3_addr = (u8 *)addr + sizeof(int3);

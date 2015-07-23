@@ -71,8 +71,8 @@ extern struct dentry *lock_rename(struct dentry *, struct dentry *);
 extern void unlock_rename(struct dentry *, struct dentry *);
 
 extern void nd_jump_link(struct nameidata *nd, struct path *path);
-extern void nd_set_link(struct nameidata *nd, char *path);
-extern char *nd_get_link(struct nameidata *nd);
+extern void nd_set_link(struct nameidata *nd, const char *path);
+extern const char *nd_get_link(const struct nameidata *nd);
 
 static inline void nd_terminate_link(void *name, size_t len, size_t maxlen)
 {

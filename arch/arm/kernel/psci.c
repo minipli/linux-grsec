@@ -26,7 +26,7 @@
 #include <asm/psci.h>
 #include <asm/system_misc.h>
 
-struct psci_operations psci_ops;
+struct psci_operations psci_ops __read_only;
 
 static int (*invoke_psci_fn)(u32, u32, u32, u32);
 typedef int (*psci_initcall_t)(const struct device_node *);
