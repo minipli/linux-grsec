@@ -153,7 +153,6 @@ ENTRY(ia32_sysenter_target)
 	movl	%ebp, %ebp
 	movl	%eax, %eax
 
-	orl	$X86_EFLAGS_IF,(%rsp)
 	GET_THREAD_INFO(%r11)
 	movl	TI_sysenter_return(%r11), %r11d
 	CFI_REGISTER rip,r11
@@ -163,6 +162,7 @@ ENTRY(ia32_sysenter_target)
 	pushq_cfi	%rbp			/* pt_regs->sp */
 	CFI_REL_OFFSET	rsp,0
 	pushfq_cfi				/* pt_regs->flags */
+	orl	$X86_EFLAGS_IF,(%rsp)
 	pushq_cfi	$__USER32_CS		/* pt_regs->cs */
 	pushq_cfi	%r11 /* pt_regs->ip = thread_info->sysenter_return */
 	CFI_REL_OFFSET	rip,0
