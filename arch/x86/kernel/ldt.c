@@ -11,6 +11,7 @@
 #include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/mm.h>
+#include <linux/ratelimit.h>
 #include <linux/smp.h>
 #include <linux/vmalloc.h>
 #include <linux/uaccess.h>
@@ -19,6 +20,14 @@
 #include <asm/desc.h>
 #include <asm/mmu_context.h>
 #include <asm/syscalls.h>
+
+#ifdef CONFIG_GRKERNSEC
+int sysctl_modify_ldt __read_only = 0;
+#elif defined(CONFIG_DEFAULT_MODIFY_LDT_SYSCALL)
+int sysctl_modify_ldt __read_only = 1;
+#else
+int sysctl_modify_ldt __read_only = 0;
+#endif
 
 #ifdef CONFIG_SMP
 static void flush_ldt(void *current_mm)
@@ -66,13 +75,13 @@ static int alloc_ldt(mm_context_t *pc, int mincount, int reload)
 	if (reload) {
 #ifdef CONFIG_SMP
 		preempt_disable();
-		load_LDT(pc);
+		load_LDT_nolock(pc);
 		if (!cpumask_equal(mm_cpumask(current->mm),
 				   cpumask_of(smp_processor_id())))
 			smp_call_function(flush_ldt, current->mm, 1);
 		preempt_enable();
 #else
-		load_LDT(pc);
+		load_LDT_nolock(pc);
 #endif
 	}
 	if (oldsize) {
@@ -94,7 +103,7 @@ static inline int copy_ldt(mm_context_t *new, mm_context_t *old)
 		return err;
 
 	for (i = 0; i < old->size; i++)
-		write_ldt_entry(new->ldt, i, old->ldt + i * LDT_ENTRY_SIZE);
+		write_ldt_entry(new->ldt, i, old->ldt + i);
 	return 0;
 }
 
@@ -115,6 +124,24 @@ int init_new_context(struct task_struct *tsk, struct mm_struct *mm)
 		retval = copy_ldt(&mm->context, &old_mm->context);
 		mutex_unlock(&old_mm->context.lock);
 	}
+
+	if (tsk == current) {
+		mm->context.vdso = 0;
+
+#ifdef CONFIG_X86_32
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+		mm->context.user_cs_base = 0UL;
+		mm->context.user_cs_limit = ~0UL;
+
+#if defined(CONFIG_PAX_PAGEEXEC) && defined(CONFIG_SMP)
+		cpumask_clear(&mm->context.cpu_user_cs_mask);
+#endif
+
+#endif
+#endif
+
+	}
+
 	return retval;
 }
 
@@ -229,6 +256,13 @@ static int write_ldt(void __user *ptr, unsigned long bytecount, int oldmode)
 		}
 	}
 
+#ifdef CONFIG_PAX_SEGMEXEC
+	if ((mm->pax_flags & MF_PAX_SEGMEXEC) && (ldt_info.contents & MODIFY_LDT_CONTENTS_CODE)) {
+		error = -EINVAL;
+		goto out_unlock;
+	}
+#endif
+
 	if (!IS_ENABLED(CONFIG_X86_16BIT) && !ldt_info.seg_32bit) {
 		error = -EINVAL;
 		goto out_unlock;
@@ -253,6 +287,15 @@ asmlinkage int sys_modify_ldt(int func, void __user *ptr,
 			      unsigned long bytecount)
 {
 	int ret = -ENOSYS;
+
+	if (!sysctl_modify_ldt) {
+		printk_ratelimited(KERN_INFO
+			"Denied a call to modify_ldt() from %s[%d] (uid: %d)."
+			" Adjust sysctl if this was not an exploit attempt.\n",
+			current->comm, task_pid_nr(current),
+			from_kuid_munged(current_user_ns(), current_uid()));
+		return ret;
+	}
 
 	switch (func) {
 	case 0:

@@ -151,8 +151,11 @@ static inline void sanitize_i387_state(struct task_struct *tsk)
 #define user_insn(insn, output, input...)				\
 ({									\
 	int err;							\
+	pax_open_userland();						\
 	asm volatile(ASM_STAC "\n"					\
-		     "1:" #insn "\n\t"					\
+		     "1:"						\
+		     __copyuser_seg					\
+		     #insn "\n\t"					\
 		     "2: " ASM_CLAC "\n"				\
 		     ".section .fixup,\"ax\"\n"				\
 		     "3:  movl $-1,%[err]\n"				\
@@ -161,6 +164,7 @@ static inline void sanitize_i387_state(struct task_struct *tsk)
 		     _ASM_EXTABLE(1b, 3b)				\
 		     : [err] "=r" (err), output				\
 		     : "0"(0), input);					\
+	pax_close_userland();						\
 	err;								\
 })
 
@@ -327,7 +331,7 @@ static inline int restore_fpu_checking(struct task_struct *tsk)
 			"fnclex\n\t"
 			"emms\n\t"
 			"fildl %P[addr]"	/* set F?P to defined value */
-			: : [addr] "m" (tsk->thread.fpu.has_fpu));
+			: : [addr] "m" (cpu_tss[raw_smp_processor_id()].x86_tss.sp0));
 	}
 
 	return fpu_restore_checking(&tsk->thread.fpu);

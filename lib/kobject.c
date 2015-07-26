@@ -340,8 +340,9 @@ error:
 }
 EXPORT_SYMBOL(kobject_init);
 
-static int kobject_add_varg(struct kobject *kobj, struct kobject *parent,
-			    const char *fmt, va_list vargs)
+static __printf(3, 0) int kobject_add_varg(struct kobject *kobj,
+					   struct kobject *parent,
+					   const char *fmt, va_list vargs)
 {
 	int retval;
 
@@ -936,9 +937,9 @@ EXPORT_SYMBOL_GPL(kset_create_and_add);
 
 
 static DEFINE_SPINLOCK(kobj_ns_type_lock);
-static const struct kobj_ns_type_operations *kobj_ns_ops_tbl[KOBJ_NS_TYPES];
+static const struct kobj_ns_type_operations *kobj_ns_ops_tbl[KOBJ_NS_TYPES] __read_only;
 
-int kobj_ns_type_register(const struct kobj_ns_type_operations *ops)
+int __init kobj_ns_type_register(const struct kobj_ns_type_operations *ops)
 {
 	enum kobj_ns_type type = ops->type;
 	int error;

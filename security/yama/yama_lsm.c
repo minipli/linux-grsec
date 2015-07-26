@@ -365,7 +365,7 @@ int yama_ptrace_traceme(struct task_struct *parent)
 }
 
 #ifndef CONFIG_SECURITY_YAMA_STACKED
-static struct security_operations yama_ops = {
+static struct security_operations yama_ops __read_only = {
 	.name =			"yama",
 
 	.ptrace_access_check =	yama_ptrace_access_check,
@@ -379,7 +379,7 @@ static struct security_operations yama_ops = {
 static int yama_dointvec_minmax(struct ctl_table *table, int write,
 				void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table table_copy;
+	ctl_table_no_const table_copy;
 
 	if (write && !capable(CAP_SYS_PTRACE))
 		return -EPERM;
