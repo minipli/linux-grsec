@@ -45,7 +45,11 @@ void leave_mm(int cpu)
 		BUG();
 	if (cpumask_test_cpu(cpu, mm_cpumask(active_mm))) {
 		cpumask_clear_cpu(cpu, mm_cpumask(active_mm));
+
+#ifndef CONFIG_PAX_PER_CPU_PGD
 		load_cr3(swapper_pg_dir);
+#endif
+
 		/*
 		 * This gets called in the idle path where RCU
 		 * functions differently.  Tracing normally
@@ -117,7 +121,7 @@ static void flush_tlb_func(void *info)
 		} else {
 			unsigned long addr;
 			unsigned long nr_pages =
-				f->flush_end - f->flush_start / PAGE_SIZE;
+				(f->flush_end - f->flush_start) / PAGE_SIZE;
 			addr = f->flush_start;
 			while (addr < f->flush_end) {
 				__flush_tlb_single(addr);

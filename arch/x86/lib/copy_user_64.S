@@ -15,6 +15,7 @@
 #include <asm/alternative-asm.h>
 #include <asm/asm.h>
 #include <asm/smap.h>
+#include <asm/pgtable.h>
 
 	.macro ALIGN_DESTINATION
 	/* check for bad alignment of destination */
@@ -40,56 +41,6 @@
 	_ASM_EXTABLE(101b,103b)
 	.endm
 
-/* Standard copy_to_user with segment limit checking */
-ENTRY(_copy_to_user)
-	CFI_STARTPROC
-	GET_THREAD_INFO(%rax)
-	movq %rdi,%rcx
-	addq %rdx,%rcx
-	jc bad_to_user
-	cmpq TI_addr_limit(%rax),%rcx
-	ja bad_to_user
-	ALTERNATIVE_2 "jmp copy_user_generic_unrolled",		\
-		      "jmp copy_user_generic_string",		\
-		      X86_FEATURE_REP_GOOD,			\
-		      "jmp copy_user_enhanced_fast_string",	\
-		      X86_FEATURE_ERMS
-	CFI_ENDPROC
-ENDPROC(_copy_to_user)
-
-/* Standard copy_from_user with segment limit checking */
-ENTRY(_copy_from_user)
-	CFI_STARTPROC
-	GET_THREAD_INFO(%rax)
-	movq %rsi,%rcx
-	addq %rdx,%rcx
-	jc bad_from_user
-	cmpq TI_addr_limit(%rax),%rcx
-	ja bad_from_user
-	ALTERNATIVE_2 "jmp copy_user_generic_unrolled",		\
-		      "jmp copy_user_generic_string",		\
-		      X86_FEATURE_REP_GOOD,			\
-		      "jmp copy_user_enhanced_fast_string",	\
-		      X86_FEATURE_ERMS
-	CFI_ENDPROC
-ENDPROC(_copy_from_user)
-
-	.section .fixup,"ax"
-	/* must zero dest */
-ENTRY(bad_from_user)
-bad_from_user:
-	CFI_STARTPROC
-	movl %edx,%ecx
-	xorl %eax,%eax
-	rep
-	stosb
-bad_to_user:
-	movl %edx,%eax
-	ret
-	CFI_ENDPROC
-ENDPROC(bad_from_user)
-	.previous
-
 /*
  * copy_user_generic_unrolled - memory copy with exception handling.
  * This version is for CPUs like P4 that don't have efficient micro
@@ -105,6 +56,7 @@ ENDPROC(bad_from_user)
  */
 ENTRY(copy_user_generic_unrolled)
 	CFI_STARTPROC
+	ASM_PAX_OPEN_USERLAND
 	ASM_STAC
 	cmpl $8,%edx
 	jb 20f		/* less then 8 bytes, go to byte copy loop */
@@ -154,6 +106,8 @@ ENTRY(copy_user_generic_unrolled)
 	jnz 21b
 23:	xor %eax,%eax
 	ASM_CLAC
+	ASM_PAX_CLOSE_USERLAND
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"
@@ -209,6 +163,7 @@ ENDPROC(copy_user_generic_unrolled)
  */
 ENTRY(copy_user_generic_string)
 	CFI_STARTPROC
+	ASM_PAX_OPEN_USERLAND
 	ASM_STAC
 	cmpl $8,%edx
 	jb 2f		/* less than 8 bytes, go to byte copy loop */
@@ -223,6 +178,8 @@ ENTRY(copy_user_generic_string)
 	movsb
 	xorl %eax,%eax
 	ASM_CLAC
+	ASM_PAX_CLOSE_USERLAND
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"
@@ -250,12 +207,15 @@ ENDPROC(copy_user_generic_string)
  */
 ENTRY(copy_user_enhanced_fast_string)
 	CFI_STARTPROC
+	ASM_PAX_OPEN_USERLAND
 	ASM_STAC
 	movl %edx,%ecx
 1:	rep
 	movsb
 	xorl %eax,%eax
 	ASM_CLAC
+	ASM_PAX_CLOSE_USERLAND
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"

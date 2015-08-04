@@ -312,7 +312,7 @@ struct subsys_interface {
 	struct list_head node;
 	int (*add_dev)(struct device *dev, struct subsys_interface *sif);
 	int (*remove_dev)(struct device *dev, struct subsys_interface *sif);
-};
+} __do_const;
 
 int subsys_interface_register(struct subsys_interface *sif);
 void subsys_interface_unregister(struct subsys_interface *sif);
@@ -508,7 +508,7 @@ struct device_type {
 	void (*release)(struct device *dev);
 
 	const struct dev_pm_ops *pm;
-};
+} __do_const;
 
 /* interface for exporting device attributes */
 struct device_attribute {
@@ -518,11 +518,12 @@ struct device_attribute {
 	ssize_t (*store)(struct device *dev, struct device_attribute *attr,
 			 const char *buf, size_t count);
 };
+typedef struct device_attribute __no_const device_attribute_no_const;
 
 struct dev_ext_attribute {
 	struct device_attribute attr;
 	void *var;
-};
+} __do_const;
 
 ssize_t device_show_ulong(struct device *dev, struct device_attribute *attr,
 			  char *buf);
@@ -607,8 +608,9 @@ extern int devres_release_group(struct device *dev, void *id);
 
 /* managed devm_k.alloc/kfree for device drivers */
 extern void *devm_kmalloc(struct device *dev, size_t size, gfp_t gfp);
-extern char *devm_kvasprintf(struct device *dev, gfp_t gfp, const char *fmt,
-			     va_list ap);
+extern __printf(3, 0)
+char *devm_kvasprintf(struct device *dev, gfp_t gfp, const char *fmt,
+		      va_list ap);
 extern __printf(3, 4)
 char *devm_kasprintf(struct device *dev, gfp_t gfp, const char *fmt, ...);
 static inline void *devm_kzalloc(struct device *dev, size_t size, gfp_t gfp)
@@ -980,12 +982,10 @@ extern int __must_check device_reprobe(struct device *dev);
 /*
  * Easy functions for dynamically creating devices on the fly
  */
-extern struct device *device_create_vargs(struct class *cls,
-					  struct device *parent,
-					  dev_t devt,
-					  void *drvdata,
-					  const char *fmt,
-					  va_list vargs);
+extern __printf(5, 0)
+struct device *device_create_vargs(struct class *cls, struct device *parent,
+				   dev_t devt, void *drvdata,
+				   const char *fmt, va_list vargs);
 extern __printf(5, 6)
 struct device *device_create(struct class *cls, struct device *parent,
 			     dev_t devt, void *drvdata,

@@ -174,7 +174,7 @@ struct iommu_ops {
 
 	unsigned long pgsize_bitmap;
 	void *priv;
-};
+} __do_const;
 
 #define IOMMU_GROUP_NOTIFY_ADD_DEVICE		1 /* Device added */
 #define IOMMU_GROUP_NOTIFY_DEL_DEVICE		2 /* Pre Device removed */
@@ -234,7 +234,7 @@ extern int iommu_domain_set_attr(struct iommu_domain *domain, enum iommu_attr,
 				 void *data);
 struct device *iommu_device_create(struct device *parent, void *drvdata,
 				   const struct attribute_group **groups,
-				   const char *fmt, ...);
+				   const char *fmt, ...) __printf(4, 5);
 void iommu_device_destroy(struct device *dev);
 int iommu_device_link(struct device *dev, struct device *link);
 void iommu_device_unlink(struct device *dev, struct device *link);

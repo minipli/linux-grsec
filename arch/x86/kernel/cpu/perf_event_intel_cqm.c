@@ -934,6 +934,14 @@ static u64 intel_cqm_event_count(struct perf_event *event)
 		return 0;
 
 	/*
+	 * Getting up-to-date values requires an SMP IPI which is not
+	 * possible if we're being called in interrupt context. Return
+	 * the cached values instead.
+	 */
+	if (unlikely(in_interrupt()))
+		goto out;
+
+	/*
 	 * Notice that we don't perform the reading of an RMID
 	 * atomically, because we can't hold a spin lock across the
 	 * IPIs.
@@ -1352,7 +1360,9 @@ static int __init intel_cqm_init(void)
 		goto out;
 	}
 
-	event_attr_intel_cqm_llc_scale.event_str = str;
+	pax_open_kernel();
+	*(const char **)&event_attr_intel_cqm_llc_scale.event_str = str;
+	pax_close_kernel();
 
 	ret = intel_cqm_setup_rmid_cache();
 	if (ret)

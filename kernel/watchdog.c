@@ -648,7 +648,7 @@ void watchdog_nmi_enable_all(void) {}
 void watchdog_nmi_disable_all(void) {}
 #endif /* CONFIG_HARDLOCKUP_DETECTOR */
 
-static struct smp_hotplug_thread watchdog_threads = {
+static struct smp_hotplug_thread watchdog_threads __read_only = {
 	.store			= &softlockup_watchdog,
 	.thread_should_run	= watchdog_should_run,
 	.thread_fn		= watchdog,

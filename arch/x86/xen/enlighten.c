@@ -125,8 +125,6 @@ EXPORT_SYMBOL_GPL(xen_start_info);
 
 struct shared_info xen_dummy_shared_info;
 
-void *xen_initial_gdt;
-
 RESERVE_BRK(shared_info_page_brk, PAGE_SIZE);
 __read_mostly int xen_have_vector_callback;
 EXPORT_SYMBOL_GPL(xen_have_vector_callback);
@@ -483,6 +481,7 @@ static void set_aliased_prot(void *v, pgprot_t prot)
 	pte_t pte;
 	unsigned long pfn;
 	struct page *page;
+	unsigned char dummy;
 
 	ptep = lookup_address((unsigned long)v, &level);
 	BUG_ON(ptep == NULL);
@@ -491,6 +490,32 @@ static void set_aliased_prot(void *v, pgprot_t prot)
 	page = pfn_to_page(pfn);
 
 	pte = pfn_pte(pfn, prot);
+
+	/*
+	 * Careful: update_va_mapping() will fail if the virtual address
+	 * we're poking isn't populated in the page tables.  We don't
+	 * need to worry about the direct map (that's always in the page
+	 * tables), but we need to be careful about vmap space.  In
+	 * particular, the top level page table can lazily propagate
+	 * entries between processes, so if we've switched mms since we
+	 * vmapped the target in the first place, we might not have the
+	 * top-level page table entry populated.
+	 *
+	 * We disable preemption because we want the same mm active when
+	 * we probe the target and when we issue the hypercall.  We'll
+	 * have the same nominal mm, but if we're a kernel thread, lazy
+	 * mm dropping could change our pgd.
+	 *
+	 * Out of an abundance of caution, this uses __get_user() to fault
+	 * in the target address just in case there's some obscure case
+	 * in which the target address isn't readable.
+	 */
+
+	preempt_disable();
+
+	pagefault_disable();	/* Avoid warnings due to being atomic. */
+	__get_user(dummy, (unsigned char __user __force *)v);
+	pagefault_enable();
 
 	if (HYPERVISOR_update_va_mapping((unsigned long)v, pte, 0))
 		BUG();
@@ -503,12 +528,25 @@ static void set_aliased_prot(void *v, pgprot_t prot)
 				BUG();
 	} else
 		kmap_flush_unused();
+
+	preempt_enable();
 }
 
 static void xen_alloc_ldt(struct desc_struct *ldt, unsigned entries)
 {
 	const unsigned entries_per_page = PAGE_SIZE / LDT_ENTRY_SIZE;
 	int i;
+
+	/*
+	 * We need to mark the all aliases of the LDT pages RO.  We
+	 * don't need to call vm_flush_aliases(), though, since that's
+	 * only responsible for flushing aliases out the TLBs, not the
+	 * page tables, and Xen will flush the TLB for us if needed.
+	 *
+	 * To avoid confusing future readers: none of this is necessary
+	 * to load the LDT.  The hypervisor only checks this when the
+	 * LDT is faulted in due to subsequent descriptor access.
+	 */
 
 	for(i = 0; i < entries; i += entries_per_page)
 		set_aliased_prot(ldt + i, PAGE_KERNEL_RO);
@@ -544,8 +582,7 @@ static void xen_load_gdt(const struct desc_ptr *dtr)
 {
 	unsigned long va = dtr->address;
 	unsigned int size = dtr->size + 1;
-	unsigned pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-	unsigned long frames[pages];
+	unsigned long frames[65536 / PAGE_SIZE];
 	int f;
 
 	/*
@@ -593,8 +630,7 @@ static void __init xen_load_gdt_boot(const struct desc_ptr *dtr)
 {
 	unsigned long va = dtr->address;
 	unsigned int size = dtr->size + 1;
-	unsigned pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
-	unsigned long frames[pages];
+	unsigned long frames[(GDT_SIZE + PAGE_SIZE - 1) / PAGE_SIZE];
 	int f;
 
 	/*
@@ -602,7 +638,7 @@ static void __init xen_load_gdt_boot(const struct desc_ptr *dtr)
 	 * 8-byte entries, or 16 4k pages..
 	 */
 
-	BUG_ON(size > 65536);
+	BUG_ON(size > GDT_SIZE);
 	BUG_ON(va & ~PAGE_MASK);
 
 	for (f = 0; va < dtr->address + size; va += PAGE_SIZE, f++) {
@@ -1223,30 +1259,30 @@ static const struct pv_apic_ops xen_apic_ops __initconst = {
 #endif
 };
 
-static void xen_reboot(int reason)
+static __noreturn void xen_reboot(int reason)
 {
 	struct sched_shutdown r = { .reason = reason };
 
-	if (HYPERVISOR_sched_op(SCHEDOP_shutdown, &r))
-		BUG();
+	HYPERVISOR_sched_op(SCHEDOP_shutdown, &r);
+	BUG();
 }
 
-static void xen_restart(char *msg)
+static __noreturn void xen_restart(char *msg)
 {
 	xen_reboot(SHUTDOWN_reboot);
 }
 
-static void xen_emergency_restart(void)
+static __noreturn void xen_emergency_restart(void)
 {
 	xen_reboot(SHUTDOWN_reboot);
 }
 
-static void xen_machine_halt(void)
+static __noreturn void xen_machine_halt(void)
 {
 	xen_reboot(SHUTDOWN_poweroff);
 }
 
-static void xen_machine_power_off(void)
+static __noreturn void xen_machine_power_off(void)
 {
 	if (pm_power_off)
 		pm_power_off();
@@ -1399,8 +1435,11 @@ static void __ref xen_setup_gdt(int cpu)
 	pv_cpu_ops.write_gdt_entry = xen_write_gdt_entry_boot;
 	pv_cpu_ops.load_gdt = xen_load_gdt_boot;
 
-	setup_stack_canary_segment(0);
-	switch_to_new_gdt(0);
+	setup_stack_canary_segment(cpu);
+#ifdef CONFIG_X86_64
+	load_percpu_segment(cpu);
+#endif
+	switch_to_new_gdt(cpu);
 
 	pv_cpu_ops.write_gdt_entry = xen_write_gdt_entry;
 	pv_cpu_ops.load_gdt = xen_load_gdt;
@@ -1515,7 +1554,17 @@ asmlinkage __visible void __init xen_start_kernel(void)
 	__userpte_alloc_gfp &= ~__GFP_HIGHMEM;
 
 	/* Work out if we support NX */
-	x86_configure_nx();
+#if defined(CONFIG_X86_64) || defined(CONFIG_X86_PAE)
+	if ((cpuid_eax(0x80000000) & 0xffff0000) == 0x80000000 &&
+	    (cpuid_edx(0x80000001) & (1U << (X86_FEATURE_NX & 31)))) {
+		unsigned l, h;
+
+		__supported_pte_mask |= _PAGE_NX;
+		rdmsr(MSR_EFER, l, h);
+		l |= EFER_NX;
+		wrmsr(MSR_EFER, l, h);
+	}
+#endif
 
 	/* Get mfn list */
 	xen_build_dynamic_phys_to_machine();
@@ -1542,13 +1591,6 @@ asmlinkage __visible void __init xen_start_kernel(void)
 	}
 
 	machine_ops = xen_machine_ops;
-
-	/*
-	 * The only reliable way to retain the initial address of the
-	 * percpu gdt_page is to remember it here, so we can go and
-	 * mark it RW later, when the initial percpu area is freed.
-	 */
-	xen_initial_gdt = &per_cpu(gdt_page, 0);
 
 	xen_smp_init();
 

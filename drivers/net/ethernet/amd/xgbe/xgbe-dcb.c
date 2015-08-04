@@ -187,7 +187,7 @@ static int xgbe_dcb_ieee_setets(struct net_device *netdev,
 
 	memcpy(pdata->ets, ets, sizeof(*pdata->ets));
 
-	pdata->hw_if.config_dcb_tc(pdata);
+	pdata->hw_if->config_dcb_tc(pdata);
 
 	return 0;
 }
@@ -226,7 +226,7 @@ static int xgbe_dcb_ieee_setpfc(struct net_device *netdev,
 
 	memcpy(pdata->pfc, pfc, sizeof(*pdata->pfc));
 
-	pdata->hw_if.config_dcb_pfc(pdata);
+	pdata->hw_if->config_dcb_pfc(pdata);
 
 	return 0;
 }
