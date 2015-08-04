@@ -170,7 +170,7 @@ cifs_buf_get(void)
 		memset(ret_buf, 0, buf_size + 3);
 		atomic_inc(&bufAllocCount);
 #ifdef CONFIG_CIFS_STATS2
-		atomic_inc(&totBufAllocCount);
+		atomic_inc_unchecked(&totBufAllocCount);
 #endif /* CONFIG_CIFS_STATS2 */
 	}
 
@@ -205,7 +205,7 @@ cifs_small_buf_get(void)
 	/*	memset(ret_buf, 0, sizeof(struct smb_hdr) + 27);*/
 		atomic_inc(&smBufAllocCount);
 #ifdef CONFIG_CIFS_STATS2
-		atomic_inc(&totSmBufAllocCount);
+		atomic_inc_unchecked(&totSmBufAllocCount);
 #endif /* CONFIG_CIFS_STATS2 */
 
 	}

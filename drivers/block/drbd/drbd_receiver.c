@@ -834,7 +834,7 @@ int drbd_connected(struct drbd_conf *mdev)
 {
 	int err;
 
-	atomic_set(&mdev->packet_seq, 0);
+	atomic_set_unchecked(&mdev->packet_seq, 0);
 	mdev->peer_seq = 0;
 
 	mdev->state_mutex = mdev->tconn->agreed_pro_version < 100 ?
@@ -1193,7 +1193,7 @@ static enum finish_epoch drbd_may_finish_epoch(struct drbd_tconn *tconn,
 	do {
 		next_epoch = NULL;
 
-		epoch_size = atomic_read(&epoch->epoch_size);
+		epoch_size = atomic_read_unchecked(&epoch->epoch_size);
 
 		switch (ev & ~EV_CLEANUP) {
 		case EV_PUT:
@@ -1233,7 +1233,7 @@ static enum finish_epoch drbd_may_finish_epoch(struct drbd_tconn *tconn,
 					rv = FE_DESTROYED;
 			} else {
 				epoch->flags = 0;
-				atomic_set(&epoch->epoch_size, 0);
+				atomic_set_unchecked(&epoch->epoch_size, 0);
 				/* atomic_set(&epoch->active, 0); is already zero */
 				if (rv == FE_STILL_LIVE)
 					rv = FE_RECYCLED;
@@ -1451,7 +1451,7 @@ static int receive_Barrier(struct drbd_tconn *tconn, struct packet_info *pi)
 		conn_wait_active_ee_empty(tconn);
 		drbd_flush(tconn);
 
-		if (atomic_read(&tconn->current_epoch->epoch_size)) {
+		if (atomic_read_unchecked(&tconn->current_epoch->epoch_size)) {
 			epoch = kmalloc(sizeof(struct drbd_epoch), GFP_NOIO);
 			if (epoch)
 				break;
@@ -1464,11 +1464,11 @@ static int receive_Barrier(struct drbd_tconn *tconn, struct packet_info *pi)
 	}
 
 	epoch->flags = 0;
-	atomic_set(&epoch->epoch_size, 0);
+	atomic_set_unchecked(&epoch->epoch_size, 0);
 	atomic_set(&epoch->active, 0);
 
 	spin_lock(&tconn->epoch_lock);
-	if (atomic_read(&tconn->current_epoch->epoch_size)) {
+	if (atomic_read_unchecked(&tconn->current_epoch->epoch_size)) {
 		list_add(&epoch->list, &tconn->current_epoch->list);
 		tconn->current_epoch = epoch;
 		tconn->epochs++;
@@ -1688,7 +1688,7 @@ static int recv_resync_read(struct drbd_conf *mdev, sector_t sector, int data_si
 	list_add(&peer_req->w.list, &mdev->sync_ee);
 	spin_unlock_irq(&mdev->tconn->req_lock);
 
-	atomic_add(data_size >> 9, &mdev->rs_sect_ev);
+	atomic_add_unchecked(data_size >> 9, &mdev->rs_sect_ev);
 	if (drbd_submit_peer_request(mdev, peer_req, WRITE, DRBD_FAULT_RS_WR) == 0)
 		return 0;
 
@@ -1782,7 +1782,7 @@ static int receive_RSDataReply(struct drbd_tconn *tconn, struct packet_info *pi)
 		drbd_send_ack_dp(mdev, P_NEG_ACK, p, pi->size);
 	}
 
-	atomic_add(pi->size >> 9, &mdev->rs_sect_in);
+	atomic_add_unchecked(pi->size >> 9, &mdev->rs_sect_in);
 
 	return err;
 }
@@ -2164,7 +2164,7 @@ static int receive_Data(struct drbd_tconn *tconn, struct packet_info *pi)
 
 		err = wait_for_and_update_peer_seq(mdev, peer_seq);
 		drbd_send_ack_dp(mdev, P_NEG_ACK, p, pi->size);
-		atomic_inc(&tconn->current_epoch->epoch_size);
+		atomic_inc_unchecked(&tconn->current_epoch->epoch_size);
 		err2 = drbd_drain_block(mdev, pi->size);
 		if (!err)
 			err = err2;
@@ -2198,7 +2198,7 @@ static int receive_Data(struct drbd_tconn *tconn, struct packet_info *pi)
 
 	spin_lock(&tconn->epoch_lock);
 	peer_req->epoch = tconn->current_epoch;
-	atomic_inc(&peer_req->epoch->epoch_size);
+	atomic_inc_unchecked(&peer_req->epoch->epoch_size);
 	atomic_inc(&peer_req->epoch->active);
 	spin_unlock(&tconn->epoch_lock);
 
@@ -2326,7 +2326,7 @@ int drbd_rs_should_slow_down(struct drbd_conf *mdev, sector_t sector)
 
 	curr_events = (int)part_stat_read(&disk->part0, sectors[0]) +
 		      (int)part_stat_read(&disk->part0, sectors[1]) -
-			atomic_read(&mdev->rs_sect_ev);
+			atomic_read_unchecked(&mdev->rs_sect_ev);
 
 	if (!mdev->rs_last_events || curr_events - mdev->rs_last_events > 64) {
 		unsigned long rs_left;
@@ -2459,7 +2459,7 @@ static int receive_DataRequest(struct drbd_tconn *tconn, struct packet_info *pi)
 			mdev->bm_resync_fo = BM_SECT_TO_BIT(sector);
 		} else if (pi->cmd == P_OV_REPLY) {
 			/* track progress, we may need to throttle */
-			atomic_add(size >> 9, &mdev->rs_sect_in);
+			atomic_add_unchecked(size >> 9, &mdev->rs_sect_in);
 			peer_req->w.cb = w_e_end_ov_reply;
 			dec_rs_pending(mdev);
 			/* drbd_rs_begin_io done when we sent this request,
@@ -2520,7 +2520,7 @@ static int receive_DataRequest(struct drbd_tconn *tconn, struct packet_info *pi)
 		goto out_free_e;
 
 submit_for_resync:
-	atomic_add(size >> 9, &mdev->rs_sect_ev);
+	atomic_add_unchecked(size >> 9, &mdev->rs_sect_ev);
 
 submit:
 	inc_unacked(mdev);
@@ -4345,7 +4345,7 @@ struct data_cmd {
 	int expect_payload;
 	size_t pkt_size;
 	int (*fn)(struct drbd_tconn *, struct packet_info *);
-};
+} __do_const;
 
 static struct data_cmd drbd_cmd_handler[] = {
 	[P_DATA]	    = { 1, sizeof(struct p_data), receive_Data },
@@ -4465,7 +4465,7 @@ static void conn_disconnect(struct drbd_tconn *tconn)
 	if (!list_empty(&tconn->current_epoch->list))
 		conn_err(tconn, "ASSERTION FAILED: tconn->current_epoch->list not empty\n");
 	/* ok, no more ee's on the fly, it is safe to reset the epoch_size */
-	atomic_set(&tconn->current_epoch->epoch_size, 0);
+	atomic_set_unchecked(&tconn->current_epoch->epoch_size, 0);
 	tconn->send.seen_any_write_yet = false;
 
 	conn_info(tconn, "Connection closed\n");
@@ -4947,7 +4947,7 @@ static int got_IsInSync(struct drbd_tconn *tconn, struct packet_info *pi)
 		put_ldev(mdev);
 	}
 	dec_rs_pending(mdev);
-	atomic_add(blksize >> 9, &mdev->rs_sect_in);
+	atomic_add_unchecked(blksize >> 9, &mdev->rs_sect_in);
 
 	return 0;
 }
@@ -5221,7 +5221,7 @@ static int tconn_finish_peer_reqs(struct drbd_tconn *tconn)
 struct asender_cmd {
 	size_t pkt_size;
 	int (*fn)(struct drbd_tconn *tconn, struct packet_info *);
-};
+} __do_const;
 
 static struct asender_cmd asender_tbl[] = {
 	[P_PING]	    = { 0, got_Ping },

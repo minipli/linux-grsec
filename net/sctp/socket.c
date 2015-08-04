@@ -1607,6 +1607,7 @@ static int sctp_sendmsg(struct kiocb *iocb, struct sock *sk,
 	sctp_scope_t scope;
 	long timeo;
 	__u16 sinfo_flags = 0;
+	bool wait_connect = false;
 	struct sctp_datamsg *datamsg;
 	int msg_flags = msg->msg_flags;
 
@@ -1926,6 +1927,7 @@ static int sctp_sendmsg(struct kiocb *iocb, struct sock *sk,
 		if (err < 0)
 			goto out_free;
 
+		wait_connect = true;
 		pr_debug("%s: we associated primitively\n", __func__);
 	}
 
@@ -1962,6 +1964,11 @@ static int sctp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
 	sctp_datamsg_put(datamsg);
 	err = msg_len;
+
+	if (unlikely(wait_connect)) {
+		timeo = sock_sndtimeo(sk, msg_flags & MSG_DONTWAIT);
+		sctp_wait_for_connect(asoc, &timeo);
+	}
 
 	/* If we are already past ASSOCIATE, the lower
 	 * layers are responsible for association cleanup.
@@ -2177,11 +2184,13 @@ static int sctp_setsockopt_events(struct sock *sk, char __user *optval,
 {
 	struct sctp_association *asoc;
 	struct sctp_ulpevent *event;
+	struct sctp_event_subscribe subscribe;
 
 	if (optlen > sizeof(struct sctp_event_subscribe))
 		return -EINVAL;
-	if (copy_from_user(&sctp_sk(sk)->subscribe, optval, optlen))
+	if (copy_from_user(&subscribe, optval, optlen))
 		return -EFAULT;
+	sctp_sk(sk)->subscribe = subscribe;
 
 	/*
 	 * At the time when a user app subscribes to SCTP_SENDER_DRY_EVENT,
@@ -4273,13 +4282,16 @@ static int sctp_getsockopt_disable_fragments(struct sock *sk, int len,
 static int sctp_getsockopt_events(struct sock *sk, int len, char __user *optval,
 				  int __user *optlen)
 {
+	struct sctp_event_subscribe subscribe;
+
 	if (len <= 0)
 		return -EINVAL;
 	if (len > sizeof(struct sctp_event_subscribe))
 		len = sizeof(struct sctp_event_subscribe);
 	if (put_user(len, optlen))
 		return -EFAULT;
-	if (copy_to_user(optval, &sctp_sk(sk)->subscribe, len))
+	subscribe = sctp_sk(sk)->subscribe;
+	if (copy_to_user(optval, &subscribe, len))
 		return -EFAULT;
 	return 0;
 }
@@ -4297,6 +4309,8 @@ static int sctp_getsockopt_events(struct sock *sk, int len, char __user *optval,
  */
 static int sctp_getsockopt_autoclose(struct sock *sk, int len, char __user *optval, int __user *optlen)
 {
+	__u32 autoclose;
+
 	/* Applicable to UDP-style socket only */
 	if (sctp_style(sk, TCP))
 		return -EOPNOTSUPP;
@@ -4305,7 +4319,8 @@ static int sctp_getsockopt_autoclose(struct sock *sk, int len, char __user *optv
 	len = sizeof(int);
 	if (put_user(len, optlen))
 		return -EFAULT;
-	if (copy_to_user(optval, &sctp_sk(sk)->autoclose, sizeof(int)))
+	autoclose = sctp_sk(sk)->autoclose;
+	if (copy_to_user(optval, &autoclose, sizeof(int)))
 		return -EFAULT;
 	return 0;
 }
@@ -4680,12 +4695,15 @@ static int sctp_getsockopt_delayed_ack(struct sock *sk, int len,
  */
 static int sctp_getsockopt_initmsg(struct sock *sk, int len, char __user *optval, int __user *optlen)
 {
+	struct sctp_initmsg initmsg;
+
 	if (len < sizeof(struct sctp_initmsg))
 		return -EINVAL;
 	len = sizeof(struct sctp_initmsg);
 	if (put_user(len, optlen))
 		return -EFAULT;
-	if (copy_to_user(optval, &sctp_sk(sk)->initmsg, len))
+	initmsg = sctp_sk(sk)->initmsg;
+	if (copy_to_user(optval, &initmsg, len))
 		return -EFAULT;
 	return 0;
 }
@@ -4726,6 +4744,8 @@ static int sctp_getsockopt_peer_addrs(struct sock *sk, int len,
 		addrlen = sctp_get_af_specific(temp.sa.sa_family)->sockaddr_len;
 		if (space_left < addrlen)
 			return -ENOMEM;
+		if (addrlen > sizeof(temp) || addrlen < 0)
+			return -EFAULT;
 		if (copy_to_user(to, &temp, addrlen))
 			return -EFAULT;
 		to += addrlen;

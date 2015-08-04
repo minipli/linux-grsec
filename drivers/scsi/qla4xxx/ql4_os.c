@@ -4463,12 +4463,12 @@ static void qla4xxx_check_relogin_flash_ddb(struct iscsi_cls_session *cls_sess)
 		 */
 		if (!iscsi_is_session_online(cls_sess)) {
 			/* Reset retry relogin timer */
-			atomic_inc(&ddb_entry->relogin_retry_count);
+			atomic_inc_unchecked(&ddb_entry->relogin_retry_count);
 			DEBUG2(ql4_printk(KERN_INFO, ha,
 				"%s: index[%d] relogin timed out-retrying"
 				" relogin (%d), retry (%d)\n", __func__,
 				ddb_entry->fw_ddb_index,
-				atomic_read(&ddb_entry->relogin_retry_count),
+				atomic_read_unchecked(&ddb_entry->relogin_retry_count),
 				ddb_entry->default_time2wait + 4));
 			set_bit(DPC_RELOGIN_DEVICE, &ha->dpc_flags);
 			atomic_set(&ddb_entry->retry_relogin_timer,
@@ -6552,7 +6552,7 @@ static void qla4xxx_setup_flash_ddb_entry(struct scsi_qla_host *ha,
 
 	atomic_set(&ddb_entry->retry_relogin_timer, INVALID_ENTRY);
 	atomic_set(&ddb_entry->relogin_timer, 0);
-	atomic_set(&ddb_entry->relogin_retry_count, 0);
+	atomic_set_unchecked(&ddb_entry->relogin_retry_count, 0);
 	def_timeout = le16_to_cpu(ddb_entry->fw_ddb_entry.def_timeout);
 	ddb_entry->default_relogin_timeout =
 		(def_timeout > LOGIN_TOV) && (def_timeout < LOGIN_TOV * 10) ?

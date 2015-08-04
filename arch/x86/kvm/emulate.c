@@ -3390,7 +3390,7 @@ static int check_cr_write(struct x86_emulate_ctxt *ctxt)
 	int cr = ctxt->modrm_reg;
 	u64 efer = 0;
 
-	static u64 cr_reserved_bits[] = {
+	static const u64 cr_reserved_bits[] = {
 		0xffffffff00000000ULL,
 		0, 0, 0, /* CR3 checked later */
 		CR4_RESERVED_BITS,
@@ -3425,7 +3425,7 @@ static int check_cr_write(struct x86_emulate_ctxt *ctxt)
 
 		ctxt->ops->get_msr(ctxt, MSR_EFER, &efer);
 		if (efer & EFER_LMA)
-			rsvd = CR3_L_MODE_RESERVED_BITS;
+			rsvd = CR3_L_MODE_RESERVED_BITS & ~CR3_PCID_INVD;
 		else if (ctxt->ops->get_cr(ctxt, 4) & X86_CR4_PAE)
 			rsvd = CR3_PAE_RESERVED_BITS;
 		else if (ctxt->ops->get_cr(ctxt, 0) & X86_CR0_PG)
@@ -3657,8 +3657,8 @@ static const struct opcode group5[] = {
 };
 
 static const struct opcode group6[] = {
-	DI(Prot,	sldt),
-	DI(Prot,	str),
+	DI(Prot | DstMem,	sldt),
+	DI(Prot | DstMem,	str),
 	II(Prot | Priv | SrcMem16, em_lldt, lldt),
 	II(Prot | Priv | SrcMem16, em_ltr, ltr),
 	N, N, N, N,
