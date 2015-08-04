@@ -97,6 +97,12 @@ void bad_trap(struct pt_regs *regs, long lvl)
 
 	lvl -= 0x100;
 	if (regs->tstate & TSTATE_PRIV) {
+
+#ifdef CONFIG_PAX_REFCOUNT
+		if (lvl == 6)
+			pax_report_refcount_overflow(regs);
+#endif
+
 		sprintf(buffer, "Kernel bad sw trap %lx", lvl);
 		die_if_kernel(buffer, regs);
 	}
@@ -115,10 +121,15 @@ void bad_trap(struct pt_regs *regs, long lvl)
 void bad_trap_tl1(struct pt_regs *regs, long lvl)
 {
 	char buffer[32];
-	
+
 	if (notify_die(DIE_TRAP_TL1, "bad trap tl1", regs,
 		       0, lvl, SIGTRAP) == NOTIFY_STOP)
 		return;
+
+#ifdef CONFIG_PAX_REFCOUNT
+	if (lvl == 6)
+		pax_report_refcount_overflow(regs);
+#endif
 
 	dump_tl1_traplog((struct tl1_traplog *)(regs + 1));
 
@@ -1837,8 +1848,8 @@ struct sun4v_error_entry {
 /*0x38*/u64		reserved_5;
 };
 
-static atomic_t sun4v_resum_oflow_cnt = ATOMIC_INIT(0);
-static atomic_t sun4v_nonresum_oflow_cnt = ATOMIC_INIT(0);
+static atomic_unchecked_t sun4v_resum_oflow_cnt = ATOMIC_INIT(0);
+static atomic_unchecked_t sun4v_nonresum_oflow_cnt = ATOMIC_INIT(0);
 
 static const char *sun4v_err_type_to_str(u8 type)
 {
@@ -1930,7 +1941,7 @@ static void sun4v_report_real_raddr(const char *pfx, struct pt_regs *regs)
 }
 
 static void sun4v_log_error(struct pt_regs *regs, struct sun4v_error_entry *ent,
-			    int cpu, const char *pfx, atomic_t *ocnt)
+			    int cpu, const char *pfx, atomic_unchecked_t *ocnt)
 {
 	u64 *raw_ptr = (u64 *) ent;
 	u32 attrs;
@@ -1988,8 +1999,8 @@ static void sun4v_log_error(struct pt_regs *regs, struct sun4v_error_entry *ent,
 
 	show_regs(regs);
 
-	if ((cnt = atomic_read(ocnt)) != 0) {
-		atomic_set(ocnt, 0);
+	if ((cnt = atomic_read_unchecked(ocnt)) != 0) {
+		atomic_set_unchecked(ocnt, 0);
 		wmb();
 		printk("%s: Queue overflowed %d times.\n",
 		       pfx, cnt);
@@ -2046,7 +2057,7 @@ out:
  */
 void sun4v_resum_overflow(struct pt_regs *regs)
 {
-	atomic_inc(&sun4v_resum_oflow_cnt);
+	atomic_inc_unchecked(&sun4v_resum_oflow_cnt);
 }
 
 /* We run with %pil set to PIL_NORMAL_MAX and PSTATE_IE enabled in %pstate.
@@ -2099,7 +2110,7 @@ void sun4v_nonresum_overflow(struct pt_regs *regs)
 	/* XXX Actually even this can make not that much sense.  Perhaps
 	 * XXX we should just pull the plug and panic directly from here?
 	 */
-	atomic_inc(&sun4v_nonresum_oflow_cnt);
+	atomic_inc_unchecked(&sun4v_nonresum_oflow_cnt);
 }
 
 static void sun4v_tlb_error(struct pt_regs *regs)
