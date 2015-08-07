@@ -252,6 +252,53 @@ static __always_inline void setup_smap(struct cpuinfo_x86 *c)
 	}
 }
 
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+#ifdef CONFIG_X86_64
+static bool uderef_enabled __read_only = true;
+unsigned long pax_user_shadow_base __read_only;
+EXPORT_SYMBOL(pax_user_shadow_base);
+extern char pax_enter_kernel_user[];
+extern char pax_exit_kernel_user[];
+
+static int __init setup_pax_weakuderef(char *str)
+{
+	if (uderef_enabled)
+		pax_user_shadow_base = 1UL << TASK_SIZE_MAX_SHIFT;
+	return 1;
+}
+__setup("pax_weakuderef", setup_pax_weakuderef);
+#endif
+
+static int __init setup_pax_nouderef(char *str)
+{
+#ifdef CONFIG_X86_32
+	unsigned int cpu;
+	struct desc_struct *gdt;
+
+	for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
+		gdt = get_cpu_gdt_table(cpu);
+		gdt[GDT_ENTRY_KERNEL_DS].type = 3;
+		gdt[GDT_ENTRY_KERNEL_DS].limit = 0xf;
+		gdt[GDT_ENTRY_DEFAULT_USER_CS].limit = 0xf;
+		gdt[GDT_ENTRY_DEFAULT_USER_DS].limit = 0xf;
+	}
+	loadsegment(ds, __KERNEL_DS);
+	loadsegment(es, __KERNEL_DS);
+	loadsegment(ss, __KERNEL_DS);
+#else
+	memcpy(pax_enter_kernel_user, (unsigned char []){0xc3}, 1);
+	memcpy(pax_exit_kernel_user, (unsigned char []){0xc3}, 1);
+	clone_pgd_mask = ~(pgdval_t)0UL;
+	pax_user_shadow_base = 0UL;
+	setup_clear_cpu_cap(X86_FEATURE_PCIDUDEREF);
+	uderef_enabled = false;
+#endif
+
+	return 0;
+}
+early_param("pax_nouderef", setup_pax_nouderef);
+#endif
+
 #ifdef CONFIG_X86_64
 static __init int setup_disable_pcid(char *arg)
 {
@@ -259,7 +306,7 @@ static __init int setup_disable_pcid(char *arg)
 	setup_clear_cpu_cap(X86_FEATURE_INVPCID);
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
-	if (clone_pgd_mask != ~(pgdval_t)0UL)
+	if (uderef_enabled)
 		pax_user_shadow_base = 1UL << TASK_SIZE_MAX_SHIFT;
 #endif
 
@@ -279,7 +326,7 @@ static void setup_pcid(struct cpuinfo_x86 *c)
 		printk("PAX: INVPCID detected\n");
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
-	if (clone_pgd_mask == ~(pgdval_t)0UL) {
+	if (!uderef_enabled) {
 		printk("PAX: UDEREF disabled\n");
 		return;
 	}

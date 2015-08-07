@@ -94,16 +94,18 @@ static inline void __native_flush_tlb(void)
 		return;
 	}
 
-#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
-	if (static_cpu_has(X86_FEATURE_PCIDUDEREF)) {
+	if (static_cpu_has(X86_FEATURE_PCID)) {
 		unsigned int cpu = raw_get_cpu();
 
-		native_write_cr3(__pa(get_cpu_pgd(cpu, user)) | PCID_USER);
+#if defined(CONFIG_X86_64) && defined(CONFIG_PAX_MEMORY_UDEREF)
+		if (static_cpu_has(X86_FEATURE_PCIDUDEREF))
+			native_write_cr3(__pa(get_cpu_pgd(cpu, user)) | PCID_USER);
+#endif
+
 		native_write_cr3(__pa(get_cpu_pgd(cpu, kernel)) | PCID_KERNEL);
 		raw_put_cpu_no_resched();
 		return;
 	}
-#endif
 
 	native_write_cr3(native_read_cr3());
 }
