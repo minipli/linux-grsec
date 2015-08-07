@@ -102,7 +102,12 @@ union bpf_attr;
 #define __TYPE_IS_L(t)	(__same_type((t)0, 0L))
 #define __TYPE_IS_UL(t)	(__same_type((t)0, 0UL))
 #define __TYPE_IS_LL(t) (__same_type((t)0, 0LL) || __same_type((t)0, 0ULL))
-#define __SC_LONG(t, a) __typeof(__builtin_choose_expr(__TYPE_IS_LL(t), 0LL, 0L)) a
+#define __SC_LONG(t, a)	__typeof__(				\
+	__builtin_choose_expr(					\
+		sizeof(t) > sizeof(int),			\
+		(t) 0,						\
+		__builtin_choose_expr(__type_is_unsigned(t), 0UL, 0L)	\
+	)) a
 #define __SC_CAST(t, a)	(t) a
 #define __SC_ARGS(t, a)	a
 #define __SC_TEST(t, a) (void)BUILD_BUG_ON_ZERO(!__TYPE_IS_LL(t) && sizeof(t) > sizeof(long))
@@ -384,11 +389,11 @@ asmlinkage long sys_sync(void);
 asmlinkage long sys_fsync(unsigned int fd);
 asmlinkage long sys_fdatasync(unsigned int fd);
 asmlinkage long sys_bdflush(int func, long data);
-asmlinkage long sys_mount(char __user *dev_name, char __user *dir_name,
-				char __user *type, unsigned long flags,
+asmlinkage long sys_mount(const char __user *dev_name, const char __user *dir_name,
+				const char __user *type, unsigned long flags,
 				void __user *data);
-asmlinkage long sys_umount(char __user *name, int flags);
-asmlinkage long sys_oldumount(char __user *name);
+asmlinkage long sys_umount(const char __user *name, int flags);
+asmlinkage long sys_oldumount(const char __user *name);
 asmlinkage long sys_truncate(const char __user *path, long length);
 asmlinkage long sys_ftruncate(unsigned int fd, unsigned long length);
 asmlinkage long sys_stat(const char __user *filename,
@@ -604,7 +609,7 @@ asmlinkage long sys_getsockname(int, struct sockaddr __user *, int __user *);
 asmlinkage long sys_getpeername(int, struct sockaddr __user *, int __user *);
 asmlinkage long sys_send(int, void __user *, size_t, unsigned);
 asmlinkage long sys_sendto(int, void __user *, size_t, unsigned,
-				struct sockaddr __user *, int);
+				struct sockaddr __user *, int) __intentional_overflow(0);
 asmlinkage long sys_sendmsg(int fd, struct user_msghdr __user *msg, unsigned flags);
 asmlinkage long sys_sendmmsg(int fd, struct mmsghdr __user *msg,
 			     unsigned int vlen, unsigned flags);
@@ -663,10 +668,10 @@ asmlinkage long sys_msgctl(int msqid, int cmd, struct msqid_ds __user *buf);
 
 asmlinkage long sys_semget(key_t key, int nsems, int semflg);
 asmlinkage long sys_semop(int semid, struct sembuf __user *sops,
-				unsigned nsops);
+				long nsops);
 asmlinkage long sys_semctl(int semid, int semnum, int cmd, unsigned long arg);
 asmlinkage long sys_semtimedop(int semid, struct sembuf __user *sops,
-				unsigned nsops,
+				long nsops,
 				const struct timespec __user *timeout);
 asmlinkage long sys_shmat(int shmid, char __user *shmaddr, int shmflg);
 asmlinkage long sys_shmget(key_t key, size_t size, int flag);

@@ -11,6 +11,7 @@
 #include <asm/msr.h>
 #include <asm/processor-flags.h>
 #include <asm/page_types.h>
+#include <asm/alternative-asm.h>
 
 #define SAVE_XMM			\
 	mov %rsp, %rax;			\
@@ -88,6 +89,7 @@ ENTRY(efi_call)
 	RESTORE_PGT
 	addq $48, %rsp
 	RESTORE_XMM
+	pax_force_retaddr 0, 1
 	ret
 ENDPROC(efi_call)
 
