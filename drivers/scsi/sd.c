@@ -105,7 +105,7 @@ static void sd_shutdown(struct device *);
 static int sd_suspend(struct device *, pm_message_t state);
 static int sd_resume(struct device *);
 static void sd_rescan(struct device *);
-static int sd_done(struct scsi_cmnd *);
+static unsigned int sd_done(struct scsi_cmnd *);
 static void sd_read_capacity(struct scsi_disk *sdkp, unsigned char *buffer);
 static void scsi_disk_release(struct device *cdev);
 static void sd_print_sense_hdr(struct scsi_disk *, struct scsi_sense_hdr *);
@@ -1384,7 +1384,7 @@ static unsigned int sd_completed_bytes(struct scsi_cmnd *scmd)
  *
  *	Note: potentially run from within an ISR. Must not block.
  **/
-static int sd_done(struct scsi_cmnd *SCpnt)
+static unsigned int sd_done(struct scsi_cmnd *SCpnt)
 {
 	int result = SCpnt->result;
 	unsigned int good_bytes = result ? 0 : scsi_bufflen(SCpnt);
@@ -2626,7 +2626,7 @@ static int sd_probe(struct device *dev)
 	device_initialize(&sdkp->dev);
 	sdkp->dev.parent = dev;
 	sdkp->dev.class = &sd_disk_class;
-	dev_set_name(&sdkp->dev, dev_name(dev));
+	dev_set_name(&sdkp->dev, "%s", dev_name(dev));
 
 	if (device_add(&sdkp->dev))
 		goto out_free_index;

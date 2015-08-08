@@ -1616,12 +1616,17 @@ ftrace_code_disable(struct module *mod, struct dyn_ftrace *rec)
 	if (unlikely(ftrace_disabled))
 		return 0;
 
+	ret = ftrace_arch_code_modify_prepare();
+	FTRACE_WARN_ON(ret);
+	if (ret)
+		return 0;
+
 	ret = ftrace_make_nop(mod, rec, MCOUNT_ADDR);
+	FTRACE_WARN_ON(ftrace_arch_code_modify_post_process());
 	if (ret) {
 		ftrace_bug(ret, ip);
-		return 0;
 	}
-	return 1;
+	return ret ? 0 : 1;
 }
 
 /*
@@ -2713,7 +2718,7 @@ static void ftrace_free_entry_rcu(struct rcu_head *rhp)
 
 int
 register_ftrace_function_probe(char *glob, struct ftrace_probe_ops *ops,
-			      void *data)
+				void *data)
 {
 	struct ftrace_func_probe *entry;
 	struct ftrace_page *pg;
@@ -4062,8 +4067,6 @@ ftrace_enable_sysctl(struct ctl_table *table, int write,
 
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
 
-static struct notifier_block ftrace_suspend_notifier;
-
 int ftrace_graph_entry_stub(struct ftrace_graph_ent *trace)
 {
 	return 0;
@@ -4105,7 +4108,7 @@ static int alloc_retstack_tasklist(struct ftrace_ret_stack **ret_stack_list)
 
 		if (t->ret_stack == NULL) {
 			atomic_set(&t->tracing_graph_pause, 0);
-			atomic_set(&t->trace_overrun, 0);
+			atomic_set_unchecked(&t->trace_overrun, 0);
 			t->curr_ret_stack = -1;
 			/* Make sure the tasks see the -1 first: */
 			smp_wmb();
@@ -4208,6 +4211,10 @@ ftrace_suspend_notifier_call(struct notifier_block *bl, unsigned long state,
 	return NOTIFY_DONE;
 }
 
+static struct notifier_block ftrace_suspend_notifier = {
+	.notifier_call = ftrace_suspend_notifier_call
+};
+
 /* Just a place holder for function graph */
 static struct ftrace_ops fgraph_ops __read_mostly = {
 	.func		= ftrace_stub,
@@ -4251,7 +4258,6 @@ int register_ftrace_graph(trace_func_graph_ret_t retfunc,
 		goto out;
 	}
 
-	ftrace_suspend_notifier.notifier_call = ftrace_suspend_notifier_call;
 	register_pm_notifier(&ftrace_suspend_notifier);
 
 	ftrace_graph_active++;
@@ -4305,7 +4311,7 @@ static void
 graph_init_task(struct task_struct *t, struct ftrace_ret_stack *ret_stack)
 {
 	atomic_set(&t->tracing_graph_pause, 0);
-	atomic_set(&t->trace_overrun, 0);
+	atomic_set_unchecked(&t->trace_overrun, 0);
 	t->ftrace_timestamp = 0;
 	/* make curr_ret_stack visible before we add the ret_stack */
 	smp_wmb();

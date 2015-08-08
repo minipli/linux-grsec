@@ -1,7 +1,7 @@
 #ifndef _ASM_X86_PAGE_64_DEFS_H
 #define _ASM_X86_PAGE_64_DEFS_H
 
-#define THREAD_ORDER	1
+#define THREAD_ORDER	2
 #define THREAD_SIZE  (PAGE_SIZE << THREAD_ORDER)
 #define CURRENT_MASK (~(THREAD_SIZE - 1))
 
@@ -55,9 +55,9 @@ void copy_page(void *to, void *from);
 
 /* duplicated to the one in bootmem.h */
 extern unsigned long max_pfn;
-extern unsigned long phys_base;
+extern const unsigned long phys_base;
 
-extern unsigned long __phys_addr(unsigned long);
+extern unsigned long __intentional_overflow(-1) __phys_addr(unsigned long);
 #define __phys_reloc_hide(x)	(x)
 
 #define vmemmap ((struct page *)VMEMMAP_START)
