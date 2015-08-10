@@ -92,6 +92,7 @@ ENTRY(call_rwsem_down_read_failed)
 	call rwsem_down_read_failed
 	__ASM_SIZE(pop,_cfi_reg) __ASM_REG(dx)
 	restore_common_regs
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(call_rwsem_down_read_failed)
@@ -102,6 +103,7 @@ ENTRY(call_rwsem_down_write_failed)
 	movq %rax,%rdi
 	call rwsem_down_write_failed
 	restore_common_regs
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(call_rwsem_down_write_failed)
@@ -115,7 +117,8 @@ ENTRY(call_rwsem_wake)
 	movq %rax,%rdi
 	call rwsem_wake
 	restore_common_regs
-1:	ret
+1:	pax_force_retaddr
+	ret
 	CFI_ENDPROC
 ENDPROC(call_rwsem_wake)
 
@@ -127,6 +130,7 @@ ENTRY(call_rwsem_downgrade_wake)
 	call rwsem_downgrade_wake
 	__ASM_SIZE(pop,_cfi_reg) __ASM_REG(dx)
 	restore_common_regs
+	pax_force_retaddr
 	ret
 	CFI_ENDPROC
 ENDPROC(call_rwsem_downgrade_wake)
