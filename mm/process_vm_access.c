@@ -258,19 +258,19 @@ static ssize_t process_vm_rw_core(pid_t pid, const struct iovec *lvec,
 	size_t iov_l_curr_offset = 0;
 	ssize_t iov_len;
 
+	return -ENOSYS; // PaX: until properly audited
+
 	/*
 	 * Work out how many pages of struct pages we're going to need
 	 * when eventually calling get_user_pages
 	 */
 	for (i = 0; i < riovcnt; i++) {
 		iov_len = rvec[i].iov_len;
-		if (iov_len > 0) {
-			nr_pages_iov = ((unsigned long)rvec[i].iov_base
-					+ iov_len)
-				/ PAGE_SIZE - (unsigned long)rvec[i].iov_base
-				/ PAGE_SIZE + 1;
-			nr_pages = max(nr_pages, nr_pages_iov);
-		}
+		if (iov_len <= 0)
+			continue;
+		nr_pages_iov = ((unsigned long)rvec[i].iov_base + iov_len) / PAGE_SIZE -
+				(unsigned long)rvec[i].iov_base / PAGE_SIZE + 1;
+		nr_pages = max(nr_pages, nr_pages_iov);
 	}
 
 	if (nr_pages == 0)

@@ -121,7 +121,7 @@ static void print_one_rcu_data(struct seq_file *m, struct rcu_data *rdp)
 		   ulong2long(rdp->completed), ulong2long(rdp->gpnum),
 		   rdp->passed_quiesce, rdp->qs_pending);
 	seq_printf(m, " dt=%d/%llx/%d df=%lu",
-		   atomic_read(&rdp->dynticks->dynticks),
+		   atomic_read_unchecked(&rdp->dynticks->dynticks),
 		   rdp->dynticks->dynticks_nesting,
 		   rdp->dynticks->dynticks_nmi_nesting,
 		   rdp->dynticks_fqs);
@@ -182,17 +182,17 @@ static int show_rcuexp(struct seq_file *m, void *v)
 	struct rcu_state *rsp = (struct rcu_state *)m->private;
 
 	seq_printf(m, "s=%lu d=%lu w=%lu tf=%lu wd1=%lu wd2=%lu n=%lu sc=%lu dt=%lu dl=%lu dx=%lu\n",
-		   atomic_long_read(&rsp->expedited_start),
+		   atomic_long_read_unchecked(&rsp->expedited_start),
 		   atomic_long_read(&rsp->expedited_done),
-		   atomic_long_read(&rsp->expedited_wrap),
-		   atomic_long_read(&rsp->expedited_tryfail),
-		   atomic_long_read(&rsp->expedited_workdone1),
-		   atomic_long_read(&rsp->expedited_workdone2),
-		   atomic_long_read(&rsp->expedited_normal),
-		   atomic_long_read(&rsp->expedited_stoppedcpus),
-		   atomic_long_read(&rsp->expedited_done_tries),
-		   atomic_long_read(&rsp->expedited_done_lost),
-		   atomic_long_read(&rsp->expedited_done_exit));
+		   atomic_long_read_unchecked(&rsp->expedited_wrap),
+		   atomic_long_read_unchecked(&rsp->expedited_tryfail),
+		   atomic_long_read_unchecked(&rsp->expedited_workdone1),
+		   atomic_long_read_unchecked(&rsp->expedited_workdone2),
+		   atomic_long_read_unchecked(&rsp->expedited_normal),
+		   atomic_long_read_unchecked(&rsp->expedited_stoppedcpus),
+		   atomic_long_read_unchecked(&rsp->expedited_done_tries),
+		   atomic_long_read_unchecked(&rsp->expedited_done_lost),
+		   atomic_long_read_unchecked(&rsp->expedited_done_exit));
 	return 0;
 }
 
