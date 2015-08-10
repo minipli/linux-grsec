@@ -2870,6 +2870,7 @@ kimage_normal_alloc_31140 kimage_normal_alloc 3 31140 NULL
 size_inside_page_31141 size_inside_page 0 31141 NULL
 w9966_v4l_read_31148 w9966_v4l_read 3 31148 NULL
 ch_do_scsi_31171 ch_do_scsi 4 31171 NULL
+crypto_rng_seedsize_31196 crypto_rng_seedsize 0 31196 NULL
 r592_read_fifo_pio_31198 r592_read_fifo_pio 3 31198 NULL
 mtdchar_readoob_31200 mtdchar_readoob 4 31200 NULL
 __btrfs_free_reserved_extent_31207 __btrfs_free_reserved_extent 2 31207 NULL
@@ -3803,6 +3804,7 @@ dma_attach_41094 dma_attach 5-6 41094 NULL
 provide_user_output_41105 provide_user_output 3 41105 NULL
 f_audio_buffer_alloc_41110 f_audio_buffer_alloc 1 41110 NULL
 ath10k_read_wmi_services_41112 ath10k_read_wmi_services 3 41112 NULL
+ocfs2_extend_trans_41116 ocfs2_extend_trans 2 41116 NULL
 v4l2_ctrl_new_int_menu_41151 v4l2_ctrl_new_int_menu 4 41151 NULL
 tx_frag_mpdu_alloc_failed_read_41167 tx_frag_mpdu_alloc_failed_read 3 41167 NULL
 dvb_ca_write_41171 dvb_ca_write 3 41171 NULL
