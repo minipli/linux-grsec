@@ -456,7 +456,7 @@ static __always_inline __pure bool __static_cpu_has(u16 bit)
 
 #ifdef CONFIG_X86_DEBUG_STATIC_CPU_HAS
 	t_warn:
-		if (bit != X86_FEATURE_PCID && bit != X86_FEATURE_INVPCID)
+		if (bit != X86_FEATURE_PCID && bit != X86_FEATURE_INVPCID && bit != X86_FEATURE_PCIDUDEREF)
 			warn_pre_alternatives();
 		return false;
 #endif
