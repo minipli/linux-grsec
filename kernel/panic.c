@@ -54,7 +54,7 @@ EXPORT_SYMBOL(panic_blink);
 /*
  * Stop ourself in panic -- architecture code may override this
  */
-void __weak panic_smp_self_stop(void)
+void __weak __noreturn panic_smp_self_stop(void)
 {
 	while (1)
 		cpu_relax();
@@ -425,7 +425,7 @@ static void warn_slowpath_common(const char *file, int line, void *caller,
 	disable_trace_on_warning();
 
 	pr_warn("------------[ cut here ]------------\n");
-	pr_warn("WARNING: CPU: %d PID: %d at %s:%d %pS()\n",
+	pr_warn("WARNING: CPU: %d PID: %d at %s:%d %pA()\n",
 		raw_smp_processor_id(), current->pid, file, line, caller);
 
 	if (args)
@@ -490,7 +490,8 @@ EXPORT_SYMBOL(warn_slowpath_null);
  */
 __visible void __stack_chk_fail(void)
 {
-	panic("stack-protector: Kernel stack is corrupted in: %p\n",
+	dump_stack();
+	panic("stack-protector: Kernel stack is corrupted in: %pA\n",
 		__builtin_return_address(0));
 }
 EXPORT_SYMBOL(__stack_chk_fail);
