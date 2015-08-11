@@ -163,7 +163,7 @@ struct neigh_ops {
 	void			(*error_report)(struct neighbour *, struct sk_buff *);
 	int			(*output)(struct neighbour *, struct sk_buff *);
 	int			(*connected_output)(struct neighbour *, struct sk_buff *);
-};
+} __do_const;
 
 struct pneigh_entry {
 	struct pneigh_entry	*next;
@@ -203,7 +203,6 @@ struct neigh_table {
 	void			(*proxy_redo)(struct sk_buff *skb);
 	char			*id;
 	struct neigh_parms	parms;
-	/* HACK. gc_* should follow parms without a gap! */
 	int			gc_interval;
 	int			gc_thresh1;
 	int			gc_thresh2;
@@ -218,7 +217,7 @@ struct neigh_table {
 	struct neigh_statistics	__percpu *stats;
 	struct neigh_hash_table __rcu *nht;
 	struct pneigh_entry	**phash_buckets;
-};
+} __randomize_layout;
 
 static inline int neigh_parms_family(struct neigh_parms *p)
 {

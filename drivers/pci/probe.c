@@ -175,7 +175,7 @@ int __pci_read_base(struct pci_dev *dev, enum pci_bar_type type,
 	struct pci_bus_region region, inverted_region;
 	bool bar_too_big = false, bar_disabled = false;
 
-	mask = type ? PCI_ROM_ADDRESS_MASK : ~0;
+	mask = type ? (u32)PCI_ROM_ADDRESS_MASK : ~0;
 
 	/* No printks while decoding is disabled! */
 	if (!dev->mmio_always_on) {

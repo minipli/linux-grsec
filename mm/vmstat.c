@@ -20,6 +20,7 @@
 #include <linux/writeback.h>
 #include <linux/compaction.h>
 #include <linux/mm_inline.h>
+#include <linux/grsecurity.h>
 
 #include "internal.h"
 
@@ -79,7 +80,7 @@ void vm_events_fold_cpu(int cpu)
  *
  * vm_stat contains the global counters
  */
-atomic_long_t vm_stat[NR_VM_ZONE_STAT_ITEMS] __cacheline_aligned_in_smp;
+atomic_long_unchecked_t vm_stat[NR_VM_ZONE_STAT_ITEMS] __cacheline_aligned_in_smp;
 EXPORT_SYMBOL(vm_stat);
 
 #ifdef CONFIG_SMP
@@ -423,7 +424,7 @@ static inline void fold_diff(int *diff)
 
 	for (i = 0; i < NR_VM_ZONE_STAT_ITEMS; i++)
 		if (diff[i])
-			atomic_long_add(diff[i], &vm_stat[i]);
+			atomic_long_add_unchecked(diff[i], &vm_stat[i]);
 }
 
 /*
@@ -455,7 +456,7 @@ static void refresh_cpu_vm_stats(void)
 			v = this_cpu_xchg(p->vm_stat_diff[i], 0);
 			if (v) {
 
-				atomic_long_add(v, &zone->vm_stat[i]);
+				atomic_long_add_unchecked(v, &zone->vm_stat[i]);
 				global_diff[i] += v;
 #ifdef CONFIG_NUMA
 				/* 3 seconds idle till flush */
@@ -517,7 +518,7 @@ void cpu_vm_stats_fold(int cpu)
 
 				v = p->vm_stat_diff[i];
 				p->vm_stat_diff[i] = 0;
-				atomic_long_add(v, &zone->vm_stat[i]);
+				atomic_long_add_unchecked(v, &zone->vm_stat[i]);
 				global_diff[i] += v;
 			}
 	}
@@ -537,8 +538,8 @@ void drain_zonestat(struct zone *zone, struct per_cpu_pageset *pset)
 		if (pset->vm_stat_diff[i]) {
 			int v = pset->vm_stat_diff[i];
 			pset->vm_stat_diff[i] = 0;
-			atomic_long_add(v, &zone->vm_stat[i]);
-			atomic_long_add(v, &vm_stat[i]);
+			atomic_long_add_unchecked(v, &zone->vm_stat[i]);
+			atomic_long_add_unchecked(v, &vm_stat[i]);
 		}
 }
 #endif
@@ -1151,10 +1152,22 @@ static void *vmstat_start(struct seq_file *m, loff_t *pos)
 	stat_items_size += sizeof(struct vm_event_state);
 #endif
 
-	v = kmalloc(stat_items_size, GFP_KERNEL);
+	v = kzalloc(stat_items_size, GFP_KERNEL);
 	m->private = v;
 	if (!v)
 		return ERR_PTR(-ENOMEM);
+
+#ifdef CONFIG_GRKERNSEC_PROC_ADD
+#if defined(CONFIG_GRKERNSEC_PROC_USER) || defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+        if (!uid_eq(current_uid(), GLOBAL_ROOT_UID)
+#ifdef CONFIG_GRKERNSEC_PROC_USERGROUP
+                && !in_group_p(grsec_proc_gid)
+#endif
+        )
+		return (unsigned long *)m->private + *pos;
+#endif
+#endif
+
 	for (i = 0; i < NR_VM_ZONE_STAT_ITEMS; i++)
 		v[i] = global_page_state(i);
 	v += NR_VM_ZONE_STAT_ITEMS;
@@ -1303,10 +1316,16 @@ static int __init setup_vmstat(void)
 	put_online_cpus();
 #endif
 #ifdef CONFIG_PROC_FS
-	proc_create("buddyinfo", S_IRUGO, NULL, &fragmentation_file_operations);
-	proc_create("pagetypeinfo", S_IRUGO, NULL, &pagetypeinfo_file_ops);
-	proc_create("vmstat", S_IRUGO, NULL, &proc_vmstat_file_operations);
-	proc_create("zoneinfo", S_IRUGO, NULL, &proc_zoneinfo_file_operations);
+	{
+		mode_t gr_mode = S_IRUGO;
+#ifdef CONFIG_GRKERNSEC_PROC_ADD
+		gr_mode = S_IRUSR;
+#endif
+		proc_create("buddyinfo", gr_mode, NULL, &fragmentation_file_operations);
+		proc_create("pagetypeinfo", gr_mode, NULL, &pagetypeinfo_file_ops);
+		proc_create("vmstat", S_IRUGO, NULL, &proc_vmstat_file_operations);
+		proc_create("zoneinfo", gr_mode, NULL, &proc_zoneinfo_file_operations);
+	}
 #endif
 	return 0;
 }

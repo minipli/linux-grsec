@@ -1157,7 +1157,7 @@ struct sched_class {
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	void (*task_move_group) (struct task_struct *p, int on_rq);
 #endif
-};
+} __do_const;
 
 #define sched_class_highest (&stop_sched_class)
 #define for_each_class(class) \

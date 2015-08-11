@@ -202,6 +202,9 @@ SYSCALL_DEFINE2(capget, cap_user_header_t, header, cap_user_data_t, dataptr)
 		 * before modification is attempted and the application
 		 * fails.
 		 */
+		if (tocopy > ARRAY_SIZE(kdata))
+			return -EFAULT;
+
 		if (copy_to_user(dataptr, kdata, tocopy
 				 * sizeof(struct __user_cap_data_struct))) {
 			return -EFAULT;
@@ -307,10 +310,11 @@ bool has_ns_capability(struct task_struct *t,
 	int ret;
 
 	rcu_read_lock();
-	ret = security_capable(__task_cred(t), ns, cap);
+	ret = security_capable(__task_cred(t), ns, cap) == 0 &&
+		gr_task_is_capable(t, __task_cred(t), cap);
 	rcu_read_unlock();
 
-	return (ret == 0);
+	return ret;
 }
 
 /**
@@ -347,10 +351,10 @@ bool has_ns_capability_noaudit(struct task_struct *t,
 	int ret;
 
 	rcu_read_lock();
-	ret = security_capable_noaudit(__task_cred(t), ns, cap);
+	ret = security_capable_noaudit(__task_cred(t), ns, cap) == 0 && gr_task_is_capable_nolog(t, cap);
 	rcu_read_unlock();
 
-	return (ret == 0);
+	return ret;
 }
 
 /**
@@ -388,13 +392,28 @@ bool ns_capable(struct user_namespace *ns, int cap)
 		BUG();
 	}
 
-	if (security_capable(current_cred(), ns, cap) == 0) {
+	if (security_capable(current_cred(), ns, cap) == 0 && gr_is_capable(cap)) {
 		current->flags |= PF_SUPERPRIV;
 		return true;
 	}
 	return false;
 }
 EXPORT_SYMBOL(ns_capable);
+
+bool ns_capable_nolog(struct user_namespace *ns, int cap)
+{
+	if (unlikely(!cap_valid(cap))) {
+		printk(KERN_CRIT "capable_nolog() called with invalid cap=%u\n", cap);
+		BUG();
+	}
+
+	if (security_capable_noaudit(current_cred(), ns, cap) == 0 && gr_is_capable_nolog(cap)) {
+		current->flags |= PF_SUPERPRIV;
+		return true;
+	}
+	return false;
+}
+EXPORT_SYMBOL(ns_capable_nolog);
 
 /**
  * file_ns_capable - Determine if the file's opener had a capability in effect
@@ -436,6 +455,12 @@ bool capable(int cap)
 }
 EXPORT_SYMBOL(capable);
 
+bool capable_nolog(int cap)
+{
+	return ns_capable_nolog(&init_user_ns, cap);
+}
+EXPORT_SYMBOL(capable_nolog);
+
 /**
  * capable_wrt_inode_uidgid - Check nsown_capable and uid and gid mapped
  * @inode: The inode in question
@@ -453,3 +478,12 @@ bool capable_wrt_inode_uidgid(const struct inode *inode, int cap)
 		kgid_has_mapping(ns, inode->i_gid);
 }
 EXPORT_SYMBOL(capable_wrt_inode_uidgid);
+
+bool capable_wrt_inode_uidgid_nolog(const struct inode *inode, int cap)
+{
+	struct user_namespace *ns = current_user_ns();
+
+	return ns_capable_nolog(ns, cap) && kuid_has_mapping(ns, inode->i_uid) &&
+		kgid_has_mapping(ns, inode->i_gid);
+}
+EXPORT_SYMBOL(capable_wrt_inode_uidgid_nolog);

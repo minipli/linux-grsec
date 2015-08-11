@@ -78,8 +78,9 @@ struct kobject {
 
 extern __printf(2, 3)
 int kobject_set_name(struct kobject *kobj, const char *name, ...);
-extern int kobject_set_name_vargs(struct kobject *kobj, const char *fmt,
-				  va_list vargs);
+extern __printf(2, 0)
+int kobject_set_name_vargs(struct kobject *kobj, const char *fmt,
+			   va_list vargs);
 
 static inline const char *kobject_name(const struct kobject *kobj)
 {
@@ -116,7 +117,7 @@ struct kobj_type {
 	struct attribute **default_attrs;
 	const struct kobj_ns_type_operations *(*child_ns_type)(struct kobject *kobj);
 	const void *(*namespace)(struct kobject *kobj);
-};
+} __do_const;
 
 struct kobj_uevent_env {
 	char *envp[UEVENT_NUM_ENVP];
@@ -139,6 +140,7 @@ struct kobj_attribute {
 	ssize_t (*store)(struct kobject *kobj, struct kobj_attribute *attr,
 			 const char *buf, size_t count);
 };
+typedef struct kobj_attribute __no_const kobj_attribute_no_const;
 
 extern const struct sysfs_ops kobj_sysfs_ops;
 
@@ -166,7 +168,7 @@ struct kset {
 	spinlock_t list_lock;
 	struct kobject kobj;
 	const struct kset_uevent_ops *uevent_ops;
-};
+} __randomize_layout;
 
 extern void kset_init(struct kset *kset);
 extern int __must_check kset_register(struct kset *kset);

@@ -2451,7 +2451,7 @@ static void sony_nc_gfx_switch_cleanup(struct platform_device *pd)
 }
 
 /* High speed charging function */
-static struct device_attribute *hsc_handle;
+static device_attribute_no_const *hsc_handle;
 
 static ssize_t sony_nc_highspeed_charging_store(struct device *dev,
 		struct device_attribute *attr,
@@ -4434,7 +4434,7 @@ static struct acpi_driver sony_pic_driver = {
 	.drv.pm = &sony_pic_pm,
 };
 
-static struct dmi_system_id __initdata sonypi_dmi_table[] = {
+static const struct dmi_system_id __initconst sonypi_dmi_table[] = {
 	{
 		.ident = "Sony Vaio",
 		.matches = {
