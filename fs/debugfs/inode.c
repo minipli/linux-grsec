@@ -165,6 +165,7 @@ static struct file_system_type debug_fs_type = {
 	.mount =	debug_mount,
 	.kill_sb =	kill_litter_super,
 };
+MODULE_ALIAS_FS("debugfs");
 
 static int debugfs_create_by_name(const char *name, mode_t mode,
 				  struct dentry *parent,
@@ -278,11 +279,20 @@ EXPORT_SYMBOL_GPL(debugfs_create_file);
  * If debugfs is not enabled in the kernel, the value -%ENODEV will be
  * returned.
  */
+#ifdef CONFIG_GRKERNSEC_SYSFS_RESTRICT
+extern int grsec_enable_sysfs_restrict;
+#endif
+
 struct dentry *debugfs_create_dir(const char *name, struct dentry *parent)
 {
-	return debugfs_create_file(name, 
-				   S_IFDIR | S_IRWXU | S_IRUGO | S_IXUGO,
-				   parent, NULL, NULL);
+	umode_t mode = S_IFDIR | S_IRWXU | S_IRUGO | S_IXUGO;
+
+#ifdef CONFIG_GRKERNSEC_SYSFS_RESTRICT
+	if (grsec_enable_sysfs_restrict)
+		mode = S_IFDIR | S_IRWXU;
+#endif
+
+	return debugfs_create_file(name, mode, parent, NULL, NULL);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_dir);
 

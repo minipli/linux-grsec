@@ -249,6 +249,7 @@ struct gprefix {
 
 #define ____emulate_2op(ctxt, _op, _x, _y, _suffix, _dsttype)	\
 	do {								\
+		unsigned long _tmp;					\
 		__asm__ __volatile__ (					\
 			_PRE_EFLAGS("0", "4", "2")			\
 			_op _suffix " %"_x"3,%1; "			\
@@ -263,8 +264,6 @@ struct gprefix {
 /* Raw emulation: instruction has two explicit operands. */
 #define __emulate_2op_nobyte(ctxt,_op,_wx,_wy,_lx,_ly,_qx,_qy)		\
 	do {								\
-		unsigned long _tmp;					\
-									\
 		switch ((ctxt)->dst.bytes) {				\
 		case 2:							\
 			____emulate_2op(ctxt,_op,_wx,_wy,"w",u16);	\
@@ -280,7 +279,6 @@ struct gprefix {
 
 #define __emulate_2op(ctxt,_op,_bx,_by,_wx,_wy,_lx,_ly,_qx,_qy)		     \
 	do {								     \
-		unsigned long _tmp;					     \
 		switch ((ctxt)->dst.bytes) {				     \
 		case 1:							     \
 			____emulate_2op(ctxt,_op,_bx,_by,"b",u8);	     \
@@ -383,8 +381,7 @@ struct gprefix {
 			_ASM_EXTABLE(1b, 3b)				\
 			: "=m" ((ctxt)->eflags), "=&r" (_tmp),		\
 			  "+a" (*rax), "+d" (*rdx), "+qm"(_ex)		\
-			: "i" (EFLAGS_MASK), "m" ((ctxt)->src.val),	\
-			  "a" (*rax), "d" (*rdx));			\
+			: "i" (EFLAGS_MASK), "m" ((ctxt)->src.val));	\
 	} while (0)
 
 /* instruction has only one source operand, destination is implicit (e.g. mul, div, imul, idiv) */
@@ -3013,7 +3010,7 @@ static int check_cr_write(struct x86_emulate_ctxt *ctxt)
 	int cr = ctxt->modrm_reg;
 	u64 efer = 0;
 
-	static u64 cr_reserved_bits[] = {
+	static const u64 cr_reserved_bits[] = {
 		0xffffffff00000000ULL,
 		0, 0, 0, /* CR3 checked later */
 		CR4_RESERVED_BITS,
@@ -3048,7 +3045,7 @@ static int check_cr_write(struct x86_emulate_ctxt *ctxt)
 
 		ctxt->ops->get_msr(ctxt, MSR_EFER, &efer);
 		if (efer & EFER_LMA)
-			rsvd = CR3_L_MODE_RESERVED_BITS;
+			rsvd = CR3_L_MODE_RESERVED_BITS & ~CR3_PCID_INVD;
 		else if (ctxt->ops->get_cr(ctxt, 4) & X86_CR4_PAE)
 			rsvd = CR3_PAE_RESERVED_BITS;
 		else if (ctxt->ops->get_cr(ctxt, 0) & X86_CR0_PG)

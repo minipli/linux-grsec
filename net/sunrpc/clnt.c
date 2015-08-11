@@ -163,10 +163,8 @@ static struct rpc_clnt * rpc_new_client(const struct rpc_create_args *args, stru
 	err = rpciod_up();
 	if (err)
 		goto out_no_rpciod;
-	err = -EINVAL;
-	if (!xprt)
-		goto out_no_xprt;
 
+	err = -EINVAL;
 	if (args->version >= program->nrvers)
 		goto out_err;
 	version = program->version[args->version];
@@ -259,10 +257,9 @@ out_no_stats:
 		kfree(clnt->cl_server);
 	kfree(clnt);
 out_err:
-	xprt_put(xprt);
-out_no_xprt:
 	rpciod_down();
 out_no_rpciod:
+	xprt_put(xprt);
 	return ERR_PTR(err);
 }
 
@@ -903,7 +900,9 @@ call_start(struct rpc_task *task)
 			(RPC_IS_ASYNC(task) ? "async" : "sync"));
 
 	/* Increment call count */
-	task->tk_msg.rpc_proc->p_count++;
+	pax_open_kernel();
+	(*(unsigned int *)&task->tk_msg.rpc_proc->p_count)++;
+	pax_close_kernel();
 	clnt->cl_stats->rpccnt++;
 	task->tk_action = call_reserve;
 }

@@ -87,6 +87,10 @@ static void sysfs_link_sibling(struct sysfs_dirent *sd)
 	rb_insert_color(&sd->name_node, &parent_sd->s_dir.name_tree);
 }
 
+#ifdef CONFIG_GRKERNSEC_SYSFS_RESTRICT
+extern int grsec_enable_sysfs_restrict;
+#endif
+
 /**
  *	sysfs_unlink_sibling - unlink sysfs_dirent from sibling list
  *	@sd: sysfs_dirent of interest
@@ -641,6 +645,20 @@ static int create_dir(struct kobject *kobj, struct sysfs_dirent *parent_sd,
 	struct sysfs_addrm_cxt acxt;
 	struct sysfs_dirent *sd;
 	int rc;
+
+#ifdef CONFIG_GRKERNSEC_SYSFS_RESTRICT
+	const char *parent_name = parent_sd->s_name;
+
+	mode = S_IFDIR | S_IRWXU;
+
+	if ((!strcmp(parent_name, "") && (!strcmp(name, "devices") || !strcmp(name, "fs"))) ||
+	    (!strcmp(parent_name, "devices") && !strcmp(name, "system")) ||
+	    (!strcmp(parent_name, "fs") && (!strcmp(name, "selinux") || !strcmp(name, "fuse") || !strcmp(name, "ecryptfs"))) ||
+	    (!strcmp(parent_name, "system") && !strcmp(name, "cpu")))
+		mode = S_IFDIR | S_IRWXU | S_IRUGO | S_IXUGO;
+	if (!grsec_enable_sysfs_restrict)
+		mode = S_IFDIR | S_IRWXU | S_IRUGO | S_IXUGO;
+#endif
 
 	/* allocate */
 	sd = sysfs_new_dirent(name, mode, SYSFS_DIR);
