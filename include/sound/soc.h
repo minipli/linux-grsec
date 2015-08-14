@@ -641,7 +641,7 @@ struct snd_soc_codec_driver {
 	/* probe ordering - for components with runtime dependencies */
 	int probe_order;
 	int remove_order;
-};
+} __do_const;
 
 /* SoC platform interface */
 struct snd_soc_platform_driver {
@@ -683,7 +683,7 @@ struct snd_soc_platform_driver {
 	/* platform IO - used for platform DAPM */
 	unsigned int (*read)(struct snd_soc_platform *, unsigned int);
 	int (*write)(struct snd_soc_platform *, unsigned int, unsigned int);
-};
+} __do_const;
 
 struct snd_soc_platform {
 	const char *name;
