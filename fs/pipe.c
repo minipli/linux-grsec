@@ -33,7 +33,7 @@ unsigned int pipe_max_size = 1048576;
 /*
  * Minimum pipe size, as required by POSIX
  */
-unsigned int pipe_min_size = PAGE_SIZE;
+unsigned int pipe_min_size __read_only = PAGE_SIZE;
 
 /*
  * We use a start+len construction, which provides full use of the 
@@ -442,9 +442,9 @@ redo:
 		}
 		if (bufs)	/* More to do? */
 			continue;
-		if (!pipe->writers)
+		if (!atomic_read(&pipe->writers))
 			break;
-		if (!pipe->waiting_writers) {
+		if (!atomic_read(&pipe->waiting_writers)) {
 			/* syscall merging: Usually we must not sleep
 			 * if O_NONBLOCK is set, or if we got some data.
 			 * But if a writer sleeps in kernel space, then
@@ -508,7 +508,7 @@ pipe_write(struct kiocb *iocb, const struct iovec *_iov,
 	mutex_lock(&inode->i_mutex);
 	pipe = inode->i_pipe;
 
-	if (!pipe->readers) {
+	if (!atomic_read(&pipe->readers)) {
 		send_sig(SIGPIPE, current, 0);
 		ret = -EPIPE;
 		goto out;
@@ -558,7 +558,7 @@ redo1:
 	for (;;) {
 		int bufs;
 
-		if (!pipe->readers) {
+		if (!atomic_read(&pipe->readers)) {
 			send_sig(SIGPIPE, current, 0);
 			if (!ret)
 				ret = -EPIPE;
@@ -652,9 +652,9 @@ redo2:
 			kill_fasync(&pipe->fasync_readers, SIGIO, POLL_IN);
 			do_wakeup = 0;
 		}
-		pipe->waiting_writers++;
+		atomic_inc(&pipe->waiting_writers);
 		pipe_wait(pipe);
-		pipe->waiting_writers--;
+		atomic_dec(&pipe->waiting_writers);
 	}
 out:
 	mutex_unlock(&inode->i_mutex);
@@ -721,7 +721,7 @@ pipe_poll(struct file *filp, poll_table *wait)
 	mask = 0;
 	if (filp->f_mode & FMODE_READ) {
 		mask = (nrbufs > 0) ? POLLIN | POLLRDNORM : 0;
-		if (!pipe->writers && filp->f_version != pipe->w_counter)
+		if (!atomic_read(&pipe->writers) && filp->f_version != pipe->w_counter)
 			mask |= POLLHUP;
 	}
 
@@ -731,7 +731,7 @@ pipe_poll(struct file *filp, poll_table *wait)
 		 * Most Unices do not set POLLERR for FIFOs but on Linux they
 		 * behave exactly like pipes for poll().
 		 */
-		if (!pipe->readers)
+		if (!atomic_read(&pipe->readers))
 			mask |= POLLERR;
 	}
 
@@ -745,10 +745,10 @@ pipe_release(struct inode *inode, int decr, int decw)
 
 	mutex_lock(&inode->i_mutex);
 	pipe = inode->i_pipe;
-	pipe->readers -= decr;
-	pipe->writers -= decw;
+	atomic_sub(decr, &pipe->readers);
+	atomic_sub(decw, &pipe->writers);
 
-	if (!pipe->readers && !pipe->writers) {
+	if (!atomic_read(&pipe->readers) && !atomic_read(&pipe->writers)) {
 		free_pipe_info(inode);
 	} else {
 		wake_up_interruptible_sync_poll(&pipe->wait, POLLIN | POLLOUT | POLLRDNORM | POLLWRNORM | POLLERR | POLLHUP);
@@ -838,7 +838,7 @@ pipe_read_open(struct inode *inode, struct file *filp)
 
 	if (inode->i_pipe) {
 		ret = 0;
-		inode->i_pipe->readers++;
+		atomic_inc(&inode->i_pipe->readers);
 	}
 
 	mutex_unlock(&inode->i_mutex);
@@ -855,7 +855,7 @@ pipe_write_open(struct inode *inode, struct file *filp)
 
 	if (inode->i_pipe) {
 		ret = 0;
-		inode->i_pipe->writers++;
+		atomic_inc(&inode->i_pipe->writers);
 	}
 
 	mutex_unlock(&inode->i_mutex);
@@ -876,9 +876,9 @@ pipe_rdwr_open(struct inode *inode, struct file *filp)
 	if (inode->i_pipe) {
 		ret = 0;
 		if (filp->f_mode & FMODE_READ)
-			inode->i_pipe->readers++;
+			atomic_inc(&inode->i_pipe->readers);
 		if (filp->f_mode & FMODE_WRITE)
-			inode->i_pipe->writers++;
+			atomic_inc(&inode->i_pipe->writers);
 	}
 
 	mutex_unlock(&inode->i_mutex);
@@ -970,7 +970,7 @@ void free_pipe_info(struct inode *inode)
 	inode->i_pipe = NULL;
 }
 
-static struct vfsmount *pipe_mnt __read_mostly;
+struct vfsmount *pipe_mnt __read_mostly;
 
 /*
  * pipefs_dname() is called from d_path().
@@ -1000,7 +1000,8 @@ static struct inode * get_pipe_inode(void)
 		goto fail_iput;
 	inode->i_pipe = pipe;
 
-	pipe->readers = pipe->writers = 1;
+	atomic_set(&pipe->readers, 1);
+	atomic_set(&pipe->writers, 1);
 	inode->i_fop = &rdwr_pipefifo_fops;
 
 	/*
@@ -1212,7 +1213,7 @@ static long pipe_set_size(struct pipe_inode_info *pipe, unsigned long nr_pages)
  * Currently we rely on the pipe array holding a power-of-2 number
  * of pages.
  */
-static inline unsigned int round_pipe_size(unsigned int size)
+static inline unsigned long round_pipe_size(unsigned long size)
 {
 	unsigned long nr_pages;
 
@@ -1262,13 +1263,16 @@ long pipe_fcntl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	switch (cmd) {
 	case F_SETPIPE_SZ: {
-		unsigned int size, nr_pages;
+		unsigned long size, nr_pages;
+
+		ret = -EINVAL;
+		if (arg < pipe_min_size)
+			goto out;
 
 		size = round_pipe_size(arg);
 		nr_pages = size >> PAGE_SHIFT;
 
-		ret = -EINVAL;
-		if (!nr_pages)
+		if (size < pipe_min_size)
 			goto out;
 
 		if (!capable(CAP_SYS_RESOURCE) && size > pipe_max_size) {

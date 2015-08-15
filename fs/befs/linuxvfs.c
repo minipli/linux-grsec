@@ -503,7 +503,7 @@ static void befs_put_link(struct dentry *dentry, struct nameidata *nd, void *p)
 {
 	befs_inode_info *befs_ino = BEFS_I(dentry->d_inode);
 	if (befs_ino->i_flags & BEFS_LONG_SYMLINK) {
-		char *link = nd_get_link(nd);
+		const char *link = nd_get_link(nd);
 		if (!IS_ERR(link))
 			kfree(link);
 	}
@@ -937,6 +937,7 @@ static struct file_system_type befs_fs_type = {
 	.kill_sb	= kill_block_super,
 	.fs_flags	= FS_REQUIRES_DEV,	
 };
+MODULE_ALIAS_FS("befs");
 
 static int __init
 init_befs_fs(void)

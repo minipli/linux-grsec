@@ -102,11 +102,6 @@ void gcov_enable_events(void)
 }
 
 #ifdef CONFIG_MODULES
-static inline int within(void *addr, void *start, unsigned long size)
-{
-	return ((addr >= start) && (addr < start + size));
-}
-
 /* Update list and generate events when modules are unloaded. */
 static int gcov_module_notifier(struct notifier_block *nb, unsigned long event,
 				void *data)
@@ -121,7 +116,7 @@ static int gcov_module_notifier(struct notifier_block *nb, unsigned long event,
 	prev = NULL;
 	/* Remove entries located in module from linked list. */
 	for (info = gcov_info_head; info; info = info->next) {
-		if (within(info, mod->module_core, mod->core_size)) {
+		if (within_module_core_rw((unsigned long)info, mod)) {
 			if (prev)
 				prev->next = info->next;
 			else

@@ -27,6 +27,7 @@ enum km_type {
 	KM_PPC_SYNC_PAGE,
 	KM_PPC_SYNC_ICACHE,
 	KM_KDB,
+	KM_CLEARPAGE,
 	KM_TYPE_NR
 };
 

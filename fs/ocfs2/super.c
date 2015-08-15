@@ -301,11 +301,11 @@ static int ocfs2_osb_dump(struct ocfs2_super *osb, char *buf, int len)
 			"%10s => GlobalAllocs: %d  LocalAllocs: %d  "
 			"SubAllocs: %d  LAWinMoves: %d  SAExtends: %d\n",
 			"Stats",
-			atomic_read(&osb->alloc_stats.bitmap_data),
-			atomic_read(&osb->alloc_stats.local_data),
-			atomic_read(&osb->alloc_stats.bg_allocs),
-			atomic_read(&osb->alloc_stats.moves),
-			atomic_read(&osb->alloc_stats.bg_extends));
+			atomic_read_unchecked(&osb->alloc_stats.bitmap_data),
+			atomic_read_unchecked(&osb->alloc_stats.local_data),
+			atomic_read_unchecked(&osb->alloc_stats.bg_allocs),
+			atomic_read_unchecked(&osb->alloc_stats.moves),
+			atomic_read_unchecked(&osb->alloc_stats.bg_extends));
 
 	out += snprintf(buf + out, len - out,
 			"%10s => State: %u  Descriptor: %llu  Size: %u bits  "
@@ -1270,6 +1270,7 @@ static struct file_system_type ocfs2_fs_type = {
 	.fs_flags       = FS_REQUIRES_DEV|FS_RENAME_DOES_D_MOVE,
 	.next           = NULL
 };
+MODULE_ALIAS_FS("ocfs2");
 
 static int ocfs2_check_set_options(struct super_block *sb,
 				   struct mount_options *options)
@@ -2119,11 +2120,11 @@ static int ocfs2_initialize_super(struct super_block *sb,
 	spin_lock_init(&osb->osb_xattr_lock);
 	ocfs2_init_steal_slots(osb);
 
-	atomic_set(&osb->alloc_stats.moves, 0);
-	atomic_set(&osb->alloc_stats.local_data, 0);
-	atomic_set(&osb->alloc_stats.bitmap_data, 0);
-	atomic_set(&osb->alloc_stats.bg_allocs, 0);
-	atomic_set(&osb->alloc_stats.bg_extends, 0);
+	atomic_set_unchecked(&osb->alloc_stats.moves, 0);
+	atomic_set_unchecked(&osb->alloc_stats.local_data, 0);
+	atomic_set_unchecked(&osb->alloc_stats.bitmap_data, 0);
+	atomic_set_unchecked(&osb->alloc_stats.bg_allocs, 0);
+	atomic_set_unchecked(&osb->alloc_stats.bg_extends, 0);
 
 	/* Copy the blockcheck stats from the superblock probe */
 	osb->osb_ecc_stats = *stats;

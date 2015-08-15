@@ -11,33 +11,97 @@ typedef struct {
 	atomic_long_t a;
 } local_t;
 
+typedef struct {
+	atomic_long_unchecked_t a;
+} local_unchecked_t;
+
 #define LOCAL_INIT(i)	{ ATOMIC_LONG_INIT(i) }
 
 #define local_read(l)	atomic_long_read(&(l)->a)
+#define local_read_unchecked(l)	atomic_long_read_unchecked(&(l)->a)
 #define local_set(l, i)	atomic_long_set(&(l)->a, (i))
+#define local_set_unchecked(l, i)	atomic_long_set_unchecked(&(l)->a, (i))
 
 static inline void local_inc(local_t *l)
 {
-	asm volatile(_ASM_INC "%0"
+	asm volatile(_ASM_INC "%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     _ASM_DEC "%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     : "+m" (l->a.counter));
+}
+
+static inline void local_inc_unchecked(local_unchecked_t *l)
+{
+	asm volatile(_ASM_INC "%0\n"
 		     : "+m" (l->a.counter));
 }
 
 static inline void local_dec(local_t *l)
 {
-	asm volatile(_ASM_DEC "%0"
+	asm volatile(_ASM_DEC "%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     _ASM_INC "%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     : "+m" (l->a.counter));
+}
+
+static inline void local_dec_unchecked(local_unchecked_t *l)
+{
+	asm volatile(_ASM_DEC "%0\n"
 		     : "+m" (l->a.counter));
 }
 
 static inline void local_add(long i, local_t *l)
 {
-	asm volatile(_ASM_ADD "%1,%0"
+	asm volatile(_ASM_ADD "%1,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     _ASM_SUB "%1,%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     : "+m" (l->a.counter)
+		     : "ir" (i));
+}
+
+static inline void local_add_unchecked(long i, local_unchecked_t *l)
+{
+	asm volatile(_ASM_ADD "%1,%0\n"
 		     : "+m" (l->a.counter)
 		     : "ir" (i));
 }
 
 static inline void local_sub(long i, local_t *l)
 {
-	asm volatile(_ASM_SUB "%1,%0"
+	asm volatile(_ASM_SUB "%1,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     _ASM_ADD "%1,%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     : "+m" (l->a.counter)
+		     : "ir" (i));
+}
+
+static inline void local_sub_unchecked(long i, local_unchecked_t *l)
+{
+	asm volatile(_ASM_SUB "%1,%0\n"
 		     : "+m" (l->a.counter)
 		     : "ir" (i));
 }
@@ -55,7 +119,16 @@ static inline int local_sub_and_test(long i, local_t *l)
 {
 	unsigned char c;
 
-	asm volatile(_ASM_SUB "%2,%0; sete %1"
+	asm volatile(_ASM_SUB "%2,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     _ASM_ADD "%2,%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     "sete %1\n"
 		     : "+m" (l->a.counter), "=qm" (c)
 		     : "ir" (i) : "memory");
 	return c;
@@ -73,7 +146,16 @@ static inline int local_dec_and_test(local_t *l)
 {
 	unsigned char c;
 
-	asm volatile(_ASM_DEC "%0; sete %1"
+	asm volatile(_ASM_DEC "%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     _ASM_INC "%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     "sete %1\n"
 		     : "+m" (l->a.counter), "=qm" (c)
 		     : : "memory");
 	return c != 0;
@@ -91,7 +173,16 @@ static inline int local_inc_and_test(local_t *l)
 {
 	unsigned char c;
 
-	asm volatile(_ASM_INC "%0; sete %1"
+	asm volatile(_ASM_INC "%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     _ASM_DEC "%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     "sete %1\n"
 		     : "+m" (l->a.counter), "=qm" (c)
 		     : : "memory");
 	return c != 0;
@@ -110,7 +201,16 @@ static inline int local_add_negative(long i, local_t *l)
 {
 	unsigned char c;
 
-	asm volatile(_ASM_ADD "%2,%0; sets %1"
+	asm volatile(_ASM_ADD "%2,%0\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     _ASM_SUB "%2,%0\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
+		     "sets %1\n"
 		     : "+m" (l->a.counter), "=qm" (c)
 		     : "ir" (i) : "memory");
 	return c;
@@ -133,7 +233,15 @@ static inline long local_add_return(long i, local_t *l)
 #endif
 	/* Modern 486+ processor */
 	__i = i;
-	asm volatile(_ASM_XADD "%0, %1;"
+	asm volatile(_ASM_XADD "%0, %1\n"
+
+#ifdef CONFIG_PAX_REFCOUNT
+		     "jno 0f\n"
+		     _ASM_MOV "%0,%1\n"
+		     "int $4\n0:\n"
+		     _ASM_EXTABLE(0b, 0b)
+#endif
+
 		     : "+r" (i), "+m" (l->a.counter)
 		     : : "memory");
 	return i + __i;
@@ -148,6 +256,38 @@ no_xadd: /* Legacy 386 processor */
 #endif
 }
 
+/**
+ * local_add_return_unchecked - add and return
+ * @i: integer value to add
+ * @l: pointer to type local_unchecked_t
+ *
+ * Atomically adds @i to @l and returns @i + @l
+ */
+static inline long local_add_return_unchecked(long i, local_unchecked_t *l)
+{
+	long __i;
+#ifdef CONFIG_M386
+	unsigned long flags;
+	if (unlikely(boot_cpu_data.x86 <= 3))
+		goto no_xadd;
+#endif
+	/* Modern 486+ processor */
+	__i = i;
+	asm volatile(_ASM_XADD "%0, %1\n"
+		     : "+r" (i), "+m" (l->a.counter)
+		     : : "memory");
+	return i + __i;
+
+#ifdef CONFIG_M386
+no_xadd: /* Legacy 386 processor */
+	local_irq_save(flags);
+	__i = local_read_unchecked(l);
+	local_set_unchecked(l, i + __i);
+	local_irq_restore(flags);
+	return i + __i;
+#endif
+}
+
 static inline long local_sub_return(long i, local_t *l)
 {
 	return local_add_return(-i, l);
@@ -157,6 +297,8 @@ static inline long local_sub_return(long i, local_t *l)
 #define local_dec_return(l)  (local_sub_return(1, l))
 
 #define local_cmpxchg(l, o, n) \
+	(cmpxchg_local(&((l)->a.counter), (o), (n)))
+#define local_cmpxchg_unchecked(l, o, n) \
 	(cmpxchg_local(&((l)->a.counter), (o), (n)))
 /* Always has a lock prefix */
 #define local_xchg(l, n) (xchg(&((l)->a.counter), (n)))

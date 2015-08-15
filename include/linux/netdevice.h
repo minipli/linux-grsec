@@ -949,6 +949,7 @@ struct net_device_ops {
 	int			(*ndo_set_features)(struct net_device *dev,
 						    u32 features);
 };
+typedef struct net_device_ops __no_const net_device_ops_no_const;
 
 /*
  *	The DEVICE structure.
@@ -1088,7 +1089,7 @@ struct net_device {
 	int			iflink;
 
 	struct net_device_stats	stats;
-	atomic_long_t		rx_dropped; /* dropped packets by core network
+	atomic_long_unchecked_t	rx_dropped; /* dropped packets by core network
 					     * Do not use this in drivers.
 					     */
 
@@ -2594,7 +2595,7 @@ static inline int netif_is_bond_slave(struct net_device *dev)
 	return dev->flags & IFF_SLAVE && dev->priv_flags & IFF_BONDING;
 }
 
-extern struct pernet_operations __net_initdata loopback_net_ops;
+extern struct pernet_operations __net_initconst loopback_net_ops;
 
 static inline u32 dev_ethtool_get_rx_csum(struct net_device *dev)
 {
