@@ -802,6 +802,22 @@ static inline void pmdp_set_numa(struct mm_struct *mm, unsigned long addr,
 }
 #endif /* CONFIG_NUMA_BALANCING */
 
+#ifndef __HAVE_ARCH_PAX_OPEN_KERNEL
+#ifdef CONFIG_PAX_KERNEXEC
+#error KERNEXEC requires pax_open_kernel
+#else
+static inline unsigned long pax_open_kernel(void) { return 0; }
+#endif
+#endif
+
+#ifndef __HAVE_ARCH_PAX_CLOSE_KERNEL
+#ifdef CONFIG_PAX_KERNEXEC
+#error KERNEXEC requires pax_close_kernel
+#else
+static inline unsigned long pax_close_kernel(void) { return 0; }
+#endif
+#endif
+
 #endif /* CONFIG_MMU */
 
 #endif /* !__ASSEMBLY__ */

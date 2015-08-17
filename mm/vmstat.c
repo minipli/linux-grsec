@@ -79,7 +79,7 @@ void vm_events_fold_cpu(int cpu)
  *
  * vm_stat contains the global counters
  */
-atomic_long_t vm_stat[NR_VM_ZONE_STAT_ITEMS] __cacheline_aligned_in_smp;
+atomic_long_unchecked_t vm_stat[NR_VM_ZONE_STAT_ITEMS] __cacheline_aligned_in_smp;
 EXPORT_SYMBOL(vm_stat);
 
 #ifdef CONFIG_SMP
@@ -423,7 +423,7 @@ static inline void fold_diff(int *diff)
 
 	for (i = 0; i < NR_VM_ZONE_STAT_ITEMS; i++)
 		if (diff[i])
-			atomic_long_add(diff[i], &vm_stat[i]);
+			atomic_long_add_unchecked(diff[i], &vm_stat[i]);
 }
 
 /*
@@ -455,7 +455,7 @@ static void refresh_cpu_vm_stats(void)
 			v = this_cpu_xchg(p->vm_stat_diff[i], 0);
 			if (v) {
 
-				atomic_long_add(v, &zone->vm_stat[i]);
+				atomic_long_add_unchecked(v, &zone->vm_stat[i]);
 				global_diff[i] += v;
 #ifdef CONFIG_NUMA
 				/* 3 seconds idle till flush */
@@ -517,7 +517,7 @@ void cpu_vm_stats_fold(int cpu)
 
 				v = p->vm_stat_diff[i];
 				p->vm_stat_diff[i] = 0;
-				atomic_long_add(v, &zone->vm_stat[i]);
+				atomic_long_add_unchecked(v, &zone->vm_stat[i]);
 				global_diff[i] += v;
 			}
 	}
@@ -537,8 +537,8 @@ void drain_zonestat(struct zone *zone, struct per_cpu_pageset *pset)
 		if (pset->vm_stat_diff[i]) {
 			int v = pset->vm_stat_diff[i];
 			pset->vm_stat_diff[i] = 0;
-			atomic_long_add(v, &zone->vm_stat[i]);
-			atomic_long_add(v, &vm_stat[i]);
+			atomic_long_add_unchecked(v, &zone->vm_stat[i]);
+			atomic_long_add_unchecked(v, &vm_stat[i]);
 		}
 }
 #endif

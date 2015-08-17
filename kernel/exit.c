@@ -330,7 +330,7 @@ int allow_signal(int sig)
 	 * know it'll be handled, so that they don't get converted to
 	 * SIGKILL or just silently dropped.
 	 */
-	current->sighand->action[(sig)-1].sa.sa_handler = (void __user *)2;
+	current->sighand->action[(sig)-1].sa.sa_handler = (__force void __user *)2;
 	recalc_sigpending();
 	spin_unlock_irq(&current->sighand->siglock);
 	return 0;
@@ -900,7 +900,7 @@ SYSCALL_DEFINE1(exit, int, error_code)
  * Take down every thread in the group.  This is called by fatal signals
  * as well as by sys_exit_group (below).
  */
-void
+__noreturn void
 do_group_exit(int exit_code)
 {
 	struct signal_struct *sig = current->signal;

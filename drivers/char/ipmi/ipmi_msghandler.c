@@ -420,7 +420,7 @@ struct ipmi_smi {
 	struct proc_dir_entry *proc_dir;
 	char                  proc_dir_name[10];
 
-	atomic_t stats[IPMI_NUM_STATS];
+	atomic_unchecked_t stats[IPMI_NUM_STATS];
 
 	/*
 	 * run_to_completion duplicate of smb_info, smi_info
@@ -453,9 +453,9 @@ static DEFINE_MUTEX(smi_watchers_mutex);
 
 
 #define ipmi_inc_stat(intf, stat) \
-	atomic_inc(&(intf)->stats[IPMI_STAT_ ## stat])
+	atomic_inc_unchecked(&(intf)->stats[IPMI_STAT_ ## stat])
 #define ipmi_get_stat(intf, stat) \
-	((unsigned int) atomic_read(&(intf)->stats[IPMI_STAT_ ## stat]))
+	((unsigned int) atomic_read_unchecked(&(intf)->stats[IPMI_STAT_ ## stat]))
 
 static int is_lan_addr(struct ipmi_addr *addr)
 {
@@ -2883,7 +2883,7 @@ int ipmi_register_smi(struct ipmi_smi_handlers *handlers,
 	INIT_LIST_HEAD(&intf->cmd_rcvrs);
 	init_waitqueue_head(&intf->waitq);
 	for (i = 0; i < IPMI_NUM_STATS; i++)
-		atomic_set(&intf->stats[i], 0);
+		atomic_set_unchecked(&intf->stats[i], 0);
 
 	intf->proc_dir = NULL;
 
