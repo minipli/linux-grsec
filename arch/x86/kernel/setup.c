@@ -864,7 +864,8 @@ dump_kernel_offset(struct notifier_block *self, unsigned long v, void *p)
 void __init setup_arch(char **cmdline_p)
 {
 #ifdef CONFIG_X86_32
-	memblock_reserve(LOAD_PHYSICAL_ADDR, __pa_symbol(__bss_stop) - LOAD_PHYSICAL_ADDR);
+	memblock_reserve(LOAD_PHYSICAL_ADDR,
+			 (unsigned long)__bss_stop - (unsigned long)_text);
 #else
 	memblock_reserve(__pa_symbol(_text),
 			 (unsigned long)__bss_stop - (unsigned long)_text);
