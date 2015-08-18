@@ -37,6 +37,7 @@ ENTRY(memcpy)
 	rep movsq
 	movl %edx, %ecx
 	rep movsb
+	pax_force_retaddr
 	ret
 ENDPROC(memcpy)
 ENDPROC(__memcpy)
@@ -49,6 +50,7 @@ ENTRY(memcpy_erms)
 	movq %rdi, %rax
 	movq %rdx, %rcx
 	rep movsb
+	pax_force_retaddr
 	ret
 ENDPROC(memcpy_erms)
 
@@ -134,6 +136,7 @@ ENTRY(memcpy_orig)
 	movq %r9,	1*8(%rdi)
 	movq %r10,	-2*8(%rdi, %rdx)
 	movq %r11,	-1*8(%rdi, %rdx)
+	pax_force_retaddr
 	retq
 	.p2align 4
 .Lless_16bytes:
@@ -146,6 +149,7 @@ ENTRY(memcpy_orig)
 	movq -1*8(%rsi, %rdx),	%r9
 	movq %r8,	0*8(%rdi)
 	movq %r9,	-1*8(%rdi, %rdx)
+	pax_force_retaddr
 	retq
 	.p2align 4
 .Lless_8bytes:
@@ -159,6 +163,7 @@ ENTRY(memcpy_orig)
 	movl -4(%rsi, %rdx), %r8d
 	movl %ecx, (%rdi)
 	movl %r8d, -4(%rdi, %rdx)
+	pax_force_retaddr
 	retq
 	.p2align 4
 .Lless_3bytes:
@@ -177,6 +182,7 @@ ENTRY(memcpy_orig)
 	movb %cl, (%rdi)
 
 .Lend:
+	pax_force_retaddr
 	retq
 	CFI_ENDPROC
 ENDPROC(memcpy_orig)

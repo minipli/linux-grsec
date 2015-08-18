@@ -143,14 +143,17 @@ bpf_jit_binary_alloc(unsigned int proglen, u8 **image_ptr,
 	 * random section of illegal instructions.
 	 */
 	size = round_up(proglen + sizeof(*hdr) + 128, PAGE_SIZE);
-	hdr = module_alloc(size);
+	hdr = module_alloc_exec(size);
 	if (hdr == NULL)
 		return NULL;
 
 	/* Fill space with illegal/arch-dep instructions. */
 	bpf_fill_ill_insns(hdr, size);
 
+	pax_open_kernel();
 	hdr->pages = size / PAGE_SIZE;
+	pax_close_kernel();
+
 	hole = min_t(unsigned int, size - (proglen + sizeof(*hdr)),
 		     PAGE_SIZE - sizeof(*hdr));
 	start = (prandom_u32() % hole) & ~(alignment - 1);
@@ -163,7 +166,7 @@ bpf_jit_binary_alloc(unsigned int proglen, u8 **image_ptr,
 
 void bpf_jit_binary_free(struct bpf_binary_header *hdr)
 {
-	module_memfree(hdr);
+	module_memfree_exec(hdr);
 }
 #endif /* CONFIG_BPF_JIT */
 

@@ -168,18 +168,18 @@ static inline int save_xstate_epilog(void __user *buf, int ia32_frame)
 
 	/* Setup the bytes not touched by the [f]xsave and reserved for SW. */
 	sw_bytes = ia32_frame ? &fx_sw_reserved_ia32 : &fx_sw_reserved;
-	err = __copy_to_user(&x->i387.sw_reserved, sw_bytes, sizeof(*sw_bytes));
+	err = __copy_to_user(x->i387.sw_reserved, sw_bytes, sizeof(*sw_bytes));
 
 	if (!use_xsave())
 		return err;
 
-	err |= __put_user(FP_XSTATE_MAGIC2, (__u32 *)(buf + xstate_size));
+	err |= __put_user(FP_XSTATE_MAGIC2, (__u32 __user *)(buf + xstate_size));
 
 	/*
 	 * Read the xstate_bv which we copied (directly from the cpu or
 	 * from the state in task struct) to the user buffers.
 	 */
-	err |= __get_user(xstate_bv, (__u32 *)&x->xsave_hdr.xstate_bv);
+	err |= __get_user(xstate_bv, (__u32 __user *)&x->xsave_hdr.xstate_bv);
 
 	/*
 	 * For legacy compatible, we always set FP/SSE bits in the bit
@@ -194,7 +194,7 @@ static inline int save_xstate_epilog(void __user *buf, int ia32_frame)
 	 */
 	xstate_bv |= XSTATE_FPSSE;
 
-	err |= __put_user(xstate_bv, (__u32 *)&x->xsave_hdr.xstate_bv);
+	err |= __put_user(xstate_bv, (__u32 __user *)&x->xsave_hdr.xstate_bv);
 
 	return err;
 }
@@ -203,6 +203,7 @@ static inline int save_user_xstate(struct xsave_struct __user *buf)
 {
 	int err;
 
+	buf = (struct xsave_struct __user *)____m(buf);
 	if (use_xsave())
 		err = xsave_user(buf);
 	else if (use_fxsr())
@@ -313,6 +314,7 @@ sanitize_restored_xstate(struct task_struct *tsk,
  */
 static inline int restore_user_xstate(void __user *buf, u64 xbv, int fx_only)
 {
+	buf = (void __user *)____m(buf);
 	if (use_xsave()) {
 		if ((unsigned long)buf % 64 || fx_only) {
 			u64 init_bv = pcntxt_mask & ~XSTATE_FPSSE;
