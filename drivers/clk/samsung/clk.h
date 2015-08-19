@@ -121,7 +121,7 @@ struct samsung_mux_clock {
 	unsigned int		id;
 	const char		*dev_name;
 	const char		*name;
-	const char		**parent_names;
+	const char		* const *parent_names;
 	u8			num_parents;
 	unsigned long		flags;
 	unsigned long		offset;
@@ -260,7 +260,7 @@ struct samsung_gate_clock {
 #define GATE_DA(_id, dname, cname, pname, o, b, f, gf, a)	\
 	__GATE(_id, dname, cname, pname, o, b, f, gf, a)
 
-#define PNAME(x) static const char *x[] __initdata
+#define PNAME(x) static const char * const x[] __initconst
 
 /**
  * struct samsung_clk_reg_dump: register dump of clock controller registers.

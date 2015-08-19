@@ -20,6 +20,7 @@
 #include <asm/cacheflush.h>
 #include <asm/hwcap.h>
 #include <asm/opcodes.h>
+#include <asm/pgtable.h>
 
 #include "bpf_jit_32.h"
 
@@ -72,7 +73,11 @@ struct jit_ctx {
 #endif
 };
 
+#ifdef CONFIG_GRKERNSEC_BPF_HARDEN
+int bpf_jit_enable __read_only;
+#else
 int bpf_jit_enable __read_mostly;
+#endif
 
 static u64 jit_get_skb_b(struct sk_buff *skb, unsigned offset)
 {
@@ -179,8 +184,10 @@ static void jit_fill_hole(void *area, unsigned int size)
 {
 	u32 *ptr;
 	/* We are guaranteed to have aligned memory. */
+	pax_open_kernel();
 	for (ptr = area; size >= sizeof(u32); size -= sizeof(u32))
 		*ptr++ = __opcode_to_mem_arm(ARM_INST_UDF);
+	pax_close_kernel();
 }
 
 static void build_prologue(struct jit_ctx *ctx)
@@ -547,7 +554,7 @@ load_common:
 				emit(ARM_SUB_I(r_scratch, r_skb_hl,
 					       1 << load_order), ctx);
 				emit(ARM_CMP_R(r_scratch, r_off), ctx);
-				condt = ARM_COND_HS;
+				condt = ARM_COND_GE;
 			} else {
 				emit(ARM_CMP_R(r_skb_hl, r_off), ctx);
 				condt = ARM_COND_HI;
@@ -860,9 +867,11 @@ b_epilogue:
 			off = offsetof(struct sk_buff, vlan_tci);
 			emit(ARM_LDRH_I(r_A, r_skb, off), ctx);
 			if (code == (BPF_ANC | SKF_AD_VLAN_TAG))
-				OP_IMM3(ARM_AND, r_A, r_A, VLAN_VID_MASK, ctx);
-			else
-				OP_IMM3(ARM_AND, r_A, r_A, VLAN_TAG_PRESENT, ctx);
+				OP_IMM3(ARM_AND, r_A, r_A, ~VLAN_TAG_PRESENT, ctx);
+			else {
+				OP_IMM3(ARM_LSR, r_A, r_A, 12, ctx);
+				OP_IMM3(ARM_AND, r_A, r_A, 0x1, ctx);
+			}
 			break;
 		case BPF_ANC | SKF_AD_QUEUE:
 			ctx->seen |= SEEN_SKB;

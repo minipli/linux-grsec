@@ -1415,7 +1415,7 @@ static int qlcnic_83xx_copy_fw_file(struct qlcnic_adapter *adapter)
 	if (fw->size & 0xF) {
 		addr = dest + size;
 		for (i = 0; i < (fw->size & 0xF); i++)
-			data[i] = temp[size + i];
+			data[i] = ((u8 *)temp)[size + i];
 		for (; i < 16; i++)
 			data[i] = 0;
 		ret = qlcnic_ms_mem_write128(adapter, addr,
@@ -2324,7 +2324,9 @@ int qlcnic_83xx_configure_opmode(struct qlcnic_adapter *adapter)
 		max_tx_rings = QLCNIC_MAX_VNIC_TX_RINGS;
 	} else if (ret == QLC_83XX_DEFAULT_OPMODE) {
 		ahw->nic_mode = QLCNIC_DEFAULT_MODE;
-		adapter->nic_ops->init_driver = qlcnic_83xx_init_default_driver;
+		pax_open_kernel();
+		*(void **)&adapter->nic_ops->init_driver = qlcnic_83xx_init_default_driver;
+		pax_close_kernel();
 		ahw->idc.state_entry = qlcnic_83xx_idc_ready_state_entry;
 		max_sds_rings = QLCNIC_MAX_SDS_RINGS;
 		max_tx_rings = QLCNIC_MAX_TX_RINGS;

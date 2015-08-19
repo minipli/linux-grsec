@@ -2095,7 +2095,7 @@ int generic_file_mmap(struct file * file, struct vm_area_struct * vma)
 	struct address_space *mapping = file->f_mapping;
 
 	if (!mapping->a_ops->readpage)
-		return -ENOEXEC;
+		return -ENODEV;
 	file_accessed(file);
 	vma->vm_ops = &generic_file_vm_ops;
 	return 0;
@@ -2276,6 +2276,7 @@ inline ssize_t generic_write_checks(struct kiocb *iocb, struct iov_iter *from)
 	pos = iocb->ki_pos;
 
 	if (limit != RLIM_INFINITY) {
+		gr_learn_resource(current, RLIMIT_FSIZE, iocb->ki_pos, 0);
 		if (iocb->ki_pos >= limit) {
 			send_sig(SIGXFSZ, current, 0);
 			return -EFBIG;

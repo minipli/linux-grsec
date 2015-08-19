@@ -112,6 +112,8 @@ static inline size_t br_port_info_size(void)
 		+ nla_total_size(1)	/* IFLA_BRPORT_FAST_LEAVE */
 		+ nla_total_size(1)	/* IFLA_BRPORT_LEARNING */
 		+ nla_total_size(1)	/* IFLA_BRPORT_UNICAST_FLOOD */
+		+ nla_total_size(1)	/* IFLA_BRPORT_PROXYARP */
+		+ nla_total_size(1)	/* IFLA_BRPORT_PROXYARP_WIFI */
 		+ 0;
 }
 
@@ -504,6 +506,8 @@ static const struct nla_policy br_port_policy[IFLA_BRPORT_MAX + 1] = {
 	[IFLA_BRPORT_FAST_LEAVE]= { .type = NLA_U8 },
 	[IFLA_BRPORT_LEARNING]	= { .type = NLA_U8 },
 	[IFLA_BRPORT_UNICAST_FLOOD] = { .type = NLA_U8 },
+	[IFLA_BRPORT_PROXYARP]	= { .type = NLA_U8 },
+	[IFLA_BRPORT_PROXYARP_WIFI] = { .type = NLA_U8 },
 };
 
 /* Change the state of the port and notify spanning tree */
@@ -841,7 +845,7 @@ static struct rtnl_af_ops br_af_ops __read_mostly = {
 	.get_link_af_size	= br_get_link_af_size,
 };
 
-struct rtnl_link_ops br_link_ops __read_mostly = {
+struct rtnl_link_ops br_link_ops = {
 	.kind			= "bridge",
 	.priv_size		= sizeof(struct net_bridge),
 	.setup			= br_dev_setup,

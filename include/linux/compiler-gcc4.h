@@ -39,9 +39,38 @@
 # define __compiletime_warning(message) __attribute__((warning(message)))
 # define __compiletime_error(message) __attribute__((error(message)))
 #endif /* __CHECKER__ */
+
+#define __alloc_size(...)	__attribute((alloc_size(__VA_ARGS__)))
+#define __bos(ptr, arg)		__builtin_object_size((ptr), (arg))
+#define __bos0(ptr)		__bos((ptr), 0)
+#define __bos1(ptr)		__bos((ptr), 1)
 #endif /* GCC_VERSION >= 40300 */
 
 #if GCC_VERSION >= 40500
+
+#ifdef RANDSTRUCT_PLUGIN
+#define __randomize_layout __attribute__((randomize_layout))
+#define __no_randomize_layout __attribute__((no_randomize_layout))
+#endif
+
+#ifdef CONSTIFY_PLUGIN
+#define __no_const __attribute__((no_const))
+#define __do_const __attribute__((do_const))
+#endif
+
+#ifdef SIZE_OVERFLOW_PLUGIN
+#define __size_overflow(...) __attribute__((size_overflow(__VA_ARGS__)))
+#define __intentional_overflow(...) __attribute__((intentional_overflow(__VA_ARGS__)))
+#endif
+
+#ifdef LATENT_ENTROPY_PLUGIN
+#define __latent_entropy __attribute__((latent_entropy))
+#endif
+
+#ifdef INITIFY_PLUGIN
+#define __nocapture(...) __attribute__((nocapture(__VA_ARGS__)))
+#endif
+
 /*
  * Mark a position in code as unreachable.  This can be used to
  * suppress control flow warnings after asm blocks that transfer

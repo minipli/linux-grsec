@@ -56,11 +56,9 @@ static int __ioremap_check_ram(unsigned long start_pfn, unsigned long nr_pages,
 	unsigned long i;
 
 	for (i = 0; i < nr_pages; ++i)
-		if (pfn_valid(start_pfn + i) &&
-		    !PageReserved(pfn_to_page(start_pfn + i)))
+		if (pfn_valid(start_pfn + i) && (start_pfn + i >= 0x100 ||
+		    !PageReserved(pfn_to_page(start_pfn + i))))
 			return 1;
-
-	WARN_ONCE(1, "ioremap on RAM pfn 0x%lx\n", start_pfn);
 
 	return 0;
 }
@@ -91,7 +89,6 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 	pgprot_t prot;
 	int retval;
 	void __iomem *ret_addr;
-	int ram_region;
 
 	/* Don't allow wraparound or zero size */
 	last_addr = phys_addr + size - 1;
@@ -114,23 +111,15 @@ static void __iomem *__ioremap_caller(resource_size_t phys_addr,
 	/*
 	 * Don't allow anybody to remap normal RAM that we're using..
 	 */
-	/* First check if whole region can be identified as RAM or not */
-	ram_region = region_is_ram(phys_addr, size);
-	if (ram_region > 0) {
-		WARN_ONCE(1, "ioremap on RAM at 0x%lx - 0x%lx\n",
-				(unsigned long int)phys_addr,
-				(unsigned long int)last_addr);
+	pfn      = phys_addr >> PAGE_SHIFT;
+	last_pfn = last_addr >> PAGE_SHIFT;
+	if (walk_system_ram_range(pfn, last_pfn - pfn + 1, NULL,
+					  __ioremap_check_ram) == 1) {
+		WARN_ONCE(1, "ioremap on RAM at 0x%llx - 0x%llx\n",
+					phys_addr, last_addr);
 		return NULL;
 	}
 
-	/* If could not be identified(-1), check page by page */
-	if (ram_region < 0) {
-		pfn      = phys_addr >> PAGE_SHIFT;
-		last_pfn = last_addr >> PAGE_SHIFT;
-		if (walk_system_ram_range(pfn, last_pfn - pfn + 1, NULL,
-					  __ioremap_check_ram) == 1)
-			return NULL;
-	}
 	/*
 	 * Mappings have to be page-aligned
 	 */
@@ -288,7 +277,7 @@ EXPORT_SYMBOL(ioremap_prot);
  *
  * Caller must ensure there is only one unmapping for the same pointer.
  */
-void iounmap(volatile void __iomem *addr)
+void iounmap(const volatile void __iomem *addr)
 {
 	struct vm_struct *p, *o;
 
@@ -351,32 +340,36 @@ int arch_ioremap_pmd_supported(void)
  */
 void *xlate_dev_mem_ptr(phys_addr_t phys)
 {
-	unsigned long start  = phys &  PAGE_MASK;
-	unsigned long offset = phys & ~PAGE_MASK;
-	unsigned long vaddr;
+	phys_addr_t pfn = phys >> PAGE_SHIFT;
 
-	/* If page is RAM, we can use __va. Otherwise ioremap and unmap. */
-	if (page_is_ram(start >> PAGE_SHIFT))
-		return __va(phys);
+	if (page_is_ram(pfn)) {
+#ifdef CONFIG_HIGHMEM
+		if (pfn >= max_low_pfn)
+			return kmap_high(pfn_to_page(pfn));
+		else
+#endif
+			return __va(phys);
+	}
 
-	vaddr = (unsigned long)ioremap_cache(start, PAGE_SIZE);
-	/* Only add the offset on success and return NULL if the ioremap() failed: */
-	if (vaddr)
-		vaddr += offset;
-
-	return (void *)vaddr;
+	return (void __force *)ioremap_cache(phys, 1);
 }
 
 void unxlate_dev_mem_ptr(phys_addr_t phys, void *addr)
 {
-	if (page_is_ram(phys >> PAGE_SHIFT))
-		return;
+	phys_addr_t pfn = phys >> PAGE_SHIFT;
 
-	iounmap((void __iomem *)((unsigned long)addr & PAGE_MASK));
-	return;
+	if (page_is_ram(pfn)) {
+#ifdef CONFIG_HIGHMEM
+		if (pfn >= max_low_pfn)
+			kunmap_high(pfn_to_page(pfn));
+#endif
+		return;
+	}
+
+	iounmap((void __iomem __force *)addr);
 }
 
-static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __page_aligned_bss;
+static pte_t bm_pte[PAGE_SIZE/sizeof(pte_t)] __read_only __aligned(PAGE_SIZE);
 
 static inline pmd_t * __init early_ioremap_pmd(unsigned long addr)
 {
@@ -412,8 +405,7 @@ void __init early_ioremap_init(void)
 	early_ioremap_setup();
 
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
-	memset(bm_pte, 0, sizeof(bm_pte));
-	pmd_populate_kernel(&init_mm, pmd, bm_pte);
+	pmd_populate_user(&init_mm, pmd, bm_pte);
 
 	/*
 	 * The boot-ioremap range spans multiple pmds, for which
