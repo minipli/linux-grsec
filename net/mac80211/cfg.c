@@ -839,7 +839,7 @@ static int ieee80211_set_monitor_channel(struct wiphy *wiphy,
 			ret = ieee80211_vif_use_channel(sdata, chandef,
 					IEEE80211_CHANCTX_EXCLUSIVE);
 		}
-	} else if (local->open_count == local->monitors) {
+	} else if (local_read(&local->open_count) == local->monitors) {
 		local->_oper_chandef = *chandef;
 		ieee80211_hw_config(local, 0);
 	}
@@ -3356,7 +3356,7 @@ static void ieee80211_mgmt_frame_register(struct wiphy *wiphy,
 		else
 			local->probe_req_reg--;
 
-		if (!local->open_count)
+		if (!local_read(&local->open_count))
 			break;
 
 		ieee80211_queue_work(&local->hw, &local->reconfig_filter);
@@ -3819,8 +3819,8 @@ static int ieee80211_cfg_get_channel(struct wiphy *wiphy,
 	if (chanctx_conf) {
 		*chandef = chanctx_conf->def;
 		ret = 0;
-	} else if (local->open_count > 0 &&
-		   local->open_count == local->monitors &&
+	} else if (local_read(&local->open_count) > 0 &&
+		   local_read(&local->open_count) == local->monitors &&
 		   sdata->vif.type == NL80211_IFTYPE_MONITOR) {
 		if (local->use_chanctx)
 			*chandef = local->monitor_chandef;

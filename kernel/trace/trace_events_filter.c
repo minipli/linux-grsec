@@ -1416,8 +1416,12 @@ static int check_preds(struct filter_parse_state *ps)
 		cnt--;
 		if (elt->op == OP_AND || elt->op == OP_OR) {
 			n_logical_preds++;
+			cnt--;
 			continue;
 		}
+		// OP_NOT is not supported in this kernel, will get
+		// a reject here when it's backported
+		cnt--;
 		n_normal_preds++;
 		/* all ops should have operands */
 		if (cnt < 0)

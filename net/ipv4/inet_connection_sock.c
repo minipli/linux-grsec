@@ -29,7 +29,7 @@ const char inet_csk_timer_bug_msg[] = "inet_csk BUG: unknown timer value\n";
 EXPORT_SYMBOL(inet_csk_timer_bug_msg);
 #endif
 
-unsigned long *sysctl_local_reserved_ports;
+unsigned long sysctl_local_reserved_ports[65536 / 8 / sizeof(unsigned long)];
 EXPORT_SYMBOL(sysctl_local_reserved_ports);
 
 void inet_get_local_port_range(struct net *net, int *low, int *high)

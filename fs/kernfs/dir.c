@@ -28,7 +28,7 @@ DEFINE_MUTEX(kernfs_mutex);
  *
  *	Returns 31 bit hash of ns + name (so it fits in an off_t )
  */
-static unsigned int kernfs_name_hash(const char *name, const void *ns)
+static unsigned int kernfs_name_hash(const unsigned char *name, const void *ns)
 {
 	unsigned long hash = init_name_hash();
 	unsigned int len = strlen(name);
@@ -729,11 +729,19 @@ static int kernfs_iop_mkdir(struct inode *dir, struct dentry *dentry,
 {
 	struct kernfs_node *parent = dir->i_private;
 	struct kernfs_dir_ops *kdops = kernfs_root(parent)->dir_ops;
+	int ret;
 
 	if (!kdops || !kdops->mkdir)
 		return -EPERM;
 
-	return kdops->mkdir(parent, dentry->d_name.name, mode);
+	ret = kdops->mkdir(parent, dentry->d_name.name, mode);
+
+	if (!ret) {
+		struct dentry *dentry_ret = kernfs_iop_lookup(dir, dentry, 0);
+		ret = PTR_ERR_OR_ZERO(dentry_ret);
+	}
+
+	return ret;
 }
 
 static int kernfs_iop_rmdir(struct inode *dir, struct dentry *dentry)

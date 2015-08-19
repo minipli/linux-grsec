@@ -534,7 +534,7 @@ static void accumulate_16bit_val(u32 *acc, u16 val)
 
 	if (wrapped)
 		newacc += 65536;
-	ACCESS_ONCE(*acc) = newacc;
+	ACCESS_ONCE_RW(*acc) = newacc;
 }
 
 static void populate_erx_stats(struct be_adapter *adapter,
@@ -4001,6 +4001,9 @@ static int be_ndo_bridge_setlink(struct net_device *dev,
 	nla_for_each_nested(attr, br_spec, rem) {
 		if (nla_type(attr) != IFLA_BRIDGE_MODE)
 			continue;
+
+		if (nla_len(attr) < sizeof(mode))
+			return -EINVAL;
 
 		mode = nla_get_u16(attr);
 		if (mode != BRIDGE_MODE_VEPA && mode != BRIDGE_MODE_VEB)
