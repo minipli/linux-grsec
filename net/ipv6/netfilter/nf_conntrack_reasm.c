@@ -96,12 +96,11 @@ static struct ctl_table nf_ct_frag6_sysctl_table[] = {
 
 static int nf_ct_frag6_sysctl_register(struct net *net)
 {
-	struct ctl_table *table;
+	ctl_table_no_const *table = NULL;
 	struct ctl_table_header *hdr;
 
-	table = nf_ct_frag6_sysctl_table;
 	if (!net_eq(net, &init_net)) {
-		table = kmemdup(table, sizeof(nf_ct_frag6_sysctl_table),
+		table = kmemdup(nf_ct_frag6_sysctl_table, sizeof(nf_ct_frag6_sysctl_table),
 				GFP_KERNEL);
 		if (table == NULL)
 			goto err_alloc;
@@ -112,9 +111,9 @@ static int nf_ct_frag6_sysctl_register(struct net *net)
 		table[2].data = &net->nf_frag.frags.high_thresh;
 		table[2].extra1 = &net->nf_frag.frags.low_thresh;
 		table[2].extra2 = &init_net.nf_frag.frags.high_thresh;
-	}
-
-	hdr = register_net_sysctl(net, "net/netfilter", table);
+		hdr = register_net_sysctl(net, "net/netfilter", table);
+	} else
+		hdr = register_net_sysctl(net, "net/netfilter", nf_ct_frag6_sysctl_table);
 	if (hdr == NULL)
 		goto err_reg;
 
@@ -122,8 +121,7 @@ static int nf_ct_frag6_sysctl_register(struct net *net)
 	return 0;
 
 err_reg:
-	if (!net_eq(net, &init_net))
-		kfree(table);
+	kfree(table);
 err_alloc:
 	return -ENOMEM;
 }
@@ -348,7 +346,7 @@ found:
 	fq->ecn |= ecn;
 	if (payload_len > fq->q.max_size)
 		fq->q.max_size = payload_len;
-	add_frag_mem_limit(&fq->q, skb->truesize);
+	add_frag_mem_limit(fq->q.net, skb->truesize);
 
 	/* The first fragment.
 	 * nhoffset is obtained from the first fragment, of course.
@@ -430,7 +428,7 @@ nf_ct_frag6_reasm(struct frag_queue *fq, struct net_device *dev)
 		clone->ip_summed = head->ip_summed;
 
 		NFCT_FRAG6_CB(clone)->orig = NULL;
-		add_frag_mem_limit(&fq->q, clone->truesize);
+		add_frag_mem_limit(fq->q.net, clone->truesize);
 	}
 
 	/* We have to remove fragment header from datagram and to relocate
@@ -454,7 +452,7 @@ nf_ct_frag6_reasm(struct frag_queue *fq, struct net_device *dev)
 			head->csum = csum_add(head->csum, fp->csum);
 		head->truesize += fp->truesize;
 	}
-	sub_frag_mem_limit(&fq->q, head->truesize);
+	sub_frag_mem_limit(fq->q.net, head->truesize);
 
 	head->ignore_df = 1;
 	head->next = NULL;

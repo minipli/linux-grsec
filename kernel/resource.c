@@ -162,8 +162,18 @@ static const struct file_operations proc_iomem_operations = {
 
 static int __init ioresources_init(void)
 {
+#ifdef CONFIG_GRKERNSEC_PROC_ADD
+#ifdef CONFIG_GRKERNSEC_PROC_USER
+	proc_create("ioports", S_IRUSR, NULL, &proc_ioports_operations);
+	proc_create("iomem", S_IRUSR, NULL, &proc_iomem_operations);
+#elif defined(CONFIG_GRKERNSEC_PROC_USERGROUP)
+	proc_create("ioports", S_IRUSR | S_IRGRP, NULL, &proc_ioports_operations);
+	proc_create("iomem", S_IRUSR | S_IRGRP, NULL, &proc_iomem_operations);
+#endif
+#else
 	proc_create("ioports", 0, NULL, &proc_ioports_operations);
 	proc_create("iomem", 0, NULL, &proc_iomem_operations);
+#endif
 	return 0;
 }
 __initcall(ioresources_init);
@@ -504,13 +514,13 @@ int region_is_ram(resource_size_t start, unsigned long size)
 {
 	struct resource *p;
 	resource_size_t end = start + size - 1;
-	int flags = IORESOURCE_MEM | IORESOURCE_BUSY;
+	unsigned long flags = IORESOURCE_MEM | IORESOURCE_BUSY;
 	const char *name = "System RAM";
 	int ret = -1;
 
 	read_lock(&resource_lock);
 	for (p = iomem_resource.child; p ; p = p->sibling) {
-		if (end < p->start)
+		if (p->end < start)
 			continue;
 
 		if (p->start <= start && end <= p->end) {
@@ -521,7 +531,7 @@ int region_is_ram(resource_size_t start, unsigned long size)
 				ret = 1;
 			break;
 		}
-		if (p->end < start)
+		if (end < p->start)
 			break;	/* not found */
 	}
 	read_unlock(&resource_lock);

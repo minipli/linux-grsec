@@ -52,12 +52,12 @@ static inline void name(type val, volatile void __iomem *addr) \
 "m" (*(volatile type __force *)addr) barrier); }
 
 build_mmio_read(readb, "b", unsigned char, "=q", :"memory")
-build_mmio_read(readw, "w", unsigned short, "=r", :"memory")
-build_mmio_read(readl, "l", unsigned int, "=r", :"memory")
+build_mmio_read(__intentional_overflow(-1) readw, "w", unsigned short, "=r", :"memory")
+build_mmio_read(__intentional_overflow(-1) readl, "l", unsigned int, "=r", :"memory")
 
 build_mmio_read(__readb, "b", unsigned char, "=q", )
-build_mmio_read(__readw, "w", unsigned short, "=r", )
-build_mmio_read(__readl, "l", unsigned int, "=r", )
+build_mmio_read(__intentional_overflow(-1) __readw, "w", unsigned short, "=r", )
+build_mmio_read(__intentional_overflow(-1) __readl, "l", unsigned int, "=r", )
 
 build_mmio_write(writeb, "b", unsigned char, "q", :"memory")
 build_mmio_write(writew, "w", unsigned short, "r", :"memory")
@@ -113,7 +113,7 @@ build_mmio_write(writeq, "q", unsigned long, "r", :"memory")
  *	this function
  */
 
-static inline phys_addr_t virt_to_phys(volatile void *address)
+static inline phys_addr_t __intentional_overflow(-1) virt_to_phys(volatile void *address)
 {
 	return __pa(address);
 }
@@ -189,7 +189,7 @@ static inline void __iomem *ioremap(resource_size_t offset, unsigned long size)
 	return ioremap_nocache(offset, size);
 }
 
-extern void iounmap(volatile void __iomem *addr);
+extern void iounmap(const volatile void __iomem *addr);
 
 extern void set_iounmap_nonlazy(void);
 
@@ -198,6 +198,17 @@ extern void set_iounmap_nonlazy(void);
 #include <asm-generic/iomap.h>
 
 #include <linux/vmalloc.h>
+
+#define ARCH_HAS_VALID_PHYS_ADDR_RANGE
+static inline int valid_phys_addr_range(unsigned long addr, size_t count)
+{
+	return ((addr + count + PAGE_SIZE - 1) >> PAGE_SHIFT) < (1ULL << (boot_cpu_data.x86_phys_bits - PAGE_SHIFT)) ? 1 : 0;
+}
+
+static inline int valid_mmap_phys_addr_range(unsigned long pfn, size_t count)
+{
+	return (pfn + (count >> PAGE_SHIFT)) < (1ULL << (boot_cpu_data.x86_phys_bits - PAGE_SHIFT)) ? 1 : 0;
+}
 
 /*
  * Convert a virtual cached pointer to an uncached pointer

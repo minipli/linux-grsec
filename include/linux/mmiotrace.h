@@ -46,7 +46,7 @@ extern int kmmio_handler(struct pt_regs *regs, unsigned long addr);
 /* Called from ioremap.c */
 extern void mmiotrace_ioremap(resource_size_t offset, unsigned long size,
 							void __iomem *addr);
-extern void mmiotrace_iounmap(volatile void __iomem *addr);
+extern void mmiotrace_iounmap(const volatile void __iomem *addr);
 
 /* For anyone to insert markers. Remember trailing newline. */
 extern __printf(1, 2) int mmiotrace_printk(const char *fmt, ...);
@@ -66,7 +66,7 @@ static inline void mmiotrace_ioremap(resource_size_t offset,
 {
 }
 
-static inline void mmiotrace_iounmap(volatile void __iomem *addr)
+static inline void mmiotrace_iounmap(const volatile void __iomem *addr)
 {
 }
 
@@ -106,6 +106,6 @@ extern void enable_mmiotrace(void);
 extern void disable_mmiotrace(void);
 extern void mmio_trace_rw(struct mmiotrace_rw *rw);
 extern void mmio_trace_mapping(struct mmiotrace_map *map);
-extern int mmio_trace_printk(const char *fmt, va_list args);
+extern __printf(1, 0) int mmio_trace_printk(const char *fmt, va_list args);
 
 #endif /* _LINUX_MMIOTRACE_H */

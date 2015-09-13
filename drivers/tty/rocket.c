@@ -914,7 +914,7 @@ static int rp_open(struct tty_struct *tty, struct file *filp)
 	tty->driver_data = info;
 	tty_port_tty_set(port, tty);
 
-	if (port->count++ == 0) {
+	if (atomic_inc_return(&port->count) == 1) {
 		atomic_inc(&rp_num_ports_open);
 
 #ifdef ROCKET_DEBUG_OPEN
@@ -923,7 +923,7 @@ static int rp_open(struct tty_struct *tty, struct file *filp)
 #endif
 	}
 #ifdef ROCKET_DEBUG_OPEN
-	printk(KERN_INFO "rp_open ttyR%d, count=%d\n", info->line, info->port.count);
+	printk(KERN_INFO "rp_open ttyR%d, count=%d\n", info->line, atomic-read(&info->port.count));
 #endif
 
 	/*
@@ -1515,7 +1515,7 @@ static void rp_hangup(struct tty_struct *tty)
 		spin_unlock_irqrestore(&info->port.lock, flags);
 		return;
 	}
-	if (info->port.count)
+	if (atomic_read(&info->port.count))
 		atomic_dec(&rp_num_ports_open);
 	clear_bit((info->aiop * 8) + info->chan, (void *) &xmit_flags[info->board]);
 	spin_unlock_irqrestore(&info->port.lock, flags);

@@ -144,7 +144,7 @@ void ip6_expire_frag_queue(struct net *net, struct frag_queue *fq,
 
 	IP6_INC_STATS_BH(net, __in6_dev_get(dev), IPSTATS_MIB_REASMFAILS);
 
-	if (fq->q.flags & INET_FRAG_EVICTED)
+	if (inet_frag_evicting(&fq->q))
 		goto out_rcu_unlock;
 
 	IP6_INC_STATS_BH(net, __in6_dev_get(dev), IPSTATS_MIB_REASMTIMEOUT);
@@ -330,7 +330,7 @@ found:
 	fq->q.stamp = skb->tstamp;
 	fq->q.meat += skb->len;
 	fq->ecn |= ecn;
-	add_frag_mem_limit(&fq->q, skb->truesize);
+	add_frag_mem_limit(fq->q.net, skb->truesize);
 
 	/* The first fragment.
 	 * nhoffset is obtained from the first fragment, of course.
@@ -443,7 +443,7 @@ static int ip6_frag_reasm(struct frag_queue *fq, struct sk_buff *prev,
 		head->len -= clone->len;
 		clone->csum = 0;
 		clone->ip_summed = head->ip_summed;
-		add_frag_mem_limit(&fq->q, clone->truesize);
+		add_frag_mem_limit(fq->q.net, clone->truesize);
 	}
 
 	/* We have to remove fragment header from datagram and to relocate
@@ -481,7 +481,7 @@ static int ip6_frag_reasm(struct frag_queue *fq, struct sk_buff *prev,
 		}
 		fp = next;
 	}
-	sub_frag_mem_limit(&fq->q, sum_truesize);
+	sub_frag_mem_limit(fq->q.net, sum_truesize);
 
 	head->next = NULL;
 	head->dev = dev;
@@ -626,12 +626,11 @@ static struct ctl_table ip6_frags_ctl_table[] = {
 
 static int __net_init ip6_frags_ns_sysctl_register(struct net *net)
 {
-	struct ctl_table *table;
+	ctl_table_no_const *table = NULL;
 	struct ctl_table_header *hdr;
 
-	table = ip6_frags_ns_ctl_table;
 	if (!net_eq(net, &init_net)) {
-		table = kmemdup(table, sizeof(ip6_frags_ns_ctl_table), GFP_KERNEL);
+		table = kmemdup(ip6_frags_ns_ctl_table, sizeof(ip6_frags_ns_ctl_table), GFP_KERNEL);
 		if (!table)
 			goto err_alloc;
 
@@ -645,9 +644,10 @@ static int __net_init ip6_frags_ns_sysctl_register(struct net *net)
 		/* Don't export sysctls to unprivileged users */
 		if (net->user_ns != &init_user_ns)
 			table[0].procname = NULL;
-	}
+		hdr = register_net_sysctl(net, "net/ipv6", table);
+	} else
+		hdr = register_net_sysctl(net, "net/ipv6", ip6_frags_ns_ctl_table);
 
-	hdr = register_net_sysctl(net, "net/ipv6", table);
 	if (!hdr)
 		goto err_reg;
 
@@ -655,8 +655,7 @@ static int __net_init ip6_frags_ns_sysctl_register(struct net *net)
 	return 0;
 
 err_reg:
-	if (!net_eq(net, &init_net))
-		kfree(table);
+	kfree(table);
 err_alloc:
 	return -ENOMEM;
 }
