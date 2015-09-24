@@ -5843,7 +5843,6 @@ static int selinux_key_getsecurity(struct key *key, char **_buffer)
 #endif
 
 static struct security_operations selinux_ops __read_only = {
- 	.name =				"selinux",
 	.name =				"selinux",
 
 	.binder_set_context_mgr =	selinux_binder_set_context_mgr,

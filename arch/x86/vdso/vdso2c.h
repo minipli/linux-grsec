@@ -83,7 +83,7 @@ static void BITSFUNC(go)(void *raw_addr, size_t raw_len,
 	for (i = 0;
 	     i < GET_LE(&symtab_hdr->sh_size) / GET_LE(&symtab_hdr->sh_entsize);
 	     i++) {
-		int k;
+		unsigned int k;
 		ELF(Sym) *sym = raw_addr + GET_LE(&symtab_hdr->sh_offset) +
 			GET_LE(&symtab_hdr->sh_entsize) * i;
 		const char *name = raw_addr + GET_LE(&strtab_hdr->sh_offset) +

@@ -782,7 +782,7 @@ static void __init trim_bios_range(void)
 /* called before trim_bios_range() to spare extra sanitize */
 static void __init e820_add_kernel_range(void)
 {
-	u64 start = __pa_symbol(ktla_ktva(_text));
+	u64 start = __pa_symbol(ktla_ktva((unsigned long)_text));
 	u64 size = __pa_symbol(_end) - start;
 
 	/*
@@ -962,15 +962,15 @@ void __init setup_arch(char **cmdline_p)
 
 	if (!boot_params.hdr.root_flags)
 		root_mountflags &= ~MS_RDONLY;
-	init_mm.start_code = ktla_ktva((unsigned long) _text);
-	init_mm.end_code = ktla_ktva((unsigned long) _etext);
-	init_mm.end_data = (unsigned long) _edata;
+	init_mm.start_code = ktla_ktva((unsigned long)_text);
+	init_mm.end_code = ktla_ktva((unsigned long)_etext);
+	init_mm.end_data = (unsigned long)_edata;
 	init_mm.brk = _brk_end;
 
 	mpx_mm_init(&init_mm);
 
-	code_resource.start = __pa_symbol(ktla_ktva(_text));
-	code_resource.end = __pa_symbol(ktla_ktva(_etext))-1;
+	code_resource.start = __pa_symbol(ktla_ktva((unsigned long)_text));
+	code_resource.end = __pa_symbol(ktla_ktva((unsigned long)_etext))-1;
 	data_resource.start = __pa_symbol(_sdata);
 	data_resource.end = __pa_symbol(_edata)-1;
 	bss_resource.start = __pa_symbol(__bss_start);

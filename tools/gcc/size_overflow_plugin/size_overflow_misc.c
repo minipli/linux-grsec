@@ -19,6 +19,62 @@
 
 #include "size_overflow.h"
 
+bool is_vararg(const_tree fn, unsigned int num)
+{
+	tree arg_list;
+
+	if (num == 0)
+		return false;
+	if (fn == NULL_TREE)
+		return false;
+	if (TREE_CODE(fn) != FUNCTION_DECL)
+		return false;
+
+	arg_list = TYPE_ARG_TYPES(TREE_TYPE(fn));
+	if (arg_list == NULL_TREE)
+		return false;
+
+	if (tree_last(arg_list) == void_list_node)
+		return false;
+
+	return num >= (unsigned int)list_length(arg_list);
+}
+
+// Extract the field decl from memory references
+tree get_ref_field(const_tree ref)
+{
+	tree field;
+
+	// TODO: handle nested memory references
+	switch (TREE_CODE(ref)) {
+	case ARRAY_REF:
+		return NULL_TREE;
+#if BUILDING_GCC_VERSION >= 4006
+	case MEM_REF:
+#endif
+	case INDIRECT_REF:
+		field = TREE_OPERAND(ref, 0);
+		break;
+	case COMPONENT_REF:
+		field = TREE_OPERAND(ref, 1);
+		break;
+	default:
+		return NULL_TREE;
+	}
+
+	// TODO
+	if (TREE_CODE(field) == SSA_NAME)
+		return NULL_TREE;
+	// TODO
+	if (TREE_CODE(field) != FIELD_DECL)
+		return NULL_TREE;
+	// TODO
+	if (TREE_CODE(field) == ADDR_EXPR)
+		return NULL_TREE;
+
+	return field;
+}
+
 const char *get_type_name_from_field(const_tree field_decl)
 {
 	const_tree context, type_name;
@@ -27,6 +83,9 @@ const char *get_type_name_from_field(const_tree field_decl)
 		return NULL;
 
 	context = DECL_CONTEXT(field_decl);
+	// TODO
+	if (TREE_CODE(context) != RECORD_TYPE)
+		return NULL;
 	gcc_assert(TREE_CODE(context) == RECORD_TYPE);
 	type_name = TYPE_NAME(TYPE_MAIN_VARIANT(context));
 	if (type_name == NULL_TREE)
@@ -45,14 +104,16 @@ const char *get_type_name_from_field(const_tree field_decl)
 // Was the function created by the compiler itself?
 bool made_by_compiler(const_tree decl)
 {
+	enum tree_code decl_code;
 	struct cgraph_node *node;
 
 	if (FUNCTION_PTR_P(decl))
 		return false;
-	if (TREE_CODE(decl) == VAR_DECL)
+	decl_code = TREE_CODE(decl);
+	if (decl_code == VAR_DECL || decl_code == FIELD_DECL)
 		return false;
 
-	gcc_assert(TREE_CODE(decl) == FUNCTION_DECL);
+	gcc_assert(decl_code == FUNCTION_DECL);
 	if (DECL_ABSTRACT_ORIGIN(decl) != NULL_TREE)
 		return true;
 	if (DECL_ARTIFICIAL(decl))
@@ -238,7 +299,8 @@ unsigned int get_correct_argnum_fndecl(const_tree fndecl, const_tree correct_arg
 		return CANNOT_FIND_ARG;
 
 	fndecl_arg = chain_index(num - 1, fndecl_arglist);
-	gcc_assert(fndecl_arg != NULL_TREE);
+	if (fndecl_arg == NULL_TREE)
+		return CANNOT_FIND_ARG;
 
 	for (arg = target_fndecl_arglist, new_num = 1; arg; arg = TREE_CHAIN(arg), new_num++) {
 		if (arg == fndecl_arg || !strcmp(DECL_NAME_POINTER(arg), DECL_NAME_POINTER(fndecl_arg)))
@@ -352,6 +414,8 @@ unsigned int get_correct_argnum(const_tree decl, const_tree correct_argnum_of_de
 tree get_orig_fndecl(const_tree clone_fndecl)
 {
 	struct cgraph_node *node;
+
+	gcc_assert(TREE_CODE(clone_fndecl) == FUNCTION_DECL);
 
 	if (DECL_ABSTRACT_ORIGIN(clone_fndecl))
 		return (tree)DECL_ORIGIN(clone_fndecl);

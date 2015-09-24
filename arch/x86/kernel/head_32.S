@@ -138,7 +138,14 @@ ENTRY(startup_32)
 	movb %ah,GDT_ENTRY_PERCPU * 8 + 7(%edi)
 	movl $__per_cpu_end - 1,%eax
 	subl $__per_cpu_start,%eax
+	cmpl $0x100000,%eax
+	jb 1f
+	shrl $PAGE_SHIFT,%eax
+	orb $0x80,GDT_ENTRY_PERCPU * 8 + 6(%edi)
+1:
 	movw %ax,GDT_ENTRY_PERCPU * 8 + 0(%edi)
+	shrl $16,%eax
+	orb %al,GDT_ENTRY_PERCPU * 8 + 6(%edi)
 #endif
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
