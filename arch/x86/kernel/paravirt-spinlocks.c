@@ -23,7 +23,7 @@ bool pv_is_native_spin_unlock(void)
 }
 #endif
 
-struct pv_lock_ops pv_lock_ops = {
+struct pv_lock_ops pv_lock_ops __read_only = {
 #ifdef CONFIG_SMP
 #ifdef CONFIG_QUEUED_SPINLOCKS
 	.queued_spin_lock_slowpath = native_queued_spin_lock_slowpath,

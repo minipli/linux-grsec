@@ -492,8 +492,8 @@ static int populate_msi_sysfs(struct pci_dev *pdev)
 {
 	struct attribute **msi_attrs;
 	struct attribute *msi_attr;
-	struct device_attribute *msi_dev_attr;
-	struct attribute_group *msi_irq_group;
+	device_attribute_no_const *msi_dev_attr;
+	attribute_group_no_const *msi_irq_group;
 	const struct attribute_group **msi_irq_groups;
 	struct msi_desc *entry;
 	int ret = -ENOMEM;
@@ -552,7 +552,7 @@ error_attrs:
 	count = 0;
 	msi_attr = msi_attrs[count];
 	while (msi_attr) {
-		msi_dev_attr = container_of(msi_attr, struct device_attribute, attr);
+		msi_dev_attr = container_of(msi_attr, device_attribute_no_const, attr);
 		kfree(msi_attr->name);
 		kfree(msi_dev_attr);
 		++count;
@@ -1236,12 +1236,14 @@ static void pci_msi_domain_update_dom_ops(struct msi_domain_info *info)
 	if (ops == NULL) {
 		info->ops = &pci_msi_domain_ops_default;
 	} else {
+		pax_open_kernel();
 		if (ops->set_desc == NULL)
-			ops->set_desc = pci_msi_domain_set_desc;
+			*(void **)&ops->set_desc = pci_msi_domain_set_desc;
 		if (ops->msi_check == NULL)
-			ops->msi_check = pci_msi_domain_check_cap;
+			*(void **)&ops->msi_check = pci_msi_domain_check_cap;
 		if (ops->handle_error == NULL)
-			ops->handle_error = pci_msi_domain_handle_error;
+			*(void **)&ops->handle_error = pci_msi_domain_handle_error;
+		pax_close_kernel();
 	}
 }
 
@@ -1250,8 +1252,11 @@ static void pci_msi_domain_update_chip_ops(struct msi_domain_info *info)
 	struct irq_chip *chip = info->chip;
 
 	BUG_ON(!chip);
-	if (!chip->irq_write_msi_msg)
-		chip->irq_write_msi_msg = pci_msi_domain_write_msg;
+	if (!chip->irq_write_msi_msg) {
+		pax_open_kernel();
+		*(void **)&chip->irq_write_msi_msg = pci_msi_domain_write_msg;
+		pax_close_kernel();
+	}
 }
 
 /**

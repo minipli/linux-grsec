@@ -2103,7 +2103,7 @@ EXPORT_SYMBOL(__skb_checksum);
 __wsum skb_checksum(const struct sk_buff *skb, int offset,
 		    int len, __wsum csum)
 {
-	const struct skb_checksum_ops ops = {
+	static const struct skb_checksum_ops ops = {
 		.update  = csum_partial_ext,
 		.combine = csum_block_add_ext,
 	};
@@ -3317,12 +3317,14 @@ void __init skb_init(void)
 	skbuff_head_cache = kmem_cache_create("skbuff_head_cache",
 					      sizeof(struct sk_buff),
 					      0,
-					      SLAB_HWCACHE_ALIGN|SLAB_PANIC,
+					      SLAB_HWCACHE_ALIGN|SLAB_PANIC|
+					      SLAB_NO_SANITIZE,
 					      NULL);
 	skbuff_fclone_cache = kmem_cache_create("skbuff_fclone_cache",
 						sizeof(struct sk_buff_fclones),
 						0,
-						SLAB_HWCACHE_ALIGN|SLAB_PANIC,
+						SLAB_HWCACHE_ALIGN|SLAB_PANIC|
+						SLAB_NO_SANITIZE,
 						NULL);
 }
 

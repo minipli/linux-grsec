@@ -212,7 +212,7 @@ struct common_dbs_data {
 	void (*exit)(struct dbs_data *dbs_data, bool notify);
 
 	/* Governor specific ops, see below */
-	void *gov_ops;
+	const void *gov_ops;
 
 	/*
 	 * Protects governor's data (struct dbs_data and struct common_dbs_data)
@@ -234,7 +234,7 @@ struct od_ops {
 	unsigned int (*powersave_bias_target)(struct cpufreq_policy *policy,
 			unsigned int freq_next, unsigned int relation);
 	void (*freq_increase)(struct cpufreq_policy *policy, unsigned int freq);
-};
+} __no_const;
 
 static inline int delay_for_sampling_rate(unsigned int sampling_rate)
 {
