@@ -1,7 +1,7 @@
 ccflags-y := -Iinclude/drm
-ifeq (, $(findstring -W,$(EXTRA_CFLAGS)))
-	ccflags-y += -Werror
-endif
+#ifeq (, $(findstring -W,$(EXTRA_CFLAGS)))
+#	ccflags-y += -Werror
+#endif
 
 tilcdc-y := \
 	tilcdc_crtc.o \

@@ -96,23 +96,26 @@ For 32-bit we have the following conventions - kernel is built with
 	.endm
 
 	.macro SAVE_C_REGS_HELPER offset=0 rax=1 rcx=1 r8910=1 r11=1
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	movq_cfi r12, R12+\offset
+#endif
 	.if \r11
-	movq_cfi r11, 6*8+\offset
+	movq_cfi r11, R11+\offset
 	.endif
 	.if \r8910
-	movq_cfi r10, 7*8+\offset
-	movq_cfi r9,  8*8+\offset
-	movq_cfi r8,  9*8+\offset
+	movq_cfi r10, R10+\offset
+	movq_cfi r9,  R9+\offset
+	movq_cfi r8,  R8+\offset
 	.endif
 	.if \rax
-	movq_cfi rax, 10*8+\offset
+	movq_cfi rax, RAX+\offset
 	.endif
 	.if \rcx
-	movq_cfi rcx, 11*8+\offset
+	movq_cfi rcx, RCX+\offset
 	.endif
-	movq_cfi rdx, 12*8+\offset
-	movq_cfi rsi, 13*8+\offset
-	movq_cfi rdi, 14*8+\offset
+	movq_cfi rdx, RDX+\offset
+	movq_cfi rsi, RSI+\offset
+	movq_cfi rdi, RDI+\offset
 	.endm
 	.macro SAVE_C_REGS offset=0
 	SAVE_C_REGS_HELPER \offset, 1, 1, 1, 1
@@ -131,76 +134,87 @@ For 32-bit we have the following conventions - kernel is built with
 	.endm
 
 	.macro SAVE_EXTRA_REGS offset=0
-	movq_cfi r15, 0*8+\offset
-	movq_cfi r14, 1*8+\offset
-	movq_cfi r13, 2*8+\offset
-	movq_cfi r12, 3*8+\offset
-	movq_cfi rbp, 4*8+\offset
-	movq_cfi rbx, 5*8+\offset
+	movq_cfi r15, R15+\offset
+	movq_cfi r14, R14+\offset
+	movq_cfi r13, R13+\offset
+#ifndef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	movq_cfi r12, R12+\offset
+#endif
+	movq_cfi rbp, RBP+\offset
+	movq_cfi rbx, RBX+\offset
 	.endm
 	.macro SAVE_EXTRA_REGS_RBP offset=0
-	movq_cfi rbp, 4*8+\offset
+	movq_cfi rbp, RBP+\offset
 	.endm
 
 	.macro RESTORE_EXTRA_REGS offset=0
-	movq_cfi_restore 0*8+\offset, r15
-	movq_cfi_restore 1*8+\offset, r14
-	movq_cfi_restore 2*8+\offset, r13
-	movq_cfi_restore 3*8+\offset, r12
-	movq_cfi_restore 4*8+\offset, rbp
-	movq_cfi_restore 5*8+\offset, rbx
+	movq_cfi_restore R15+\offset, r15
+	movq_cfi_restore R14+\offset, r14
+	movq_cfi_restore R13+\offset, r13
+#ifndef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	movq_cfi_restore R12+\offset, r12
+#endif
+	movq_cfi_restore RBP+\offset, rbp
+	movq_cfi_restore RBX+\offset, rbx
 	.endm
 
 	.macro ZERO_EXTRA_REGS
 	xorl	%r15d, %r15d
 	xorl	%r14d, %r14d
 	xorl	%r13d, %r13d
+#ifndef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
 	xorl	%r12d, %r12d
+#endif
 	xorl	%ebp, %ebp
 	xorl	%ebx, %ebx
 	.endm
 
-	.macro RESTORE_C_REGS_HELPER rstor_rax=1, rstor_rcx=1, rstor_r11=1, rstor_r8910=1, rstor_rdx=1
+	.macro RESTORE_C_REGS_HELPER rstor_rax=1, rstor_rcx=1, rstor_r11=1, rstor_r8910=1, rstor_rdx=1, rstor_r12=1
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	.if \rstor_r12
+	movq_cfi_restore R12, r12
+	.endif
+#endif
 	.if \rstor_r11
-	movq_cfi_restore 6*8, r11
+	movq_cfi_restore R11, r11
 	.endif
 	.if \rstor_r8910
-	movq_cfi_restore 7*8, r10
-	movq_cfi_restore 8*8, r9
-	movq_cfi_restore 9*8, r8
+	movq_cfi_restore R10, r10
+	movq_cfi_restore R9, r9
+	movq_cfi_restore R8, r8
 	.endif
 	.if \rstor_rax
-	movq_cfi_restore 10*8, rax
+	movq_cfi_restore RAX, rax
 	.endif
 	.if \rstor_rcx
-	movq_cfi_restore 11*8, rcx
+	movq_cfi_restore RCX, rcx
 	.endif
 	.if \rstor_rdx
-	movq_cfi_restore 12*8, rdx
+	movq_cfi_restore RDX, rdx
 	.endif
-	movq_cfi_restore 13*8, rsi
-	movq_cfi_restore 14*8, rdi
+	movq_cfi_restore RSI, rsi
+	movq_cfi_restore RDI, rdi
 	.endm
 	.macro RESTORE_C_REGS
-	RESTORE_C_REGS_HELPER 1,1,1,1,1
+	RESTORE_C_REGS_HELPER 1,1,1,1,1,1
 	.endm
 	.macro RESTORE_C_REGS_EXCEPT_RAX
-	RESTORE_C_REGS_HELPER 0,1,1,1,1
+	RESTORE_C_REGS_HELPER 0,1,1,1,1,0
 	.endm
 	.macro RESTORE_C_REGS_EXCEPT_RCX
-	RESTORE_C_REGS_HELPER 1,0,1,1,1
+	RESTORE_C_REGS_HELPER 1,0,1,1,1,0
 	.endm
 	.macro RESTORE_C_REGS_EXCEPT_R11
-	RESTORE_C_REGS_HELPER 1,1,0,1,1
+	RESTORE_C_REGS_HELPER 1,1,0,1,1,1
 	.endm
 	.macro RESTORE_C_REGS_EXCEPT_RCX_R11
-	RESTORE_C_REGS_HELPER 1,0,0,1,1
+	RESTORE_C_REGS_HELPER 1,0,0,1,1,1
 	.endm
 	.macro RESTORE_RSI_RDI
-	RESTORE_C_REGS_HELPER 0,0,0,0,0
+	RESTORE_C_REGS_HELPER 0,0,0,0,0,1
 	.endm
 	.macro RESTORE_RSI_RDI_RDX
-	RESTORE_C_REGS_HELPER 0,0,0,0,1
+	RESTORE_C_REGS_HELPER 0,0,0,0,1,1
 	.endm
 
 	.macro REMOVE_PT_GPREGS_FROM_STACK addskip=0

@@ -75,7 +75,7 @@ static __inline__ int get_count_order(unsigned int count)
 	return order;
 }
 
-static inline unsigned long hweight_long(unsigned long w)
+static inline unsigned long __intentional_overflow(-1) hweight_long(unsigned long w)
 {
 	return sizeof(w) == 4 ? hweight32(w) : hweight64(w);
 }
@@ -105,7 +105,7 @@ static inline __u64 ror64(__u64 word, unsigned int shift)
  * @word: value to rotate
  * @shift: bits to roll
  */
-static inline __u32 rol32(__u32 word, unsigned int shift)
+static inline __u32 __intentional_overflow(-1) rol32(__u32 word, unsigned int shift)
 {
 	return (word << shift) | (word >> (32 - shift));
 }
@@ -115,7 +115,7 @@ static inline __u32 rol32(__u32 word, unsigned int shift)
  * @word: value to rotate
  * @shift: bits to roll
  */
-static inline __u32 ror32(__u32 word, unsigned int shift)
+static inline __u32 __intentional_overflow(-1) ror32(__u32 word, unsigned int shift)
 {
 	return (word >> shift) | (word << (32 - shift));
 }
@@ -171,7 +171,7 @@ static inline __s32 sign_extend32(__u32 value, int index)
 	return (__s32)(value << shift) >> shift;
 }
 
-static inline unsigned fls_long(unsigned long l)
+static inline unsigned __intentional_overflow(-1) fls_long(unsigned long l)
 {
 	if (sizeof(l) == 4)
 		return fls(l);
