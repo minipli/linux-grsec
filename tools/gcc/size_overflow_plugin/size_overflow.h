@@ -215,6 +215,7 @@ extern tree handle_integer_truncation(struct visited *visited, next_interesting_
 extern bool is_a_neg_overflow(const gassign *stmt, const_tree rhs);
 extern enum intentional_overflow_type add_mul_intentional_overflow(const gassign *stmt);
 extern void unsigned_signed_cast_intentional_overflow(struct visited *visited, gassign *stmt);
+extern bool is_intentional_truncation(gassign *assign);
 
 
 // insert_size_overflow_asm.c

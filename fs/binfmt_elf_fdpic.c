@@ -1667,7 +1667,7 @@ static int elf_fdpic_core_dump(struct coredump_params *cprm)
 
 	/* Write notes phdr entry */
 	{
-		int sz = 0;
+		size_t sz = 0;
 
 		for (i = 0; i < numnote; i++)
 			sz += notesize(notes + i);
