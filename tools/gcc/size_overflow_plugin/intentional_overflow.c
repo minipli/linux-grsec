@@ -169,8 +169,8 @@ static void print_missing_intentional(enum intentional_mark callee_attr, enum in
 	if (!hash)
 		return;
 
-	loc = DECL_SOURCE_LOCATION(decl);
-	inform(loc, "The intentional_overflow attribute is missing from +%s+%u+", DECL_NAME_POINTER(decl), argnum);
+//	loc = DECL_SOURCE_LOCATION(decl);
+//	inform(loc, "The intentional_overflow attribute is missing from +%s+%u+", DECL_NAME_POINTER(decl), argnum);
 }
 
 // Get the field decl of a component ref for intentional_overflow checking
@@ -424,7 +424,7 @@ enum intentional_mark check_intentional_attribute(const_gimple stmt, unsigned in
 
 	// the callee is missing the intentional attribute (MARK_YES or MARK_END_INTENTIONAL)
 	if (caller_mark == MARK_YES) {
-//		print_missing_intentional(callee_mark, caller_mark, fndecl, argnum);
+		print_missing_intentional(callee_mark, caller_mark, fndecl, argnum);
 		return MARK_YES;
 	}
 
@@ -937,5 +937,44 @@ void unsigned_signed_cast_intentional_overflow(struct visited *visited, gassign 
 
 	so_stmt = get_dup_stmt(visited, stmt);
 	create_up_and_down_cast(visited, so_stmt, lhs_type, gimple_assign_rhs1(so_stmt));
+}
+
+bool is_intentional_truncation(gassign *assign)
+{
+	enum machine_mode lhs_mode, def_rhs_mode;
+	gimple def_stmt;
+	const_tree decl, rhs, def_rhs, def_def_rhs, lhs;
+
+	if (gimple_num_ops(assign) != 2)
+		return false;
+
+	lhs = gimple_assign_lhs(assign);
+	if (VAR_P(lhs))
+		return false;
+
+	// structure field write
+	decl = get_ref_field(lhs);
+	if (TREE_CODE(decl) != FIELD_DECL)
+		return false;
+
+	rhs = gimple_assign_rhs1(assign);
+	def_stmt = get_def_stmt(rhs);
+	if (!def_stmt || !gimple_assign_cast_p(def_stmt))
+		return false;
+
+	lhs_mode = TYPE_MODE(TREE_TYPE(rhs));
+	def_rhs = gimple_assign_rhs1(def_stmt);
+	def_rhs_mode = TYPE_MODE(TREE_TYPE(def_rhs));
+	// cast from 16 to 8
+	if (def_rhs_mode != HImode || lhs_mode != QImode)
+		return false;
+
+	def_stmt = get_def_stmt(def_rhs);
+	if (!def_stmt || !is_gimple_assign(def_stmt) || gimple_num_ops(def_stmt) != 2)
+		return false;
+
+	def_def_rhs = gimple_assign_rhs1(def_stmt);
+	// structure field read
+	return TREE_CODE(def_def_rhs) == MEM_REF;
 }
 
