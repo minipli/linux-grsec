@@ -7,7 +7,7 @@
 
 
 struct sched_param {
-	int sched_priority;
+	unsigned int sched_priority;
 };
 
 #include <asm/param.h>	/* for HZ */
