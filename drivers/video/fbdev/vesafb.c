@@ -354,8 +354,8 @@ static int vesafb_probe(struct platform_device *dev)
 		pmi_pal   = (void*)((char*)pmi_code + pmi_base[2]);
 
 #if defined(CONFIG_MODULES) && defined(CONFIG_PAX_KERNEXEC)
-		pmi_start = ktva_ktla(pmi_start);
-		pmi_pal = ktva_ktla(pmi_pal);
+		pmi_start = (void *)ktva_ktla((unsigned long)pmi_start);
+		pmi_pal = (void *)ktva_ktla((unsigned long)pmi_pal);
 		pax_close_kernel();
 #endif
 
