@@ -32,6 +32,8 @@ void common(void) {
 	OFFSET(TI_flags, thread_info, flags);
 	OFFSET(TI_status, thread_info, status);
 	OFFSET(TI_addr_limit, thread_info, addr_limit);
+	OFFSET(TI_lowest_stack, thread_info, lowest_stack);
+	DEFINE(TI_task_thread_sp0, offsetof(struct task_struct, thread.sp0) - offsetof(struct task_struct, tinfo));
 
 	BLANK();
 	OFFSET(crypto_tfm_ctx_offset, crypto_tfm, __crt_ctx);
@@ -52,7 +54,25 @@ void common(void) {
 	OFFSET(PV_CPU_irq_enable_sysexit, pv_cpu_ops, irq_enable_sysexit);
 	OFFSET(PV_CPU_read_cr0, pv_cpu_ops, read_cr0);
 	OFFSET(PV_MMU_read_cr2, pv_mmu_ops, read_cr2);
+
+#ifdef CONFIG_PAX_KERNEXEC
+	OFFSET(PV_CPU_write_cr0, pv_cpu_ops, write_cr0);
 #endif
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	OFFSET(PV_MMU_read_cr3, pv_mmu_ops, read_cr3);
+	OFFSET(PV_MMU_write_cr3, pv_mmu_ops, write_cr3);
+#ifdef CONFIG_X86_64
+	OFFSET(PV_MMU_set_pgd_batched, pv_mmu_ops, set_pgd_batched);
+#endif
+#endif
+
+#endif
+
+	BLANK();
+	DEFINE(PAGE_SIZE_asm, PAGE_SIZE);
+	DEFINE(PAGE_SHIFT_asm, PAGE_SHIFT);
+	DEFINE(THREAD_SIZE_asm, THREAD_SIZE);
 
 #ifdef CONFIG_XEN
 	BLANK();
