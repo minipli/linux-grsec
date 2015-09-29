@@ -467,13 +467,12 @@ static void insert_cond_result(next_interesting_function_t expand_from, basic_bl
 	gimple_stmt_iterator gsi = gsi_start_bb(bb_true);
 
 	def_stmt = get_def_stmt(arg);
-	xloc = expand_location(gimple_location(def_stmt));
-
-	if (!gimple_has_location(def_stmt)) {
+	if (gimple_has_location(def_stmt))
+		xloc = expand_location(gimple_location(def_stmt));
+	else if (gimple_has_location(stmt))
 		xloc = expand_location(gimple_location(stmt));
-		if (!gimple_has_location(stmt))
-			xloc = expand_location(DECL_SOURCE_LOCATION(current_function_decl));
-	}
+	else
+		xloc = expand_location(DECL_SOURCE_LOCATION(current_function_decl));
 
 	loc_line = build_int_cstu(unsigned_type_node, xloc.line);
 

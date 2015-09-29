@@ -1220,7 +1220,7 @@ static int load_elf_binary(struct linux_binprm *bprm)
 
 #if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
 	if (0 > pax_parse_pax_flags(&loc->elf_ex, elf_phdata, bprm->file)) {
-		send_sig(SIGKILL, current, 0);
+		retval = -EINVAL;
 		goto out_free_dentry;
 	}
 #endif
