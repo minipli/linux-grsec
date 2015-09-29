@@ -93,14 +93,14 @@ EXPORT_SYMBOL_GPL(cpu_has_xfeatures);
  */
 void fpstate_sanitize_xstate(struct fpu *fpu)
 {
-	struct fxregs_state *fx = &fpu->state.fxsave;
+	struct fxregs_state *fx = &fpu->state->fxsave;
 	int feature_bit;
 	u64 xfeatures;
 
 	if (!use_xsaveopt())
 		return;
 
-	xfeatures = fpu->state.xsave.header.xfeatures;
+	xfeatures = fpu->state->xsave.header.xfeatures;
 
 	/*
 	 * None of the feature bits are in init state. So nothing else
@@ -402,7 +402,7 @@ void *get_xsave_addr(struct xregs_state *xsave, int xstate_feature)
 	if (!boot_cpu_has(X86_FEATURE_XSAVE))
 		return NULL;
 
-	xsave = &current->thread.fpu.state.xsave;
+	xsave = &current->thread.fpu.state->xsave;
 	/*
 	 * We should not ever be requesting features that we
 	 * have not enabled.  Remember that pcntxt_mask is
@@ -457,5 +457,5 @@ const void *get_xsave_field_ptr(int xsave_state)
 	 */
 	fpu__save(fpu);
 
-	return get_xsave_addr(&fpu->state.xsave, xsave_state);
+	return get_xsave_addr(&fpu->state->xsave, xsave_state);
 }

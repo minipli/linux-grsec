@@ -69,7 +69,7 @@
 #include <asm/proto.h>
 
 /* No need to be aligned, but done to keep all IDTs defined the same way. */
-gate_desc debug_idt_table[NR_VECTORS] __page_aligned_bss;
+gate_desc debug_idt_table[NR_VECTORS] __page_aligned_rodata;
 #else
 #include <asm/processor-flags.h>
 #include <asm/setup.h>
@@ -77,7 +77,7 @@ gate_desc debug_idt_table[NR_VECTORS] __page_aligned_bss;
 #endif
 
 /* Must be page-aligned because the real IDT is used in a fixmap. */
-gate_desc idt_table[NR_VECTORS] __page_aligned_bss;
+gate_desc idt_table[NR_VECTORS] __page_aligned_rodata;
 
 DECLARE_BITMAP(used_vectors, NR_VECTORS);
 EXPORT_SYMBOL_GPL(used_vectors);
@@ -174,7 +174,7 @@ void ist_begin_non_atomic(struct pt_regs *regs)
 	 * will catch asm bugs and any attempt to use ist_preempt_enable
 	 * from double_fault.
 	 */
-	BUG_ON((unsigned long)(current_top_of_stack() -
+	BUG_ON((unsigned long)(current_top_of_stack(smp_processor_id()) -
 			       current_stack_pointer()) >= THREAD_SIZE);
 
 	preempt_count_sub(HARDIRQ_OFFSET);
@@ -191,7 +191,7 @@ void ist_end_non_atomic(void)
 }
 
 static nokprobe_inline int
-do_trap_no_signal(struct task_struct *tsk, int trapnr, char *str,
+do_trap_no_signal(struct task_struct *tsk, int trapnr, const char *str,
 		  struct pt_regs *regs,	long error_code)
 {
 	if (v8086_mode(regs)) {
@@ -211,8 +211,20 @@ do_trap_no_signal(struct task_struct *tsk, int trapnr, char *str,
 		if (!fixup_exception(regs)) {
 			tsk->thread.error_code = error_code;
 			tsk->thread.trap_nr = trapnr;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+			if (trapnr == X86_TRAP_SS && ((regs->cs & 0xFFFF) == __KERNEL_CS || (regs->cs & 0xFFFF) == __KERNEXEC_KERNEL_CS))
+				str = "PAX: suspicious stack segment fault";
+#endif
+
 			die(str, regs, error_code);
 		}
+
+#ifdef CONFIG_PAX_REFCOUNT
+		if (trapnr == X86_TRAP_OF)
+			pax_report_refcount_overflow(regs);
+#endif
+
 		return 0;
 	}
 
@@ -251,7 +263,7 @@ static siginfo_t *fill_trap_info(struct pt_regs *regs, int signr, int trapnr,
 }
 
 static void
-do_trap(int trapnr, int signr, char *str, struct pt_regs *regs,
+do_trap(int trapnr, int signr, const char *str, struct pt_regs *regs,
 	long error_code, siginfo_t *info)
 {
 	struct task_struct *tsk = current;
@@ -275,7 +287,7 @@ do_trap(int trapnr, int signr, char *str, struct pt_regs *regs,
 	if (show_unhandled_signals && unhandled_signal(tsk, signr) &&
 	    printk_ratelimit()) {
 		pr_info("%s[%d] trap %s ip:%lx sp:%lx error:%lx",
-			tsk->comm, tsk->pid, str,
+			tsk->comm, task_pid_nr(tsk), str,
 			regs->ip, regs->sp, error_code);
 		print_vma_addr(" in ", regs->ip);
 		pr_cont("\n");
@@ -473,10 +485,34 @@ do_general_protection(struct pt_regs *regs, long error_code)
 		tsk->thread.error_code = error_code;
 		tsk->thread.trap_nr = X86_TRAP_GP;
 		if (notify_die(DIE_GPF, "general protection fault", regs, error_code,
-			       X86_TRAP_GP, SIGSEGV) != NOTIFY_STOP)
+			       X86_TRAP_GP, SIGSEGV) != NOTIFY_STOP) {
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+		if ((regs->cs & 0xFFFF) == __KERNEL_CS || (regs->cs & 0xFFFF) == __KERNEXEC_KERNEL_CS)
+			die("PAX: suspicious general protection fault", regs, error_code);
+		else
+#endif
+
 			die("general protection fault", regs, error_code);
+		}
 		goto exit;
 	}
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_PAGEEXEC)
+	if (!(__supported_pte_mask & _PAGE_NX) && tsk->mm && (tsk->mm->pax_flags & MF_PAX_PAGEEXEC)) {
+		struct mm_struct *mm = tsk->mm;
+		unsigned long limit;
+
+		down_write(&mm->mmap_sem);
+		limit = mm->context.user_cs_limit;
+		if (limit < TASK_SIZE) {
+			track_exec_limit(mm, limit, TASK_SIZE, VM_EXEC);
+			up_write(&mm->mmap_sem);
+			return;
+		}
+		up_write(&mm->mmap_sem);
+	}
+#endif
 
 	tsk->thread.error_code = error_code;
 	tsk->thread.trap_nr = X86_TRAP_GP;
@@ -575,6 +611,9 @@ struct bad_iret_stack *fixup_bad_iret(struct bad_iret_stack *s)
 	struct bad_iret_stack *new_stack =
 		container_of(task_pt_regs(current),
 			     struct bad_iret_stack, regs);
+
+	if ((current->thread.sp0 ^ (unsigned long)s) < THREAD_SIZE)
+		new_stack = s;
 
 	/* Copy the IRET target to the new stack. */
 	memmove(&new_stack->regs.ip, (void *)s->regs.sp, 5*8);

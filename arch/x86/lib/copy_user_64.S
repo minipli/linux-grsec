@@ -14,50 +14,7 @@
 #include <asm/alternative-asm.h>
 #include <asm/asm.h>
 #include <asm/smap.h>
-
-/* Standard copy_to_user with segment limit checking */
-ENTRY(_copy_to_user)
-	GET_THREAD_INFO(%rax)
-	movq %rdi,%rcx
-	addq %rdx,%rcx
-	jc bad_to_user
-	cmpq TI_addr_limit(%rax),%rcx
-	ja bad_to_user
-	ALTERNATIVE_2 "jmp copy_user_generic_unrolled",		\
-		      "jmp copy_user_generic_string",		\
-		      X86_FEATURE_REP_GOOD,			\
-		      "jmp copy_user_enhanced_fast_string",	\
-		      X86_FEATURE_ERMS
-ENDPROC(_copy_to_user)
-
-/* Standard copy_from_user with segment limit checking */
-ENTRY(_copy_from_user)
-	GET_THREAD_INFO(%rax)
-	movq %rsi,%rcx
-	addq %rdx,%rcx
-	jc bad_from_user
-	cmpq TI_addr_limit(%rax),%rcx
-	ja bad_from_user
-	ALTERNATIVE_2 "jmp copy_user_generic_unrolled",		\
-		      "jmp copy_user_generic_string",		\
-		      X86_FEATURE_REP_GOOD,			\
-		      "jmp copy_user_enhanced_fast_string",	\
-		      X86_FEATURE_ERMS
-ENDPROC(_copy_from_user)
-
-	.section .fixup,"ax"
-	/* must zero dest */
-ENTRY(bad_from_user)
-bad_from_user:
-	movl %edx,%ecx
-	xorl %eax,%eax
-	rep
-	stosb
-bad_to_user:
-	movl %edx,%eax
-	ret
-ENDPROC(bad_from_user)
-	.previous
+#include <asm/pgtable.h>
 
 /*
  * copy_user_generic_unrolled - memory copy with exception handling.
@@ -73,6 +30,7 @@ ENDPROC(bad_from_user)
  * eax uncopied bytes or 0 if successful.
  */
 ENTRY(copy_user_generic_unrolled)
+	ASM_PAX_OPEN_USERLAND
 	ASM_STAC
 	cmpl $8,%edx
 	jb 20f		/* less then 8 bytes, go to byte copy loop */
@@ -122,6 +80,8 @@ ENTRY(copy_user_generic_unrolled)
 	jnz 21b
 23:	xor %eax,%eax
 	ASM_CLAC
+	ASM_PAX_CLOSE_USERLAND
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"
@@ -175,6 +135,7 @@ ENDPROC(copy_user_generic_unrolled)
  * eax uncopied bytes or 0 if successful.
  */
 ENTRY(copy_user_generic_string)
+	ASM_PAX_OPEN_USERLAND
 	ASM_STAC
 	cmpl $8,%edx
 	jb 2f		/* less than 8 bytes, go to byte copy loop */
@@ -189,6 +150,8 @@ ENTRY(copy_user_generic_string)
 	movsb
 	xorl %eax,%eax
 	ASM_CLAC
+	ASM_PAX_CLOSE_USERLAND
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"
@@ -214,12 +177,15 @@ ENDPROC(copy_user_generic_string)
  * eax uncopied bytes or 0 if successful.
  */
 ENTRY(copy_user_enhanced_fast_string)
+	ASM_PAX_OPEN_USERLAND
 	ASM_STAC
 	movl %edx,%ecx
 1:	rep
 	movsb
 	xorl %eax,%eax
 	ASM_CLAC
+	ASM_PAX_CLOSE_USERLAND
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"
@@ -235,6 +201,16 @@ ENDPROC(copy_user_enhanced_fast_string)
  * This will force destination/source out of cache for more performance.
  */
 ENTRY(__copy_user_nocache)
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	mov pax_user_shadow_base,%rcx
+	cmp %rcx,%rsi
+	jae 1f
+	add %rcx,%rsi
+1:
+#endif
+
+	ASM_PAX_OPEN_USERLAND
 	ASM_STAC
 	cmpl $8,%edx
 	jb 20f		/* less then 8 bytes, go to byte copy loop */
@@ -284,7 +260,9 @@ ENTRY(__copy_user_nocache)
 	jnz 21b
 23:	xorl %eax,%eax
 	ASM_CLAC
+	ASM_PAX_CLOSE_USERLAND
 	sfence
+	pax_force_retaddr
 	ret
 
 	.section .fixup,"ax"

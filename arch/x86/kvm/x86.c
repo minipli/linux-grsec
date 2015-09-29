@@ -1842,8 +1842,8 @@ static int xen_hvm_config(struct kvm_vcpu *vcpu, u64 data)
 {
 	struct kvm *kvm = vcpu->kvm;
 	int lm = is_long_mode(vcpu);
-	u8 *blob_addr = lm ? (u8 *)(long)kvm->arch.xen_hvm_config.blob_addr_64
-		: (u8 *)(long)kvm->arch.xen_hvm_config.blob_addr_32;
+	u8 __user *blob_addr = lm ? (u8 __user *)(long)kvm->arch.xen_hvm_config.blob_addr_64
+		: (u8 __user *)(long)kvm->arch.xen_hvm_config.blob_addr_32;
 	u8 blob_size = lm ? kvm->arch.xen_hvm_config.blob_size_64
 		: kvm->arch.xen_hvm_config.blob_size_32;
 	u32 page_num = data & ~PAGE_MASK;
@@ -2731,6 +2731,8 @@ long kvm_arch_dev_ioctl(struct file *filp,
 		if (n < msr_list.nmsrs)
 			goto out;
 		r = -EFAULT;
+		if (num_msrs_to_save > ARRAY_SIZE(msrs_to_save))
+			goto out;
 		if (copy_to_user(user_msr_list->indices, &msrs_to_save,
 				 num_msrs_to_save * sizeof(u32)))
 			goto out;
@@ -3091,7 +3093,7 @@ static int kvm_vcpu_ioctl_x86_set_debugregs(struct kvm_vcpu *vcpu,
 
 static void fill_xsave(u8 *dest, struct kvm_vcpu *vcpu)
 {
-	struct xregs_state *xsave = &vcpu->arch.guest_fpu.state.xsave;
+	struct xregs_state *xsave = &vcpu->arch.guest_fpu.state->xsave;
 	u64 xstate_bv = xsave->header.xfeatures;
 	u64 valid;
 
@@ -3127,7 +3129,7 @@ static void fill_xsave(u8 *dest, struct kvm_vcpu *vcpu)
 
 static void load_xsave(struct kvm_vcpu *vcpu, u8 *src)
 {
-	struct xregs_state *xsave = &vcpu->arch.guest_fpu.state.xsave;
+	struct xregs_state *xsave = &vcpu->arch.guest_fpu.state->xsave;
 	u64 xstate_bv = *(u64 *)(src + XSAVE_HDR_OFFSET);
 	u64 valid;
 
@@ -3171,7 +3173,7 @@ static void kvm_vcpu_ioctl_x86_get_xsave(struct kvm_vcpu *vcpu,
 		fill_xsave((u8 *) guest_xsave->region, vcpu);
 	} else {
 		memcpy(guest_xsave->region,
-			&vcpu->arch.guest_fpu.state.fxsave,
+			&vcpu->arch.guest_fpu.state->fxsave,
 			sizeof(struct fxregs_state));
 		*(u64 *)&guest_xsave->region[XSAVE_HDR_OFFSET / sizeof(u32)] =
 			XSTATE_FPSSE;
@@ -3196,7 +3198,7 @@ static int kvm_vcpu_ioctl_x86_set_xsave(struct kvm_vcpu *vcpu,
 	} else {
 		if (xstate_bv & ~XSTATE_FPSSE)
 			return -EINVAL;
-		memcpy(&vcpu->arch.guest_fpu.state.fxsave,
+		memcpy(&vcpu->arch.guest_fpu.state->fxsave,
 			guest_xsave->region, sizeof(struct fxregs_state));
 	}
 	return 0;
@@ -5786,7 +5788,7 @@ static struct notifier_block pvclock_gtod_notifier = {
 };
 #endif
 
-int kvm_arch_init(void *opaque)
+int kvm_arch_init(const void *opaque)
 {
 	int r;
 	struct kvm_x86_ops *ops = opaque;
@@ -7210,7 +7212,7 @@ int kvm_arch_vcpu_ioctl_translate(struct kvm_vcpu *vcpu,
 int kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 {
 	struct fxregs_state *fxsave =
-			&vcpu->arch.guest_fpu.state.fxsave;
+			&vcpu->arch.guest_fpu.state->fxsave;
 
 	memcpy(fpu->fpr, fxsave->st_space, 128);
 	fpu->fcw = fxsave->cwd;
@@ -7227,7 +7229,7 @@ int kvm_arch_vcpu_ioctl_get_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 int kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 {
 	struct fxregs_state *fxsave =
-			&vcpu->arch.guest_fpu.state.fxsave;
+			&vcpu->arch.guest_fpu.state->fxsave;
 
 	memcpy(fxsave->st_space, fpu->fpr, 128);
 	fxsave->cwd = fpu->fcw;
@@ -7243,9 +7245,9 @@ int kvm_arch_vcpu_ioctl_set_fpu(struct kvm_vcpu *vcpu, struct kvm_fpu *fpu)
 
 static void fx_init(struct kvm_vcpu *vcpu)
 {
-	fpstate_init(&vcpu->arch.guest_fpu.state);
+	fpstate_init(vcpu->arch.guest_fpu.state);
 	if (cpu_has_xsaves)
-		vcpu->arch.guest_fpu.state.xsave.header.xcomp_bv =
+		vcpu->arch.guest_fpu.state->xsave.header.xcomp_bv =
 			host_xcr0 | XSTATE_COMPACTION_ENABLED;
 
 	/*
@@ -7269,7 +7271,7 @@ void kvm_load_guest_fpu(struct kvm_vcpu *vcpu)
 	kvm_put_guest_xcr0(vcpu);
 	vcpu->guest_fpu_loaded = 1;
 	__kernel_fpu_begin();
-	__copy_kernel_to_fpregs(&vcpu->arch.guest_fpu.state);
+	__copy_kernel_to_fpregs(vcpu->arch.guest_fpu.state);
 	trace_kvm_fpu(1);
 }
 
@@ -7547,6 +7549,8 @@ bool kvm_vcpu_compatible(struct kvm_vcpu *vcpu)
 
 struct static_key kvm_no_apic_vcpu __read_mostly;
 
+extern struct kmem_cache *fpregs_state_cachep;
+
 int kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 {
 	struct page *page;
@@ -7563,11 +7567,14 @@ int kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 	else
 		vcpu->arch.mp_state = KVM_MP_STATE_UNINITIALIZED;
 
-	page = alloc_page(GFP_KERNEL | __GFP_ZERO);
-	if (!page) {
-		r = -ENOMEM;
+	r = -ENOMEM;
+	vcpu->arch.guest_fpu.state = kmem_cache_alloc(fpregs_state_cachep, GFP_KERNEL);
+	if (!vcpu->arch.guest_fpu.state)
 		goto fail;
-	}
+
+	page = alloc_page(GFP_KERNEL | __GFP_ZERO);
+	if (!page)
+		goto fail_free_fpregs;
 	vcpu->arch.pio_data = page_address(page);
 
 	kvm_set_tsc_khz(vcpu, max_tsc_khz);
@@ -7621,6 +7628,9 @@ fail_mmu_destroy:
 	kvm_mmu_destroy(vcpu);
 fail_free_pio_data:
 	free_page((unsigned long)vcpu->arch.pio_data);
+fail_free_fpregs:
+	kmem_cache_free(fpregs_state_cachep, vcpu->arch.guest_fpu.state);
+	vcpu->arch.guest_fpu.state = NULL;
 fail:
 	return r;
 }
@@ -7638,6 +7648,8 @@ void kvm_arch_vcpu_uninit(struct kvm_vcpu *vcpu)
 	free_page((unsigned long)vcpu->arch.pio_data);
 	if (!irqchip_in_kernel(vcpu->kvm))
 		static_key_slow_dec(&kvm_no_apic_vcpu);
+	kmem_cache_free(fpregs_state_cachep, vcpu->arch.guest_fpu.state);
+	vcpu->arch.guest_fpu.state = NULL;
 }
 
 void kvm_arch_sched_in(struct kvm_vcpu *vcpu, int cpu)

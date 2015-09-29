@@ -198,7 +198,7 @@ struct sock_common {
 	struct in6_addr		skc_v6_rcv_saddr;
 #endif
 
-	atomic64_t		skc_cookie;
+	atomic64_unchecked_t	skc_cookie;
 
 	/*
 	 * fields between dontcopy_begin/dontcopy_end
@@ -364,7 +364,7 @@ struct sock {
 	unsigned int		sk_napi_id;
 	unsigned int		sk_ll_usec;
 #endif
-	atomic_t		sk_drops;
+	atomic_unchecked_t	sk_drops;
 	int			sk_rcvbuf;
 
 	struct sk_filter __rcu	*sk_filter;
@@ -1211,7 +1211,7 @@ static inline void memcg_memory_allocated_sub(struct cg_proto *prot,
 	page_counter_uncharge(&prot->memory_allocated, amt);
 }
 
-static inline long
+static inline long __intentional_overflow(-1)
 sk_memory_allocated(const struct sock *sk)
 {
 	struct proto *prot = sk->sk_prot;
@@ -1776,7 +1776,7 @@ static inline void sk_nocaps_add(struct sock *sk, netdev_features_t flags)
 }
 
 static inline int skb_do_copy_data_nocache(struct sock *sk, struct sk_buff *skb,
-					   struct iov_iter *from, char *to,
+					   struct iov_iter *from, unsigned char *to,
 					   int copy, int offset)
 {
 	if (skb->ip_summed == CHECKSUM_NONE) {
@@ -2023,7 +2023,7 @@ static inline void sk_stream_moderate_sndbuf(struct sock *sk)
 	}
 }
 
-struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp,
+struct sk_buff * __intentional_overflow(0) sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp,
 				    bool force_schedule);
 
 /**
@@ -2099,7 +2099,7 @@ struct sock_skb_cb {
 static inline void
 sock_skb_set_dropcount(const struct sock *sk, struct sk_buff *skb)
 {
-	SOCK_SKB_CB(skb)->dropcount = atomic_read(&sk->sk_drops);
+	SOCK_SKB_CB(skb)->dropcount = atomic_read_unchecked(&sk->sk_drops);
 }
 
 void __sock_recv_timestamp(struct msghdr *msg, struct sock *sk,
