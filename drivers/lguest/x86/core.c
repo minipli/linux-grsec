@@ -60,7 +60,7 @@ static struct {
 /* Offset from where switcher.S was compiled to where we've copied it */
 static unsigned long switcher_offset(void)
 {
-	return switcher_addr - (unsigned long)ktla_ktva(start_switcher_text);
+	return switcher_addr - ktla_ktva((unsigned long)start_switcher_text);
 }
 
 /* This cpu's struct lguest_pages (after the Switcher text page) */
@@ -583,7 +583,7 @@ void __init lguest_arch_host_init(void)
 	 * it will be undisturbed when we switch.  To change %cs and jump we
 	 * need this structure to feed to Intel's "lcall" instruction.
 	 */
-	lguest_entry.offset = (long)ktla_ktva(switch_to_guest) + switcher_offset();
+	lguest_entry.offset = ktla_ktva((unsigned long)switch_to_guest) + switcher_offset();
 	lguest_entry.segment = LGUEST_CS;
 
 	/*

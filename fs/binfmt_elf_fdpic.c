@@ -1296,7 +1296,7 @@ static inline void fill_elf_fdpic_header(struct elfhdr *elf, int segs)
 	return;
 }
 
-static inline void fill_elf_note_phdr(struct elf_phdr *phdr, int sz, loff_t offset)
+static inline void fill_elf_note_phdr(struct elf_phdr *phdr, size_t sz, loff_t offset)
 {
 	phdr->p_type = PT_NOTE;
 	phdr->p_offset = offset;
