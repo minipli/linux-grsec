@@ -585,8 +585,8 @@ static int uvesafb_vbe_getpmi(struct uvesafb_ktask *task,
 		memcpy(par->pmi_code, par->pmi_base, (u16)task->t.regs.ecx);
 		pax_close_kernel();
 
-		par->pmi_start = ktva_ktla(par->pmi_code + par->pmi_base[1]);
-		par->pmi_pal = ktva_ktla(par->pmi_code + par->pmi_base[2]);
+		par->pmi_start = (void *)ktva_ktla((unsigned long)(par->pmi_code + par->pmi_base[1]));
+		par->pmi_pal = (void *)ktva_ktla((unsigned long)(par->pmi_code + par->pmi_base[2]));
 #else
 		par->pmi_start = (u8 *)par->pmi_base + par->pmi_base[1];
 		par->pmi_pal = (u8 *)par->pmi_base + par->pmi_base[2];

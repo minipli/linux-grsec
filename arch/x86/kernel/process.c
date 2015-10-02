@@ -546,5 +546,6 @@ void pax_randomize_kstack(struct pt_regs *regs)
 
 	thread->sp0 ^= time;
 	load_sp0(cpu_tss + smp_processor_id(), thread);
+	this_cpu_write(cpu_current_top_of_stack, thread->sp0);
 }
 #endif
