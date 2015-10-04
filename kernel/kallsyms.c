@@ -54,11 +54,32 @@ extern const unsigned long kallsyms_markers[] __weak;
 
 static inline int is_kernel_inittext(unsigned long addr)
 {
+	if (system_state != SYSTEM_BOOTING)
+		return 0;
+
 	if (addr >= (unsigned long)_sinittext
 	    && addr <= (unsigned long)_einittext)
 		return 1;
 	return 0;
 }
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+#ifdef CONFIG_MODULES
+static inline int is_module_text(unsigned long addr)
+{
+	if ((unsigned long)MODULES_EXEC_VADDR <= addr && addr <= (unsigned long)MODULES_EXEC_END)
+		return 1;
+
+	addr = ktla_ktva(addr);
+	return (unsigned long)MODULES_EXEC_VADDR <= addr && addr <= (unsigned long)MODULES_EXEC_END;
+}
+#else
+static inline int is_module_text(unsigned long addr)
+{
+	return 0;
+}
+#endif
+#endif
 
 static inline int is_kernel_text(unsigned long addr)
 {
@@ -70,13 +91,28 @@ static inline int is_kernel_text(unsigned long addr)
 
 static inline int is_kernel(unsigned long addr)
 {
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if (is_kernel_text(addr) || is_kernel_inittext(addr))
+		return 1;
+
+	if (ktla_ktva((unsigned long)_text) <= addr && addr < (unsigned long)_end)
+#else
 	if (addr >= (unsigned long)_stext && addr <= (unsigned long)_end)
+#endif
+
 		return 1;
 	return in_gate_area_no_mm(addr);
 }
 
 static int is_ksym_addr(unsigned long addr)
 {
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	if (is_module_text(addr))
+		return 0;
+#endif
+
 	if (all_var)
 		return is_kernel(addr);
 
@@ -481,7 +517,6 @@ static unsigned long get_ksymbol_core(struct kallsym_iter *iter)
 
 static void reset_iter(struct kallsym_iter *iter, loff_t new_pos)
 {
-	iter->name[0] = '\0';
 	iter->nameoff = get_symbol_offset(new_pos);
 	iter->pos = new_pos;
 }

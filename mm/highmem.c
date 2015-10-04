@@ -196,7 +196,6 @@ static void flush_all_zero_pkmaps(void)
 		 */
 		page = pte_page(pkmap_page_table[i]);
 		pte_clear(&init_mm, PKMAP_ADDR(i), &pkmap_page_table[i]);
-
 		set_page_address(page, NULL);
 		need_flush = 1;
 	}

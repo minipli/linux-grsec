@@ -545,7 +545,7 @@ static void __dentry_kill(struct dentry *dentry)
 	 * dentry_iput drops the locks, at which point nobody (except
 	 * transient RCU lookups) can reach this dentry.
 	 */
-	BUG_ON(dentry->d_lockref.count > 0);
+	BUG_ON(__lockref_read(&dentry->d_lockref) > 0);
 	this_cpu_dec(nr_dentry);
 	if (dentry->d_op && dentry->d_op->d_release)
 		dentry->d_op->d_release(dentry);
@@ -598,7 +598,7 @@ static inline struct dentry *lock_parent(struct dentry *dentry)
 	struct dentry *parent = dentry->d_parent;
 	if (IS_ROOT(dentry))
 		return NULL;
-	if (unlikely(dentry->d_lockref.count < 0))
+	if (unlikely(__lockref_read(&dentry->d_lockref) < 0))
 		return NULL;
 	if (likely(spin_trylock(&parent->d_lock)))
 		return parent;
@@ -660,8 +660,8 @@ static inline bool fast_dput(struct dentry *dentry)
 	 */
 	if (unlikely(ret < 0)) {
 		spin_lock(&dentry->d_lock);
-		if (dentry->d_lockref.count > 1) {
-			dentry->d_lockref.count--;
+		if (__lockref_read(&dentry->d_lockref) > 1) {
+			__lockref_dec(&dentry->d_lockref);
 			spin_unlock(&dentry->d_lock);
 			return 1;
 		}
@@ -716,7 +716,7 @@ static inline bool fast_dput(struct dentry *dentry)
 	 * else could have killed it and marked it dead. Either way, we
 	 * don't need to do anything else.
 	 */
-	if (dentry->d_lockref.count) {
+	if (__lockref_read(&dentry->d_lockref)) {
 		spin_unlock(&dentry->d_lock);
 		return 1;
 	}
@@ -726,7 +726,7 @@ static inline bool fast_dput(struct dentry *dentry)
 	 * lock, and we just tested that it was zero, so we can just
 	 * set it to 1.
 	 */
-	dentry->d_lockref.count = 1;
+	__lockref_set(&dentry->d_lockref, 1);
 	return 0;
 }
 
@@ -788,7 +788,7 @@ repeat:
 		dentry->d_flags |= DCACHE_REFERENCED;
 	dentry_lru_add(dentry);
 
-	dentry->d_lockref.count--;
+	__lockref_dec(&dentry->d_lockref);
 	spin_unlock(&dentry->d_lock);
 	return;
 
@@ -803,7 +803,7 @@ EXPORT_SYMBOL(dput);
 /* This must be called with d_lock held */
 static inline void __dget_dlock(struct dentry *dentry)
 {
-	dentry->d_lockref.count++;
+	__lockref_inc(&dentry->d_lockref);
 }
 
 static inline void __dget(struct dentry *dentry)
@@ -844,8 +844,8 @@ repeat:
 		goto repeat;
 	}
 	rcu_read_unlock();
-	BUG_ON(!ret->d_lockref.count);
-	ret->d_lockref.count++;
+	BUG_ON(!__lockref_read(&ret->d_lockref));
+	__lockref_inc(&ret->d_lockref);
 	spin_unlock(&ret->d_lock);
 	return ret;
 }
@@ -923,9 +923,9 @@ restart:
 	spin_lock(&inode->i_lock);
 	hlist_for_each_entry(dentry, &inode->i_dentry, d_u.d_alias) {
 		spin_lock(&dentry->d_lock);
-		if (!dentry->d_lockref.count) {
+		if (!__lockref_read(&dentry->d_lockref)) {
 			struct dentry *parent = lock_parent(dentry);
-			if (likely(!dentry->d_lockref.count)) {
+			if (likely(!__lockref_read(&dentry->d_lockref))) {
 				__dentry_kill(dentry);
 				dput(parent);
 				goto restart;
@@ -960,7 +960,7 @@ static void shrink_dentry_list(struct list_head *list)
 		 * We found an inuse dentry which was not removed from
 		 * the LRU because of laziness during lookup. Do not free it.
 		 */
-		if (dentry->d_lockref.count > 0) {
+		if (__lockref_read(&dentry->d_lockref) > 0) {
 			spin_unlock(&dentry->d_lock);
 			if (parent)
 				spin_unlock(&parent->d_lock);
@@ -998,8 +998,8 @@ static void shrink_dentry_list(struct list_head *list)
 		dentry = parent;
 		while (dentry && !lockref_put_or_lock(&dentry->d_lockref)) {
 			parent = lock_parent(dentry);
-			if (dentry->d_lockref.count != 1) {
-				dentry->d_lockref.count--;
+			if (__lockref_read(&dentry->d_lockref) != 1) {
+				__lockref_inc(&dentry->d_lockref);
 				spin_unlock(&dentry->d_lock);
 				if (parent)
 					spin_unlock(&parent->d_lock);
@@ -1039,7 +1039,7 @@ static enum lru_status dentry_lru_isolate(struct list_head *item,
 	 * counts, just remove them from the LRU. Otherwise give them
 	 * another pass through the LRU.
 	 */
-	if (dentry->d_lockref.count) {
+	if (__lockref_read(&dentry->d_lockref)) {
 		d_lru_isolate(lru, dentry);
 		spin_unlock(&dentry->d_lock);
 		return LRU_REMOVED;
@@ -1373,7 +1373,7 @@ static enum d_walk_ret select_collect(void *_data, struct dentry *dentry)
 	} else {
 		if (dentry->d_flags & DCACHE_LRU_LIST)
 			d_lru_del(dentry);
-		if (!dentry->d_lockref.count) {
+		if (!__lockref_read(&dentry->d_lockref)) {
 			d_shrink_add(dentry, &data->dispose);
 			data->found++;
 		}
@@ -1421,7 +1421,7 @@ static enum d_walk_ret umount_check(void *_data, struct dentry *dentry)
 		return D_WALK_CONTINUE;
 
 	/* root with refcount 1 is fine */
-	if (dentry == _data && dentry->d_lockref.count == 1)
+	if (dentry == _data && __lockref_read(&dentry->d_lockref) == 1)
 		return D_WALK_CONTINUE;
 
 	printk(KERN_ERR "BUG: Dentry %p{i=%lx,n=%pd} "
@@ -1430,7 +1430,7 @@ static enum d_walk_ret umount_check(void *_data, struct dentry *dentry)
 		       dentry->d_inode ?
 		       dentry->d_inode->i_ino : 0UL,
 		       dentry,
-		       dentry->d_lockref.count,
+		       __lockref_read(&dentry->d_lockref),
 		       dentry->d_sb->s_type->name,
 		       dentry->d_sb->s_id);
 	WARN_ON(1);
@@ -1571,7 +1571,7 @@ struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
 	dentry->d_iname[DNAME_INLINE_LEN-1] = 0;
 	if (name->len > DNAME_INLINE_LEN-1) {
 		size_t size = offsetof(struct external_name, name[1]);
-		struct external_name *p = kmalloc(size + name->len, GFP_KERNEL);
+		struct external_name *p = kmalloc(round_up(size + name->len, sizeof(unsigned long)), GFP_KERNEL);
 		if (!p) {
 			kmem_cache_free(dentry_cache, dentry); 
 			return NULL;
@@ -1594,7 +1594,7 @@ struct dentry *__d_alloc(struct super_block *sb, const struct qstr *name)
 	smp_wmb();
 	dentry->d_name.name = dname;
 
-	dentry->d_lockref.count = 1;
+	__lockref_set(&dentry->d_lockref, 1);
 	dentry->d_flags = 0;
 	spin_lock_init(&dentry->d_lock);
 	seqcount_init(&dentry->d_seq);
@@ -2327,7 +2327,7 @@ struct dentry *__d_lookup(const struct dentry *parent, const struct qstr *name)
 				goto next;
 		}
 
-		dentry->d_lockref.count++;
+		__lockref_inc(&dentry->d_lockref);
 		found = dentry;
 		spin_unlock(&dentry->d_lock);
 		break;
@@ -2395,7 +2395,7 @@ again:
 	spin_lock(&dentry->d_lock);
 	inode = dentry->d_inode;
 	isdir = S_ISDIR(inode->i_mode);
-	if (dentry->d_lockref.count == 1) {
+	if (__lockref_read(&dentry->d_lockref) == 1) {
 		if (!spin_trylock(&inode->i_lock)) {
 			spin_unlock(&dentry->d_lock);
 			cpu_relax();
@@ -3337,7 +3337,7 @@ static enum d_walk_ret d_genocide_kill(void *data, struct dentry *dentry)
 
 		if (!(dentry->d_flags & DCACHE_GENOCIDE)) {
 			dentry->d_flags |= DCACHE_GENOCIDE;
-			dentry->d_lockref.count--;
+			__lockref_dec(&dentry->d_lockref);
 		}
 	}
 	return D_WALK_CONTINUE;
@@ -3445,7 +3445,8 @@ void __init vfs_caches_init_early(void)
 void __init vfs_caches_init(void)
 {
 	names_cachep = kmem_cache_create("names_cache", PATH_MAX, 0,
-			SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
+			SLAB_HWCACHE_ALIGN|SLAB_PANIC|SLAB_USERCOPY|
+			SLAB_NO_SANITIZE, NULL);
 
 	dcache_init();
 	inode_init();

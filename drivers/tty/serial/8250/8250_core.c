@@ -3229,9 +3229,9 @@ static void univ8250_release_port(struct uart_port *port)
 
 static void univ8250_rsa_support(struct uart_ops *ops)
 {
-	ops->config_port  = univ8250_config_port;
-	ops->request_port = univ8250_request_port;
-	ops->release_port = univ8250_release_port;
+	*(void **)&ops->config_port  = univ8250_config_port;
+	*(void **)&ops->request_port = univ8250_request_port;
+	*(void **)&ops->release_port = univ8250_release_port;
 }
 
 #else
@@ -3274,8 +3274,10 @@ static void __init serial8250_isa_init_ports(void)
 	}
 
 	/* chain base port ops to support Remote Supervisor Adapter */
-	univ8250_port_ops = *base_ops;
+	pax_open_kernel();
+	memcpy((void *)&univ8250_port_ops, base_ops, sizeof univ8250_port_ops);
 	univ8250_rsa_support(&univ8250_port_ops);
+	pax_close_kernel();
 
 	if (share_irqs)
 		irqflag = IRQF_SHARED;

@@ -36,7 +36,7 @@ static struct irq_chip lapic_controller;
 static struct apic_chip_data *legacy_irq_data[NR_IRQS_LEGACY];
 #endif
 
-void lock_vector_lock(void)
+void lock_vector_lock(void) __acquires(vector_lock)
 {
 	/* Used to the online set of cpus does not change
 	 * during assign_irq_vector.
@@ -44,7 +44,7 @@ void lock_vector_lock(void)
 	raw_spin_lock(&vector_lock);
 }
 
-void unlock_vector_lock(void)
+void unlock_vector_lock(void) __releases(vector_lock)
 {
 	raw_spin_unlock(&vector_lock);
 }

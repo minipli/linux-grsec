@@ -1804,7 +1804,7 @@ EXPORT_SYMBOL(full_name_hash);
 static inline u64 hash_name(const char *name)
 {
 	unsigned long a, b, adata, bdata, mask, hash, len;
-	const struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;
+	static const struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;
 
 	hash = a = 0;
 	len = -sizeof(unsigned long);
@@ -3632,7 +3632,7 @@ void dentry_unhash(struct dentry *dentry)
 {
 	shrink_dcache_parent(dentry);
 	spin_lock(&dentry->d_lock);
-	if (dentry->d_lockref.count == 1)
+	if (__lockref_read(&dentry->d_lockref) == 1)
 		__d_drop(dentry);
 	spin_unlock(&dentry->d_lock);
 }
@@ -4456,14 +4456,24 @@ EXPORT_SYMBOL(vfs_whiteout);
 
 int readlink_copy(char __user *buffer, int buflen, const char *link)
 {
+	char tmpbuf[64];
+	const char *newlink;
 	int len = PTR_ERR(link);
+
 	if (IS_ERR(link))
 		goto out;
 
 	len = strlen(link);
 	if (len > (unsigned) buflen)
 		len = buflen;
-	if (copy_to_user(buffer, link, len))
+
+	if (len < sizeof(tmpbuf)) {
+		memcpy(tmpbuf, link, len);
+		newlink = tmpbuf;
+	} else
+		newlink = link;
+
+	if (copy_to_user(buffer, newlink, len))
 		len = -EFAULT;
 out:
 	return len;

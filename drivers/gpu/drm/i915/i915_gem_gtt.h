@@ -233,8 +233,8 @@ struct i915_address_space {
 	struct drm_mm mm;
 	struct drm_device *dev;
 	struct list_head global_link;
-	unsigned long start;		/* Start offset always 0 for dri2 */
-	size_t total;		/* size addr space maps (ex. 2GB for ggtt) */
+	uint64_t start;		/* Start offset always 0 for dri2 */
+	uint64_t total;		/* size addr space maps (ex. 2GB for ggtt) */
 
 	struct {
 		dma_addr_t addr;
@@ -300,11 +300,11 @@ struct i915_address_space {
  */
 struct i915_gtt {
 	struct i915_address_space base;
-	size_t stolen_size;		/* Total size of stolen memory */
+	uint64_t stolen_size;		/* Total size of stolen memory */
 
-	unsigned long mappable_end;	/* End offset that we can CPU map */
+	uint64_t mappable_end;		/* End offset that we can CPU map */
 	struct io_mapping *mappable;	/* Mapping to our CPU mappable region */
-	phys_addr_t mappable_base;	/* PA of our GMADR */
+	uint64_t mappable_base;		/* PA of our GMADR */
 
 	/** "Graphics Stolen Memory" holds the global PTEs */
 	void __iomem *gsm;
@@ -314,9 +314,9 @@ struct i915_gtt {
 	int mtrr;
 
 	/* global gtt ops */
-	int (*gtt_probe)(struct drm_device *dev, size_t *gtt_total,
-			  size_t *stolen, phys_addr_t *mappable_base,
-			  unsigned long *mappable_end);
+	int (*gtt_probe)(struct drm_device *dev, uint64_t *gtt_total,
+			  uint64_t *stolen, uint64_t *mappable_base,
+			  uint64_t *mappable_end);
 };
 
 struct i915_hw_ppgtt {
