@@ -104,7 +104,7 @@ static void spidev_complete(void *arg)
 	complete(arg);
 }
 
-static ssize_t
+static ssize_t __intentional_overflow(-1)
 spidev_sync(struct spidev_data *spidev, struct spi_message *message)
 {
 	DECLARE_COMPLETION_ONSTACK(done);

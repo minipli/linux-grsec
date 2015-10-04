@@ -513,8 +513,8 @@ static int populate_msi_sysfs(struct pci_dev *pdev)
 {
 	struct attribute **msi_attrs;
 	struct attribute *msi_attr;
-	struct device_attribute *msi_dev_attr;
-	struct attribute_group *msi_irq_group;
+	device_attribute_no_const *msi_dev_attr;
+	attribute_group_no_const *msi_irq_group;
 	const struct attribute_group **msi_irq_groups;
 	struct msi_desc *entry;
 	int ret = -ENOMEM;
@@ -573,7 +573,7 @@ error_attrs:
 	count = 0;
 	msi_attr = msi_attrs[count];
 	while (msi_attr) {
-		msi_dev_attr = container_of(msi_attr, struct device_attribute, attr);
+		msi_dev_attr = container_of(msi_attr, device_attribute_no_const, attr);
 		kfree(msi_attr->name);
 		kfree(msi_dev_attr);
 		++count;

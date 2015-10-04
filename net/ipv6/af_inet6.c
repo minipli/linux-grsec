@@ -768,7 +768,7 @@ static int __net_init inet6_net_init(struct net *net)
 	net->ipv6.sysctl.auto_flowlabels = 0;
 	net->ipv6.sysctl.idgen_retries = 3;
 	net->ipv6.sysctl.idgen_delay = 1 * HZ;
-	atomic_set(&net->ipv6.fib6_sernum, 1);
+	atomic_set_unchecked(&net->ipv6.fib6_sernum, 1);
 
 	err = ipv6_init_mibs(net);
 	if (err)

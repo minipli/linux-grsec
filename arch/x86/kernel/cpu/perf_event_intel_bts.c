@@ -252,7 +252,7 @@ static void bts_event_start(struct perf_event *event, int flags)
 	__bts_event_start(event);
 
 	/* PMI handler: this counter is running and likely generating PMIs */
-	ACCESS_ONCE(bts->started) = 1;
+	ACCESS_ONCE_RW(bts->started) = 1;
 }
 
 static void __bts_event_stop(struct perf_event *event)
@@ -266,7 +266,7 @@ static void __bts_event_stop(struct perf_event *event)
 	if (event->hw.state & PERF_HES_STOPPED)
 		return;
 
-	ACCESS_ONCE(event->hw.state) |= PERF_HES_STOPPED;
+	ACCESS_ONCE_RW(event->hw.state) |= PERF_HES_STOPPED;
 }
 
 static void bts_event_stop(struct perf_event *event, int flags)
@@ -274,7 +274,7 @@ static void bts_event_stop(struct perf_event *event, int flags)
 	struct bts_ctx *bts = this_cpu_ptr(&bts_ctx);
 
 	/* PMI handler: don't restart this counter */
-	ACCESS_ONCE(bts->started) = 0;
+	ACCESS_ONCE_RW(bts->started) = 0;
 
 	__bts_event_stop(event);
 

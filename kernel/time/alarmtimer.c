@@ -823,7 +823,7 @@ static int __init alarmtimer_init(void)
 	struct platform_device *pdev;
 	int error = 0;
 	int i;
-	struct k_clock alarm_clock = {
+	static struct k_clock alarm_clock = {
 		.clock_getres	= alarm_clock_getres,
 		.clock_get	= alarm_clock_get,
 		.timer_create	= alarm_timer_create,

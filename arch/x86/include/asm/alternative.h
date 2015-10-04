@@ -130,7 +130,7 @@ static inline int alternatives_text_reserved(void *start, void *end)
 	".pushsection .altinstructions,\"a\"\n"				\
 	ALTINSTR_ENTRY(feature, 1)					\
 	".popsection\n"							\
-	".pushsection .altinstr_replacement, \"ax\"\n"			\
+	".pushsection .altinstr_replacement, \"a\"\n"			\
 	ALTINSTR_REPLACEMENT(newinstr, feature, 1)			\
 	".popsection"
 
@@ -140,7 +140,7 @@ static inline int alternatives_text_reserved(void *start, void *end)
 	ALTINSTR_ENTRY(feature1, 1)					\
 	ALTINSTR_ENTRY(feature2, 2)					\
 	".popsection\n"							\
-	".pushsection .altinstr_replacement, \"ax\"\n"			\
+	".pushsection .altinstr_replacement, \"a\"\n"			\
 	ALTINSTR_REPLACEMENT(newinstr1, feature1, 1)			\
 	ALTINSTR_REPLACEMENT(newinstr2, feature2, 2)			\
 	".popsection"
