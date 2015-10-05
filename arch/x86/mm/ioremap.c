@@ -462,9 +462,13 @@ void __init early_ioremap_init(void)
 
 	pmd = early_ioremap_pmd(fix_to_virt(FIX_BTMAP_BEGIN));
 	if (pmd_none(*pmd))
+#ifdef CONFIG_COMPAT_VDSO
 		pmd_populate_user(&init_mm, pmd, __bm_pte);
+#else
+		pmd_populate_kernel(&init_mm, pmd, __bm_pte);
+#endif
 	else
-		bm_pte = pte_offset_kernel(pmd, fix_to_virt(FIX_BTMAP_BEGIN));
+		bm_pte = (pte_t *)pmd_page_vaddr(*pmd);
 
 	/*
 	 * The boot-ioremap range spans multiple pmds, for which

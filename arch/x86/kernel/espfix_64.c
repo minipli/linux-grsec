@@ -125,7 +125,7 @@ void __init init_espfix_bsp(void)
 
 	/* Install the espfix pud into the kernel page directory */
 	pgd_p = &init_level4_pgt[index];
-	pgd_populate(&init_mm, pgd_p, (pud_t *)espfix_pud_page);
+	pgd_populate_kernel(&init_mm, pgd_p, (pud_t *)espfix_pud_page);
 
 #ifdef CONFIG_PAX_PER_CPU_PGD
 	clone_pgd_range(get_cpu_pgd(0, kernel) + index, swapper_pg_dir + index, 1);
