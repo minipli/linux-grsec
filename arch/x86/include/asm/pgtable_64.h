@@ -52,19 +52,21 @@ void set_pte_vaddr_pud(pud_t *pud_page, unsigned long vaddr, pte_t new_pte);
 static inline void native_pte_clear(struct mm_struct *mm, unsigned long addr,
 				    pte_t *ptep)
 {
+	pax_open_kernel();
 	*ptep = native_make_pte(0);
+	pax_close_kernel();
 }
 
 static inline void native_set_pte(pte_t *ptep, pte_t pte)
 {
+	pax_open_kernel();
 	*ptep = pte;
+	pax_close_kernel();
 }
 
 static inline void native_set_pte_atomic(pte_t *ptep, pte_t pte)
 {
-	pax_open_kernel();
 	native_set_pte(ptep, pte);
-	pax_close_kernel();
 }
 
 static inline void native_set_pmd(pmd_t *pmdp, pmd_t pmd)
@@ -82,7 +84,12 @@ static inline void native_pmd_clear(pmd_t *pmd)
 static inline pte_t native_ptep_get_and_clear(pte_t *xp)
 {
 #ifdef CONFIG_SMP
-	return native_make_pte(xchg(&xp->pte, 0));
+	pte_t pte;
+
+	pax_open_kernel();
+	pte = native_make_pte(xchg(&xp->pte, 0));
+	pax_close_kernel();
+	return pte;
 #else
 	/* native_local_ptep_get_and_clear,
 	   but duplicated because of cyclic dependency */
@@ -95,7 +102,12 @@ static inline pte_t native_ptep_get_and_clear(pte_t *xp)
 static inline pmd_t native_pmdp_get_and_clear(pmd_t *xp)
 {
 #ifdef CONFIG_SMP
-	return native_make_pmd(xchg(&xp->pmd, 0));
+	pmd_t pmd;
+
+	pax_open_kernel();
+	pmd = native_make_pmd(xchg(&xp->pmd, 0));
+	pax_close_kernel();
+	return pmd;
 #else
 	/* native_local_pmdp_get_and_clear,
 	   but duplicated because of cyclic dependency */

@@ -3457,7 +3457,6 @@ enable_so_residual_data_length_pmcraid_ioasa_14459 residual_data_length pmcraid_
 enable_so__regmap_multi_reg_write_fndecl_14460 _regmap_multi_reg_write fndecl 3 14460 NULL
 enable_so_data_inp_ep_vub300_mmc_host_14468 data_inp_ep vub300_mmc_host 0 14468 NULL nohasharray
 enable_so_cfs_hash_create_fndecl_14468 cfs_hash_create fndecl 4-2-5 14468 &enable_so_data_inp_ep_vub300_mmc_host_14468
-enable_so_sel_end_vardecl_selection_c_14469 sel_end vardecl_selection.c 0 14469 NULL
 enable_so_ntfs_sync_mft_mirror_fndecl_14470 ntfs_sync_mft_mirror fndecl 2 14470 NULL
 enable_so_cache_nat_entry_fndecl_14475 cache_nat_entry fndecl 2 14475 NULL
 enable_so_groups_netlink_table_14476 groups netlink_table 0 14476 NULL
@@ -12754,7 +12753,6 @@ enable_so_count_i40e_ring_52936 count i40e_ring 0 52936 NULL
 enable_so_si2165_write_fndecl_52941 si2165_write fndecl 4 52941 NULL nohasharray
 enable_so_signal_nr_nvkm_specdom_52941 signal_nr nvkm_specdom 0 52941 &enable_so_si2165_write_fndecl_52941
 enable_so_rules_count_canid_match_52943 rules_count canid_match 0 52943 NULL
-enable_so_pipe_urb_52947 pipe urb 0 52947 NULL
 enable_so_position_jfs_dirent_52952 position jfs_dirent 0 52952 NULL
 enable_so_trigger_level_eg20t_port_52953 trigger_level eg20t_port 0 52953 NULL
 enable_so_i2c_read_demod_bytes_fndecl_52958 i2c_read_demod_bytes fndecl 4 52958 NULL
