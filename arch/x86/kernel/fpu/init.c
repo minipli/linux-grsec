@@ -42,7 +42,7 @@ static void fpu__init_cpu_generic(void)
 	/* Flush out any pending x87 state: */
 #ifdef CONFIG_MATH_EMULATION
 	if (!cpu_has_fpu)
-		fpstate_init_soft(&current->thread.fpu.state.soft);
+		fpstate_init_soft(&current->thread.fpu.state->soft);
 	else
 #endif
 		asm volatile ("fninit");
@@ -147,12 +147,14 @@ EXPORT_SYMBOL_GPL(xstate_size);
 #define CHECK_MEMBER_AT_END_OF(TYPE, MEMBER) \
 	BUILD_BUG_ON(sizeof(TYPE) != offsetofend(TYPE, MEMBER))
 
+union fpregs_state init_fpregs_state;
+
 /*
  * We append the 'struct fpu' to the task_struct:
  */
 static void __init fpu__init_task_struct_size(void)
 {
-	int task_size = sizeof(struct task_struct);
+	size_t task_size = sizeof(struct task_struct);
 
 	/*
 	 * Subtract off the static size of the register state.
@@ -168,16 +170,12 @@ static void __init fpu__init_task_struct_size(void)
 
 	/*
 	 * We dynamically size 'struct fpu', so we require that
-	 * it be at the end of 'thread_struct' and that
-	 * 'thread_struct' be at the end of 'task_struct'.  If
+	 * it be at the end of 'thread_struct'. If
 	 * you hit a compile error here, check the structure to
 	 * see if something got added to the end.
 	 */
 	CHECK_MEMBER_AT_END_OF(struct fpu, state);
 	CHECK_MEMBER_AT_END_OF(struct thread_struct, fpu);
-	CHECK_MEMBER_AT_END_OF(struct task_struct, thread);
-
-	arch_task_struct_size = task_size;
 }
 
 /*
