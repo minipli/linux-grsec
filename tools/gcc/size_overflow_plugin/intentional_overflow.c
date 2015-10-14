@@ -165,12 +165,12 @@ static void print_missing_intentional(enum intentional_mark callee_attr, enum in
 	if (callee_attr == MARK_END_INTENTIONAL || callee_attr == MARK_YES)
 		return;
 
-	hash = get_size_overflow_hash_entry_tree(decl, argnum, ONLY_SO);
+	hash = get_size_overflow_hash_entry_tree(decl, argnum, SIZE_OVERFLOW);
 	if (!hash)
 		return;
 
-//	loc = DECL_SOURCE_LOCATION(decl);
-//	inform(loc, "The intentional_overflow attribute is missing from +%s+%u+", DECL_NAME_POINTER(decl), argnum);
+	loc = DECL_SOURCE_LOCATION(decl);
+	inform(loc, "The intentional_overflow attribute is missing from +%s+%u+", DECL_NAME_POINTER(decl), argnum);
 }
 
 // Get the field decl of a component ref for intentional_overflow checking
@@ -975,6 +975,10 @@ bool is_intentional_truncation(gassign *assign)
 
 	def_def_rhs = gimple_assign_rhs1(def_stmt);
 	// structure field read
+#if BUILDING_GCC_VERSION == 4005
+	return TREE_CODE(def_def_rhs) == INDIRECT_REF;
+#else
 	return TREE_CODE(def_def_rhs) == MEM_REF;
+#endif
 }
 

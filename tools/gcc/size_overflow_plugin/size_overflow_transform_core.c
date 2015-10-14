@@ -24,7 +24,7 @@
 
 unsigned int call_count = 0;
 
-static tree get_size_overflow_type(struct visited *visited, const_gimple stmt, const_tree node)
+tree get_size_overflow_type(struct visited *visited, const_gimple stmt, const_tree node)
 {
 	const_tree type;
 	tree new_type;
@@ -67,7 +67,7 @@ static tree get_size_overflow_type(struct visited *visited, const_gimple stmt, c
 	return new_type;
 }
 
-static tree cast_to_new_size_overflow_type(struct visited *visited, gimple stmt, tree rhs, tree size_overflow_type, bool before)
+tree cast_to_new_size_overflow_type(struct visited *visited, gimple stmt, tree rhs, tree size_overflow_type, bool before)
 {
 	gimple_stmt_iterator gsi;
 	gimple new_stmt;

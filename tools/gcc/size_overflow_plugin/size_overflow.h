@@ -23,8 +23,8 @@
 #define GLOBAL_NIFN_LEN 65536
 #define NO_HASH 65537
 
-#define ONLY_DISABLE_SO true
-#define ONLY_SO false
+#define SIZE_OVERFLOW true
+#define DISABLE_SIZE_OVERFLOW false
 
 #include "gcc-common.h"
 
@@ -40,7 +40,7 @@ enum intentional_overflow_type {
 };
 
 enum size_overflow_mark {
-	NO_SO_MARK, YES_SO_MARK, ASM_STMT_SO_MARK, ERROR_CODE_SO_MARK
+	NO_SO_MARK, YES_SO_MARK, ASM_STMT_SO_MARK
 };
 
 struct decl_hash {
@@ -51,20 +51,6 @@ struct decl_hash {
 	unsigned int hash;
 	const char *fn_name;
 };
-
-/* Detect error codes
- *    * bin_op: is there a binary assignment in the data flow
- *    * error_const: whether it falls in the signed range of [-4095, -1]
- *    * only_signed_unsigned_cast: is there size cast in the data flow
- * Error code if: bin_op is false, error_const is true and only_signed_unsigned_cast is false
- */
-struct error_code {
-	bool bin_op;
-	bool error_const;
-	bool only_signed_unsigned_cast;
-};
-
-typedef struct error_code * error_code_t;
 
 struct next_interesting_function;
 typedef struct next_interesting_function *  next_interesting_function_t;
@@ -78,7 +64,6 @@ struct fn_raw_data
 	unsigned int hash;
 	unsigned int num;
 	enum size_overflow_mark marked;
-	struct error_code error_data_flow;
 };
 
 #if BUILDING_GCC_VERSION <= 4007
@@ -170,7 +155,6 @@ struct next_interesting_function {
 	unsigned int num;
 	enum size_overflow_mark marked;
 	next_interesting_function_t orig_next_node;
-	error_code_t error_data_flow;
 };
 
 // size_overflow_plugin.c
@@ -189,11 +173,10 @@ struct size_overflow_hash {
 	const unsigned int param;
 };
 
-extern const struct size_overflow_hash *get_disable_size_overflow_hash_entry(unsigned int hash, const char *decl_name, const char *context, unsigned int argnum);
 extern const char *get_orig_decl_name(const_tree decl);
 extern bool is_size_overflow_asm(const_gimple stmt);
 extern void print_missing_function(next_interesting_function_t node);
-extern const struct size_overflow_hash *get_size_overflow_hash_entry_tree(const_tree fndecl, unsigned int argnum, bool only_from_disable_so_hash_table);
+extern const struct size_overflow_hash *get_size_overflow_hash_entry_tree(const_tree fndecl, unsigned int argnum, bool hash_table);
 extern unsigned int find_arg_number_tree(const_tree arg, const_tree func);
 extern unsigned int get_decl_hash(const_tree decl, const char *decl_name);
 extern const struct size_overflow_hash *get_size_overflow_hash_entry(unsigned int hash, const char *decl_name, const char *context, unsigned int argnum);
@@ -257,6 +240,8 @@ extern tree handle_fnptr_assign(const_gimple stmt);
 
 
 // size_overflow_transform_core.c
+extern tree cast_to_new_size_overflow_type(struct visited *visited, gimple stmt, tree rhs, tree size_overflow_type, bool before);
+extern tree get_size_overflow_type(struct visited *visited, const_gimple stmt, const_tree node);
 extern tree expand(struct visited *visited, next_interesting_function_t expand_from, tree lhs);
 extern void check_size_overflow(next_interesting_function_t expand_from, gimple stmt, tree size_overflow_type, tree cast_rhs, tree rhs, bool before);
 extern tree dup_assign(struct visited *visited, gassign *oldstmt, const_tree node, tree rhs1, tree rhs2, tree __unused rhs3);
@@ -273,7 +258,6 @@ extern void create_up_and_down_cast(struct visited *visited, gassign *use_stmt, 
 // size_overflow_ipa.c
 struct walk_use_def_data {
 	next_interesting_function_t parent;
-	struct error_code error_data_flow;
 	next_interesting_function_t next_cnodes_head;
 	gimple_set *visited;
 };
@@ -296,7 +280,6 @@ extern void size_overflow_node_removal_hook(struct cgraph_node *node, void *data
 extern next_interesting_function_t get_and_create_next_node_from_global_next_nodes(struct fn_raw_data *raw_data, next_interesting_function_t orig_next_node);
 extern next_interesting_function_t create_new_next_interesting_decl(struct fn_raw_data *raw_data, next_interesting_function_t orig_next_node);
 extern next_interesting_function_t create_new_next_interesting_entry(struct fn_raw_data *raw_data, next_interesting_function_t orig_next_node);
-extern bool is_default_error_data_flow(error_code_t error_code);
 
 
 // size_overflow_lto.c
