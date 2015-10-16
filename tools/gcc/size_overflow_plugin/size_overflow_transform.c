@@ -19,17 +19,6 @@
 
 #include "size_overflow.h"
 
-struct interesting_stmts;
-typedef struct interesting_stmts * interesting_stmts_t;
-
-struct interesting_stmts {
-	struct interesting_stmts *next;
-	next_interesting_function_t next_node;
-	gimple first_stmt;
-	tree orig_node;
-	unsigned int num;
-};
-
 static tree cast_to_orig_type(struct visited *visited, gimple stmt, const_tree orig_node, tree new_node)
 {
 	gimple def_stmt;
@@ -199,10 +188,6 @@ static interesting_stmts_t search_interesting_stmt(interesting_stmts_t head, nex
 	if (check_intentional_size_overflow_asm_and_attribute(orig_node) != MARK_NO)
 		return head;
 
-	// The PHI stmt is part of an error code data flow so we need to insert a size_overflow cast check
-	if (gimple_code(first_stmt) != GIMPLE_PHI && SSA_NAME_IS_DEFAULT_DEF(orig_node))
-		return head;
-
 	if (skip_asm_cast(orig_node))
 		return head;
 
@@ -241,117 +226,120 @@ static bool is_error_code_const(const_tree node)
 		return true;
 	return TYPE_UNSIGNED(TREE_TYPE(node)) && is_unsigned_error_code_const(node);
 }
-/* We found an error code data flow if:
- *  * def_stmt is a signed/unsigned cast
- *  * rhs of the cast stmt is a PHI where one of the args is an error code constant
- * In this cast the PHI stmt will be the first_stmt and later we duplicate the stmts until the PHI non-const  * arg def_stmt and check the return type of the duplicated PHI arg.
- */
-static gimple handle_error_codes(greturn *ret)
+
+static bool has_error_code(interesting_stmts_t expand_from, gphi *phi)
 {
-	unsigned int i;
-	gphi *phi;
-	const_tree cast_def_lhs, cast_def_rhs, retval;
-	gimple phi_def, cast_def;
+	unsigned int i, len = gimple_phi_num_args(phi);
 
-	retval = gimple_return_retval(ret);
-	cast_def = get_def_stmt(retval);
-	if (!cast_def || !gimple_assign_cast_p(cast_def))
-		return ret;
+	for (i = 0; i < len; i++) {
+		const_tree arg = gimple_phi_arg_def(phi, i);
 
-	cast_def_lhs = gimple_assign_lhs(cast_def);
-	cast_def_rhs = gimple_assign_rhs1(cast_def);
-	if (TYPE_MODE(TREE_TYPE(cast_def_lhs)) != TYPE_MODE(TREE_TYPE(cast_def_rhs)))
-		return ret;
-	if (TYPE_UNSIGNED(TREE_TYPE(cast_def_lhs)) == TYPE_UNSIGNED(TREE_TYPE(cast_def_rhs)))
-		return ret;
-
-	phi_def = get_def_stmt(cast_def_rhs);
-	if (!phi_def || gimple_code(phi_def) != GIMPLE_PHI)
-		return ret;
-
-	phi = as_a_gphi(phi_def);
-	for (i = 0; i < gimple_phi_num_args(phi); i++) {
-		tree arg;
-
-		arg = gimple_phi_arg_def(phi, i);
 		if (is_error_code_const(arg))
-			return phi;
+			return true;
 	}
 
-	return ret;
+	return false;
 }
 
 static interesting_stmts_t search_interesting_rets(interesting_stmts_t head, next_interesting_function_t next_node_ret, greturn *ret)
 {
 	tree first_node;
-	gimple first_stmt;
 
 	if (!next_node_ret || next_node_ret->marked == ASM_STMT_SO_MARK)
 		return head;
 
-	// The first_node stays same in the error code case because we insert size_overflow checks for this type
 	first_node = gimple_return_retval(ret);
 	if (first_node == NULL_TREE)
 		return head;
 
-	// The PHI first_stmt shows that this is an error code data flow.
-	first_stmt = handle_error_codes(ret);
-	return search_interesting_stmt(head, next_node_ret, first_stmt, first_node, 0);
+	return search_interesting_stmt(head, next_node_ret, ret, first_node, 0);
 }
 
-static tree handle_phi_parm_decl(struct visited *visited, gphi *phi, tree arg, unsigned int i)
+static void handle_binary_assign(struct visited *visited, interesting_stmts_t expand_from, gassign *assign, tree rhs)
 {
-	tree so_type;
-	gimple_stmt_iterator gsi;
-	basic_block bb = gimple_phi_arg_edge(phi, i)->src;
+	tree new_node;
 
-	gcc_assert(bb->index != 0);
+	new_node = expand(visited, expand_from, rhs);
+	if (new_node == NULL_TREE)
+		return;
 
-	so_type = get_size_overflow_type(visited, phi, arg);
-
-	gsi = gsi_after_labels(bb);
-	return cast_to_new_size_overflow_type(visited, gsi_stmt(gsi), arg, so_type, BEFORE_STMT);
+	change_orig_node(visited, assign, rhs, new_node, 0);
+	check_size_overflow(expand_from, assign, TREE_TYPE(new_node), new_node, rhs, BEFORE_STMT);
 }
 
-// Run duplication from def_stmt of the PHI arg because we want to skip the error codes
-static bool handle_error_code_stmt(struct visited *visited, interesting_stmts_t cur)
+static bool search_error_codes(struct visited *visited, gimple_set *visited_error_codes, interesting_stmts_t expand_from, tree lhs, bool error_code)
 {
-	unsigned int i;
-	gphi *phi;
+	gimple def_stmt;
 
-	if (gimple_code(cur->first_stmt) != GIMPLE_PHI)
+	def_stmt = get_def_stmt(lhs);
+	if (!def_stmt || gimple_code(def_stmt) == GIMPLE_NOP)
+		return error_code;
+
+	if (pointer_set_insert(visited_error_codes, def_stmt))
+		return error_code;
+
+	if (is_gimple_constant(lhs))
+		return error_code;
+	if (skip_types(lhs))
+		return is_error_code_const(lhs);
+
+	switch (gimple_code(def_stmt)) {
+	case GIMPLE_CALL:
+	case GIMPLE_ASM:
+		return error_code;
+	case GIMPLE_ASSIGN: {
+		tree rhs1, rhs2;
+		gassign *assign = as_a_gassign(def_stmt);
+
+		switch (gimple_num_ops(assign)) {
+		case 2:
+			return search_error_codes(visited, visited_error_codes, expand_from, gimple_assign_rhs1(def_stmt), error_code);
+		case 3:
+			if (!error_code)
+				return error_code;
+
+			/* Run stmt duplication from the binary assignment ops (rhs1 and rhs2)
+			 * so that size_overflow checking skips the lhs of the last binary assignment
+			 * before the error code PHI.
+			 */
+			rhs1 = gimple_assign_rhs1(assign);
+			handle_binary_assign(visited, expand_from, assign, rhs1);
+			rhs2 = gimple_assign_rhs2(assign);
+			handle_binary_assign(visited, expand_from, assign, rhs2);
+			return error_code;
+		}
+		gcc_unreachable();
+	}
+	case GIMPLE_PHI: {
+		unsigned int i;
+
+		error_code = has_error_code(expand_from, as_a_gphi(def_stmt));
+		for (i = 0; i < gimple_phi_num_args(def_stmt); i++) {
+			error_code = search_error_codes(visited, visited_error_codes, expand_from, gimple_phi_arg_def(def_stmt, i), error_code);
+		}
+		return error_code;
+	}
+	default:
+		debug_gimple_stmt(def_stmt);
+		error("%s: unknown gimple code", __func__);
+		gcc_unreachable();
+	}
+}
+
+static bool handle_error_codes(struct visited *visited, interesting_stmts_t expand_from)
+{
+	bool error_code;
+	gimple_set *visited_error_codes;
+
+	// expand the data flow from a return stmt
+	if (expand_from->next_node->num != 0 || strcmp(expand_from->next_node->context, "fndecl"))
 		return false;
 
-	phi = as_a_gphi(cur->first_stmt);
-	for (i = 0; i < gimple_phi_num_args(phi); i++) {
-		tree new_arg, arg, new_phi_arg;
-		gimple def_stmt, def_new_phi_arg;
+	visited_error_codes = pointer_set_create();
+	error_code = search_error_codes(visited, visited_error_codes, expand_from, expand_from->orig_node, false);
+	pointer_set_destroy(visited_error_codes);
 
-		arg = gimple_phi_arg_def(phi, i);
-		if (is_gimple_constant(arg))
-			continue;
-
-		def_stmt = get_def_stmt(arg);
-		gcc_assert(def_stmt);
-		if (gimple_code(def_stmt) == GIMPLE_NOP)
-			new_arg = handle_phi_parm_decl(visited, phi, arg, i);
-		else
-			new_arg = expand(visited, cur->next_node, arg);
-
-		if (new_arg == NULL_TREE)
-			continue;
-
-		change_orig_node(visited, phi, arg, new_arg, i);
-		new_phi_arg = gimple_phi_arg_def(phi, i);
-
-		def_new_phi_arg = get_def_stmt(new_phi_arg);
-		gcc_assert(def_new_phi_arg);
-
-		// Insert size_overflow check for the type of the return type
-		check_size_overflow(cur->next_node, def_new_phi_arg, TREE_TYPE(new_arg), new_arg, cur->orig_node, BEFORE_STMT);
-	}
-
-	return true;
+	return error_code;
 }
 
 static void handle_interesting_stmt(struct visited *visited, interesting_stmts_t head)
@@ -361,15 +349,15 @@ static void handle_interesting_stmt(struct visited *visited, interesting_stmts_t
 	for (cur = head; cur; cur = cur->next) {
 		tree new_node;
 
-		if (handle_error_code_stmt(visited, cur))
+		if (handle_error_codes(visited, cur))
 			continue;
 
-		new_node = expand(visited, cur->next_node, cur->orig_node);
+		new_node = expand(visited, cur, cur->orig_node);
 		if (new_node == NULL_TREE)
 			continue;
 
 		change_orig_node(visited, cur->first_stmt, cur->orig_node, new_node, cur->num);
-		check_size_overflow(cur->next_node, cur->first_stmt, TREE_TYPE(new_node), new_node, cur->orig_node, BEFORE_STMT);
+		check_size_overflow(cur, cur->first_stmt, TREE_TYPE(new_node), new_node, cur->orig_node, BEFORE_STMT);
 	}
 }
 

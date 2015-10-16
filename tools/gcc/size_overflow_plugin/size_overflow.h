@@ -55,6 +55,9 @@ struct decl_hash {
 struct next_interesting_function;
 typedef struct next_interesting_function *  next_interesting_function_t;
 
+struct interesting_stmts;
+typedef struct interesting_stmts * interesting_stmts_t;
+
 // Store data associated with the next_interesting_function_t entry
 struct fn_raw_data
 {
@@ -193,8 +196,8 @@ extern const_tree get_attribute(const char* attr_name, const_tree decl);
 extern bool is_a_cast_and_const_overflow(const_tree no_const_rhs);
 extern bool is_const_plus_unsigned_signed_truncation(const_tree lhs);
 extern bool is_a_constant_overflow(const gassign *stmt, const_tree rhs);
-extern tree handle_intentional_overflow(struct visited *visited, next_interesting_function_t expand_from, bool check_overflow, gassign *stmt, tree change_rhs, tree new_rhs2);
-extern tree handle_integer_truncation(struct visited *visited, next_interesting_function_t expand_from, const_tree lhs);
+extern tree handle_intentional_overflow(struct visited *visited, interesting_stmts_t expand_from, bool check_overflow, gassign *stmt, tree change_rhs, tree new_rhs2);
+extern tree handle_integer_truncation(struct visited *visited, interesting_stmts_t expand_from, const_tree lhs);
 extern bool is_a_neg_overflow(const gassign *stmt, const_tree rhs);
 extern enum intentional_overflow_type add_mul_intentional_overflow(const gassign *stmt);
 extern void unsigned_signed_cast_intentional_overflow(struct visited *visited, gassign *stmt);
@@ -235,6 +238,14 @@ extern tree get_lhs(const_gimple stmt);
 
 
 // size_overflow_transform.c
+struct interesting_stmts {
+	struct interesting_stmts *next;
+	next_interesting_function_t next_node;
+	gimple first_stmt;
+	tree orig_node;
+	unsigned int num;
+};
+
 extern unsigned int size_overflow_transform(struct cgraph_node *node);
 extern tree handle_fnptr_assign(const_gimple stmt);
 
@@ -242,8 +253,8 @@ extern tree handle_fnptr_assign(const_gimple stmt);
 // size_overflow_transform_core.c
 extern tree cast_to_new_size_overflow_type(struct visited *visited, gimple stmt, tree rhs, tree size_overflow_type, bool before);
 extern tree get_size_overflow_type(struct visited *visited, const_gimple stmt, const_tree node);
-extern tree expand(struct visited *visited, next_interesting_function_t expand_from, tree lhs);
-extern void check_size_overflow(next_interesting_function_t expand_from, gimple stmt, tree size_overflow_type, tree cast_rhs, tree rhs, bool before);
+extern tree expand(struct visited *visited, interesting_stmts_t expand_from, tree lhs);
+extern void check_size_overflow(interesting_stmts_t expand_from, gimple stmt, tree size_overflow_type, tree cast_rhs, tree rhs, bool before);
 extern tree dup_assign(struct visited *visited, gassign *oldstmt, const_tree node, tree rhs1, tree rhs2, tree __unused rhs3);
 extern tree create_assign(struct visited *visited, gimple oldstmt, tree rhs1, bool before);
 
