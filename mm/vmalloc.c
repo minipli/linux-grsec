@@ -73,6 +73,7 @@ static void vunmap_pte_range(pmd_t *pmd, unsigned long addr, unsigned long end)
 	pte_t *pte;
 
 	pte = pte_offset_kernel(pmd, addr);
+	pax_open_kernel();
 	do {
 
 #if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
@@ -88,6 +89,7 @@ static void vunmap_pte_range(pmd_t *pmd, unsigned long addr, unsigned long end)
 			WARN_ON(!pte_none(ptent) && !pte_present(ptent));
 		}
 	} while (pte++, addr += PAGE_SIZE, addr != end);
+	pax_close_kernel();
 }
 
 static void vunmap_pmd_range(pud_t *pud, unsigned long addr, unsigned long end)
@@ -150,6 +152,8 @@ static int vmap_pte_range(pmd_t *pmd, unsigned long addr,
 	pte = pte_alloc_kernel(pmd, addr);
 	if (!pte)
 		return -ENOMEM;
+
+	pax_open_kernel();
 	do {
 		struct page *page = pages[*nr];
 
@@ -158,16 +162,19 @@ static int vmap_pte_range(pmd_t *pmd, unsigned long addr,
 #endif
 
 		if (!pte_none(*pte)) {
+			pax_close_kernel();
 			WARN_ON(1);
 			return -EBUSY;
 		}
 		if (!page) {
+			pax_close_kernel();
 			WARN_ON(1);
 			return -ENOMEM;
 		}
 		set_pte_at(&init_mm, addr, pte, mk_pte(page, prot));
 		(*nr)++;
 	} while (pte++, addr += PAGE_SIZE, addr != end);
+	pax_close_kernel();
 	return 0;
 }
 
