@@ -582,7 +582,11 @@ do_pass:
 
 		/* Unknown instruction. */
 		default:
-			goto err;
+			WARN(1, KERN_ALERT "Unknown sock filter code:%u jt:%u tf:%u k:%u\n",
+				       fp->code, fp->jt, fp->jf, fp->k);
+			kfree(addrs);
+			BUG();
+			return -EINVAL;
 		}
 
 		insn++;
@@ -626,7 +630,7 @@ static int check_load_and_stores(const struct sock_filter *filter, int flen)
 	u16 *masks, memvalid = 0; /* One bit per cell, 16 cells */
 	int pc, ret = 0;
 
-	BUILD_BUG_ON(BPF_MEMWORDS > 16);
+	BUILD_BUG_ON(BPF_MEMWORDS != 16);
 
 	masks = kmalloc_array(flen, sizeof(*masks), GFP_KERNEL);
 	if (!masks)
@@ -1055,7 +1059,7 @@ int bpf_prog_create(struct bpf_prog **pfp, struct sock_fprog_kern *fprog)
 	if (!fp)
 		return -ENOMEM;
 
-	memcpy(fp->insns, fprog->filter, fsize);
+	memcpy(fp->insns, (void __force_kernel *)fprog->filter, fsize);
 
 	fp->len = fprog->len;
 	/* Since unattached filters are not copied back to user
@@ -1701,9 +1705,13 @@ int sk_get_filter(struct sock *sk, struct sock_filter __user *ubuf,
 		goto out;
 
 	/* We're copying the filter that has been originally attached,
-	 * so no conversion/decode needed anymore.
+	 * so no conversion/decode needed anymore. eBPF programs that
+	 * have no original program cannot be dumped through this.
 	 */
+	ret = -EACCES;
 	fprog = filter->prog->orig_prog;
+	if (!fprog)
+		goto out;
 
 	ret = fprog->len;
 	if (!len)

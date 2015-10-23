@@ -383,7 +383,10 @@ struct irq_chip {
 	int		(*irq_set_vcpu_affinity)(struct irq_data *data, void *vcpu_info);
 
 	unsigned long	flags;
-};
+} __do_const;
+#ifndef _LINUX_IRQDOMAIN_H
+typedef struct irq_chip __no_const irq_chip_no_const;
+#endif
 
 /*
  * irq_chip specific flags

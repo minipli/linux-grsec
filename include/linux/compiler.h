@@ -5,11 +5,14 @@
 
 #ifdef __CHECKER__
 # define __user		__attribute__((noderef, address_space(1)))
+# define __force_user	__force __user
 # define __kernel	__attribute__((address_space(0)))
+# define __force_kernel	__force __kernel
 # define __safe		__attribute__((safe))
 # define __force	__attribute__((force))
 # define __nocast	__attribute__((nocast))
 # define __iomem	__attribute__((noderef, address_space(2)))
+# define __force_iomem	__force __iomem
 # define __must_hold(x)	__attribute__((context(x,1,1)))
 # define __acquires(x)	__attribute__((context(x,0,1)))
 # define __releases(x)	__attribute__((context(x,1,0)))
@@ -17,21 +20,39 @@
 # define __release(x)	__context__(x,-1)
 # define __cond_lock(x,c)	((c) ? ({ __acquire(x); 1; }) : 0)
 # define __percpu	__attribute__((noderef, address_space(3)))
+# define __force_percpu	__force __percpu
 # define __pmem		__attribute__((noderef, address_space(5)))
+# define __force_pmem	__force __pmem
 #ifdef CONFIG_SPARSE_RCU_POINTER
 # define __rcu		__attribute__((noderef, address_space(4)))
+# define __force_rcu	__force __rcu
 #else
 # define __rcu
+# define __force_rcu
 #endif
 extern void __chk_user_ptr(const volatile void __user *);
 extern void __chk_io_ptr(const volatile void __iomem *);
 #else
-# define __user
-# define __kernel
+# ifdef CHECKER_PLUGIN
+//#  define __user
+//#  define __force_user
+//#  define __kernel
+//#  define __force_kernel
+# else
+#  ifdef STRUCTLEAK_PLUGIN
+#   define __user __attribute__((user))
+#  else
+#   define __user
+#  endif
+#  define __force_user
+#  define __kernel
+#  define __force_kernel
+# endif
 # define __safe
 # define __force
 # define __nocast
 # define __iomem
+# define __force_iomem
 # define __chk_user_ptr(x) (void)0
 # define __chk_io_ptr(x) (void)0
 # define __builtin_warning(x, y...) (1)
@@ -42,8 +63,11 @@ extern void __chk_io_ptr(const volatile void __iomem *);
 # define __release(x) (void)0
 # define __cond_lock(x,c) (c)
 # define __percpu
+# define __force_percpu
 # define __rcu
+# define __force_rcu
 # define __pmem
+# define __force_pmem
 #endif
 
 /* Indirect macros required for expanded argument pasting, eg. __LINE__. */
@@ -201,27 +225,27 @@ void ftrace_likely_update(struct ftrace_branch_data *f, int val, int expect);
 static __always_inline void __read_once_size(const volatile void *p, void *res, int size)
 {
 	switch (size) {
-	case 1: *(__u8 *)res = *(volatile __u8 *)p; break;
-	case 2: *(__u16 *)res = *(volatile __u16 *)p; break;
-	case 4: *(__u32 *)res = *(volatile __u32 *)p; break;
-	case 8: *(__u64 *)res = *(volatile __u64 *)p; break;
+	case 1: *(__u8 *)res = *(const volatile __u8 *)p; break;
+	case 2: *(__u16 *)res = *(const volatile __u16 *)p; break;
+	case 4: *(__u32 *)res = *(const volatile __u32 *)p; break;
+	case 8: *(__u64 *)res = *(const volatile __u64 *)p; break;
 	default:
 		barrier();
-		__builtin_memcpy((void *)res, (const void *)p, size);
+		__builtin_memcpy(res, (const void *)p, size);
 		barrier();
 	}
 }
 
-static __always_inline void __write_once_size(volatile void *p, void *res, int size)
+static __always_inline void __write_once_size(volatile void *p, const void *res, int size)
 {
 	switch (size) {
-	case 1: *(volatile __u8 *)p = *(__u8 *)res; break;
-	case 2: *(volatile __u16 *)p = *(__u16 *)res; break;
-	case 4: *(volatile __u32 *)p = *(__u32 *)res; break;
-	case 8: *(volatile __u64 *)p = *(__u64 *)res; break;
+	case 1: *(volatile __u8 *)p = *(const __u8 *)res; break;
+	case 2: *(volatile __u16 *)p = *(const __u16 *)res; break;
+	case 4: *(volatile __u32 *)p = *(const __u32 *)res; break;
+	case 8: *(volatile __u64 *)p = *(const __u64 *)res; break;
 	default:
 		barrier();
-		__builtin_memcpy((void *)p, (const void *)res, size);
+		__builtin_memcpy((void *)p, res, size);
 		barrier();
 	}
 }
@@ -370,6 +394,38 @@ static __always_inline void __write_once_size(volatile void *p, void *res, int s
 # define __attribute_const__	/* unimplemented */
 #endif
 
+#ifndef __randomize_layout
+# define __randomize_layout
+#endif
+
+#ifndef __no_randomize_layout
+# define __no_randomize_layout
+#endif
+
+#ifndef __no_const
+# define __no_const
+#endif
+
+#ifndef __do_const
+# define __do_const
+#endif
+
+#ifndef __size_overflow
+# define __size_overflow(...)
+#endif
+
+#ifndef __intentional_overflow
+# define __intentional_overflow(...)
+#endif
+
+#ifndef __latent_entropy
+# define __latent_entropy
+#endif
+
+#ifndef __nocapture
+# define __nocapture(...)
+#endif
+
 /*
  * Tell gcc if a function is cold. The compiler will assume any path
  * directly leading to the call is unlikely.
@@ -377,6 +433,22 @@ static __always_inline void __write_once_size(volatile void *p, void *res, int s
 
 #ifndef __cold
 #define __cold
+#endif
+
+#ifndef __alloc_size
+#define __alloc_size(...)
+#endif
+
+#ifndef __bos
+#define __bos(ptr, arg)
+#endif
+
+#ifndef __bos0
+#define __bos0(ptr)
+#endif
+
+#ifndef __bos1
+#define __bos1(ptr)
 #endif
 
 /* Simple shorthand for a section definition */
@@ -392,6 +464,8 @@ static __always_inline void __write_once_size(volatile void *p, void *res, int s
 #ifndef __same_type
 # define __same_type(a, b) __builtin_types_compatible_p(typeof(a), typeof(b))
 #endif
+
+#define __type_is_unsigned(t) (__same_type((t)0, 0UL) || __same_type((t)0, 0U) || __same_type((t)0, (unsigned short)0) || __same_type((t)0, (unsigned char)0))
 
 /* Is this type a native word size -- useful for atomic operations */
 #ifndef __native_word
@@ -472,8 +546,9 @@ static __always_inline void __write_once_size(volatile void *p, void *res, int s
  */
 #define __ACCESS_ONCE(x) ({ \
 	 __maybe_unused typeof(x) __var = (__force typeof(x)) 0; \
-	(volatile typeof(x) *)&(x); })
+	(volatile const typeof(x) *)&(x); })
 #define ACCESS_ONCE(x) (*__ACCESS_ONCE(x))
+#define ACCESS_ONCE_RW(x) (*(volatile typeof(x) *)&(x))
 
 /**
  * lockless_dereference() - safely load a pointer for later dereference
