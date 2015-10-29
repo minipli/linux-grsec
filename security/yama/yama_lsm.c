@@ -362,7 +362,7 @@ void __init yama_add_hooks(void)
 static int yama_dointvec_minmax(struct ctl_table *table, int write,
 				void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table table_copy;
+	ctl_table_no_const table_copy;
 
 	if (write && !capable(CAP_SYS_PTRACE))
 		return -EPERM;
