@@ -321,7 +321,7 @@ extern struct dentry *__d_lookup_rcu(const struct dentry *parent,
 
 static inline unsigned d_count(const struct dentry *dentry)
 {
-	return dentry->d_lockref.count;
+	return __lockref_read(&dentry->d_lockref);
 }
 
 /*
@@ -350,7 +350,7 @@ extern char *dentry_path(struct dentry *, char *, int);
 static inline struct dentry *dget_dlock(struct dentry *dentry)
 {
 	if (dentry)
-		dentry->d_lockref.count++;
+		__lockref_inc(&dentry->d_lockref);
 	return dentry;
 }
 
