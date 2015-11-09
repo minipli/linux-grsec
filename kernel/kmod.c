@@ -250,8 +250,8 @@ static int call_usermodehelper_exec_async(void *data)
 	commit_creds(new);
 
 	retval = do_execve(getname_kernel(sub_info->path),
-			   (const char __user *const __user *)sub_info->argv,
-			   (const char __user *const __user *)sub_info->envp);
+			   (const char __user *const __force_user *)sub_info->argv,
+			   (const char __user *const __force_user *)sub_info->envp);
 out:
 	sub_info->retval = retval;
 	/*
@@ -287,7 +287,7 @@ static void call_usermodehelper_exec_sync(struct subprocess_info *sub_info)
 		 *
 		 * Thus the __user pointer cast is valid here.
 		 */
-		sys_wait4(pid, (int __user *)&ret, 0, NULL);
+		sys_wait4(pid, (int __force_user *)&ret, 0, NULL);
 
 		/*
 		 * If ret is 0, either call_usermodehelper_exec_async failed and
@@ -630,7 +630,7 @@ EXPORT_SYMBOL(call_usermodehelper);
 static int proc_cap_handler(struct ctl_table *table, int write,
 			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table t;
+	ctl_table_no_const t;
 	unsigned long cap_array[_KERNEL_CAPABILITY_U32S];
 	kernel_cap_t new_cap;
 	int err, i;

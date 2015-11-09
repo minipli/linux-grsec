@@ -81,7 +81,7 @@ enum batadv_dhcp_recipient {
 struct batadv_hard_iface_bat_iv {
 	unsigned char *ogm_buff;
 	int ogm_buff_len;
-	atomic_t ogm_seqno;
+	atomic_unchecked_t ogm_seqno;
 };
 
 /**
@@ -784,7 +784,7 @@ struct batadv_priv {
 	atomic_t bonding;
 	atomic_t fragmentation;
 	atomic_t packet_size_max;
-	atomic_t frag_seqno;
+	atomic_unchecked_t frag_seqno;
 #ifdef CONFIG_BATMAN_ADV_BLA
 	atomic_t bridge_loop_avoidance;
 #endif
@@ -803,7 +803,7 @@ struct batadv_priv {
 #endif
 	u32 isolation_mark;
 	u32 isolation_mark_mask;
-	atomic_t bcast_seqno;
+	atomic_unchecked_t bcast_seqno;
 	atomic_t bcast_queue_left;
 	atomic_t batman_queue_left;
 	char num_ifaces;

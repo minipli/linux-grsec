@@ -62,7 +62,7 @@
 #define DACR_INIT \
 	(domain_val(DOMAIN_USER, DOMAIN_NOACCESS) | \
 	 domain_val(DOMAIN_KERNEL, DOMAIN_MANAGER) | \
-	 domain_val(DOMAIN_IO, DOMAIN_CLIENT) | \
+	 domain_val(DOMAIN_IO, DOMAIN_KERNELCLIENT) | \
 	 domain_val(DOMAIN_VECTORS, DOMAIN_CLIENT))
 #else
 #define DACR_INIT \
