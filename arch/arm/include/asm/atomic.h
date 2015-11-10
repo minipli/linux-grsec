@@ -62,38 +62,64 @@ static inline void atomic_set_unchecked(atomic_unchecked_t *v, int i)
  * to ensure that the update happens.
  */
 
-#define ATOMIC_OP(op, c_op, asm_op)					\
-static inline void atomic_##op(int i, atomic_t *v)			\
+#ifdef CONFIG_PAX_REFCOUNT
+#define __OVERFLOW_POST			\
+	"	bvc	3f\n"		\
+	"2:	" REFCOUNT_TRAP_INSN "\n"\
+	"3:\n"
+#define __OVERFLOW_POST_RETURN		\
+	"	bvc	3f\n"		\
+"	mov	%0, %1\n"		\
+	"2:	" REFCOUNT_TRAP_INSN "\n"\
+	"3:\n"
+#define __OVERFLOW_EXTABLE		\
+	"4:\n"				\
+	_ASM_EXTABLE(2b, 4b)
+#else
+#define __OVERFLOW_POST
+#define __OVERFLOW_POST_RETURN
+#define __OVERFLOW_EXTABLE
+#endif
+
+#define __ATOMIC_OP(op, suffix, c_op, asm_op, post_op, extable)		\
+static inline void atomic_##op##suffix(int i, atomic##suffix##_t *v)	\
 {									\
 	unsigned long tmp;						\
 	int result;							\
 									\
 	prefetchw(&v->counter);						\
-	__asm__ __volatile__("@ atomic_" #op "\n"			\
+	__asm__ __volatile__("@ atomic_" #op #suffix "\n"		\
 "1:	ldrex	%0, [%3]\n"						\
 "	" #asm_op "	%0, %0, %4\n"					\
+	post_op								\
 "	strex	%1, %0, [%3]\n"						\
 "	teq	%1, #0\n"						\
-"	bne	1b"							\
+"	bne	1b\n"							\
+	extable								\
 	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)		\
 	: "r" (&v->counter), "Ir" (i)					\
 	: "cc");							\
 }									\
 
-#define ATOMIC_OP_RETURN(op, c_op, asm_op)				\
-static inline int atomic_##op##_return_relaxed(int i, atomic_t *v)	\
+#define ATOMIC_OP(op, c_op, asm_op) __ATOMIC_OP(op, _unchecked, c_op, asm_op, , )\
+				    __ATOMIC_OP(op, , c_op, asm_op##s, __OVERFLOW_POST, __OVERFLOW_EXTABLE)
+
+#define __ATOMIC_OP_RETURN(op, suffix, c_op, asm_op, post_op, extable)	\
+static inline int atomic_##op##_return##suffix##_relaxed(int i, atomic##suffix##_t *v)\
 {									\
 	unsigned long tmp;						\
 	int result;							\
 									\
 	prefetchw(&v->counter);						\
 									\
-	__asm__ __volatile__("@ atomic_" #op "_return\n"		\
+	__asm__ __volatile__("@ atomic_" #op "_return" #suffix "\n"	\
 "1:	ldrex	%0, [%3]\n"						\
 "	" #asm_op "	%0, %0, %4\n"					\
+	post_op								\
 "	strex	%1, %0, [%3]\n"						\
 "	teq	%1, #0\n"						\
-"	bne	1b"							\
+"	bne	1b\n"							\
+	extable								\
 	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)		\
 	: "r" (&v->counter), "Ir" (i)					\
 	: "cc");							\
@@ -103,6 +129,9 @@ static inline int atomic_##op##_return_relaxed(int i, atomic_t *v)	\
 
 #define atomic_add_return_relaxed	atomic_add_return_relaxed
 #define atomic_sub_return_relaxed	atomic_sub_return_relaxed
+
+#define ATOMIC_OP_RETURN(op, c_op, asm_op) __ATOMIC_OP_RETURN(op, _unchecked, c_op, asm_op, , )\
+					   __ATOMIC_OP_RETURN(op, , c_op, asm_op##s, __OVERFLOW_POST_RETURN, __OVERFLOW_EXTABLE)
 
 static inline int atomic_cmpxchg_relaxed(atomic_t *ptr, int old, int new)
 {
@@ -277,7 +306,7 @@ ATOMIC_OP(xor, ^=, eor)
 #define atomic_xchg(v, new) (xchg(&((v)->counter), new))
 static inline int atomic_xchg_unchecked(atomic_unchecked_t *v, int new)
 {
-	return xchg(&v->counter, new);
+	return xchg_relaxed(&v->counter, new);
 }
 
 #define atomic_inc(v)		atomic_add(1, v)
@@ -294,13 +323,13 @@ static inline void atomic_dec_unchecked(atomic_unchecked_t *v)
 #define atomic_inc_and_test(v)	(atomic_add_return(1, v) == 0)
 static inline int atomic_inc_and_test_unchecked(atomic_unchecked_t *v)
 {
-	return atomic_add_return_unchecked(1, v) == 0;
+	return atomic_add_return_unchecked_relaxed(1, v) == 0;
 }
 #define atomic_dec_and_test(v)	(atomic_sub_return(1, v) == 0)
 #define atomic_inc_return(v)    (atomic_add_return(1, v))
 static inline int atomic_inc_return_unchecked(atomic_unchecked_t *v)
 {
-	return atomic_add_return_unchecked(1, v);
+	return atomic_add_return_unchecked_relaxed(1, v);
 }
 #define atomic_dec_return(v)    (atomic_sub_return(1, v))
 #define atomic_sub_and_test(i, v) (atomic_sub_return(i, v) == 0)
@@ -407,43 +436,73 @@ static inline void atomic64_set(atomic64_t *v, long long i)
 	: "r" (&v->counter), "r" (i)
 	: "cc");
 }
+
+static inline void atomic64_set_unchecked(atomic64_unchecked_t *v, long long i)
+{
+	long long tmp;
+
+	prefetchw(&v->counter);
+	__asm__ __volatile__("@ atomic64_set_unchecked\n"
+"1:	ldrexd	%0, %H0, [%2]\n"
+"	strexd	%0, %3, %H3, [%2]\n"
+"	teq	%0, #0\n"
+"	bne	1b"
+	: "=&r" (tmp), "=Qo" (v->counter)
+	: "r" (&v->counter), "r" (i)
+	: "cc");
+}
 #endif
 
-#define ATOMIC64_OP(op, op1, op2)					\
-static inline void atomic64_##op(long long i, atomic64_t *v)		\
+#undef __OVERFLOW_POST_RETURN
+#define __OVERFLOW_POST_RETURN		\
+	"	bvc	3f\n"		\
+"	mov	%0, %1\n"		\
+"	mov	%H0, %H1\n"		\
+	"2:	" REFCOUNT_TRAP_INSN "\n"\
+	"3:\n"
+
+#define __ATOMIC64_OP(op, suffix, op1, op2, post_op, extable)		\
+static inline void atomic64_##op##suffix(long long i, atomic64##suffix##_t *v)\
 {									\
 	long long result;						\
 	unsigned long tmp;						\
 									\
 	prefetchw(&v->counter);						\
-	__asm__ __volatile__("@ atomic64_" #op "\n"			\
+	__asm__ __volatile__("@ atomic64_" #op #suffix "\n"		\
 "1:	ldrexd	%0, %H0, [%3]\n"					\
 "	" #op1 " %Q0, %Q0, %Q4\n"					\
 "	" #op2 " %R0, %R0, %R4\n"					\
+	post_op								\
 "	strexd	%1, %0, %H0, [%3]\n"					\
 "	teq	%1, #0\n"						\
-"	bne	1b"							\
+"	bne	1b\n"							\
+	extable								\
 	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)		\
 	: "r" (&v->counter), "r" (i)					\
 	: "cc");							\
 }									\
 
-#define ATOMIC64_OP_RETURN(op, op1, op2)				\
+#define ATOMIC64_OP(op, op1, op2) __ATOMIC64_OP(op, _unchecked, op1, op2, , ) \
+				  __ATOMIC64_OP(op, , op1, op2##s, __OVERFLOW_POST, __OVERFLOW_EXTABLE)
+
+#define __ATOMIC64_OP_RETURN(op, suffix, op1, op2, post_op, extable)	\
 static inline long long							\
-atomic64_##op##_return_relaxed(long long i, atomic64_t *v)		\
+atomic64_##op##_return##suffix##_relaxed(long long i, atomic64##suffix##_t *v) \
 {									\
 	long long result;						\
 	unsigned long tmp;						\
 									\
 	prefetchw(&v->counter);						\
 									\
-	__asm__ __volatile__("@ atomic64_" #op "_return\n"		\
+	__asm__ __volatile__("@ atomic64_" #op "_return" #suffix "\n"	\
 "1:	ldrexd	%0, %H0, [%3]\n"					\
 "	" #op1 " %Q0, %Q0, %Q4\n"					\
 "	" #op2 " %R0, %R0, %R4\n"					\
+	post_op								\
 "	strexd	%1, %0, %H0, [%3]\n"					\
 "	teq	%1, #0\n"						\
-"	bne	1b"							\
+"	bne	1b\n"							\
+	extable								\
 	: "=&r" (result), "=&r" (tmp), "+Qo" (v->counter)		\
 	: "r" (&v->counter), "r" (i)					\
 	: "cc");							\
@@ -473,7 +532,12 @@ ATOMIC64_OP(xor, eor, eor)
 
 #undef ATOMIC64_OPS
 #undef ATOMIC64_OP_RETURN
+#undef __ATOMIC64_OP_RETURN
 #undef ATOMIC64_OP
+#undef __ATOMIC64_OP
+#undef __OVERFLOW_EXTABLE
+#undef __OVERFLOW_POST_RETURN
+#undef __OVERFLOW_POST
 
 static inline long long
 atomic64_cmpxchg_relaxed(atomic64_t *ptr, long long old, long long new)
@@ -498,6 +562,32 @@ atomic64_cmpxchg_relaxed(atomic64_t *ptr, long long old, long long new)
 	return oldval;
 }
 #define atomic64_cmpxchg_relaxed	atomic64_cmpxchg_relaxed
+
+static inline long long
+atomic64_cmpxchg_unchecked_relaxed(atomic64_unchecked_t *ptr, long long old,
+					long long new)
+{
+	long long oldval;
+	unsigned long res;
+
+	smp_mb();
+
+	do {
+		__asm__ __volatile__("@ atomic64_cmpxchg_unchecked\n"
+		"ldrexd		%1, %H1, [%3]\n"
+		"mov		%0, #0\n"
+		"teq		%1, %4\n"
+		"teqeq		%H1, %H4\n"
+		"strexdeq	%0, %5, %H5, [%3]"
+		: "=&r" (res), "=&r" (oldval), "+Qo" (ptr->counter)
+		: "r" (&ptr->counter), "r" (old), "r" (new)
+		: "cc");
+	} while (res);
+
+	smp_mb();
+
+	return oldval;
+}
 
 static inline long long atomic64_xchg_relaxed(atomic64_t *ptr, long long new)
 {

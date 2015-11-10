@@ -24,6 +24,8 @@
 #include <linux/msi.h>
 #include <linux/slab.h>
 
+#include <asm/pgtable.h>
+
 #define DEV_ID_SHIFT	24
 
 /*

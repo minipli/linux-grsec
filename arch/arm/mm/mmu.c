@@ -41,22 +41,6 @@
 #include "mm.h"
 #include "tcm.h"
 
-#if defined(CONFIG_CPU_USE_DOMAINS) || defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
-void modify_domain(unsigned int dom, unsigned int type)
-{
-	struct thread_info *thread = current_thread_info();
-	unsigned int domain = thread->cpu_domain;
-	/*
-	 * DOMAIN_MANAGER might be defined to some other value,
-	 * use the arch-defined constant
-	 */
-	domain &= ~domain_val(dom, 3);
-	thread->cpu_domain = domain | domain_val(dom, type);
-	set_domain(thread->cpu_domain);
-}
-EXPORT_SYMBOL(modify_domain);
-#endif
-
 /*
  * empty_zero_page is a special page that is used for
  * zero-initialized data and COW.

@@ -42,7 +42,7 @@
 #define DOMAIN_USER	1
 #define DOMAIN_IO	0
 #endif
-#define DOMAIN_VECTORS	3
+//#define DOMAIN_VECTORS	3
 
 /*
  * Domain types
@@ -51,8 +51,26 @@
 #define DOMAIN_CLIENT	1
 #ifdef CONFIG_CPU_USE_DOMAINS
 #define DOMAIN_MANAGER	3
+#define DOMAIN_VECTORS		DOMAIN_USER
+#else
+
+#ifdef CONFIG_PAX_KERNEXEC
+#define DOMAIN_MANAGER	1
+#define DOMAIN_KERNEXEC	3
 #else
 #define DOMAIN_MANAGER	1
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+#define DOMAIN_USERCLIENT	0
+#define DOMAIN_UDEREF		1
+#define DOMAIN_VECTORS		DOMAIN_KERNEL
+#else
+#define DOMAIN_USERCLIENT	1
+#define DOMAIN_VECTORS		DOMAIN_USER
+#endif
+#define DOMAIN_KERNELCLIENT	1
+
 #endif
 
 #define domain_mask(dom)	((3) << (2 * (dom)))

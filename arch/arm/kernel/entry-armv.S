@@ -237,6 +237,9 @@ ENDPROC(__und_invalid)
 	.macro	svc_entry, stack_hole=0, trace=1, uaccess=1
  UNWIND(.fnstart		)
  UNWIND(.save {r0 - pc}		)
+
+	pax_enter_kernel
+
 	sub	sp, sp, #(S_FRAME_SIZE + 8 + \stack_hole - 4)
 #ifdef CONFIG_THUMB2_KERNEL
  SPFIX(	str	r0, [sp]	)	@ temporarily saved
@@ -252,7 +255,12 @@ ENDPROC(__und_invalid)
 	ldmia	r0, {r3 - r5}
 	add	r7, sp, #S_SP - 4	@ here for interlock avoidance
 	mov	r6, #-1			@  ""  ""      ""       ""
+#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+	@ offset sp by 8 as done in pax_enter_kernel
+	add	r2, sp, #(S_FRAME_SIZE + \stack_hole + 4)
+#else
 	add	r2, sp, #(S_FRAME_SIZE + 8 + \stack_hole - 4)
+#endif
  SPFIX(	addeq	r2, r2, #4	)
 	str	r3, [sp, #-4]!		@ save the "real" r0 copied
 					@ from the exception stack
@@ -461,6 +469,9 @@ ENDPROC(__fiq_abt)
 	.macro	usr_entry, trace=1, uaccess=1
  UNWIND(.fnstart	)
  UNWIND(.cantunwind	)	@ don't unwind the user space
+
+	pax_enter_kernel_user
+
 	sub	sp, sp, #S_FRAME_SIZE
  ARM(	stmib	sp, {r1 - r12}	)
  THUMB(	stmia	sp, {r0 - r12}	)
@@ -575,7 +586,9 @@ __und_usr:
 	tst	r3, #PSR_T_BIT			@ Thumb mode?
 	bne	__und_usr_thumb
 	sub	r4, r2, #4			@ ARM instr at LR - 4
+	pax_open_userland
 1:	ldrt	r0, [r4]
+	pax_close_userland
  ARM_BE8(rev	r0, r0)				@ little endian instruction
 
 	uaccess_disable ip
@@ -611,11 +624,15 @@ __und_usr_thumb:
  */
 	.arch	armv6t2
 #endif
+	pax_open_userland
 2:	ldrht	r5, [r4]
+	pax_close_userland
 ARM_BE8(rev16	r5, r5)				@ little endian instruction
 	cmp	r5, #0xe800			@ 32bit instruction if xx != 0
 	blo	__und_usr_fault_16_pan		@ 16bit undefined instruction
+	pax_open_userland
 3:	ldrht	r0, [r2]
+	pax_close_userland
 ARM_BE8(rev16	r0, r0)				@ little endian instruction
 	uaccess_disable ip
 	add	r2, r2, #2			@ r2 is PC + 2, make it PC + 4
@@ -869,7 +886,7 @@ ENTRY(__switch_to)
  THUMB(	str	lr, [ip], #4		   )
 	ldr	r4, [r2, #TI_TP_VALUE]
 	ldr	r5, [r2, #TI_TP_VALUE + 4]
-#ifdef CONFIG_CPU_USE_DOMAINS
+#if defined(CONFIG_CPU_USE_DOMAINS) || defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
 	mrc	p15, 0, r6, c3, c0, 0		@ Get domain register
 	str	r6, [r1, #TI_CPU_DOMAIN]	@ Save old domain register
 	ldr	r6, [r2, #TI_CPU_DOMAIN]
