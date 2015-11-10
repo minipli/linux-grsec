@@ -209,9 +209,9 @@ EXPORT_SYMBOL(__scm_send);
 int put_cmsg(struct msghdr * msg, int level, int type, int len, void *data)
 {
 	struct cmsghdr __user *cm
-		= (__force struct cmsghdr __user *)msg->msg_control;
+		= (struct cmsghdr __force_user *)msg->msg_control;
 	struct cmsghdr cmhdr;
-	int cmlen = CMSG_LEN(len);
+	size_t cmlen = CMSG_LEN(len);
 	int err;
 
 	if (MSG_CMSG_COMPAT & msg->msg_flags)
@@ -232,7 +232,7 @@ int put_cmsg(struct msghdr * msg, int level, int type, int len, void *data)
 	err = -EFAULT;
 	if (copy_to_user(cm, &cmhdr, sizeof cmhdr))
 		goto out;
-	if (copy_to_user(CMSG_DATA(cm), data, cmlen - sizeof(struct cmsghdr)))
+	if (copy_to_user((void __force_user *)CMSG_DATA((void __force_kernel *)cm), data, cmlen - sizeof(struct cmsghdr)))
 		goto out;
 	cmlen = CMSG_SPACE(len);
 	if (msg->msg_controllen < cmlen)
@@ -248,7 +248,7 @@ EXPORT_SYMBOL(put_cmsg);
 void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 {
 	struct cmsghdr __user *cm
-		= (__force struct cmsghdr __user*)msg->msg_control;
+		= (struct cmsghdr __force_user *)msg->msg_control;
 
 	int fdmax = 0;
 	int fdnum = scm->fp->count;
@@ -268,7 +268,7 @@ void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 	if (fdnum < fdmax)
 		fdmax = fdnum;
 
-	for (i=0, cmfptr=(__force int __user *)CMSG_DATA(cm); i<fdmax;
+	for (i=0, cmfptr=(int __force_user *)CMSG_DATA((void __force_kernel *)cm); i<fdmax;
 	     i++, cmfptr++)
 	{
 		struct socket *sock;
@@ -297,7 +297,7 @@ void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 
 	if (i > 0)
 	{
-		int cmlen = CMSG_LEN(i*sizeof(int));
+		size_t cmlen = CMSG_LEN(i*sizeof(int));
 		err = put_user(SOL_SOCKET, &cm->cmsg_level);
 		if (!err)
 			err = put_user(SCM_RIGHTS, &cm->cmsg_type);
@@ -305,6 +305,8 @@ void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 			err = put_user(cmlen, &cm->cmsg_len);
 		if (!err) {
 			cmlen = CMSG_SPACE(i*sizeof(int));
+			if (msg->msg_controllen < cmlen)
+				cmlen = msg->msg_controllen;
 			msg->msg_control += cmlen;
 			msg->msg_controllen -= cmlen;
 		}

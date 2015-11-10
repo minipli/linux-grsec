@@ -211,7 +211,7 @@ static void xgbe_get_ethtool_stats(struct net_device *netdev,
 
 	DBGPR("-->%s\n", __func__);
 
-	pdata->hw_if.read_mmc_stats(pdata);
+	pdata->hw_if->read_mmc_stats(pdata);
 	for (i = 0; i < XGBE_STATS_COUNT; i++) {
 		stat = (u8 *)pdata + xgbe_gstring_stats[i].stat_offset;
 		*data++ = *(u64 *)stat;
@@ -284,7 +284,7 @@ static int xgbe_set_pauseparam(struct net_device *netdev,
 		pdata->phy.advertising ^= ADVERTISED_Asym_Pause;
 
 	if (netif_running(netdev))
-		ret = pdata->phy_if.phy_config_aneg(pdata);
+		ret = pdata->phy_if->phy_config_aneg(pdata);
 
 	DBGPR("<--xgbe_set_pauseparam\n");
 
@@ -364,7 +364,7 @@ static int xgbe_set_settings(struct net_device *netdev,
 		pdata->phy.advertising &= ~ADVERTISED_Autoneg;
 
 	if (netif_running(netdev))
-		ret = pdata->phy_if.phy_config_aneg(pdata);
+		ret = pdata->phy_if->phy_config_aneg(pdata);
 
 	DBGPR("<--xgbe_set_settings\n");
 
@@ -411,7 +411,7 @@ static int xgbe_set_coalesce(struct net_device *netdev,
 			     struct ethtool_coalesce *ec)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	unsigned int rx_frames, rx_riwt, rx_usecs;
 	unsigned int tx_frames;
 
@@ -536,7 +536,7 @@ static int xgbe_set_rxfh(struct net_device *netdev, const u32 *indir,
 			 const u8 *key, const u8 hfunc)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
-	struct xgbe_hw_if *hw_if = &pdata->hw_if;
+	struct xgbe_hw_if *hw_if = pdata->hw_if;
 	unsigned int ret;
 
 	if (hfunc != ETH_RSS_HASH_NO_CHANGE && hfunc != ETH_RSS_HASH_TOP)

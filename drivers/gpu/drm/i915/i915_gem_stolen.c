@@ -310,7 +310,7 @@ int i915_gem_init_stolen(struct drm_device *dev)
 	if (dev_priv->mm.stolen_base == 0)
 		return 0;
 
-	DRM_DEBUG_KMS("found %zd bytes of stolen memory at %08lx\n",
+	DRM_DEBUG_KMS("found %lld bytes of stolen memory at %08lx\n",
 		      dev_priv->gtt.stolen_size, dev_priv->mm.stolen_base);
 
 	if (INTEL_INFO(dev)->gen >= 8) {

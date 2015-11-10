@@ -85,7 +85,7 @@ pin_page_for_write(const void __user *_addr, pte_t **ptep, spinlock_t **ptlp)
 	return 1;
 }
 
-static unsigned long noinline
+static unsigned long noinline __size_overflow(3)
 __copy_to_user_memcpy(void __user *to, const void *from, unsigned long n)
 {
 	int atomic;
@@ -136,7 +136,7 @@ out:
 }
 
 unsigned long
-__copy_to_user(void __user *to, const void *from, unsigned long n)
+___copy_to_user(void __user *to, const void *from, unsigned long n)
 {
 	/*
 	 * This test is stubbed out of the main function above to keep
@@ -150,7 +150,7 @@ __copy_to_user(void __user *to, const void *from, unsigned long n)
 	return __copy_to_user_memcpy(to, from, n);
 }
 	
-static unsigned long noinline
+static unsigned long noinline __size_overflow(2)
 __clear_user_memset(void __user *addr, unsigned long n)
 {
 	if (unlikely(segment_eq(get_fs(), KERNEL_DS))) {
@@ -190,7 +190,7 @@ out:
 	return n;
 }
 
-unsigned long __clear_user(void __user *addr, unsigned long n)
+unsigned long ___clear_user(void __user *addr, unsigned long n)
 {
 	/* See rational for this in __copy_to_user() above. */
 	if (n < 64)
