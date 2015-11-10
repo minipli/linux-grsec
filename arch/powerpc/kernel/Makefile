@@ -14,6 +14,11 @@ CFLAGS_prom_init.o      += -fPIC
 CFLAGS_btext.o		+= -fPIC
 endif
 
+CFLAGS_REMOVE_cputable.o = $(LATENT_ENTROPY_PLUGIN_CFLAGS)
+CFLAGS_REMOVE_prom_init.o = $(LATENT_ENTROPY_PLUGIN_CFLAGS)
+CFLAGS_REMOVE_btext.o = $(LATENT_ENTROPY_PLUGIN_CFLAGS)
+CFLAGS_REMOVE_prom.o = $(LATENT_ENTROPY_PLUGIN_CFLAGS)
+
 ifdef CONFIG_FUNCTION_TRACER
 # Do not trace early boot code
 CFLAGS_REMOVE_cputable.o = -pg -mno-sched-epilog
@@ -25,6 +30,8 @@ CFLAGS_REMOVE_ftrace.o = -pg -mno-sched-epilog
 # timers used by tracing
 CFLAGS_REMOVE_time.o = -pg -mno-sched-epilog
 endif
+
+CFLAGS_REMOVE_prom_init.o += $(LATENT_ENTROPY_PLUGIN_CFLAGS)
 
 obj-y				:= cputable.o ptrace.o syscalls.o \
 				   irq.o align.o signal_32.o pmc.o vdso.o \

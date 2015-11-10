@@ -123,6 +123,7 @@ void early_printk(const char *s, ...) { }
 #endif
 
 typedef __printf(1, 0) int (*printk_func_t)(const char *fmt, va_list args);
+extern int kptr_restrict;
 
 #ifdef CONFIG_PRINTK
 asmlinkage __printf(5, 0)
@@ -158,7 +159,6 @@ extern bool printk_timed_ratelimit(unsigned long *caller_jiffies,
 
 extern int printk_delay_msec;
 extern int dmesg_restrict;
-extern int kptr_restrict;
 
 extern void wake_up_klogd(void);
 

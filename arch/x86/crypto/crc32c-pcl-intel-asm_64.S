@@ -45,6 +45,7 @@
 
 #include <asm/inst.h>
 #include <linux/linkage.h>
+#include <asm/alternative-asm.h>
 
 ## ISCSI CRC 32 Implementation with crc32 and pclmulqdq Instruction
 
@@ -309,6 +310,7 @@ do_return:
 	popq    %rsi
 	popq    %rdi
 	popq    %rbx
+	pax_force_retaddr
         ret
 
         ################################################################
@@ -330,7 +332,7 @@ ENDPROC(crc_pcl)
 	## PCLMULQDQ tables
 	## Table is 128 entries x 2 words (8 bytes) each
 	################################################################
-.section	.rotata, "a", %progbits
+.section	.rodata, "a", %progbits
 .align 8
 K_table:
 	.long 0x493c7d27, 0x00000001

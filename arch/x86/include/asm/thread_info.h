@@ -36,7 +36,7 @@
 #ifdef CONFIG_X86_32
 # define TOP_OF_KERNEL_STACK_PADDING 8
 #else
-# define TOP_OF_KERNEL_STACK_PADDING 0
+# define TOP_OF_KERNEL_STACK_PADDING 16
 #endif
 
 /*
@@ -50,27 +50,26 @@ struct task_struct;
 #include <linux/atomic.h>
 
 struct thread_info {
-	struct task_struct	*task;		/* main task structure */
 	__u32			flags;		/* low level flags */
 	__u32			status;		/* thread synchronous flags */
 	__u32			cpu;		/* current CPU */
 	int			saved_preempt_count;
 	mm_segment_t		addr_limit;
 	void __user		*sysenter_return;
+	unsigned long		lowest_stack;
 	unsigned int		sig_on_uaccess_error:1;
 	unsigned int		uaccess_err:1;	/* uaccess failed */
 };
 
-#define INIT_THREAD_INFO(tsk)			\
+#define INIT_THREAD_INFO			\
 {						\
-	.task		= &tsk,			\
 	.flags		= 0,			\
 	.cpu		= 0,			\
 	.saved_preempt_count = INIT_PREEMPT_COUNT,	\
 	.addr_limit	= KERNEL_DS,		\
 }
 
-#define init_thread_info	(init_thread_union.thread_info)
+#define init_thread_info	(init_thread_union.stack)
 #define init_stack		(init_thread_union.stack)
 
 #else /* !__ASSEMBLY__ */
@@ -110,6 +109,7 @@ struct thread_info {
 #define TIF_SYSCALL_TRACEPOINT	28	/* syscall tracepoint instrumentation */
 #define TIF_ADDR32		29	/* 32-bit address space on 64 bits */
 #define TIF_X32			30	/* 32-bit native x86-64 binary */
+#define TIF_GRSEC_SETXID	31	/* update credentials on syscall entry/exit */
 
 #define _TIF_SYSCALL_TRACE	(1 << TIF_SYSCALL_TRACE)
 #define _TIF_NOTIFY_RESUME	(1 << TIF_NOTIFY_RESUME)
@@ -133,17 +133,18 @@ struct thread_info {
 #define _TIF_SYSCALL_TRACEPOINT	(1 << TIF_SYSCALL_TRACEPOINT)
 #define _TIF_ADDR32		(1 << TIF_ADDR32)
 #define _TIF_X32		(1 << TIF_X32)
+#define _TIF_GRSEC_SETXID	(1 << TIF_GRSEC_SETXID)
 
 /* work to do in syscall_trace_enter() */
 #define _TIF_WORK_SYSCALL_ENTRY	\
 	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_EMU | _TIF_SYSCALL_AUDIT |	\
 	 _TIF_SECCOMP | _TIF_SINGLESTEP | _TIF_SYSCALL_TRACEPOINT |	\
-	 _TIF_NOHZ)
+	 _TIF_NOHZ | _TIF_GRSEC_SETXID)
 
 /* work to do in syscall_trace_leave() */
 #define _TIF_WORK_SYSCALL_EXIT	\
 	(_TIF_SYSCALL_TRACE | _TIF_SYSCALL_AUDIT | _TIF_SINGLESTEP |	\
-	 _TIF_SYSCALL_TRACEPOINT | _TIF_NOHZ)
+	 _TIF_SYSCALL_TRACEPOINT | _TIF_NOHZ | _TIF_GRSEC_SETXID)
 
 /* work to do on interrupt/exception return */
 #define _TIF_WORK_MASK							\
@@ -154,7 +155,7 @@ struct thread_info {
 /* work to do on any return to user space */
 #define _TIF_ALLWORK_MASK						\
 	((0x0000FFFF & ~_TIF_SECCOMP) | _TIF_SYSCALL_TRACEPOINT |	\
-	_TIF_NOHZ)
+	_TIF_NOHZ | _TIF_GRSEC_SETXID)
 
 /* Only used for 64 bit */
 #define _TIF_DO_NOTIFY_MASK						\
@@ -177,9 +178,11 @@ struct thread_info {
  */
 #ifndef __ASSEMBLY__
 
+DECLARE_PER_CPU(struct thread_info *, current_tinfo);
+
 static inline struct thread_info *current_thread_info(void)
 {
-	return (struct thread_info *)(current_top_of_stack() - THREAD_SIZE);
+	return this_cpu_read_stable(current_tinfo);
 }
 
 static inline unsigned long current_stack_pointer(void)
@@ -195,14 +198,9 @@ static inline unsigned long current_stack_pointer(void)
 
 #else /* !__ASSEMBLY__ */
 
-#ifdef CONFIG_X86_64
-# define cpu_current_top_of_stack (cpu_tss + TSS_sp0)
-#endif
-
 /* Load thread_info address into "reg" */
 #define GET_THREAD_INFO(reg) \
-	_ASM_MOV PER_CPU_VAR(cpu_current_top_of_stack),reg ; \
-	_ASM_SUB $(THREAD_SIZE),reg ;
+	_ASM_MOV PER_CPU_VAR(current_tinfo),reg ;
 
 /*
  * ASM operand which evaluates to a 'thread_info' address of
@@ -295,5 +293,12 @@ static inline bool is_ia32_task(void)
 extern void arch_task_cache_init(void);
 extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
 extern void arch_release_task_struct(struct task_struct *tsk);
+
+#define __HAVE_THREAD_FUNCTIONS
+#define task_thread_info(task)	(&(task)->tinfo)
+#define task_stack_page(task)	((task)->stack)
+#define setup_thread_stack(p, org) do {} while (0)
+#define end_of_stack(p) ((unsigned long *)task_stack_page(p) + 1)
+
 #endif
 #endif /* _ASM_X86_THREAD_INFO_H */
