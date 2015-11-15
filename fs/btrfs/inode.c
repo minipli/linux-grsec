@@ -5754,7 +5754,7 @@ next:
 	if (key_type == BTRFS_DIR_INDEX_KEY) {
 		if (is_curr)
 			ctx->pos++;
-		ret = btrfs_readdir_delayed_dir_index(ctx, &ins_list);
+		ret = btrfs_readdir_delayed_dir_index(ctx, &ins_list, &emitted);
 		if (ret)
 			goto nopos;
 	}
