@@ -244,12 +244,15 @@ void ftrace_likely_update(struct ftrace_branch_data *f, int val, int expect);
  * required ordering.
  */
 
-#define READ_ONCE(x) ({				\
-	*(volatile typeof(x) *)&(x);		\
+#define READ_ONCE(x) ({					\
+	typeof(x) __val = *(volatile typeof(x) *)&(x);	\
+	__val;						\
 })
 
-#define WRITE_ONCE(x, val) ({			\
-	*(volatile typeof(x) *)&(x) = (val);	\
+#define WRITE_ONCE(x, val) ({				\
+	typeof(x) __val = (val);			\
+	(x) = *(volatile typeof(x) *)&__val;		\
+	__val;						\
 })
 
 /**
