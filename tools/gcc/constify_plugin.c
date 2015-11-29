@@ -15,7 +15,7 @@
 
 #include "gcc-common.h"
 
-// unused C type flag in all versions 4.5-5.0
+// unused C type flag in all versions 4.5-6
 #define TYPE_CONSTIFY_VISITED(TYPE) TYPE_LANG_FLAG_4(TYPE)
 
 int plugin_is_GPL_compatible;
@@ -23,7 +23,7 @@ int plugin_is_GPL_compatible;
 static bool constify = true;
 
 static struct plugin_info const_plugin_info = {
-	.version	= "201511280000",
+	.version	= "201511290250",
 	.help		= "no-constify\tturn off constification\n",
 };
 
@@ -106,7 +106,7 @@ static bool constified(const_tree node)
 	}
 
 	constifiable(node, &cinfo);
-	if ((!cinfo.has_fptr_field || cinfo.has_writable_field) && !cinfo.has_do_const_field)
+	if ((!cinfo.has_fptr_field || cinfo.has_writable_field || cinfo.has_no_const_field) && !cinfo.has_do_const_field)
 		return false;
 
 	return TYPE_READONLY(node);
@@ -230,7 +230,7 @@ static tree handle_no_const_attribute(tree *node, tree name, tree args, int flag
 	}
 
 	constifiable(type, &cinfo);
-	if ((cinfo.has_fptr_field && !cinfo.has_writable_field) || lookup_attribute("do_const", TYPE_ATTRIBUTES(type))) {
+	if ((cinfo.has_fptr_field && !cinfo.has_writable_field && !cinfo.has_no_const_field) || lookup_attribute("do_const", TYPE_ATTRIBUTES(type))) {
 		if (constify) {
 			if TYPE_P(*node)
 				deconstify_type(*node);
@@ -341,7 +341,7 @@ static void finish_type(void *event_data, void *data)
 	constifiable(type, &cinfo);
 
 	if (lookup_attribute("no_const", TYPE_ATTRIBUTES(type))) {
-		if ((cinfo.has_fptr_field && !cinfo.has_writable_field) || cinfo.has_do_const_field) {
+		if ((cinfo.has_fptr_field && !cinfo.has_writable_field && !cinfo.has_no_const_field) || cinfo.has_do_const_field) {
 			deconstify_type(type);
 			TYPE_CONSTIFY_VISITED(type) = 1;
 		} else
@@ -350,7 +350,7 @@ static void finish_type(void *event_data, void *data)
 	}
 
 	if (lookup_attribute("do_const", TYPE_ATTRIBUTES(type))) {
-		if (!cinfo.has_writable_field) {
+		if (!cinfo.has_writable_field && !cinfo.has_no_const_field) {
 			error("'do_const' attribute used on type %qT that is%sconstified", type, cinfo.has_fptr_field ? " " : " not ");
 			return;
 		}
@@ -358,7 +358,7 @@ static void finish_type(void *event_data, void *data)
 		return;
 	}
 
-	if (cinfo.has_fptr_field && !cinfo.has_writable_field) {
+	if (cinfo.has_fptr_field && !cinfo.has_writable_field && !cinfo.has_no_const_field) {
 		if (lookup_attribute("do_const", TYPE_ATTRIBUTES(type))) {
 			error("'do_const' attribute used on type %qT that is constified", type);
 			return;

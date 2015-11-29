@@ -472,19 +472,18 @@ tree handle_fnptr_assign(const_gimple stmt)
 	return field;
 }
 
-static tree get_fn_or_fnptr_decl(gcall *call_stmt)
+static tree get_fn_or_fnptr_decl(const gcall *call_stmt)
 {
 	const_tree fnptr;
 	const_gimple def_stmt;
-	tree decl;
+	tree decl = gimple_call_fndecl(call_stmt);
 
-	fnptr = gimple_call_fn(call_stmt);
-	if (!fnptr)
-		return NULL_TREE;
-
-	decl = gimple_call_fndecl(call_stmt);
 	if (decl != NULL_TREE)
 		return decl;
+
+	fnptr = gimple_call_fn(call_stmt);
+	if (fnptr == NULL_TREE)
+		return NULL_TREE;
 
 	// !!! assertot kell irni 0-ra, mert csak az lehet ott
 	if (is_gimple_constant(fnptr))
