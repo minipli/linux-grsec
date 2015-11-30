@@ -2781,8 +2781,10 @@ static int __split_vma(struct mm_struct *mm, struct vm_area_struct *vma,
 #ifdef CONFIG_PAX_SEGMEXEC
 	if (vma_m) {
 		new_m = kmem_cache_alloc(vm_area_cachep, GFP_KERNEL);
-		if (!new_m)
-			goto out_free_vma;
+		if (!new_m) {
+			kmem_cache_free(vm_area_cachep, new);
+			return -ENOMEM;
+		}
 	}
 #endif
 
