@@ -670,6 +670,11 @@ else
 gcc-plugins:
 ifeq ($(call cc-ifversion, -ge, 0405, y), y)
 	$(Q)echo "warning, your gcc installation does not support plugins, perhaps the necessary headers are missing?"
+ifeq ($(call cc-ifversion, -ge, 0408, y), y)
+	$(CONFIG_SHELL) -x $(srctree)/scripts/gcc-plugin.sh "$(HOSTCXX)" "$(HOSTCXX)" "$(CC)"
+else
+	$(CONFIG_SHELL) -x $(srctree)/scripts/gcc-plugin.sh "$(HOSTCC)" "$(HOSTCXX)" "$(CC)"
+endif
 else
 	$(Q)echo "warning, your gcc version does not support plugins, you should upgrade it to gcc 4.5 at least"
 endif
