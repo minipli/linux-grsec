@@ -1061,7 +1061,7 @@ static void make_request(struct mddev *mddev, struct bio * bio)
 	struct blk_plug_cb *cb;
 	struct raid1_plug_cb *plug = NULL;
 	int first_clone;
-	int sectors_handled;
+	sector_t sectors_handled;
 	int max_sectors;
 	sector_t start_next_window;
 
