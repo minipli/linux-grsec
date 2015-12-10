@@ -26,9 +26,9 @@
 #include <linux/platform_device.h>
 
 struct gen_pci_cfg_bus_ops {
+	struct pci_ops ops;
 	u32 bus_shift;
-	void __iomem *(*map_bus)(struct pci_bus *, unsigned int, int);
-};
+} __do_const;
 
 struct gen_pci_cfg_windows {
 	struct resource				res;
@@ -56,8 +56,12 @@ static void __iomem *gen_pci_map_cfg_bus_cam(struct pci_bus *bus,
 }
 
 static struct gen_pci_cfg_bus_ops gen_pci_cfg_cam_bus_ops = {
+	.ops = {
+		.map_bus	= gen_pci_map_cfg_bus_cam,
+		.read		= pci_generic_config_read,
+		.write		= pci_generic_config_write,
+	},
 	.bus_shift	= 16,
-	.map_bus	= gen_pci_map_cfg_bus_cam,
 };
 
 static void __iomem *gen_pci_map_cfg_bus_ecam(struct pci_bus *bus,
@@ -72,13 +76,12 @@ static void __iomem *gen_pci_map_cfg_bus_ecam(struct pci_bus *bus,
 }
 
 static struct gen_pci_cfg_bus_ops gen_pci_cfg_ecam_bus_ops = {
+	.ops = {
+		.map_bus	= gen_pci_map_cfg_bus_ecam,
+		.read		= pci_generic_config_read,
+		.write		= pci_generic_config_write,
+	},
 	.bus_shift	= 20,
-	.map_bus	= gen_pci_map_cfg_bus_ecam,
-};
-
-static struct pci_ops gen_pci_ops = {
-	.read	= pci_generic_config_read,
-	.write	= pci_generic_config_write,
 };
 
 static const struct of_device_id gen_pci_of_match[] = {
@@ -219,7 +222,6 @@ static int gen_pci_probe(struct platform_device *pdev)
 		.private_data	= (void **)&pci,
 		.setup		= gen_pci_setup,
 		.map_irq	= of_irq_parse_and_map_pci,
-		.ops		= &gen_pci_ops,
 	};
 
 	if (!pci)
@@ -241,7 +243,7 @@ static int gen_pci_probe(struct platform_device *pdev)
 
 	of_id = of_match_node(gen_pci_of_match, np);
 	pci->cfg.ops = of_id->data;
-	gen_pci_ops.map_bus = pci->cfg.ops->map_bus;
+	hw.ops = &pci->cfg.ops->ops;
 	pci->host.dev.parent = dev;
 	INIT_LIST_HEAD(&pci->host.windows);
 	INIT_LIST_HEAD(&pci->resources);

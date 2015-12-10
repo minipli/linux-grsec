@@ -13,8 +13,10 @@
 #include <asm/irqflags.h>
 #include <asm/asm.h>
 #include <asm/smap.h>
+#include <asm/pgtable.h>
 #include <linux/linkage.h>
 #include <linux/err.h>
+#include <asm/alternative-asm.h>
 
 /* Avoid __ASSEMBLER__'ifying <linux/audit.h> just for this.  */
 #include <linux/elf-em.h>
@@ -34,6 +36,32 @@ ENTRY(native_usergs_sysret32)
 	sysretl
 ENDPROC(native_usergs_sysret32)
 #endif
+
+	.macro pax_enter_kernel_user
+	pax_set_fptr_mask
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	call	pax_enter_kernel_user
+#endif
+	.endm
+
+	.macro pax_exit_kernel_user
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	call	pax_exit_kernel_user
+#endif
+#ifdef CONFIG_PAX_RANDKSTACK
+	pushq	%rax
+	pushq	%r11
+	call	pax_randomize_kstack
+	popq	%r11
+	popq	%rax
+#endif
+	.endm
+
+	.macro pax_erase_kstack
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+	call	pax_erase_kstack
+#endif
+	.endm
 
 /*
  * 32-bit SYSENTER instruction entry.
@@ -65,20 +93,21 @@ ENTRY(entry_SYSENTER_compat)
 	 */
 	SWAPGS_UNSAFE_STACK
 	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
-	ENABLE_INTERRUPTS(CLBR_NONE)
 
 	/* Zero-extending 32-bit regs, do not remove */
 	movl	%ebp, %ebp
 	movl	%eax, %eax
 
-	movl	ASM_THREAD_INFO(TI_sysenter_return, %rsp, 0), %r10d
+	GET_THREAD_INFO(%r11)
+	movl	TI_sysenter_return(%r11), %r11d
 
 	/* Construct struct pt_regs on stack */
 	pushq	$__USER32_DS		/* pt_regs->ss */
 	pushq	%rbp			/* pt_regs->sp */
 	pushfq				/* pt_regs->flags */
+	orl	$X86_EFLAGS_IF,(%rsp)
 	pushq	$__USER32_CS		/* pt_regs->cs */
-	pushq	%r10			/* pt_regs->ip = thread_info->sysenter_return */
+	pushq	%r11			/* pt_regs->ip = thread_info->sysenter_return */
 	pushq	%rax			/* pt_regs->orig_ax */
 	pushq	%rdi			/* pt_regs->di */
 	pushq	%rsi			/* pt_regs->si */
@@ -88,14 +117,36 @@ ENTRY(entry_SYSENTER_compat)
 	cld
 	sub	$(10*8), %rsp /* pt_regs->r8-11, bp, bx, r12-15 not saved */
 
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	movq	%r12, R12(%rsp)
+#endif
+
+	pax_enter_kernel_user
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pax_erase_kstack
+#endif
+
+	ENABLE_INTERRUPTS(CLBR_NONE)
+
 	/*
 	 * no need to do an access_ok check here because rbp has been
 	 * 32-bit zero extended
 	 */
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	addq	pax_user_shadow_base, %rbp
+	ASM_PAX_OPEN_USERLAND
+#endif
+
 	ASM_STAC
 1:	movl	(%rbp), %ebp
 	_ASM_EXTABLE(1b, ia32_badarg)
 	ASM_CLAC
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	ASM_PAX_CLOSE_USERLAND
+#endif
 
 	/*
 	 * Sysenter doesn't filter flags, so we need to clear NT
@@ -106,8 +157,9 @@ ENTRY(entry_SYSENTER_compat)
 	jnz	sysenter_fix_flags
 sysenter_flags_fixed:
 
-	orl	$TS_COMPAT, ASM_THREAD_INFO(TI_status, %rsp, SIZEOF_PTREGS)
-	testl	$_TIF_WORK_SYSCALL_ENTRY, ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+	GET_THREAD_INFO(%r11)
+	orl	$TS_COMPAT, TI_status(%r11)
+	testl	$_TIF_WORK_SYSCALL_ENTRY, TI_flags(%r11)
 	jnz	sysenter_tracesys
 
 sysenter_do_call:
@@ -123,9 +175,10 @@ sysenter_dispatch:
 	call	*ia32_sys_call_table(, %rax, 8)
 	movq	%rax, RAX(%rsp)
 1:
+	GET_THREAD_INFO(%r11)
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	TRACE_IRQS_OFF
-	testl	$_TIF_ALLWORK_MASK, ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+	testl	$_TIF_ALLWORK_MASK, TI_flags(%r11)
 	jnz	sysexit_audit
 sysexit_from_sys_call:
 	/*
@@ -138,7 +191,9 @@ sysexit_from_sys_call:
 	 * This code path is still called 'sysexit' because it pairs
 	 * with 'sysenter' and it uses the SYSENTER calling convention.
 	 */
-	andl	$~TS_COMPAT, ASM_THREAD_INFO(TI_status, %rsp, SIZEOF_PTREGS)
+	pax_exit_kernel_user
+	pax_erase_kstack
+	andl	$~TS_COMPAT, TI_status(%r11)
 	movl	RIP(%rsp), %ecx		/* User %eip */
 	movq    RAX(%rsp), %rax
 	RESTORE_RSI_RDI
@@ -194,6 +249,8 @@ sysexit_from_sys_call:
 	movl	%eax, %edi		/* arg1 (RDI) <= syscall number  (EAX) */
 	call	__audit_syscall_entry
 
+	pax_erase_kstack
+
 	/*
 	 * We are going to jump back to the syscall dispatch code.
 	 * Prepare syscall args as required by the 64-bit C ABI.
@@ -209,7 +266,7 @@ sysexit_from_sys_call:
 	.endm
 
 	.macro auditsys_exit exit
-	testl	$(_TIF_ALLWORK_MASK & ~_TIF_SYSCALL_AUDIT), ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+	testl	$(_TIF_ALLWORK_MASK & ~_TIF_SYSCALL_AUDIT), TI_flags(%r11)
 	jnz	ia32_ret_from_sys_call
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_NONE)
@@ -220,10 +277,11 @@ sysexit_from_sys_call:
 1:	setbe	%al			/* 1 if error, 0 if not */
 	movzbl	%al, %edi		/* zero-extend that into %edi */
 	call	__audit_syscall_exit
+	GET_THREAD_INFO(%r11)
 	movl	$(_TIF_ALLWORK_MASK & ~_TIF_SYSCALL_AUDIT), %edi
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	TRACE_IRQS_OFF
-	testl	%edi, ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+	testl	%edi, TI_flags(%r11)
 	jz	\exit
 	xorl	%eax, %eax		/* Do not leak kernel information */
 	movq	%rax, R11(%rsp)
@@ -249,7 +307,7 @@ sysenter_fix_flags:
 
 sysenter_tracesys:
 #ifdef CONFIG_AUDITSYSCALL
-	testl	$(_TIF_WORK_SYSCALL_ENTRY & ~_TIF_SYSCALL_AUDIT), ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+	testl	$(_TIF_WORK_SYSCALL_ENTRY & ~_TIF_SYSCALL_AUDIT), TI_flags(%r11)
 	jz	sysenter_auditsys
 #endif
 	SAVE_EXTRA_REGS
@@ -269,6 +327,9 @@ sysenter_tracesys:
 	movl	%eax, %eax		/* zero extension */
 
 	RESTORE_EXTRA_REGS
+
+	pax_erase_kstack
+
 	jmp	sysenter_do_call
 ENDPROC(entry_SYSENTER_compat)
 
@@ -311,7 +372,6 @@ ENTRY(entry_SYSCALL_compat)
 	SWAPGS_UNSAFE_STACK
 	movl	%esp, %r8d
 	movq	PER_CPU_VAR(cpu_current_top_of_stack), %rsp
-	ENABLE_INTERRUPTS(CLBR_NONE)
 
 	/* Zero-extending 32-bit regs, do not remove */
 	movl	%eax, %eax
@@ -331,16 +391,41 @@ ENTRY(entry_SYSCALL_compat)
 	pushq	$-ENOSYS		/* pt_regs->ax */
 	sub	$(10*8), %rsp		/* pt_regs->r8-11, bp, bx, r12-15 not saved */
 
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	movq	%r12, R12(%rsp)
+#endif
+
+	pax_enter_kernel_user
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pax_erase_kstack
+#endif
+
+	ENABLE_INTERRUPTS(CLBR_NONE)
+
 	/*
 	 * No need to do an access_ok check here because r8 has been
 	 * 32-bit zero extended:
 	 */
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	ASM_PAX_OPEN_USERLAND
+	movq	pax_user_shadow_base, %r8
+	addq	RSP(%rsp), %r8
+#endif
+
 	ASM_STAC
 1:	movl	(%r8), %r9d
 	_ASM_EXTABLE(1b, ia32_badarg)
 	ASM_CLAC
-	orl	$TS_COMPAT, ASM_THREAD_INFO(TI_status, %rsp, SIZEOF_PTREGS)
-	testl	$_TIF_WORK_SYSCALL_ENTRY, ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	ASM_PAX_CLOSE_USERLAND
+#endif
+
+	GET_THREAD_INFO(%r11)
+	orl   $TS_COMPAT,TI_status(%r11)
+	testl $_TIF_WORK_SYSCALL_ENTRY,TI_flags(%r11)
 	jnz	cstar_tracesys
 
 cstar_do_call:
@@ -358,13 +443,16 @@ cstar_dispatch:
 	call	*ia32_sys_call_table(, %rax, 8)
 	movq	%rax, RAX(%rsp)
 1:
+	GET_THREAD_INFO(%r11)
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	TRACE_IRQS_OFF
-	testl	$_TIF_ALLWORK_MASK, ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+	testl	$_TIF_ALLWORK_MASK, TI_flags(%r11)
 	jnz	sysretl_audit
 
 sysretl_from_sys_call:
-	andl	$~TS_COMPAT, ASM_THREAD_INFO(TI_status, %rsp, SIZEOF_PTREGS)
+	pax_exit_kernel_user
+	pax_erase_kstack
+	andl	$~TS_COMPAT, TI_status(%r11)
 	RESTORE_RSI_RDI_RDX
 	movl	RIP(%rsp), %ecx
 	movl	EFLAGS(%rsp), %r11d
@@ -403,7 +491,7 @@ sysretl_audit:
 
 cstar_tracesys:
 #ifdef CONFIG_AUDITSYSCALL
-	testl	$(_TIF_WORK_SYSCALL_ENTRY & ~_TIF_SYSCALL_AUDIT), ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+	testl	$(_TIF_WORK_SYSCALL_ENTRY & ~_TIF_SYSCALL_AUDIT), TI_flags(%r11)
 	jz	cstar_auditsys
 #endif
 	xchgl	%r9d, %ebp
@@ -426,11 +514,19 @@ cstar_tracesys:
 
 	RESTORE_EXTRA_REGS
 	xchgl	%ebp, %r9d
+
+	pax_erase_kstack
+
 	jmp	cstar_do_call
 END(entry_SYSCALL_compat)
 
 ia32_badarg:
 	ASM_CLAC
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	ASM_PAX_CLOSE_USERLAND
+#endif
+
 	movq	$-EFAULT, RAX(%rsp)
 ia32_ret_from_sys_call:
 	xorl	%eax, %eax		/* Do not leak kernel information */
@@ -462,14 +558,8 @@ ia32_ret_from_sys_call:
  */
 
 ENTRY(entry_INT80_compat)
-	/*
-	 * Interrupts are off on entry.
-	 * We do not frame this tiny irq-off block with TRACE_IRQS_OFF/ON,
-	 * it is too small to ever cause noticeable irq latency.
-	 */
 	PARAVIRT_ADJUST_EXCEPTION_FRAME
 	SWAPGS
-	ENABLE_INTERRUPTS(CLBR_NONE)
 
 	/* Zero-extending 32-bit regs, do not remove */
 	movl	%eax, %eax
@@ -488,8 +578,26 @@ ENTRY(entry_INT80_compat)
 	cld
 	sub	$(6*8), %rsp /* pt_regs->bp, bx, r12-15 not saved */
 
-	orl	$TS_COMPAT, ASM_THREAD_INFO(TI_status, %rsp, SIZEOF_PTREGS)
-	testl	$_TIF_WORK_SYSCALL_ENTRY, ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	movq	%r12, R12(%rsp)
+#endif
+
+	pax_enter_kernel_user
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pax_erase_kstack
+#endif
+
+	/*
+	 * Interrupts are off on entry.
+	 * We do not frame this tiny irq-off block with TRACE_IRQS_OFF/ON,
+	 * it is too small to ever cause noticeable irq latency.
+	 */
+	ENABLE_INTERRUPTS(CLBR_NONE)
+
+	GET_THREAD_INFO(%r11)
+	orl	$TS_COMPAT, TI_status(%r11)
+	testl	$_TIF_WORK_SYSCALL_ENTRY, TI_flags(%r11)
 	jnz	ia32_tracesys
 
 ia32_do_call:
@@ -524,6 +632,9 @@ ia32_tracesys:
 	movl	RDI(%rsp), %edi
 	movl	%eax, %eax		/* zero extension */
 	RESTORE_EXTRA_REGS
+
+	pax_erase_kstack
+
 	jmp	ia32_do_call
 END(entry_INT80_compat)
 
