@@ -1173,8 +1173,8 @@ static long macvtap_ioctl(struct file *file, unsigned int cmd,
 		}
 		ret = 0;
 		u = vlan->dev->type;
-		if (copy_to_user(&ifr->ifr_name, vlan->dev->name, IFNAMSIZ) ||
-		    copy_to_user(&ifr->ifr_hwaddr.sa_data, vlan->dev->dev_addr, ETH_ALEN) ||
+		if (copy_to_user(ifr->ifr_name, vlan->dev->name, IFNAMSIZ) ||
+		    copy_to_user(ifr->ifr_hwaddr.sa_data, vlan->dev->dev_addr, ETH_ALEN) ||
 		    put_user(u, &ifr->ifr_hwaddr.sa_family))
 			ret = -EFAULT;
 		macvtap_put_vlan(vlan);
