@@ -33,6 +33,7 @@
 #include <linux/rculist.h>
 #include <linux/bootmem.h>
 #include <linux/hash.h>
+#include <linux/security.h>
 #include <linux/pid_namespace.h>
 #include <linux/init_task.h>
 #include <linux/syscalls.h>
@@ -47,7 +48,7 @@ struct pid init_struct_pid = INIT_STRUCT_PID;
 
 int pid_max = PID_MAX_DEFAULT;
 
-#define RESERVED_PIDS		300
+#define RESERVED_PIDS		500
 
 int pid_max_min = RESERVED_PIDS + 1;
 int pid_max_max = PID_MAX_LIMIT;
@@ -451,15 +452,31 @@ EXPORT_SYMBOL(pid_task);
  */
 struct task_struct *find_task_by_pid_ns(pid_t nr, struct pid_namespace *ns)
 {
+	struct task_struct *task;
+
 	rcu_lockdep_assert(rcu_read_lock_held(),
 			   "find_task_by_pid_ns() needs rcu_read_lock()"
 			   " protection");
-	return pid_task(find_pid_ns(nr, ns), PIDTYPE_PID);
+
+	task = pid_task(find_pid_ns(nr, ns), PIDTYPE_PID);
+
+	if (gr_pid_is_chrooted(task))
+		return NULL;
+
+	return task;
 }
 
 struct task_struct *find_task_by_vpid(pid_t vnr)
 {
 	return find_task_by_pid_ns(vnr, task_active_pid_ns(current));
+}
+
+struct task_struct *find_task_by_vpid_unrestricted(pid_t vnr)
+{
+	rcu_lockdep_assert(rcu_read_lock_held(),
+			   "find_task_by_pid_ns() needs rcu_read_lock()"
+			   " protection");
+	return pid_task(find_pid_ns(vnr, task_active_pid_ns(current)), PIDTYPE_PID);
 }
 
 struct pid *get_task_pid(struct task_struct *task, enum pid_type type)
@@ -468,7 +485,7 @@ struct pid *get_task_pid(struct task_struct *task, enum pid_type type)
 	rcu_read_lock();
 	if (type != PIDTYPE_PID)
 		task = task->group_leader;
-	pid = get_pid(task->pids[type].pid);
+	pid = get_pid(rcu_dereference(task->pids[type].pid));
 	rcu_read_unlock();
 	return pid;
 }
@@ -529,7 +546,7 @@ pid_t __task_pid_nr_ns(struct task_struct *task, enum pid_type type,
 	if (likely(pid_alive(task))) {
 		if (type != PIDTYPE_PID)
 			task = task->group_leader;
-		nr = pid_nr_ns(task->pids[type].pid, ns);
+		nr = pid_nr_ns(rcu_dereference(task->pids[type].pid), ns);
 	}
 	rcu_read_unlock();
 

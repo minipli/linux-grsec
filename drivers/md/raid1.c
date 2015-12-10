@@ -1095,7 +1095,7 @@ static void make_request(struct mddev *mddev, struct bio * bio)
 	struct blk_plug_cb *cb;
 	struct raid1_plug_cb *plug = NULL;
 	int first_clone;
-	int sectors_handled;
+	sector_t sectors_handled;
 	int max_sectors;
 	sector_t start_next_window;
 
@@ -1937,7 +1937,7 @@ static int fix_sync_read_error(struct r1bio *r1_bio)
 			if (r1_sync_page_io(rdev, sect, s,
 					    bio->bi_io_vec[idx].bv_page,
 					    READ) != 0)
-				atomic_add(s, &rdev->corrected_errors);
+				atomic_add_unchecked(s, &rdev->corrected_errors);
 		}
 		sectors -= s;
 		sect += s;
@@ -2170,7 +2170,7 @@ static void fix_read_error(struct r1conf *conf, int read_disk,
 			    !test_bit(Faulty, &rdev->flags)) {
 				if (r1_sync_page_io(rdev, sect, s,
 						    conf->tmppage, READ)) {
-					atomic_add(s, &rdev->corrected_errors);
+					atomic_add_unchecked(s, &rdev->corrected_errors);
 					printk(KERN_INFO
 					       "md/raid1:%s: read error corrected "
 					       "(%d sectors at %llu on %s)\n",

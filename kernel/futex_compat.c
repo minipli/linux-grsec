@@ -32,7 +32,7 @@ fetch_robust_entry(compat_uptr_t *uentry, struct robust_list __user **entry,
 	return 0;
 }
 
-static void __user *futex_uaddr(struct robust_list __user *entry,
+static void __user __intentional_overflow(-1) *futex_uaddr(struct robust_list __user *entry,
 				compat_long_t futex_offset)
 {
 	compat_uptr_t base = ptr_to_compat(entry);
@@ -155,7 +155,7 @@ COMPAT_SYSCALL_DEFINE3(get_robust_list, int, pid,
 	}
 
 	ret = -EPERM;
-	if (!ptrace_may_access(p, PTRACE_MODE_READ))
+	if (!ptrace_may_access(p, PTRACE_MODE_READ_REALCREDS))
 		goto err_unlock;
 
 	head = p->compat_robust_list;

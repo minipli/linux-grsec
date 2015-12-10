@@ -480,7 +480,7 @@ struct se_cmd {
 	struct kref		cmd_kref;
 	const struct target_core_fabric_ops *se_tfo;
 	sense_reason_t		(*execute_cmd)(struct se_cmd *);
-	sense_reason_t (*transport_complete_callback)(struct se_cmd *, bool);
+	sense_reason_t (*transport_complete_callback)(struct se_cmd *, bool, int *);
 	void			*protocol_data;
 
 	unsigned char		*t_task_cdb;
@@ -751,7 +751,7 @@ struct se_device {
 	atomic_long_t		write_bytes;
 	/* Active commands on this virtual SE device */
 	atomic_t		simple_cmds;
-	atomic_t		dev_ordered_id;
+	atomic_unchecked_t	dev_ordered_id;
 	atomic_t		dev_ordered_sync;
 	atomic_t		dev_qf_count;
 	u32			export_count;

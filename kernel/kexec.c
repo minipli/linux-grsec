@@ -1243,7 +1243,7 @@ static int kimage_load_segment(struct kimage *image,
  */
 struct kimage *kexec_image;
 struct kimage *kexec_crash_image;
-int kexec_load_disabled;
+int kexec_load_disabled __read_only;
 
 static DEFINE_MUTEX(kexec_mutex);
 
@@ -1359,7 +1359,8 @@ COMPAT_SYSCALL_DEFINE4(kexec_load, compat_ulong_t, entry,
 		       compat_ulong_t, flags)
 {
 	struct compat_kexec_segment in;
-	struct kexec_segment out, __user *ksegments;
+	struct kexec_segment out;
+	struct kexec_segment __user *ksegments;
 	unsigned long i, result;
 
 	/* Don't allow clients that don't understand the native
