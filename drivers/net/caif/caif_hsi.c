@@ -1444,7 +1444,7 @@ err:
 	return -ENODEV;
 }
 
-static struct rtnl_link_ops caif_hsi_link_ops __read_mostly = {
+static struct rtnl_link_ops caif_hsi_link_ops = {
 	.kind		= "cfhsi",
 	.priv_size	= sizeof(struct cfhsi),
 	.setup		= cfhsi_setup,
