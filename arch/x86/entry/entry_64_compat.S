@@ -198,6 +198,11 @@ sysexit_from_sys_call:
 	movq    RAX(%rsp), %rax
 	movl	RSI(%rsp), %esi
 	movl	RDI(%rsp), %edi
+
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	movq	R12(%rsp), %r12
+#endif
+
 	xorl	%edx, %edx		/* Do not leak kernel information */
 	xorq	%r8, %r8
 	xorq	%r9, %r9
@@ -410,9 +415,8 @@ ENTRY(entry_SYSCALL_compat)
 	 */
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
+	addq	pax_user_shadow_base, %r8
 	ASM_PAX_OPEN_USERLAND
-	movq	pax_user_shadow_base, %r8
-	addq	RSP(%rsp), %r8
 #endif
 
 	ASM_STAC
@@ -459,7 +463,12 @@ sysretl_from_sys_call:
 	movl	RDI(%rsp), %edi
 	movl	RIP(%rsp), %ecx
 	movl	EFLAGS(%rsp), %r11d
-	movq    RAX(%rsp), %rax
+	movq	RAX(%rsp), %rax
+
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	movq	R12(%rsp), %r12
+#endif
+
 	xorq	%r10, %r10
 	xorq	%r9, %r9
 	xorq	%r8, %r8
