@@ -144,7 +144,7 @@ static unsigned int execute_stackleak_tree_instrument(void)
 		gcc_assert(single_succ_p(ENTRY_BLOCK_PTR_FOR_FN(cfun)));
 		bb = single_succ(ENTRY_BLOCK_PTR_FOR_FN(cfun));
 		if (!single_pred_p(bb)) {
-			gcc_assert(bb_loop_depth(bb) || (bb->flags & BB_IRREDUCIBLE_LOOP));
+//			gcc_assert(bb_loop_depth(bb) || (bb->flags & BB_IRREDUCIBLE_LOOP));
 			split_edge(single_succ_edge(ENTRY_BLOCK_PTR_FOR_FN(cfun)));
 			gcc_assert(single_succ_p(ENTRY_BLOCK_PTR_FOR_FN(cfun)));
 			bb = single_succ(ENTRY_BLOCK_PTR_FOR_FN(cfun));
