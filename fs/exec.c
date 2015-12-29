@@ -1817,7 +1817,7 @@ int pax_check_flags(unsigned long *flags)
 	if (*flags & MF_PAX_SEGMEXEC)
 	{
 		*flags &= ~MF_PAX_SEGMEXEC;
-	retval = -EINVAL;
+		retval = -EINVAL;
 	}
 #endif
 
@@ -1842,7 +1842,7 @@ int pax_check_flags(unsigned long *flags)
 	   )
 	{
 		*flags &= ~MF_PAX_MPROTECT;
-	retval = -EINVAL;
+		retval = -EINVAL;
 	}
 
 	if ((*flags & MF_PAX_EMUTRAMP)
