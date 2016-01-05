@@ -1460,14 +1460,12 @@ ENTRY(paranoid_entry)
 1:
 #ifdef CONFIG_PAX_MEMORY_UDEREF
 	testb	$3, CS+8(%rsp)
-	jnz	1f
-	pax_enter_kernel
+	jz	1f
+	pax_enter_kernel_user
 	jmp	2f
-1:	pax_enter_kernel_user
-2:
-#else
-	pax_enter_kernel
 #endif
+1:	pax_enter_kernel
+2:
 	pax_force_retaddr
 	ret
 ENDPROC(paranoid_entry)
@@ -1536,7 +1534,6 @@ ENTRY(error_entry)
 	testb	$3, CS+8(%rsp)
 	jz	.Lerror_kernelspace
 
-.Lerror_entry_from_usermode_swapgs:
 	/*
 	 * We entered from user mode or we're pretending to have entered
 	 * from user mode due to an IRET fault.
