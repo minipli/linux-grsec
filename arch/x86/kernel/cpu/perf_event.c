@@ -2322,14 +2322,6 @@ static unsigned long code_segment_base(struct pt_regs *regs)
 
 	if (user_mode(regs) && regs->cs != __USER_CS)
 		return get_segment_base(regs->cs);
-#ifdef CONFIG_PAX_KERNEXEC
-	if (!user_mode(regs)) {
-		if ((regs->cs == __KERNEL_CS || regs->cs == __KERNEXEC_KERNEL_CS))
-			return (unsigned long)__LOAD_PHYSICAL_ADDR + PAGE_OFFSET;
-		else
-			return get_segment_base(regs->cs);
-	}
-#endif
 #else
 	if (user_mode(regs) && !user_64bit_mode(regs) &&
 	    regs->cs != __USER32_CS)
