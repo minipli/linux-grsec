@@ -27,7 +27,8 @@ static int seq_show(struct seq_file *m, void *v)
 	if (!task)
 		return -ENOENT;
 
-	files = get_files_struct(task);
+	if (!gr_acl_handle_procpidmem(task))
+		files = get_files_struct(task);
 	put_task_struct(task);
 
 	if (files) {
@@ -258,6 +259,7 @@ static int proc_readfd_common(struct file *file, struct dir_context *ctx,
 				     name, len, instantiate, p,
 				     (void *)(unsigned long)fd))
 			goto out_fd_loop;
+		cond_resched();
 		rcu_read_lock();
 	}
 	rcu_read_unlock();
@@ -291,11 +293,21 @@ static struct dentry *proc_lookupfd(struct inode *dir, struct dentry *dentry,
  */
 int proc_fd_permission(struct inode *inode, int mask)
 {
+	struct task_struct *task;
 	int rv = generic_permission(inode, mask);
-	if (rv == 0)
-		return 0;
+
 	if (task_tgid(current) == proc_pid(inode))
 		rv = 0;
+
+	task = get_proc_task(inode);
+	if (task == NULL)
+		return rv;
+
+	if (gr_acl_handle_procpidmem(task))
+		rv = -EACCES;
+
+	put_task_struct(task);
+
 	return rv;
 }
 

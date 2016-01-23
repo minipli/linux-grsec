@@ -281,7 +281,7 @@ static int yama_ptrace_access_check(struct task_struct *child,
 	int rc = 0;
 
 	/* require ptrace target be a child of ptracer on attach */
-	if (mode == PTRACE_MODE_ATTACH) {
+	if (mode & PTRACE_MODE_ATTACH) {
 		switch (ptrace_scope) {
 		case YAMA_SCOPE_DISABLED:
 			/* No additional restrictions. */
@@ -307,7 +307,7 @@ static int yama_ptrace_access_check(struct task_struct *child,
 		}
 	}
 
-	if (rc) {
+	if (rc && (mode & PTRACE_MODE_NOAUDIT) == 0) {
 		printk_ratelimited(KERN_NOTICE
 			"ptrace of pid %d was attempted by: %s (pid %d)\n",
 			child->pid, current->comm, current->pid);
@@ -357,7 +357,7 @@ static struct security_hook_list yama_hooks[] = {
 static int yama_dointvec_minmax(struct ctl_table *table, int write,
 				void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table table_copy;
+	ctl_table_no_const table_copy;
 
 	if (write && !capable(CAP_SYS_PTRACE))
 		return -EPERM;

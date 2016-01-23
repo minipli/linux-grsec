@@ -40,7 +40,7 @@
 #include <linux/pm_runtime.h>
 #include <drm/drm_crtc_helper.h>
 
-static struct drm_driver driver;
+static drm_driver_no_const driver;
 
 #define GEN_DEFAULT_PIPEOFFSETS \
 	.pipe_offsets = { PIPE_A_OFFSET, PIPE_B_OFFSET, \
@@ -1643,7 +1643,7 @@ static const struct file_operations i915_driver_fops = {
 	.llseek = noop_llseek,
 };
 
-static struct drm_driver driver = {
+static drm_driver_no_const driver __read_only = {
 	/* Don't use MTRRs here; the Xserver or userspace app should
 	 * deal with them for Intel hardware.
 	 */
@@ -1697,6 +1697,7 @@ static struct pci_driver i915_pci_driver = {
 
 static int __init i915_init(void)
 {
+	pax_open_kernel();
 	driver.num_ioctls = i915_max_ioctl;
 
 	/*
@@ -1716,6 +1717,7 @@ static int __init i915_init(void)
 
 	if (!(driver.driver_features & DRIVER_MODESET)) {
 		driver.get_vblank_timestamp = NULL;
+		pax_close_kernel();
 		/* Silently fail loading to not upset userspace. */
 		DRM_DEBUG_DRIVER("KMS and UMS disabled.\n");
 		return 0;
@@ -1728,6 +1730,7 @@ static int __init i915_init(void)
 	 */
 	if (driver.driver_features & DRIVER_MODESET)
 		driver.driver_features |= DRIVER_ATOMIC;
+	pax_close_kernel();
 
 	return drm_pci_init(&driver, &i915_pci_driver);
 }

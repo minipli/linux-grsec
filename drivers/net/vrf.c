@@ -628,7 +628,7 @@ static const struct nla_policy vrf_nl_policy[IFLA_VRF_MAX + 1] = {
 	[IFLA_VRF_TABLE] = { .type = NLA_U32 },
 };
 
-static struct rtnl_link_ops vrf_link_ops __read_mostly = {
+static struct rtnl_link_ops vrf_link_ops = {
 	.kind		= DRV_NAME,
 	.priv_size	= sizeof(struct net_vrf),
 

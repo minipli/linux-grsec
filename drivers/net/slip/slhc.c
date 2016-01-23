@@ -94,6 +94,9 @@ slhc_init(int rslots, int tslots)
 	register struct cstate *ts;
 	struct slcompress *comp;
 
+	if (rslots <= 0 || tslots <= 0 || rslots >= 256 || tslots >= 256)
+		goto out_fail;
+
 	comp = kzalloc(sizeof(struct slcompress), GFP_KERNEL);
 	if (! comp)
 		goto out_fail;
@@ -487,7 +490,7 @@ slhc_uncompress(struct slcompress *comp, unsigned char *icp, int isize)
 	register struct tcphdr *thp;
 	register struct iphdr *ip;
 	register struct cstate *cs;
-	int len, hdrlen;
+	long len, hdrlen;
 	unsigned char *cp = icp;
 
 	/* We've got a compressed packet; read the change byte */

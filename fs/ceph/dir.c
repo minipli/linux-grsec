@@ -214,10 +214,18 @@ static int __dcache_readdir(struct file *file,  struct dir_context *ctx,
 		spin_unlock(&dentry->d_lock);
 
 		if (emit_dentry) {
+			char d_name[DNAME_INLINE_LEN];
+			const unsigned char *name;
+
 			dout(" %llu (%llu) dentry %p %pd %p\n", di->offset, ctx->pos,
 			     dentry, dentry, d_inode(dentry));
 			ctx->pos = di->offset;
-			if (!dir_emit(ctx, dentry->d_name.name,
+			name = dentry->d_name.name;
+			if (name == dentry->d_iname) {
+				memcpy(d_name, name, dentry->d_name.len);
+				name = d_name;
+			}
+			if (!dir_emit(ctx, name,
 				      dentry->d_name.len,
 				      ceph_translate_ino(dentry->d_sb,
 							 d_inode(dentry)->i_ino),
@@ -259,7 +267,7 @@ static int ceph_readdir(struct file *file, struct dir_context *ctx)
 	struct ceph_fs_client *fsc = ceph_inode_to_client(inode);
 	struct ceph_mds_client *mdsc = fsc->mdsc;
 	unsigned frag = fpos_frag(ctx->pos);
-	int off = fpos_off(ctx->pos);
+	unsigned int off = fpos_off(ctx->pos);
 	int err;
 	u32 ftype;
 	struct ceph_mds_reply_info_parsed *rinfo;

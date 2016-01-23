@@ -100,6 +100,10 @@ SYSCALL_DEFINE5(kcmp, pid_t, pid1, pid_t, pid2, int, type,
 	struct task_struct *task1, *task2;
 	int ret;
 
+#ifdef CONFIG_GRKERNSEC
+	return -ENOSYS;
+#endif
+
 	rcu_read_lock();
 
 	/*
@@ -122,8 +126,8 @@ SYSCALL_DEFINE5(kcmp, pid_t, pid1, pid_t, pid2, int, type,
 			&task2->signal->cred_guard_mutex);
 	if (ret)
 		goto err;
-	if (!ptrace_may_access(task1, PTRACE_MODE_READ) ||
-	    !ptrace_may_access(task2, PTRACE_MODE_READ)) {
+	if (!ptrace_may_access(task1, PTRACE_MODE_READ_REALCREDS) ||
+	    !ptrace_may_access(task2, PTRACE_MODE_READ_REALCREDS)) {
 		ret = -EPERM;
 		goto err_unlock;
 	}
