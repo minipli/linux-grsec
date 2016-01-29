@@ -109,6 +109,6 @@ extern long strncpy_from_unsafe(char *dst, const void *unsafe_addr, long count);
  * Returns 0 on success, or -EFAULT.
  */
 #define probe_kernel_address(addr, retval)		\
-	probe_kernel_read(&retval, addr, sizeof(retval))
+	probe_kernel_read(&(retval), addr, sizeof(retval))
 
 #endif		/* __LINUX_UACCESS_H__ */
