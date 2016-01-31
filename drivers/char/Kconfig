@@ -17,7 +17,8 @@ config DEVMEM
 
 config DEVKMEM
 	bool "/dev/kmem virtual device support"
-	default y
+	default n
+	depends on !GRKERNSEC_KMEM
 	help
 	  Say Y here if you want to support the /dev/kmem device. The
 	  /dev/kmem device is rarely used, but can be used for certain
@@ -586,6 +587,7 @@ config DEVPORT
 	bool
 	depends on !M68K
 	depends on ISA || PCI
+	depends on !GRKERNSEC_KMEM
 	default y
 
 source "drivers/s390/char/Kconfig"

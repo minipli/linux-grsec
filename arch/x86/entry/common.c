@@ -150,6 +150,10 @@ unsigned long syscall_trace_enter_phase1(struct pt_regs *regs, u32 arch)
 	return 1;  /* Something is enabled that we can't handle in phase 1 */
 }
 
+#ifdef CONFIG_GRKERNSEC_SETXID
+extern void gr_delayed_cred_worker(void);
+#endif
+
 /* Returns the syscall nr to run (which should match regs->orig_ax). */
 long syscall_trace_enter_phase2(struct pt_regs *regs, u32 arch,
 				unsigned long phase1_result)
@@ -159,6 +163,11 @@ long syscall_trace_enter_phase2(struct pt_regs *regs, u32 arch,
 		_TIF_WORK_SYSCALL_ENTRY;
 
 	BUG_ON(regs != task_pt_regs(current));
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
 
 	/*
 	 * If we stepped into a sysenter/syscall insn, it trapped in
@@ -207,13 +216,6 @@ long syscall_trace_enter(struct pt_regs *regs)
 		return syscall_trace_enter_phase2(regs, arch, phase1_result);
 }
 
-static struct thread_info *pt_regs_to_thread_info(struct pt_regs *regs)
-{
-	unsigned long top_of_stack =
-		(unsigned long)(regs + 1) + TOP_OF_KERNEL_STACK_PADDING;
-	return (struct thread_info *)(top_of_stack - THREAD_SIZE);
-}
-
 /* Called with IRQs disabled. */
 __visible void prepare_exit_to_usermode(struct pt_regs *regs)
 {
@@ -230,7 +232,7 @@ __visible void prepare_exit_to_usermode(struct pt_regs *regs)
 	 */
 	while (true) {
 		u32 cached_flags =
-			READ_ONCE(pt_regs_to_thread_info(regs)->flags);
+			READ_ONCE(current_thread_info()->flags);
 
 		if (!(cached_flags & (_TIF_SIGPENDING | _TIF_NOTIFY_RESUME |
 				      _TIF_UPROBE | _TIF_NEED_RESCHED |
@@ -271,7 +273,7 @@ __visible void prepare_exit_to_usermode(struct pt_regs *regs)
  */
 __visible void syscall_return_slowpath(struct pt_regs *regs)
 {
-	struct thread_info *ti = pt_regs_to_thread_info(regs);
+	struct thread_info *ti = current_thread_info();
 	u32 cached_flags = READ_ONCE(ti->flags);
 	bool step;
 
@@ -280,6 +282,11 @@ __visible void syscall_return_slowpath(struct pt_regs *regs)
 	if (WARN(irqs_disabled(), "syscall %ld left IRQs disabled",
 		 regs->orig_ax))
 		local_irq_enable();
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
 
 	/*
 	 * First do one-time work.  If these work items are enabled, we
@@ -301,7 +308,7 @@ __visible void syscall_return_slowpath(struct pt_regs *regs)
 		step = unlikely(
 			(cached_flags & (_TIF_SINGLESTEP | _TIF_SYSCALL_EMU))
 			== _TIF_SINGLESTEP);
-		if (step || cached_flags & _TIF_SYSCALL_TRACE)
+		if (step || (cached_flags & _TIF_SYSCALL_TRACE))
 			tracehook_report_syscall_exit(regs, step);
 	}
 
