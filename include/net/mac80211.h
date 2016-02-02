@@ -1497,7 +1497,7 @@ enum ieee80211_key_flags {
  * @iv_len: The IV length for this key type
  */
 struct ieee80211_key_conf {
-	atomic64_t tx_pn;
+	atomic64_unchecked_t tx_pn;
 	u32 cipher;
 	u8 icv_len;
 	u8 iv_len;
