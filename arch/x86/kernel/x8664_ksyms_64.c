@@ -34,8 +34,6 @@ EXPORT_SYMBOL(copy_user_generic_string);
 EXPORT_SYMBOL(copy_user_generic_unrolled);
 EXPORT_SYMBOL(copy_user_enhanced_fast_string);
 EXPORT_SYMBOL(__copy_user_nocache);
-EXPORT_SYMBOL(_copy_from_user);
-EXPORT_SYMBOL(_copy_to_user);
 
 EXPORT_SYMBOL(copy_page);
 EXPORT_SYMBOL(clear_page);
@@ -76,4 +74,8 @@ EXPORT_SYMBOL(native_load_gs_index);
 #ifdef CONFIG_PREEMPT
 EXPORT_SYMBOL(___preempt_schedule);
 EXPORT_SYMBOL(___preempt_schedule_notrace);
+#endif
+
+#ifdef CONFIG_PAX_PER_CPU_PGD
+EXPORT_SYMBOL(cpu_pgd);
 #endif

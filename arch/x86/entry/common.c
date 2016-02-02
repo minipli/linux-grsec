@@ -207,13 +207,6 @@ long syscall_trace_enter(struct pt_regs *regs)
 		return syscall_trace_enter_phase2(regs, arch, phase1_result);
 }
 
-static struct thread_info *pt_regs_to_thread_info(struct pt_regs *regs)
-{
-	unsigned long top_of_stack =
-		(unsigned long)(regs + 1) + TOP_OF_KERNEL_STACK_PADDING;
-	return (struct thread_info *)(top_of_stack - THREAD_SIZE);
-}
-
 /* Called with IRQs disabled. */
 __visible void prepare_exit_to_usermode(struct pt_regs *regs)
 {
@@ -230,7 +223,7 @@ __visible void prepare_exit_to_usermode(struct pt_regs *regs)
 	 */
 	while (true) {
 		u32 cached_flags =
-			READ_ONCE(pt_regs_to_thread_info(regs)->flags);
+			READ_ONCE(current_thread_info()->flags);
 
 		if (!(cached_flags & (_TIF_SIGPENDING | _TIF_NOTIFY_RESUME |
 				      _TIF_UPROBE | _TIF_NEED_RESCHED |
@@ -271,7 +264,7 @@ __visible void prepare_exit_to_usermode(struct pt_regs *regs)
  */
 __visible void syscall_return_slowpath(struct pt_regs *regs)
 {
-	struct thread_info *ti = pt_regs_to_thread_info(regs);
+	struct thread_info *ti = current_thread_info();
 	u32 cached_flags = READ_ONCE(ti->flags);
 	bool step;
 
@@ -301,7 +294,7 @@ __visible void syscall_return_slowpath(struct pt_regs *regs)
 		step = unlikely(
 			(cached_flags & (_TIF_SINGLESTEP | _TIF_SYSCALL_EMU))
 			== _TIF_SINGLESTEP);
-		if (step || cached_flags & _TIF_SYSCALL_TRACE)
+		if (step || (cached_flags & _TIF_SYSCALL_TRACE))
 			tracehook_report_syscall_exit(regs, step);
 	}
 
