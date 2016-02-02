@@ -462,7 +462,7 @@ static int __btrfs_add_delayed_deletion_item(struct btrfs_delayed_node *node,
 
 static void finish_one_item(struct btrfs_delayed_root *delayed_root)
 {
-	int seq = atomic_inc_return(&delayed_root->items_seq);
+	int seq = atomic_inc_return_unchecked(&delayed_root->items_seq);
 
 	/*
 	 * atomic_dec_return implies a barrier for waitqueue_active
@@ -1416,7 +1416,7 @@ void btrfs_assert_delayed_root_empty(struct btrfs_root *root)
 
 static int could_end_wait(struct btrfs_delayed_root *delayed_root, int seq)
 {
-	int val = atomic_read(&delayed_root->items_seq);
+	int val = atomic_read_unchecked(&delayed_root->items_seq);
 
 	if (val < seq || val >= seq + BTRFS_DELAYED_BATCH)
 		return 1;
@@ -1441,7 +1441,7 @@ void btrfs_balance_delayed_items(struct btrfs_root *root)
 		int seq;
 		int ret;
 
-		seq = atomic_read(&delayed_root->items_seq);
+		seq = atomic_read_unchecked(&delayed_root->items_seq);
 
 		ret = btrfs_wq_run_delayed_node(delayed_root, fs_info, 0);
 		if (ret)
@@ -1694,7 +1694,7 @@ int btrfs_should_delete_dir_index(struct list_head *del_list,
  *
  */
 int btrfs_readdir_delayed_dir_index(struct dir_context *ctx,
-				    struct list_head *ins_list)
+				    struct list_head *ins_list, bool *emitted)
 {
 	struct btrfs_dir_item *di;
 	struct btrfs_delayed_item *curr, *next;
@@ -1738,6 +1738,7 @@ int btrfs_readdir_delayed_dir_index(struct dir_context *ctx,
 
 		if (over)
 			return 1;
+		*emitted = true;
 	}
 	return 0;
 }
