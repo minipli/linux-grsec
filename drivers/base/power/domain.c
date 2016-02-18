@@ -1810,8 +1810,11 @@ int genpd_dev_pm_attach(struct device *dev)
 		goto out;
 	}
 
-	dev->pm_domain->detach = genpd_dev_pm_detach;
-	dev->pm_domain->sync = genpd_dev_pm_sync;
+	pax_open_kernel();
+	*(void **)&dev->pm_domain->detach = genpd_dev_pm_detach;
+	*(void **)&dev->pm_domain->sync = genpd_dev_pm_sync;
+	pax_close_kernel();
+
 	ret = genpd_poweron(pd);
 
 out:
