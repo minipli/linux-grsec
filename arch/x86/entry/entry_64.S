@@ -1917,7 +1917,7 @@ first_nmi:
 	pushq	%rsp		/* RSP (minus 8 because of the previous push) */
 	addq	$8, (%rsp)	/* Fix up RSP */
 	pushfq			/* RFLAGS */
-	pushq	$__KERNEL_CS	/* CS */
+	pushq	4*8(%rsp)	/* CS */
 	pushq	$1f		/* RIP */
 	INTERRUPT_RETURN	/* continues at repeat_nmi below */
 1:
