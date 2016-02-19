@@ -87,6 +87,7 @@ static int scm_fp_copy(struct cmsghdr *cmsg, struct scm_fp_list **fplp)
 		*fplp = fpl;
 		fpl->count = 0;
 		fpl->max = SCM_MAX_FD;
+		fpl->user = NULL;
 	}
 	fpp = &fpl->fp[fpl->count];
 
@@ -107,6 +108,10 @@ static int scm_fp_copy(struct cmsghdr *cmsg, struct scm_fp_list **fplp)
 		*fpp++ = file;
 		fpl->count++;
 	}
+
+	if (!fpl->user)
+		fpl->user = get_uid(current_user());
+
 	return num;
 }
 
@@ -119,6 +124,7 @@ void __scm_destroy(struct scm_cookie *scm)
 		scm->fp = NULL;
 		for (i=fpl->count-1; i>=0; i--)
 			fput(fpl->fp[i]);
+		free_uid(fpl->user);
 		kfree(fpl);
 	}
 }
@@ -209,9 +215,9 @@ EXPORT_SYMBOL(__scm_send);
 int put_cmsg(struct msghdr * msg, int level, int type, int len, void *data)
 {
 	struct cmsghdr __user *cm
-		= (__force struct cmsghdr __user *)msg->msg_control;
+		= (struct cmsghdr __force_user *)msg->msg_control;
 	struct cmsghdr cmhdr;
-	int cmlen = CMSG_LEN(len);
+	size_t cmlen = CMSG_LEN(len);
 	int err;
 
 	if (MSG_CMSG_COMPAT & msg->msg_flags)
@@ -232,7 +238,7 @@ int put_cmsg(struct msghdr * msg, int level, int type, int len, void *data)
 	err = -EFAULT;
 	if (copy_to_user(cm, &cmhdr, sizeof cmhdr))
 		goto out;
-	if (copy_to_user(CMSG_DATA(cm), data, cmlen - sizeof(struct cmsghdr)))
+	if (copy_to_user((void __force_user *)CMSG_DATA((void __force_kernel *)cm), data, cmlen - sizeof(struct cmsghdr)))
 		goto out;
 	cmlen = CMSG_SPACE(len);
 	if (msg->msg_controllen < cmlen)
@@ -248,7 +254,7 @@ EXPORT_SYMBOL(put_cmsg);
 void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 {
 	struct cmsghdr __user *cm
-		= (__force struct cmsghdr __user*)msg->msg_control;
+		= (struct cmsghdr __force_user *)msg->msg_control;
 
 	int fdmax = 0;
 	int fdnum = scm->fp->count;
@@ -268,7 +274,7 @@ void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 	if (fdnum < fdmax)
 		fdmax = fdnum;
 
-	for (i=0, cmfptr=(__force int __user *)CMSG_DATA(cm); i<fdmax;
+	for (i=0, cmfptr=(int __force_user *)CMSG_DATA((void __force_kernel *)cm); i<fdmax;
 	     i++, cmfptr++)
 	{
 		struct socket *sock;
@@ -297,7 +303,7 @@ void scm_detach_fds(struct msghdr *msg, struct scm_cookie *scm)
 
 	if (i > 0)
 	{
-		int cmlen = CMSG_LEN(i*sizeof(int));
+		size_t cmlen = CMSG_LEN(i*sizeof(int));
 		err = put_user(SOL_SOCKET, &cm->cmsg_level);
 		if (!err)
 			err = put_user(SCM_RIGHTS, &cm->cmsg_type);
@@ -336,6 +342,7 @@ struct scm_fp_list *scm_fp_dup(struct scm_fp_list *fpl)
 		for (i = 0; i < fpl->count; i++)
 			get_file(fpl->fp[i]);
 		new_fpl->max = new_fpl->count;
+		new_fpl->user = get_uid(fpl->user);
 	}
 	return new_fpl;
 }

@@ -33,7 +33,7 @@
 #include <linux/swap.h>
 #include <linux/uio.h>
 
-static struct vfsmount *shm_mnt;
+struct vfsmount *shm_mnt;
 
 #ifdef CONFIG_SHMEM
 /*
@@ -82,7 +82,7 @@ static struct vfsmount *shm_mnt;
 #define BOGO_DIRENT_SIZE 20
 
 /* Symlink up to this size is kmalloc'ed instead of using a swappable page */
-#define SHORT_SYMLINK_LEN 128
+#define SHORT_SYMLINK_LEN 64
 
 /*
  * shmem_fallocate communicates with shmem_fault or shmem_writepage via
@@ -620,8 +620,7 @@ static void shmem_evict_inode(struct inode *inode)
 			list_del_init(&info->swaplist);
 			mutex_unlock(&shmem_swaplist_mutex);
 		}
-	} else
-		kfree(info->symlink);
+	}
 
 	simple_xattrs_free(&info->xattrs);
 	WARN_ON(inode->i_blocks);
@@ -2462,13 +2461,12 @@ static int shmem_symlink(struct inode *dir, struct dentry *dentry, const char *s
 	info = SHMEM_I(inode);
 	inode->i_size = len-1;
 	if (len <= SHORT_SYMLINK_LEN) {
-		info->symlink = kmemdup(symname, len, GFP_KERNEL);
-		if (!info->symlink) {
+		inode->i_link = kmemdup(symname, len, GFP_KERNEL);
+		if (!inode->i_link) {
 			iput(inode);
 			return -ENOMEM;
 		}
 		inode->i_op = &shmem_short_symlink_operations;
-		inode->i_link = info->symlink;
 	} else {
 		error = shmem_getpage(inode, 0, &page, SGP_WRITE, NULL);
 		if (error) {
@@ -2566,6 +2564,11 @@ static const struct xattr_handler *shmem_xattr_handlers[] = {
 static int shmem_xattr_validate(const char *name)
 {
 	struct { const char *prefix; size_t len; } arr[] = {
+
+#ifdef CONFIG_PAX_XATTR_PAX_FLAGS
+		{ XATTR_USER_PREFIX, XATTR_USER_PREFIX_LEN},
+#endif
+
 		{ XATTR_SECURITY_PREFIX, XATTR_SECURITY_PREFIX_LEN },
 		{ XATTR_TRUSTED_PREFIX, XATTR_TRUSTED_PREFIX_LEN }
 	};
@@ -2620,6 +2623,15 @@ static int shmem_setxattr(struct dentry *dentry, const char *name,
 	err = shmem_xattr_validate(name);
 	if (err)
 		return err;
+
+#ifdef CONFIG_PAX_XATTR_PAX_FLAGS
+	if (!strncmp(name, XATTR_USER_PREFIX, XATTR_USER_PREFIX_LEN)) {
+		if (strcmp(name, XATTR_NAME_PAX_FLAGS))
+			return -EOPNOTSUPP;
+		if (size > 8)
+			return -EINVAL;
+	}
+#endif
 
 	return simple_xattr_set(&info->xattrs, name, value, size, flags);
 }
@@ -3004,8 +3016,7 @@ int shmem_fill_super(struct super_block *sb, void *data, int silent)
 	int err = -ENOMEM;
 
 	/* Round up to L1_CACHE_BYTES to resist false sharing */
-	sbinfo = kzalloc(max((int)sizeof(struct shmem_sb_info),
-				L1_CACHE_BYTES), GFP_KERNEL);
+	sbinfo = kzalloc(max(sizeof(struct shmem_sb_info), L1_CACHE_BYTES), GFP_KERNEL);
 	if (!sbinfo)
 		return -ENOMEM;
 
@@ -3083,6 +3094,7 @@ static struct inode *shmem_alloc_inode(struct super_block *sb)
 static void shmem_destroy_callback(struct rcu_head *head)
 {
 	struct inode *inode = container_of(head, struct inode, i_rcu);
+	kfree(inode->i_link);
 	kmem_cache_free(shmem_inode_cachep, SHMEM_I(inode));
 }
 

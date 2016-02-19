@@ -289,7 +289,7 @@ static inline void kernel_param_unlock(struct module *mod)
  * @len is usually just sizeof(string).
  */
 #define module_param_string(name, string, len, perm)			\
-	static const struct kparam_string __param_string_##name		\
+	static const struct kparam_string __param_string_##name __used	\
 		= { len, string };					\
 	__module_param_call(MODULE_PARAM_PREFIX, name,			\
 			    &param_ops_string,				\
@@ -441,7 +441,7 @@ extern int param_set_bint(const char *val, const struct kernel_param *kp);
  */
 #define module_param_array_named(name, array, type, nump, perm)		\
 	param_check_##type(name, &(array)[0]);				\
-	static const struct kparam_array __param_arr_##name		\
+	static const struct kparam_array __param_arr_##name __used	\
 	= { .max = ARRAY_SIZE(array), .num = nump,                      \
 	    .ops = &param_ops_##type,					\
 	    .elemsize = sizeof(array[0]), .elem = array };		\

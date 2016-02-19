@@ -68,7 +68,7 @@ struct radix_tree_preload {
 	/* nodes->private_data points to next preallocated node */
 	struct radix_tree_node *nodes;
 };
-static DEFINE_PER_CPU(struct radix_tree_preload, radix_tree_preloads) = { 0, };
+static DEFINE_PER_CPU(struct radix_tree_preload, radix_tree_preloads);
 
 static inline void *ptr_to_indirect(void *ptr)
 {
@@ -1019,9 +1019,13 @@ radix_tree_gang_lookup(struct radix_tree_root *root, void **results,
 		return 0;
 
 	radix_tree_for_each_slot(slot, root, &iter, first_index) {
-		results[ret] = indirect_to_ptr(rcu_dereference_raw(*slot));
+		results[ret] = rcu_dereference_raw(*slot);
 		if (!results[ret])
 			continue;
+		if (radix_tree_is_indirect_ptr(results[ret])) {
+			slot = radix_tree_iter_retry(&iter);
+			continue;
+		}
 		if (++ret == max_items)
 			break;
 	}
@@ -1098,9 +1102,13 @@ radix_tree_gang_lookup_tag(struct radix_tree_root *root, void **results,
 		return 0;
 
 	radix_tree_for_each_tagged(slot, root, &iter, first_index, tag) {
-		results[ret] = indirect_to_ptr(rcu_dereference_raw(*slot));
+		results[ret] = rcu_dereference_raw(*slot);
 		if (!results[ret])
 			continue;
+		if (radix_tree_is_indirect_ptr(results[ret])) {
+			slot = radix_tree_iter_retry(&iter);
+			continue;
+		}
 		if (++ret == max_items)
 			break;
 	}
