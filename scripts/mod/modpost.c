@@ -37,6 +37,7 @@ static int vmlinux_section_warnings = 1;
 static int warn_unresolved = 0;
 /* How a symbol is exported */
 static int sec_mismatch_count = 0;
+static int writable_fptr_count = 0;
 static int sec_mismatch_verbose = 1;
 /* ignore missing files */
 static int ignore_missing_files;
@@ -1387,7 +1388,11 @@ static void report_sec_mismatch(const char *modname,
 	char *prl_from;
 	char *prl_to;
 
-	sec_mismatch_count++;
+	if (mismatch->mismatch == DATA_TO_TEXT)
+		writable_fptr_count++;
+	else
+		sec_mismatch_count++;
+
 	if (!sec_mismatch_verbose)
 		return;
 
@@ -2487,6 +2492,11 @@ int main(int argc, char **argv)
 		     "To see full details build your kernel with:\n"
 		     "'make CONFIG_DEBUG_SECTION_MISMATCH=y'\n",
 		     sec_mismatch_count);
+	if (writable_fptr_count && !sec_mismatch_verbose)
+		warn("modpost: Found %d writable function pointer(s).\n"
+		     "To see full details build your kernel with:\n"
+		     "'make CONFIG_DEBUG_SECTION_MISMATCH=y'\n",
+		     writable_fptr_count);
 
 	return err;
 }
