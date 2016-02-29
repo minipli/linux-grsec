@@ -685,10 +685,10 @@ static void __iucv_auto_name(struct iucv_sock *iucv)
 {
 	char name[12];
 
-	sprintf(name, "%08x", atomic_inc_return(&iucv_sk_list.autobind_name));
+	sprintf(name, "%08x", atomic_inc_return_unchecked(&iucv_sk_list.autobind_name));
 	while (__iucv_get_sock_by_name(name)) {
 		sprintf(name, "%08x",
-			atomic_inc_return(&iucv_sk_list.autobind_name));
+			atomic_inc_return_unchecked(&iucv_sk_list.autobind_name));
 	}
 	memcpy(iucv->src_name, name, 8);
 }
@@ -706,6 +706,9 @@ static int iucv_sock_bind(struct socket *sock, struct sockaddr *addr,
 
 	/* Verify the input sockaddr */
 	if (!addr || addr->sa_family != AF_IUCV)
+		return -EINVAL;
+
+	if (addr_len < sizeof(struct sockaddr_iucv))
 		return -EINVAL;
 
 	lock_sock(sk);

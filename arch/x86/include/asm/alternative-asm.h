@@ -18,6 +18,45 @@
 	.endm
 #endif
 
+#ifdef KERNEXEC_PLUGIN
+	.macro pax_force_retaddr_bts rip=0
+	btsq $63,\rip(%rsp)
+	.endm
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_BTS
+	.macro pax_force_retaddr rip=0, reload=0
+	btsq $63,\rip(%rsp)
+	.endm
+	.macro pax_force_fptr ptr
+	btsq $63,\ptr
+	.endm
+	.macro pax_set_fptr_mask
+	.endm
+#endif
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	.macro pax_force_retaddr rip=0, reload=0
+	.if \reload
+	pax_set_fptr_mask
+	.endif
+	orq %r12,\rip(%rsp)
+	.endm
+	.macro pax_force_fptr ptr
+	orq %r12,\ptr
+	.endm
+	.macro pax_set_fptr_mask
+	movabs $0x8000000000000000,%r12
+	.endm
+#endif
+#else
+	.macro pax_force_retaddr rip=0, reload=0
+	.endm
+	.macro pax_force_fptr ptr
+	.endm
+	.macro pax_force_retaddr_bts rip=0
+	.endm
+	.macro pax_set_fptr_mask
+	.endm
+#endif
+
 /*
  * Issue one struct alt_instr descriptor entry (need to put it into
  * the section .altinstructions, see below). This entry contains
@@ -50,7 +89,7 @@
 	altinstruction_entry 140b,143f,\feature,142b-140b,144f-143f,142b-141b
 	.popsection
 
-	.pushsection .altinstr_replacement,"ax"
+	.pushsection .altinstr_replacement,"a"
 143:
 	\newinstr
 144:
@@ -86,7 +125,7 @@
 	altinstruction_entry 140b,144f,\feature2,142b-140b,145f-144f,142b-141b
 	.popsection
 
-	.pushsection .altinstr_replacement,"ax"
+	.pushsection .altinstr_replacement,"a"
 143:
 	\newinstr1
 144:

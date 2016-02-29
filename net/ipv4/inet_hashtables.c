@@ -19,6 +19,7 @@
 #include <linux/slab.h>
 #include <linux/wait.h>
 #include <linux/vmalloc.h>
+#include <linux/security.h>
 
 #include <net/inet_connection_sock.h>
 #include <net/inet_hashtables.h>
@@ -53,6 +54,8 @@ u32 sk_ehashfn(const struct sock *sk)
 			    sk->sk_rcv_saddr, sk->sk_num,
 			    sk->sk_daddr, sk->sk_dport);
 }
+
+extern void gr_update_task_in_ip_table(const struct inet_sock *inet);
 
 /*
  * Allocate and initialize a new local port bind bucket.
@@ -586,6 +589,7 @@ ok:
 
 		if (tw)
 			inet_twsk_deschedule_put(tw);
+		gr_update_task_in_ip_table(inet_sk(sk));
 
 		ret = 0;
 		goto out;

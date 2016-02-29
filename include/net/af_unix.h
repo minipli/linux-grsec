@@ -6,8 +6,8 @@
 #include <linux/mutex.h>
 #include <net/sock.h>
 
-void unix_inflight(struct file *fp);
-void unix_notinflight(struct file *fp);
+void unix_inflight(struct user_struct *user, struct file *fp);
+void unix_notinflight(struct user_struct *user, struct file *fp);
 void unix_gc(void);
 void wait_for_unix_gc(void);
 struct sock *unix_get_socket(struct file *filp);
@@ -36,7 +36,7 @@ struct unix_skb_parms {
 	u32			secid;		/* Security ID		*/
 #endif
 	u32			consumed;
-};
+} __randomize_layout;
 
 #define UNIXCB(skb) 	(*(struct unix_skb_parms *)&((skb)->cb))
 
