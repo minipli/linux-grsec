@@ -5183,7 +5183,7 @@ STAT_ATTR(CPU_PARTIAL_NODE, cpu_partial_node);
 STAT_ATTR(CPU_PARTIAL_DRAIN, cpu_partial_drain);
 #endif
 
-static struct attribute *slab_attrs[] = {
+static struct attribute *slab_attrs[] __read_only = {
 	&slab_size_attr.attr,
 	&object_size_attr.attr,
 	&objs_per_slab_attr.attr,
