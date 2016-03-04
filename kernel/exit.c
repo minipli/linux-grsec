@@ -171,6 +171,10 @@ void release_task(struct task_struct *p)
 	struct task_struct *leader;
 	int zap_leader;
 repeat:
+#ifdef CONFIG_NET
+	gr_del_task_from_ip_table(p);
+#endif
+
 	/* don't need to get the RCU readlock here - the process is dead and
 	 * can't be modifying its own credentials. But shut RCU-lockdep up */
 	rcu_read_lock();
@@ -450,9 +454,8 @@ static struct task_struct *find_alive_thread(struct task_struct *p)
 	return NULL;
 }
 
+static struct task_struct *find_child_reaper(struct task_struct *father) __must_hold(&tasklist_lock);
 static struct task_struct *find_child_reaper(struct task_struct *father)
-	__releases(&tasklist_lock)
-	__acquires(&tasklist_lock)
 {
 	struct pid_namespace *pid_ns = task_active_pid_ns(father);
 	struct task_struct *reaper = pid_ns->child_reaper;
@@ -548,6 +551,8 @@ static void reparent_leader(struct task_struct *father, struct task_struct *p,
  *	as a result of our exiting, and if they have any stopped
  *	jobs, send them a SIGHUP and then a SIGCONT.  (POSIX 3.2.2.2)
  */
+static void forget_original_parent(struct task_struct *father,
+					struct list_head *dead) __must_hold(&tasklist_lock);
 static void forget_original_parent(struct task_struct *father,
 					struct list_head *dead)
 {
@@ -656,6 +661,8 @@ void do_exit(long code)
 	int group_dead;
 	TASKS_RCU(int tasks_rcu_i);
 
+	set_fs(USER_DS);
+
 	profile_task_exit(tsk);
 
 	WARN_ON(blk_needs_flush_plug(tsk));
@@ -672,7 +679,6 @@ void do_exit(long code)
 	 * mm_release()->clear_child_tid() from writing to a user-controlled
 	 * kernel address.
 	 */
-	set_fs(USER_DS);
 
 	ptrace_event(PTRACE_EVENT_EXIT, code);
 
@@ -731,6 +737,9 @@ void do_exit(long code)
 
 	tsk->exit_code = code;
 	taskstats_exit(tsk, group_dead);
+
+	gr_acl_handle_psacct(tsk, code);
+	gr_acl_handle_exit();
 
 	exit_mm(tsk);
 
@@ -851,7 +860,7 @@ SYSCALL_DEFINE1(exit, int, error_code)
  * Take down every thread in the group.  This is called by fatal signals
  * as well as by sys_exit_group (below).
  */
-void
+__noreturn void
 do_group_exit(int exit_code)
 {
 	struct signal_struct *sig = current->signal;
@@ -968,6 +977,7 @@ static int wait_noreap_copyout(struct wait_opts *wo, struct task_struct *p,
  * the lock and this task is uninteresting.  If we return nonzero, we have
  * released the lock and the system call should return.
  */
+static int wait_task_zombie(struct wait_opts *wo, struct task_struct *p) __must_hold(&tasklist_lock);
 static int wait_task_zombie(struct wait_opts *wo, struct task_struct *p)
 {
 	int state, retval, status;
@@ -984,6 +994,7 @@ static int wait_task_zombie(struct wait_opts *wo, struct task_struct *p)
 
 		get_task_struct(p);
 		read_unlock(&tasklist_lock);
+		__acquire(&tasklist_lock); // XXX sparse can't model conditional release
 		sched_annotate_sleep();
 
 		if ((exit_code & 0x7f) == 0) {
@@ -1006,6 +1017,7 @@ static int wait_task_zombie(struct wait_opts *wo, struct task_struct *p)
 	 * We own this thread, nobody else can reap it.
 	 */
 	read_unlock(&tasklist_lock);
+	__acquire(&tasklist_lock); // XXX sparse can't model conditional release
 	sched_annotate_sleep();
 
 	/*
@@ -1149,6 +1161,8 @@ static int *task_stopped_code(struct task_struct *p, bool ptrace)
  * search should terminate.
  */
 static int wait_task_stopped(struct wait_opts *wo,
+				int ptrace, struct task_struct *p) __must_hold(&tasklist_lock);
+static int wait_task_stopped(struct wait_opts *wo,
 				int ptrace, struct task_struct *p)
 {
 	struct siginfo __user *infop;
@@ -1196,6 +1210,7 @@ unlock_sig:
 	pid = task_pid_vnr(p);
 	why = ptrace ? CLD_TRAPPED : CLD_STOPPED;
 	read_unlock(&tasklist_lock);
+	__acquire(&tasklist_lock); // XXX sparse can't model conditional release
 	sched_annotate_sleep();
 
 	if (unlikely(wo->wo_flags & WNOWAIT))
@@ -1233,6 +1248,7 @@ unlock_sig:
  * the lock and this task is uninteresting.  If we return nonzero, we have
  * released the lock and the system call should return.
  */
+static int wait_task_continued(struct wait_opts *wo, struct task_struct *p) __must_hold(&tasklist_lock);
 static int wait_task_continued(struct wait_opts *wo, struct task_struct *p)
 {
 	int retval;
@@ -1259,6 +1275,7 @@ static int wait_task_continued(struct wait_opts *wo, struct task_struct *p)
 	pid = task_pid_vnr(p);
 	get_task_struct(p);
 	read_unlock(&tasklist_lock);
+	__acquire(&tasklist_lock); // XXX sparse can't model conditional release
 	sched_annotate_sleep();
 
 	if (!wo->wo_info) {
@@ -1287,6 +1304,8 @@ static int wait_task_continued(struct wait_opts *wo, struct task_struct *p)
  * then ->notask_error is 0 if @p is an eligible child,
  * or another error from security_task_wait(), or still -ECHILD.
  */
+static int wait_consider_task(struct wait_opts *wo, int ptrace,
+				struct task_struct *p) __must_hold(&tasklist_lock);
 static int wait_consider_task(struct wait_opts *wo, int ptrace,
 				struct task_struct *p)
 {
@@ -1413,6 +1432,7 @@ static int wait_consider_task(struct wait_opts *wo, int ptrace,
  * ->notask_error is 0 if there were any eligible children,
  * or another error from security_task_wait(), or still -ECHILD.
  */
+static int do_wait_thread(struct wait_opts *wo, struct task_struct *tsk) __must_hold(&tasklist_lock);
 static int do_wait_thread(struct wait_opts *wo, struct task_struct *tsk)
 {
 	struct task_struct *p;
@@ -1427,6 +1447,7 @@ static int do_wait_thread(struct wait_opts *wo, struct task_struct *tsk)
 	return 0;
 }
 
+static int ptrace_do_wait(struct wait_opts *wo, struct task_struct *tsk) __must_hold(&tasklist_lock);
 static int ptrace_do_wait(struct wait_opts *wo, struct task_struct *tsk)
 {
 	struct task_struct *p;
@@ -1490,12 +1511,16 @@ repeat:
 	tsk = current;
 	do {
 		retval = do_wait_thread(wo, tsk);
-		if (retval)
+		if (retval) {
+			__release(&tasklist_lock); // XXX sparse can't model conditional release
 			goto end;
+		}
 
 		retval = ptrace_do_wait(wo, tsk);
-		if (retval)
+		if (retval) {
+			__release(&tasklist_lock); // XXX sparse can't model conditional release
 			goto end;
+		}
 
 		if (wo->wo_flags & __WNOTHREAD)
 			break;
