@@ -114,7 +114,7 @@ bool made_by_compiler(const_tree decl)
 		return false;
 
 	gcc_assert(decl_code == FUNCTION_DECL);
-	if (DECL_ABSTRACT_ORIGIN(decl) != NULL_TREE)
+	if (DECL_ABSTRACT_ORIGIN(decl) != NULL_TREE && DECL_ABSTRACT_ORIGIN(decl) != decl)
 		return true;
 	if (DECL_ARTIFICIAL(decl))
 		return true;
@@ -418,17 +418,17 @@ tree get_orig_fndecl(const_tree clone_fndecl)
 	gcc_assert(TREE_CODE(clone_fndecl) == FUNCTION_DECL);
 
 	if (DECL_ABSTRACT_ORIGIN(clone_fndecl))
-		return (tree)DECL_ORIGIN(clone_fndecl);
+		return CONST_CAST_TREE(DECL_ABSTRACT_ORIGIN(clone_fndecl));
 	node = get_cnode(clone_fndecl);
 	if (!node)
-		return (tree)clone_fndecl;
+		return CONST_CAST_TREE(clone_fndecl);
 
 	while (node->clone_of)
 		node = node->clone_of;
 	if (!made_by_compiler(NODE_DECL(node)))
 		return NODE_DECL(node);
 	// Return the cloned decl because it is needed for the transform callback
-	return (tree)clone_fndecl;
+	return CONST_CAST_TREE(clone_fndecl);
 }
 
 static tree get_interesting_fndecl_from_stmt(const gcall *stmt)

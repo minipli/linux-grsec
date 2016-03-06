@@ -18,7 +18,7 @@
 int plugin_is_GPL_compatible;
 
 static struct plugin_info initify_plugin_info = {
-	.version	= "20160217",
+	.version	= "20160305",
 	.help		= "initify_plugin\n",
 };
 
@@ -391,7 +391,6 @@ static tree create_tmp_assign(gcall *stmt, unsigned int num)
 	type = TREE_TYPE(TREE_TYPE(decl));
 	type = build_qualified_type(type, TYPE_QUALS(type) | TYPE_QUAL_CONST);
 	TYPE_READONLY(type) = 1;
-	TREE_PUBLIC(type) = 0;
 
 	DECL_INITIAL(decl) = str;
 	DECL_CONTEXT(decl) = current_function_decl;

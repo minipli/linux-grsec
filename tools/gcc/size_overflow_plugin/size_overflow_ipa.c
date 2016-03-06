@@ -230,6 +230,9 @@ static next_interesting_function_t create_orig_next_node_for_a_clone(struct fn_r
 	if (DECL_BUILT_IN(orig_raw_data.decl) || DECL_BUILT_IN_CLASS(orig_raw_data.decl) == BUILT_IN_NORMAL)
 		return NULL;
 
+	if (made_by_compiler(orig_raw_data.decl))
+		return NULL;
+
 	decl_code = TREE_CODE(orig_raw_data.decl);
 	if (decl_code == FIELD_DECL || decl_code == VAR_DECL)
 		orig_raw_data.num = clone_raw_data->num;

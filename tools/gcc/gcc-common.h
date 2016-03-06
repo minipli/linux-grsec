@@ -345,7 +345,7 @@ static inline bool gimple_store_p(gimple gs)
 	return lhs && !is_gimple_reg(lhs);
 }
 
-static inline void gimple_init_singleton(gimple g)
+static inline void gimple_init_singleton(gimple g __unused)
 {
 }
 #endif
