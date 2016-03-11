@@ -2054,10 +2054,14 @@ static int cifs_writepages(struct address_space *mapping,
 		index = mapping->writeback_index; /* Start from prev offset */
 		end = -1;
 	} else {
-		index = wbc->range_start >> PAGE_CACHE_SHIFT;
-		end = wbc->range_end >> PAGE_CACHE_SHIFT;
-		if (wbc->range_start == 0 && wbc->range_end == LLONG_MAX)
+		if (wbc->range_start == 0 && wbc->range_end == LLONG_MAX) {
 			range_whole = true;
+			index = 0;
+			end = ULONG_MAX;
+		} else {
+			index = wbc->range_start >> PAGE_CACHE_SHIFT;
+			end = wbc->range_end >> PAGE_CACHE_SHIFT;
+		}
 		scanned = true;
 	}
 	server = cifs_sb_master_tcon(cifs_sb)->ses->server;
@@ -2531,7 +2535,7 @@ cifs_write_from_iter(loff_t offset, size_t len, struct iov_iter *from,
 		wdata->pid = pid;
 		wdata->bytes = cur_len;
 		wdata->pagesz = PAGE_SIZE;
-		wdata->tailsz = cur_len - ((nr_pages - 1) * PAGE_SIZE);
+		wdata->tailsz = cur_len - nr_pages * PAGE_SIZE + PAGE_SIZE;
 		wdata->credits = credits;
 
 		if (!wdata->cfile->invalidHandle ||
