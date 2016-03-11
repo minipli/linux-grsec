@@ -96,8 +96,8 @@ const char *get_type_name_from_field(const_tree field_decl)
 	else if (TREE_CODE(type_name) == TYPE_DECL)
 		return DECL_NAME_POINTER(type_name);
 
-	debug_tree((tree)field_decl);
-	debug_tree((tree)type_name);
+	debug_tree(field_decl);
+	debug_tree(type_name);
 	gcc_unreachable();
 }
 
@@ -390,8 +390,8 @@ static unsigned int get_correct_argnum_cnode(struct cgraph_node *node, struct cg
 		return orig_argnum_on_clone(correct_argnum_of_node, node, argnum);
 
 	if (node)
-		debug_tree((tree)NODE_DECL(node));
-	debug_tree((tree)correct_argnum_of_node_decl);
+		debug_tree(NODE_DECL(node));
+	debug_tree(correct_argnum_of_node_decl);
 	gcc_unreachable();
 }
 
