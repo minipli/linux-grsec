@@ -45,10 +45,18 @@ BEGIN(read)
 	movl  (v), %eax
 	movl 4(v), %edx
 RET_ENDP
+BEGIN(read_unchecked)
+	movl  (v), %eax
+	movl 4(v), %edx
+RET_ENDP
 #undef v
 
 #define v %esi
 BEGIN(set)
+	movl %ebx,  (v)
+	movl %ecx, 4(v)
+RET_ENDP
+BEGIN(set_unchecked)
 	movl %ebx,  (v)
 	movl %ecx, 4(v)
 RET_ENDP
@@ -67,11 +75,43 @@ RET_ENDP
 BEGIN(add)
 	addl %eax,  (v)
 	adcl %edx, 4(v)
+
+#ifdef CONFIG_PAX_REFCOUNT
+	jno 0f
+	subl %eax,  (v)
+	sbbl %edx, 4(v)
+	int $4
+0:
+	_ASM_EXTABLE(0b, 0b)
+#endif
+
+RET_ENDP
+BEGIN(add_unchecked)
+	addl %eax,  (v)
+	adcl %edx, 4(v)
 RET_ENDP
 #undef v
 
 #define v %ecx
 BEGIN(add_return)
+	addl  (v), %eax
+	adcl 4(v), %edx
+
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+1234:
+	_ASM_EXTABLE(1234b, 2f)
+#endif
+
+	movl %eax,  (v)
+	movl %edx, 4(v)
+
+#ifdef CONFIG_PAX_REFCOUNT
+2:
+#endif
+
+RET_ENDP
+BEGIN(add_return_unchecked)
 	addl  (v), %eax
 	adcl 4(v), %edx
 	movl %eax,  (v)
@@ -83,11 +123,46 @@ RET_ENDP
 BEGIN(sub)
 	subl %eax,  (v)
 	sbbl %edx, 4(v)
+
+#ifdef CONFIG_PAX_REFCOUNT
+	jno 0f
+	addl %eax,  (v)
+	adcl %edx, 4(v)
+	int $4
+0:
+	_ASM_EXTABLE(0b, 0b)
+#endif
+
+RET_ENDP
+BEGIN(sub_unchecked)
+	subl %eax,  (v)
+	sbbl %edx, 4(v)
 RET_ENDP
 #undef v
 
 #define v %ecx
 BEGIN(sub_return)
+	negl %edx
+	negl %eax
+	sbbl $0, %edx
+	addl  (v), %eax
+	adcl 4(v), %edx
+
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+1234:
+	_ASM_EXTABLE(1234b, 2f)
+#endif
+
+	movl %eax,  (v)
+	movl %edx, 4(v)
+
+#ifdef CONFIG_PAX_REFCOUNT
+2:
+#endif
+
+RET_ENDP
+BEGIN(sub_return_unchecked)
 	negl %edx
 	negl %eax
 	sbbl $0, %edx
@@ -102,11 +177,45 @@ RET_ENDP
 BEGIN(inc)
 	addl $1,  (v)
 	adcl $0, 4(v)
+
+#ifdef CONFIG_PAX_REFCOUNT
+	jno 0f
+	subl $1,  (v)
+	sbbl $0, 4(v)
+	int $4
+0:
+	_ASM_EXTABLE(0b, 0b)
+#endif
+
+RET_ENDP
+BEGIN(inc_unchecked)
+	addl $1,  (v)
+	adcl $0, 4(v)
 RET_ENDP
 #undef v
 
 #define v %esi
 BEGIN(inc_return)
+	movl  (v), %eax
+	movl 4(v), %edx
+	addl $1, %eax
+	adcl $0, %edx
+
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+1234:
+	_ASM_EXTABLE(1234b, 2f)
+#endif
+
+	movl %eax,  (v)
+	movl %edx, 4(v)
+
+#ifdef CONFIG_PAX_REFCOUNT
+2:
+#endif
+
+RET_ENDP
+BEGIN(inc_return_unchecked)
 	movl  (v), %eax
 	movl 4(v), %edx
 	addl $1, %eax
@@ -120,11 +229,45 @@ RET_ENDP
 BEGIN(dec)
 	subl $1,  (v)
 	sbbl $0, 4(v)
+
+#ifdef CONFIG_PAX_REFCOUNT
+	jno 0f
+	addl $1,  (v)
+	adcl $0, 4(v)
+	int $4
+0:
+	_ASM_EXTABLE(0b, 0b)
+#endif
+
+RET_ENDP
+BEGIN(dec_unchecked)
+	subl $1,  (v)
+	sbbl $0, 4(v)
 RET_ENDP
 #undef v
 
 #define v %esi
 BEGIN(dec_return)
+	movl  (v), %eax
+	movl 4(v), %edx
+	subl $1, %eax
+	sbbl $0, %edx
+
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+1234:
+	_ASM_EXTABLE(1234b, 2f)
+#endif
+
+	movl %eax,  (v)
+	movl %edx, 4(v)
+
+#ifdef CONFIG_PAX_REFCOUNT
+2:
+#endif
+
+RET_ENDP
+BEGIN(dec_return_unchecked)
 	movl  (v), %eax
 	movl 4(v), %edx
 	subl $1, %eax
@@ -140,6 +283,13 @@ BEGIN(add_unless)
 	adcl %edx, %edi
 	addl  (v), %eax
 	adcl 4(v), %edx
+
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+1234:
+	_ASM_EXTABLE(1234b, 2f)
+#endif
+
 	cmpl %eax, %ecx
 	je 3f
 1:
@@ -165,6 +315,13 @@ BEGIN(inc_not_zero)
 1:
 	addl $1, %eax
 	adcl $0, %edx
+
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+1234:
+	_ASM_EXTABLE(1234b, 2f)
+#endif
+
 	movl %eax,  (v)
 	movl %edx, 4(v)
 	movl $1, %eax
@@ -183,6 +340,13 @@ BEGIN(dec_if_positive)
 	movl 4(v), %edx
 	subl $1, %eax
 	sbbl $0, %edx
+
+#ifdef CONFIG_PAX_REFCOUNT
+	into
+1234:
+	_ASM_EXTABLE(1234b, 1f)
+#endif
+
 	js 1f
 	movl %eax,  (v)
 	movl %edx, 4(v)
