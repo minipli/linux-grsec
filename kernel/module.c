@@ -2552,12 +2552,12 @@ static void add_kallsyms(struct module *mod, const struct load_info *info)
 	/* Set up to point into init section. */
 	mod->kallsyms = mod->module_init_rx + info->mod_kallsyms_init_off;
 
+	pax_open_kernel();
+
 	mod->kallsyms->symtab = (void *)symsec->sh_addr;
 	mod->kallsyms->num_symtab = symsec->sh_size / sizeof(Elf_Sym);
 	/* Make sure we get permanent strtab: don't use info->strtab. */
 	mod->kallsyms->strtab = (void *)info->sechdrs[info->index.str].sh_addr;
-
-	pax_open_kernel();
 
 	/* Set types up while we still have access to sections. */
 	for (i = 0; i < mod->kallsyms->num_symtab; i++)
