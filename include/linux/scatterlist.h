@@ -1,6 +1,7 @@
 #ifndef _LINUX_SCATTERLIST_H
 #define _LINUX_SCATTERLIST_H
 
+#include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/types.h>
 #include <linux/bug.h>
@@ -136,10 +137,17 @@ static inline struct page *sg_page(struct scatterlist *sg)
 static inline void sg_set_buf(struct scatterlist *sg, const void *buf,
 			      unsigned int buflen)
 {
-#ifdef CONFIG_DEBUG_SG
-	BUG_ON(!virt_addr_valid(buf));
+	const void *realbuf = buf;
+
+#ifdef CONFIG_GRKERNSEC_KSTACKOVERFLOW
+	if (object_starts_on_stack(buf))
+		realbuf = buf - current->stack + current->lowmem_stack;
 #endif
-	sg_set_page(sg, virt_to_page(buf), buflen, offset_in_page(buf));
+
+#ifdef CONFIG_DEBUG_SG
+	BUG_ON(!virt_addr_valid(realbuf));
+#endif
+	sg_set_page(sg, virt_to_page(realbuf), buflen, offset_in_page(realbuf));
 }
 
 /*

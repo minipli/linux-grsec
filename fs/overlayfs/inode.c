@@ -358,6 +358,9 @@ struct inode *ovl_d_select_inode(struct dentry *dentry, unsigned file_flags)
 	if (d_is_dir(dentry))
 		return d_backing_inode(dentry);
 
+	if (d_is_dir(dentry))
+		return d_backing_inode(dentry);
+
 	type = ovl_path_real(dentry, &realpath);
 	if (ovl_open_need_copy_up(file_flags, type, realpath.dentry)) {
 		err = ovl_want_write(dentry);

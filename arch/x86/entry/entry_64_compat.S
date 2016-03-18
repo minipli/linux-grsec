@@ -13,8 +13,10 @@
 #include <asm/irqflags.h>
 #include <asm/asm.h>
 #include <asm/smap.h>
+#include <asm/pgtable.h>
 #include <linux/linkage.h>
 #include <linux/err.h>
+#include <asm/alternative-asm.h>
 
 	.section .entry.text, "ax"
 
@@ -24,6 +26,32 @@ ENTRY(native_usergs_sysret32)
 	sysretl
 ENDPROC(native_usergs_sysret32)
 #endif
+
+	.macro pax_enter_kernel_user
+	pax_set_fptr_mask
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	call	pax_enter_kernel_user
+#endif
+	.endm
+
+	.macro pax_exit_kernel_user
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	call	pax_exit_kernel_user
+#endif
+#ifdef CONFIG_PAX_RANDKSTACK
+	pushq	%rax
+	pushq	%r11
+	call	pax_randomize_kstack
+	popq	%r11
+	popq	%rax
+#endif
+	.endm
+
+	.macro pax_erase_kstack
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+	call	pax_erase_kstack
+#endif
+	.endm
 
 /*
  * 32-bit SYSENTER instruction entry.
@@ -76,25 +104,35 @@ ENTRY(entry_SYSENTER_compat)
 	ASM_CLAC			/* Clear AC after saving FLAGS */
 
 	pushq	$__USER32_CS		/* pt_regs->cs */
-	xorq    %r8,%r8
-	pushq	%r8			/* pt_regs->ip = 0 (placeholder) */
+	pushq	$0			/* pt_regs->ip = 0 (placeholder) */
 	pushq	%rax			/* pt_regs->orig_ax */
+	xorl	%eax,%eax
 	pushq	%rdi			/* pt_regs->di */
 	pushq	%rsi			/* pt_regs->si */
 	pushq	%rdx			/* pt_regs->dx */
 	pushq	%rcx			/* pt_regs->cx */
 	pushq	$-ENOSYS		/* pt_regs->ax */
-	pushq   %r8                     /* pt_regs->r8  = 0 */
-	pushq   %r8                     /* pt_regs->r9  = 0 */
-	pushq   %r8                     /* pt_regs->r10 = 0 */
-	pushq   %r8                     /* pt_regs->r11 = 0 */
+	pushq   %rax                    /* pt_regs->r8  = 0 */
+	pushq   %rax                    /* pt_regs->r9  = 0 */
+	pushq   %rax                    /* pt_regs->r10 = 0 */
+	pushq   %rax                    /* pt_regs->r11 = 0 */
 	pushq   %rbx                    /* pt_regs->rbx */
 	pushq   %rbp                    /* pt_regs->rbp (will be overwritten) */
-	pushq   %r8                     /* pt_regs->r12 = 0 */
-	pushq   %r8                     /* pt_regs->r13 = 0 */
-	pushq   %r8                     /* pt_regs->r14 = 0 */
-	pushq   %r8                     /* pt_regs->r15 = 0 */
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	pushq   %r12                    /* pt_regs->r12 */
+#else
+	pushq   %rax                    /* pt_regs->r12 = 0 */
+#endif
+	pushq   %rax                    /* pt_regs->r13 = 0 */
+	pushq   %rax                    /* pt_regs->r14 = 0 */
+	pushq   %rax                    /* pt_regs->r15 = 0 */
 	cld
+
+	pax_enter_kernel_user
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pax_erase_kstack
+#endif
 
 	/*
 	 * Sysenter doesn't filter flags, so we need to clear NT
@@ -181,17 +219,27 @@ ENTRY(entry_SYSCALL_compat)
 	pushq	%rdx			/* pt_regs->dx */
 	pushq	%rbp			/* pt_regs->cx (stashed in bp) */
 	pushq	$-ENOSYS		/* pt_regs->ax */
-	xorq    %r8,%r8
-	pushq   %r8                     /* pt_regs->r8  = 0 */
-	pushq   %r8                     /* pt_regs->r9  = 0 */
-	pushq   %r8                     /* pt_regs->r10 = 0 */
-	pushq   %r8                     /* pt_regs->r11 = 0 */
+	xorl    %eax,%eax
+	pushq   %rax                    /* pt_regs->r8  = 0 */
+	pushq   %rax                    /* pt_regs->r9  = 0 */
+	pushq   %rax                    /* pt_regs->r10 = 0 */
+	pushq   %rax                    /* pt_regs->r11 = 0 */
 	pushq   %rbx                    /* pt_regs->rbx */
 	pushq   %rbp                    /* pt_regs->rbp (will be overwritten) */
-	pushq   %r8                     /* pt_regs->r12 = 0 */
-	pushq   %r8                     /* pt_regs->r13 = 0 */
-	pushq   %r8                     /* pt_regs->r14 = 0 */
-	pushq   %r8                     /* pt_regs->r15 = 0 */
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	pushq   %r12                    /* pt_regs->r12 */
+#else
+	pushq   %rax                    /* pt_regs->r12 = 0 */
+#endif
+	pushq   %rax                    /* pt_regs->r13 = 0 */
+	pushq   %rax                    /* pt_regs->r14 = 0 */
+	pushq   %rax                    /* pt_regs->r15 = 0 */
+
+	pax_enter_kernel_user
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pax_erase_kstack
+#endif
 
 	/*
 	 * User mode is traced as though IRQs are on, and SYSENTER
@@ -207,11 +255,18 @@ ENTRY(entry_SYSCALL_compat)
 
 	/* Opportunistic SYSRET */
 sysret32_from_system_call:
+	pax_exit_kernel_user
+	pax_erase_kstack
 	TRACE_IRQS_ON			/* User mode traces as IRQs on. */
 	movq	RBX(%rsp), %rbx		/* pt_regs->rbx */
 	movq	RBP(%rsp), %rbp		/* pt_regs->rbp */
 	movq	EFLAGS(%rsp), %r11	/* pt_regs->flags (in r11) */
 	movq	RIP(%rsp), %rcx		/* pt_regs->ip (in rcx) */
+
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	movq	R12(%rsp), %r12
+#endif
+
 	addq	$RAX, %rsp		/* Skip r8-r15 */
 	popq	%rax			/* pt_regs->rax */
 	popq	%rdx			/* Skip pt_regs->cx */
@@ -239,7 +294,7 @@ sysret32_from_system_call:
 	xorq	%r10, %r10
 	movq	RSP-ORIG_RAX(%rsp), %rsp
         USERGS_SYSRET32
-END(entry_SYSCALL_compat)
+ENDPROC(entry_SYSCALL_compat)
 
 /*
  * Emulated IA32 system calls via int 0x80.
@@ -286,11 +341,11 @@ ENTRY(entry_INT80_compat)
 	pushq	%rdx			/* pt_regs->dx */
 	pushq	%rcx			/* pt_regs->cx */
 	pushq	$-ENOSYS		/* pt_regs->ax */
-	xorq    %r8,%r8
-	pushq   %r8                     /* pt_regs->r8  = 0 */
-	pushq   %r8                     /* pt_regs->r9  = 0 */
-	pushq   %r8                     /* pt_regs->r10 = 0 */
-	pushq   %r8                     /* pt_regs->r11 = 0 */
+	xorl    %eax,%eax
+	pushq   %rax                    /* pt_regs->r8  = 0 */
+	pushq   %rax                    /* pt_regs->r9  = 0 */
+	pushq   %rax                    /* pt_regs->r10 = 0 */
+	pushq   %rax                    /* pt_regs->r11 = 0 */
 	pushq   %rbx                    /* pt_regs->rbx */
 	pushq   %rbp                    /* pt_regs->rbp */
 	pushq   %r12                    /* pt_regs->r12 */
@@ -298,6 +353,12 @@ ENTRY(entry_INT80_compat)
 	pushq   %r14                    /* pt_regs->r14 */
 	pushq   %r15                    /* pt_regs->r15 */
 	cld
+
+	pax_enter_kernel_user
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pax_erase_kstack
+#endif
 
 	/*
 	 * User mode is traced as though IRQs are on, and the interrupt
@@ -310,10 +371,12 @@ ENTRY(entry_INT80_compat)
 .Lsyscall_32_done:
 
 	/* Go back to user mode. */
+	pax_exit_kernel_user
+	pax_erase_kstack
 	TRACE_IRQS_ON
 	SWAPGS
 	jmp	restore_regs_and_iret
-END(entry_INT80_compat)
+ENDPROC(entry_INT80_compat)
 
 	ALIGN
 GLOBAL(stub32_clone)
