@@ -3072,7 +3072,7 @@ static int move_module(struct module *mod, struct load_info *info)
 	if (mod->init_size_rx) {
 		ptr = module_alloc_exec(mod->init_size_rx);
 		kmemleak_ignore(ptr);
-		if (!ptr && mod->init_size_rx) {
+		if (!ptr) {
 			module_memfree_exec(mod->module_core_rx);
 			if (mod->module_init_rw)
 				module_memfree(mod->module_init_rw);
