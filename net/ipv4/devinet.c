@@ -69,7 +69,8 @@
 
 static struct ipv4_devconf ipv4_devconf = {
 	.data = {
-		[IPV4_DEVCONF_ACCEPT_REDIRECTS - 1] = 1,
+		[IPV4_DEVCONF_ACCEPT_REDIRECTS - 1] = 0,
+		[IPV4_DEVCONF_RP_FILTER - 1] = 1,
 		[IPV4_DEVCONF_SEND_REDIRECTS - 1] = 1,
 		[IPV4_DEVCONF_SECURE_REDIRECTS - 1] = 1,
 		[IPV4_DEVCONF_SHARED_MEDIA - 1] = 1,
@@ -80,7 +81,8 @@ static struct ipv4_devconf ipv4_devconf = {
 
 static struct ipv4_devconf ipv4_devconf_dflt = {
 	.data = {
-		[IPV4_DEVCONF_ACCEPT_REDIRECTS - 1] = 1,
+		[IPV4_DEVCONF_ACCEPT_REDIRECTS - 1] = 0,
+		[IPV4_DEVCONF_RP_FILTER - 1] = 1,
 		[IPV4_DEVCONF_SEND_REDIRECTS - 1] = 1,
 		[IPV4_DEVCONF_SECURE_REDIRECTS - 1] = 1,
 		[IPV4_DEVCONF_SHARED_MEDIA - 1] = 1,
@@ -334,6 +336,9 @@ static void __inet_del_ifa(struct in_device *in_dev, struct in_ifaddr **ifap,
 
 	ASSERT_RTNL();
 
+	if (in_dev->dead)
+		goto no_promotions;
+
 	/* 1. Deleting primary ifaddr forces deletion all secondaries
 	 * unless alias promotion is set
 	 **/
@@ -380,6 +385,7 @@ static void __inet_del_ifa(struct in_device *in_dev, struct in_ifaddr **ifap,
 			fib_del_ifaddr(ifa, ifa1);
 	}
 
+no_promotions:
 	/* 2. Unlink it */
 
 	*ifap = ifa1->ifa_next;
@@ -1579,7 +1585,7 @@ static int inet_dump_ifaddr(struct sk_buff *skb, struct netlink_callback *cb)
 		idx = 0;
 		head = &net->dev_index_head[h];
 		rcu_read_lock();
-		cb->seq = atomic_read(&net->ipv4.dev_addr_genid) ^
+		cb->seq = atomic_read_unchecked(&net->ipv4.dev_addr_genid) ^
 			  net->dev_base_seq;
 		hlist_for_each_entry_rcu(dev, head, index_hlist) {
 			if (idx < s_idx)
@@ -1907,7 +1913,7 @@ static int inet_netconf_dump_devconf(struct sk_buff *skb,
 		idx = 0;
 		head = &net->dev_index_head[h];
 		rcu_read_lock();
-		cb->seq = atomic_read(&net->ipv4.dev_addr_genid) ^
+		cb->seq = atomic_read_unchecked(&net->ipv4.dev_addr_genid) ^
 			  net->dev_base_seq;
 		hlist_for_each_entry_rcu(dev, head, index_hlist) {
 			if (idx < s_idx)
@@ -2148,7 +2154,7 @@ static int ipv4_doint_and_flush(struct ctl_table *ctl, int write,
 #define DEVINET_SYSCTL_FLUSHING_ENTRY(attr, name) \
 	DEVINET_SYSCTL_COMPLEX_ENTRY(attr, name, ipv4_doint_and_flush)
 
-static struct devinet_sysctl_table {
+static const struct devinet_sysctl_table {
 	struct ctl_table_header *sysctl_header;
 	struct ctl_table devinet_vars[__IPV4_DEVCONF_MAX];
 } devinet_sysctl = {
@@ -2282,7 +2288,7 @@ static __net_init int devinet_init_net(struct net *net)
 	int err;
 	struct ipv4_devconf *all, *dflt;
 #ifdef CONFIG_SYSCTL
-	struct ctl_table *tbl = ctl_forward_entry;
+	ctl_table_no_const *tbl = NULL;
 	struct ctl_table_header *forw_hdr;
 #endif
 
@@ -2300,7 +2306,7 @@ static __net_init int devinet_init_net(struct net *net)
 			goto err_alloc_dflt;
 
 #ifdef CONFIG_SYSCTL
-		tbl = kmemdup(tbl, sizeof(ctl_forward_entry), GFP_KERNEL);
+		tbl = kmemdup(ctl_forward_entry, sizeof(ctl_forward_entry), GFP_KERNEL);
 		if (!tbl)
 			goto err_alloc_ctl;
 
@@ -2320,7 +2326,10 @@ static __net_init int devinet_init_net(struct net *net)
 		goto err_reg_dflt;
 
 	err = -ENOMEM;
-	forw_hdr = register_net_sysctl(net, "net/ipv4", tbl);
+	if (!net_eq(net, &init_net))
+		forw_hdr = register_net_sysctl(net, "net/ipv4", tbl);
+	else
+		forw_hdr = register_net_sysctl(net, "net/ipv4", ctl_forward_entry);
 	if (!forw_hdr)
 		goto err_reg_ctl;
 	net->ipv4.forw_hdr = forw_hdr;
@@ -2336,8 +2345,7 @@ err_reg_ctl:
 err_reg_dflt:
 	__devinet_sysctl_unregister(all);
 err_reg_all:
-	if (tbl != ctl_forward_entry)
-		kfree(tbl);
+	kfree(tbl);
 err_alloc_ctl:
 #endif
 	if (dflt != &ipv4_devconf_dflt)

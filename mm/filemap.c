@@ -1759,15 +1759,16 @@ generic_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 	ssize_t retval = 0;
 	loff_t *ppos = &iocb->ki_pos;
 	loff_t pos = *ppos;
+	size_t count = iov_iter_count(iter);
+
+	if (!count)
+		goto out; /* skip atime */
 
 	if (iocb->ki_flags & IOCB_DIRECT) {
 		struct address_space *mapping = file->f_mapping;
 		struct inode *inode = mapping->host;
-		size_t count = iov_iter_count(iter);
 		loff_t size;
 
-		if (!count)
-			goto out; /* skip atime */
 		size = i_size_read(inode);
 		retval = filemap_write_and_wait_range(mapping, pos,
 					pos + count - 1);
@@ -2161,7 +2162,7 @@ int generic_file_mmap(struct file * file, struct vm_area_struct * vma)
 	struct address_space *mapping = file->f_mapping;
 
 	if (!mapping->a_ops->readpage)
-		return -ENOEXEC;
+		return -ENODEV;
 	file_accessed(file);
 	vma->vm_ops = &generic_file_vm_ops;
 	return 0;
@@ -2342,6 +2343,7 @@ inline ssize_t generic_write_checks(struct kiocb *iocb, struct iov_iter *from)
 	pos = iocb->ki_pos;
 
 	if (limit != RLIM_INFINITY) {
+		gr_learn_resource(current, RLIMIT_FSIZE, iocb->ki_pos, 0);
 		if (iocb->ki_pos >= limit) {
 			send_sig(SIGXFSZ, current, 0);
 			return -EFBIG;

@@ -1045,7 +1045,6 @@ ppp_net_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 	void __user *addr = (void __user *) ifr->ifr_ifru.ifru_data;
 	struct ppp_stats stats;
 	struct ppp_comp_stats cstats;
-	char *vers;
 
 	switch (cmd) {
 	case SIOCGPPPSTATS:
@@ -1067,8 +1066,7 @@ ppp_net_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 		break;
 
 	case SIOCGPPPVER:
-		vers = PPP_VERSION;
-		if (copy_to_user(addr, vers, strlen(vers) + 1))
+		if (copy_to_user(addr, PPP_VERSION, sizeof(PPP_VERSION)))
 			break;
 		err = 0;
 		break;
@@ -2290,7 +2288,7 @@ int ppp_register_net_channel(struct net *net, struct ppp_channel *chan)
 
 	pch->ppp = NULL;
 	pch->chan = chan;
-	pch->chan_net = net;
+	pch->chan_net = get_net(net);
 	chan->ppp = pch;
 	init_ppp_file(&pch->file, CHANNEL);
 	pch->file.hdrlen = chan->hdrlen;
@@ -2387,6 +2385,8 @@ ppp_unregister_channel(struct ppp_channel *chan)
 	spin_lock_bh(&pn->all_channels_lock);
 	list_del(&pch->list);
 	spin_unlock_bh(&pn->all_channels_lock);
+	put_net(pch->chan_net);
+	pch->chan_net = NULL;
 
 	pch->file.dead = 1;
 	wake_up_interruptible(&pch->file.rwait);

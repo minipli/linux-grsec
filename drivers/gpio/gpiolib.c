@@ -638,8 +638,10 @@ static void gpiochip_irqchip_remove(struct gpio_chip *gpiochip)
 	}
 
 	if (gpiochip->irqchip) {
-		gpiochip->irqchip->irq_request_resources = NULL;
-		gpiochip->irqchip->irq_release_resources = NULL;
+		pax_open_kernel();
+		*(void **)&gpiochip->irqchip->irq_request_resources = NULL;
+		*(void **)&gpiochip->irqchip->irq_release_resources = NULL;
+		pax_close_kernel();
 		gpiochip->irqchip = NULL;
 	}
 }
@@ -715,8 +717,10 @@ int _gpiochip_irqchip_add(struct gpio_chip *gpiochip,
 	 */
 	if (!irqchip->irq_request_resources &&
 	    !irqchip->irq_release_resources) {
-		irqchip->irq_request_resources = gpiochip_irq_reqres;
-		irqchip->irq_release_resources = gpiochip_irq_relres;
+		pax_open_kernel();
+		*(void **)&irqchip->irq_request_resources = gpiochip_irq_reqres;
+		*(void **)&irqchip->irq_release_resources = gpiochip_irq_relres;
+		pax_close_kernel();
 	}
 
 	/*

@@ -922,6 +922,9 @@ void fib_del_ifaddr(struct in_ifaddr *ifa, struct in_ifaddr *iprim)
 		subnet = 1;
 	}
 
+	if (in_dev->dead)
+		goto no_promotions;
+
 	/* Deletion is more complicated than add.
 	 * We should take care of not to delete too much :-)
 	 *
@@ -997,6 +1000,7 @@ void fib_del_ifaddr(struct in_ifaddr *ifa, struct in_ifaddr *iprim)
 		}
 	}
 
+no_promotions:
 	if (!(ok & BRD_OK))
 		fib_magic(RTM_DELROUTE, RTN_BROADCAST, ifa->ifa_broadcast, 32, prim);
 	if (subnet && ifa->ifa_prefixlen < 31) {
@@ -1133,12 +1137,12 @@ static int fib_inetaddr_event(struct notifier_block *this, unsigned long event, 
 #ifdef CONFIG_IP_ROUTE_MULTIPATH
 		fib_sync_up(dev, RTNH_F_DEAD);
 #endif
-		atomic_inc(&net->ipv4.dev_addr_genid);
+		atomic_inc_unchecked(&net->ipv4.dev_addr_genid);
 		rt_cache_flush(dev_net(dev));
 		break;
 	case NETDEV_DOWN:
 		fib_del_ifaddr(ifa, NULL);
-		atomic_inc(&net->ipv4.dev_addr_genid);
+		atomic_inc_unchecked(&net->ipv4.dev_addr_genid);
 		if (!ifa->ifa_dev->ifa_list) {
 			/* Last address was deleted from this interface.
 			 * Disable IP.
@@ -1178,7 +1182,7 @@ static int fib_netdev_event(struct notifier_block *this, unsigned long event, vo
 #ifdef CONFIG_IP_ROUTE_MULTIPATH
 		fib_sync_up(dev, RTNH_F_DEAD);
 #endif
-		atomic_inc(&net->ipv4.dev_addr_genid);
+		atomic_inc_unchecked(&net->ipv4.dev_addr_genid);
 		rt_cache_flush(net);
 		break;
 	case NETDEV_DOWN:

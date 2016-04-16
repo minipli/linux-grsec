@@ -367,7 +367,6 @@ static int udl_fb_release(struct fb_info *info, int user)
 		fb_deferred_io_cleanup(info);
 		kfree(info->fbdefio);
 		info->fbdefio = NULL;
-		info->fbops->fb_mmap = udl_fb_mmap;
 	}
 
 	pr_warn("released /dev/fb%d user=%d count=%d\n",
@@ -539,7 +538,7 @@ static int udlfb_create(struct drm_fb_helper *helper,
 out_destroy_fbi:
 	drm_fb_helper_release_fbi(helper);
 out_gfree:
-	drm_gem_object_unreference(&ufbdev->ufb.obj->base);
+	drm_gem_object_unreference_unlocked(&ufbdev->ufb.obj->base);
 out:
 	return ret;
 }
