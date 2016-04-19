@@ -115,7 +115,7 @@ struct intel_uncore_box {
 struct uncore_event_desc {
 	struct kobj_attribute attr;
 	const char *config;
-};
+} __do_const;
 
 struct pci2phy_map {
 	struct list_head list;
