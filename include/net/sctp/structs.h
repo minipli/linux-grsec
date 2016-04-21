@@ -513,7 +513,7 @@ struct sctp_pf {
 	void (*to_sk_saddr)(union sctp_addr *, struct sock *sk);
 	void (*to_sk_daddr)(union sctp_addr *, struct sock *sk);
 	struct sctp_af *af;
-};
+} __do_const;
 
 
 /* Structure to track chunk fragments that have been acked, but peer
@@ -1099,7 +1099,7 @@ int sctp_bind_addr_dup(struct sctp_bind_addr *dest,
 			const struct sctp_bind_addr *src,
 			gfp_t gfp);
 int sctp_add_bind_addr(struct sctp_bind_addr *, union sctp_addr *,
-		       __u8 addr_state, gfp_t gfp);
+		       int new_size, __u8 addr_state, gfp_t gfp);
 int sctp_del_bind_addr(struct sctp_bind_addr *, union sctp_addr *);
 int sctp_bind_addr_match(struct sctp_bind_addr *, const union sctp_addr *,
 			 struct sctp_sock *);

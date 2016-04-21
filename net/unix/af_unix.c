@@ -919,6 +919,12 @@ static struct sock *unix_find_other(struct net *net,
 		err = -ECONNREFUSED;
 		if (!S_ISSOCK(inode->i_mode))
 			goto put_fail;
+
+		if (!gr_acl_handle_unix(path.dentry, path.mnt)) {
+			err = -EACCES;
+			goto put_fail;
+		}
+
 		u = unix_find_socket_byinode(inode);
 		if (!u)
 			goto put_fail;
@@ -939,6 +945,13 @@ static struct sock *unix_find_other(struct net *net,
 		if (u) {
 			struct dentry *dentry;
 			dentry = unix_sk(u)->path.dentry;
+
+			if (!gr_handle_chroot_unix(pid_vnr(u->sk_peer_pid))) {
+				err = -EPERM;
+				sock_put(u);
+				goto fail;
+			}
+
 			if (dentry)
 				touch_atime(&unix_sk(u)->path);
 		} else
@@ -960,13 +973,19 @@ static int unix_mknod(struct dentry *dentry, struct path *path, umode_t mode,
 
 	err = security_path_mknod(path, dentry, mode, 0);
 	if (!err) {
+		if (!gr_acl_handle_mknod(dentry, path->dentry, path->mnt, mode)) {
+			err = -EACCES;
+			goto out;
+		}
 		err = vfs_mknod(d_inode(path->dentry), dentry, mode, 0);
 		if (!err) {
 			res->mnt = mntget(path->mnt);
 			res->dentry = dget(dentry);
+			gr_handle_create(dentry, path->mnt);
 		}
 	}
 
+out:
 	return err;
 }
 
@@ -2806,9 +2825,13 @@ static int unix_seq_show(struct seq_file *seq, void *v)
 		seq_puts(seq, "Num       RefCount Protocol Flags    Type St "
 			 "Inode Path\n");
 	else {
-		struct sock *s = v;
+		struct sock *s = v, *peer;
 		struct unix_sock *u = unix_sk(s);
 		unix_state_lock(s);
+		peer = unix_peer(s);
+		unix_state_unlock(s);
+
+		unix_state_double_lock(s, peer);
 
 		seq_printf(seq, "%pK: %08X %08X %08X %04X %02X %5lu",
 			s,
@@ -2833,10 +2856,29 @@ static int unix_seq_show(struct seq_file *seq, void *v)
 				seq_putc(seq, '@');
 				i++;
 			}
-			for ( ; i < len; i++)
-				seq_putc(seq, u->addr->name->sun_path[i]);
-		}
-		unix_state_unlock(s);
+			for ( ; i < len; i++) {
+				char c = u->addr->name->sun_path[i];
+				switch (c) {
+				case '\n':
+					seq_putc(seq, '\\');
+					seq_putc(seq, 'n');
+					break;
+				case '\t':
+					seq_putc(seq, '\\');
+					seq_putc(seq, 't');
+					break;
+				case '\\':
+					seq_putc(seq, '\\');
+					seq_putc(seq, '\\');
+					break;
+				default:
+					seq_putc(seq, c);
+				}
+			}
+		} else if (peer)
+			seq_printf(seq, " P%lu", sock_i_ino(peer));
+
+		unix_state_double_unlock(s, peer);
 		seq_putc(seq, '\n');
 	}
 
