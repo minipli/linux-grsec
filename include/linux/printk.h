@@ -43,7 +43,7 @@ static inline const char *printk_skip_level(const char *buffer)
 #define CONSOLE_LOGLEVEL_DEBUG	10 /* issue debug messages */
 #define CONSOLE_LOGLEVEL_MOTORMOUTH 15	/* You can't shut this one up */
 
-extern int console_printk[];
+extern int console_printk[4];
 
 #define console_loglevel (console_printk[0])
 #define default_message_loglevel (console_printk[1])
