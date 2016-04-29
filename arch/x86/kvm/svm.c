@@ -3529,7 +3529,11 @@ static void reload_tss(struct kvm_vcpu *vcpu)
 	int cpu = raw_smp_processor_id();
 
 	struct svm_cpu_data *sd = per_cpu(svm_data, cpu);
+
+	pax_open_kernel();
 	sd->tss_desc->type = 9; /* available 32/64-bit TSS */
+	pax_close_kernel();
+
 	load_TR_desc();
 }
 
@@ -3928,6 +3932,10 @@ static void svm_vcpu_run(struct kvm_vcpu *vcpu)
 #endif
 #endif
 
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_MEMORY_UDEREF)
+	__set_fs(current_thread_info()->addr_limit);
+#endif
+
 	reload_tss(vcpu);
 
 	local_irq_disable();
@@ -4303,7 +4311,7 @@ static void svm_sched_in(struct kvm_vcpu *vcpu, int cpu)
 {
 }
 
-static struct kvm_x86_ops svm_x86_ops = {
+static struct kvm_x86_ops svm_x86_ops __read_only = {
 	.cpu_has_kvm_support = has_svm,
 	.disabled_by_bios = is_disabled,
 	.hardware_setup = svm_hardware_setup,

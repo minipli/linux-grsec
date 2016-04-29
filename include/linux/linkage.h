@@ -36,6 +36,7 @@
 #endif
 
 #define __page_aligned_data	__section(.data..page_aligned) __aligned(PAGE_SIZE)
+#define __page_aligned_rodata	__read_only __aligned(PAGE_SIZE)
 #define __page_aligned_bss	__section(.bss..page_aligned) __aligned(PAGE_SIZE)
 
 /*
@@ -84,6 +85,17 @@
 	ALIGN ASM_NL \
 	name:
 #endif
+
+#ifdef CONFIG_PAX_RAP
+#define RAP_ENTRY(name) \
+  .globl name; \
+  ALIGN; \
+  .quad __rap_hash_##name; \
+  name:
+#else
+#define RAP_ENTRY(name) ENTRY(name)
+#endif
+
 #endif /* LINKER_SCRIPT */
 
 #ifndef WEAK

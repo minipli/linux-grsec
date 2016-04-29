@@ -20,6 +20,7 @@
 
 #include "linux_wlan_common.h"
 #include <linux/string.h>
+#include <linux/netdevice.h>
 #include "wilc_wlan_if.h"
 #include "wilc_wlan.h"
 #include "wilc_wfi_netdevice.h"
@@ -119,8 +120,6 @@ static u8 crc7(u8 crc, const u8 *buffer, u32 len)
 #define DATA_PKT_SZ					DATA_PKT_SZ_8K
 
 #define USE_SPI_DMA     0
-
-static const struct wilc1000_ops wilc1000_spi_ops;
 
 static int wilc_bus_probe(struct spi_device *spi)
 {
