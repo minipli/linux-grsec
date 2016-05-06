@@ -23,7 +23,8 @@
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
 
-typedef ssize_t (*io_fn_t)(struct file *, char __user *, size_t, loff_t *);
+typedef ssize_t (*io_fnr_t)(struct file *, char __user *, size_t, loff_t *);
+typedef ssize_t (*io_fnw_t)(struct file *, const char __user *, size_t, loff_t *);
 typedef ssize_t (*iter_fn_t)(struct kiocb *, struct iov_iter *);
 
 const struct file_operations generic_ro_fops = {
@@ -545,7 +546,7 @@ ssize_t __kernel_write(struct file *file, const char *buf, size_t count, loff_t 
 
 	old_fs = get_fs();
 	set_fs(get_ds());
-	p = (__force const char __user *)buf;
+	p = (const char __force_user *)buf;
 	if (count > MAX_RW_COUNT)
 		count =  MAX_RW_COUNT;
 	ret = __vfs_write(file, p, count, pos);
@@ -709,7 +710,7 @@ static ssize_t do_iter_readv_writev(struct file *filp, struct iov_iter *iter,
 
 /* Do it by hand, with file-ops */
 static ssize_t do_loop_readv_writev(struct file *filp, struct iov_iter *iter,
-		loff_t *ppos, io_fn_t fn)
+		loff_t *ppos, io_fnr_t fnr, io_fnw_t fnw)
 {
 	ssize_t ret = 0;
 
@@ -717,7 +718,10 @@ static ssize_t do_loop_readv_writev(struct file *filp, struct iov_iter *iter,
 		struct iovec iovec = iov_iter_iovec(iter);
 		ssize_t nr;
 
-		nr = fn(filp, iovec.iov_base, iovec.iov_len, ppos);
+		if (fnr)
+			nr = fnr(filp, iovec.iov_base, iovec.iov_len, ppos);
+		else
+			nr = fnw(filp, iovec.iov_base, iovec.iov_len, ppos);
 
 		if (nr < 0) {
 			if (!ret)
@@ -820,7 +824,8 @@ static ssize_t do_readv_writev(int type, struct file *file,
 	struct iovec *iov = iovstack;
 	struct iov_iter iter;
 	ssize_t ret;
-	io_fn_t fn;
+	io_fnr_t fnr;
+	io_fnw_t fnw;
 	iter_fn_t iter_fn;
 
 	ret = import_iovec(type, uvector, nr_segs,
@@ -836,10 +841,12 @@ static ssize_t do_readv_writev(int type, struct file *file,
 		goto out;
 
 	if (type == READ) {
-		fn = file->f_op->read;
+		fnr = file->f_op->read;
+		fnw = NULL;
 		iter_fn = file->f_op->read_iter;
 	} else {
-		fn = (io_fn_t)file->f_op->write;
+		fnr = NULL;
+		fnw = file->f_op->write;
 		iter_fn = file->f_op->write_iter;
 		file_start_write(file);
 	}
@@ -847,7 +854,7 @@ static ssize_t do_readv_writev(int type, struct file *file,
 	if (iter_fn)
 		ret = do_iter_readv_writev(file, &iter, pos, iter_fn);
 	else
-		ret = do_loop_readv_writev(file, &iter, pos, fn);
+		ret = do_loop_readv_writev(file, &iter, pos, fnr, fnw);
 
 	if (type != READ)
 		file_end_write(file);
@@ -994,7 +1001,8 @@ static ssize_t compat_do_readv_writev(int type, struct file *file,
 	struct iovec *iov = iovstack;
 	struct iov_iter iter;
 	ssize_t ret;
-	io_fn_t fn;
+	io_fnr_t fnr;
+	io_fnw_t fnw;
 	iter_fn_t iter_fn;
 
 	ret = compat_import_iovec(type, uvector, nr_segs,
@@ -1010,10 +1018,12 @@ static ssize_t compat_do_readv_writev(int type, struct file *file,
 		goto out;
 
 	if (type == READ) {
-		fn = file->f_op->read;
+		fnr = file->f_op->read;
+		fnw = NULL;
 		iter_fn = file->f_op->read_iter;
 	} else {
-		fn = (io_fn_t)file->f_op->write;
+		fnr = NULL;
+		fnw = file->f_op->write;
 		iter_fn = file->f_op->write_iter;
 		file_start_write(file);
 	}
@@ -1021,7 +1031,7 @@ static ssize_t compat_do_readv_writev(int type, struct file *file,
 	if (iter_fn)
 		ret = do_iter_readv_writev(file, &iter, pos, iter_fn);
 	else
-		ret = do_loop_readv_writev(file, &iter, pos, fn);
+		ret = do_loop_readv_writev(file, &iter, pos, fnr, fnw);
 
 	if (type != READ)
 		file_end_write(file);

@@ -1801,6 +1801,10 @@ static int do_seccomp(struct pt_regs *regs)
 static inline int do_seccomp(struct pt_regs *regs) { return 0; }
 #endif /* CONFIG_SECCOMP */
 
+#ifdef CONFIG_GRKERNSEC_SETXID
+extern void gr_delayed_cred_worker(void);
+#endif
+
 /**
  * do_syscall_trace_enter() - Do syscall tracing on kernel entry.
  * @regs: the pt_regs of the task to trace (current)
@@ -1828,6 +1832,11 @@ long do_syscall_trace_enter(struct pt_regs *regs)
 
 	if (do_seccomp(regs))
 		return -1;
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
 
 	if (test_thread_flag(TIF_SYSCALL_TRACE)) {
 		/*
@@ -1870,6 +1879,11 @@ long do_syscall_trace_enter(struct pt_regs *regs)
 void do_syscall_trace_leave(struct pt_regs *regs)
 {
 	int step;
+
+#ifdef CONFIG_GRKERNSEC_SETXID
+	if (unlikely(test_and_clear_thread_flag(TIF_GRSEC_SETXID)))
+		gr_delayed_cred_worker();
+#endif
 
 	audit_syscall_exit(regs);
 

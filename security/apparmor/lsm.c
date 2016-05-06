@@ -176,7 +176,7 @@ static int common_perm_dir_dentry(int op, struct path *dir,
 				  struct dentry *dentry, u32 mask,
 				  struct path_cond *cond)
 {
-	struct path path = { dir->mnt, dentry };
+	struct path path = { .mnt = dir->mnt, .dentry = dentry };
 
 	return common_perm(op, &path, mask, cond);
 }
@@ -193,7 +193,7 @@ static int common_perm_dir_dentry(int op, struct path *dir,
 static int common_perm_mnt_dentry(int op, struct vfsmount *mnt,
 				  struct dentry *dentry, u32 mask)
 {
-	struct path path = { mnt, dentry };
+	struct path path = { .mnt = mnt, .dentry = dentry };
 	struct path_cond cond = { d_backing_inode(dentry)->i_uid,
 				  d_backing_inode(dentry)->i_mode
 	};
@@ -315,8 +315,8 @@ static int apparmor_path_rename(struct path *old_dir, struct dentry *old_dentry,
 
 	profile = aa_current_profile();
 	if (!unconfined(profile)) {
-		struct path old_path = { old_dir->mnt, old_dentry };
-		struct path new_path = { new_dir->mnt, new_dentry };
+		struct path old_path = { .mnt = old_dir->mnt, .dentry = old_dentry };
+		struct path new_path = { .mnt = new_dir->mnt, .dentry = new_dentry };
 		struct path_cond cond = { d_backing_inode(old_dentry)->i_uid,
 					  d_backing_inode(old_dentry)->i_mode
 		};
@@ -677,11 +677,11 @@ static const struct kernel_param_ops param_ops_aalockpolicy = {
 	.get = param_get_aalockpolicy
 };
 
-static int param_set_audit(const char *val, struct kernel_param *kp);
-static int param_get_audit(char *buffer, struct kernel_param *kp);
+static int param_set_audit(const char *val, const struct kernel_param *kp);
+static int param_get_audit(char *buffer, const struct kernel_param *kp);
 
-static int param_set_mode(const char *val, struct kernel_param *kp);
-static int param_get_mode(char *buffer, struct kernel_param *kp);
+static int param_set_mode(const char *val, const struct kernel_param *kp);
+static int param_get_mode(char *buffer, const struct kernel_param *kp);
 
 /* Flag values, also controllable via /sys/module/apparmor/parameters
  * We define special types as we want to do additional mediation.
@@ -791,7 +791,7 @@ static int param_get_aauint(char *buffer, const struct kernel_param *kp)
 	return param_get_uint(buffer, kp);
 }
 
-static int param_get_audit(char *buffer, struct kernel_param *kp)
+static int param_get_audit(char *buffer, const struct kernel_param *kp)
 {
 	if (!capable(CAP_MAC_ADMIN))
 		return -EPERM;
@@ -802,7 +802,7 @@ static int param_get_audit(char *buffer, struct kernel_param *kp)
 	return sprintf(buffer, "%s", audit_mode_names[aa_g_audit]);
 }
 
-static int param_set_audit(const char *val, struct kernel_param *kp)
+static int param_set_audit(const char *val, const struct kernel_param *kp)
 {
 	int i;
 	if (!capable(CAP_MAC_ADMIN))
@@ -824,7 +824,7 @@ static int param_set_audit(const char *val, struct kernel_param *kp)
 	return -EINVAL;
 }
 
-static int param_get_mode(char *buffer, struct kernel_param *kp)
+static int param_get_mode(char *buffer, const struct kernel_param *kp)
 {
 	if (!capable(CAP_MAC_ADMIN))
 		return -EPERM;
@@ -835,7 +835,7 @@ static int param_get_mode(char *buffer, struct kernel_param *kp)
 	return sprintf(buffer, "%s", aa_profile_mode_names[aa_g_profile_mode]);
 }
 
-static int param_set_mode(const char *val, struct kernel_param *kp)
+static int param_set_mode(const char *val, const struct kernel_param *kp)
 {
 	int i;
 	if (!capable(CAP_MAC_ADMIN))

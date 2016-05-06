@@ -117,14 +117,14 @@ struct skl_dsp_fw_ops {
 	int (*load_mod)(struct sst_dsp *ctx, u16 mod_id, char *mod_name);
 	int (*unload_mod)(struct sst_dsp *ctx, u16 mod_id);
 
-};
+} __no_const;
 
 struct skl_dsp_loader_ops {
 	int (*alloc_dma_buf)(struct device *dev,
 		struct snd_dma_buffer *dmab, size_t size);
 	int (*free_dma_buf)(struct device *dev,
 		struct snd_dma_buffer *dmab);
-};
+} __no_const;
 
 struct skl_load_module_info {
 	u16 mod_id;
