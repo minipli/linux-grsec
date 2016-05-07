@@ -2899,8 +2899,10 @@ static int check_modinfo(struct module *mod, struct load_info *info, int flags)
 	int err;
 
 #ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
-	if (!license || !license_is_gpl_compatible(license))
+	if (!license || !license_is_gpl_compatible(license)) {
+		pr_err("%s: module is not compatible with the KERNEXEC_'or' method\n", mod->name);
 		return -ENOEXEC;
+	}
 #endif
 
 	if (flags & MODULE_INIT_IGNORE_VERMAGIC)
