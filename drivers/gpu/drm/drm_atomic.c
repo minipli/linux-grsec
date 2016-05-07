@@ -1339,6 +1339,11 @@ EXPORT_SYMBOL(drm_atomic_async_commit);
  * The big monstor ioctl
  */
 
+static void free_vblank_event(struct drm_pending_event *event)
+{
+	kfree(event);
+}
+
 static struct drm_pending_vblank_event *create_vblank_event(
 		struct drm_device *dev, struct drm_file *file_priv, uint64_t user_data)
 {
@@ -1366,7 +1371,7 @@ static struct drm_pending_vblank_event *create_vblank_event(
 	e->event.user_data = user_data;
 	e->base.event = &e->event.base;
 	e->base.file_priv = file_priv;
-	e->base.destroy = (void (*) (struct drm_pending_event *)) kfree;
+	e->base.destroy = free_vblank_event;
 
 out:
 	return e;

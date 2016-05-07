@@ -47,7 +47,7 @@ struct pid init_struct_pid = INIT_STRUCT_PID;
 
 int pid_max = PID_MAX_DEFAULT;
 
-#define RESERVED_PIDS		300
+#define RESERVED_PIDS		500
 
 int pid_max_min = RESERVED_PIDS + 1;
 int pid_max_max = PID_MAX_LIMIT;
@@ -497,7 +497,7 @@ struct pid *find_get_pid(pid_t nr)
 }
 EXPORT_SYMBOL_GPL(find_get_pid);
 
-pid_t pid_nr_ns(struct pid *pid, struct pid_namespace *ns)
+pid_t pid_nr_ns(const struct pid *pid, const struct pid_namespace *ns)
 {
 	struct upid *upid;
 	pid_t nr = 0;
@@ -511,7 +511,7 @@ pid_t pid_nr_ns(struct pid *pid, struct pid_namespace *ns)
 }
 EXPORT_SYMBOL_GPL(pid_nr_ns);
 
-pid_t pid_vnr(struct pid *pid)
+pid_t pid_vnr(const struct pid *pid)
 {
 	return pid_nr_ns(pid, task_active_pid_ns(current));
 }
