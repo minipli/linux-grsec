@@ -29,7 +29,7 @@ struct wil_platform_ops {
 	int (*resume)(void *handle);
 	void (*uninit)(void *handle);
 	int (*notify_crash)(void *handle);
-};
+} __no_const;
 
 /**
  * struct wil_platform_rops - wil platform module callbacks from

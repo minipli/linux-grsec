@@ -158,6 +158,17 @@ static int __init set_reset_devices(char *str)
 
 __setup("reset_devices", set_reset_devices);
 
+#ifdef CONFIG_PAX_SOFTMODE
+int pax_softmode;
+
+static int __init setup_pax_softmode(char *str)
+{
+	get_option(&str, &pax_softmode);
+	return 1;
+}
+__setup("pax_softmode=", setup_pax_softmode);
+#endif
+
 static const char *argv_init[MAX_INIT_ARGS+2] = { "init", NULL, };
 const char *envp_init[MAX_INIT_ENVS+2] = { "HOME=/", "TERM=linux", NULL, };
 static const char *panic_later, *panic_param;
@@ -783,7 +794,7 @@ int __init_or_module do_one_initcall(initcall_t fn)
 {
 	int count = preempt_count();
 	int ret;
-	char msgbuf[64];
+	const char *msg1 = "", *msg2 = "";
 
 	if (initcall_blacklisted(fn))
 		return -EPERM;
@@ -793,18 +804,17 @@ int __init_or_module do_one_initcall(initcall_t fn)
 	else
 		ret = fn();
 
-	msgbuf[0] = 0;
-
 	if (preempt_count() != count) {
-		sprintf(msgbuf, "preemption imbalance ");
+		msg1 = " preemption imbalance";
 		preempt_count_set(count);
 	}
 	if (irqs_disabled()) {
-		strlcat(msgbuf, "disabled interrupts ", sizeof(msgbuf));
+		msg2 = " disabled interrupts";
 		local_irq_enable();
 	}
-	WARN(msgbuf[0], "initcall %pF returned with %s\n", fn, msgbuf);
+	WARN(*msg1 || *msg2, "initcall %pF returned with%s%s\n", fn, msg1, msg2);
 
+	add_latent_entropy();
 	return ret;
 }
 
@@ -909,8 +919,8 @@ static int run_init_process(const char *init_filename)
 {
 	argv_init[0] = init_filename;
 	return do_execve(getname_kernel(init_filename),
-		(const char __user *const __user *)argv_init,
-		(const char __user *const __user *)envp_init);
+		(const char __user *const __force_user *)argv_init,
+		(const char __user *const __force_user *)envp_init);
 }
 
 static int try_to_run_init_process(const char *init_filename)
@@ -1010,7 +1020,7 @@ static noinline void __init kernel_init_freeable(void)
 	do_basic_setup();
 
 	/* Open the /dev/console on the rootfs, this should never fail */
-	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
+	if (sys_open((const char __force_user *) "/dev/console", O_RDWR, 0) < 0)
 		pr_err("Warning: unable to open an initial console.\n");
 
 	(void) sys_dup(0);
@@ -1023,7 +1033,7 @@ static noinline void __init kernel_init_freeable(void)
 	if (!ramdisk_execute_command)
 		ramdisk_execute_command = "/init";
 
-	if (sys_access((const char __user *) ramdisk_execute_command, 0) != 0) {
+	if (sys_access((const char __force_user *) ramdisk_execute_command, 0) != 0) {
 		ramdisk_execute_command = NULL;
 		prepare_namespace();
 	}

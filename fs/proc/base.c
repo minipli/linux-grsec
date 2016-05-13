@@ -865,7 +865,7 @@ static ssize_t mem_rw(struct file *file, char __user *buf,
 		goto free;
 
 	while (count > 0) {
-		int this_len = min_t(int, count, PAGE_SIZE);
+		ssize_t this_len = min_t(ssize_t, count, PAGE_SIZE);
 
 		if (write && copy_from_user(page, buf, this_len)) {
 			copied = -EFAULT;
@@ -972,9 +972,12 @@ static ssize_t environ_read(struct file *file, char __user *buf,
 	env_end = mm->env_end;
 	up_read(&mm->mmap_sem);
 
+	if (!env_end)
+		goto free;
+
 	while (count > 0) {
 		size_t this_len, max_len;
-		int retval;
+		ssize_t retval;
 
 		if (src >= (env_end - env_start))
 			break;

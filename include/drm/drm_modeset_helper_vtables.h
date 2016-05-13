@@ -638,7 +638,7 @@ struct drm_encoder_helper_funcs {
 	int (*atomic_check)(struct drm_encoder *encoder,
 			    struct drm_crtc_state *crtc_state,
 			    struct drm_connector_state *conn_state);
-};
+} __no_const;
 
 /**
  * drm_encoder_helper_add - sets the helper vtable for an encoder
