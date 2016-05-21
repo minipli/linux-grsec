@@ -208,6 +208,27 @@ vfs_getxattr_alloc(struct dentry *dentry, const char *name, char **xattr_value,
 	return error;
 }
 
+#ifdef CONFIG_PAX_XATTR_PAX_FLAGS
+ssize_t
+pax_getxattr(struct dentry *dentry, void *value, size_t size)
+{
+	struct inode *inode = dentry->d_inode;
+	ssize_t error;
+
+	error = inode_permission(inode, MAY_EXEC);
+	if (error)
+		return error;
+
+	if (inode->i_op->getxattr)
+		error = inode->i_op->getxattr(dentry, XATTR_NAME_USER_PAX_FLAGS, value, size);
+	else
+		error = -EOPNOTSUPP;
+
+	return error;
+}
+EXPORT_SYMBOL(pax_getxattr);
+#endif
+
 ssize_t
 vfs_getxattr(struct dentry *dentry, const char *name, void *value, size_t size)
 {
