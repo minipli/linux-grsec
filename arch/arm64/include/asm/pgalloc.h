@@ -47,6 +47,11 @@ static inline void pud_populate(struct mm_struct *mm, pud_t *pud, pmd_t *pmd)
 	set_pud(pud, __pud(__pa(pmd) | PMD_TYPE_TABLE));
 }
 
+static inline void pud_populate_kernel(struct mm_struct *mm, pud_t *pud, pmd_t *pmd)
+{
+	pud_populate(mm, pud, pmd);
+}
+
 #endif	/* CONFIG_PGTABLE_LEVELS > 2 */
 
 #if CONFIG_PGTABLE_LEVELS > 3

@@ -425,6 +425,13 @@ extern const char *__elf_platform;
 #define ELF_ET_DYN_BASE		(TASK_SIZE / 3 * 2)
 #endif
 
+#ifdef CONFIG_PAX_ASLR
+#define PAX_ELF_ET_DYN_BASE	(TASK_IS_32BIT_ADDR ? 0x00400000UL : 0x00400000UL)
+
+#define PAX_DELTA_MMAP_LEN	(TASK_IS_32BIT_ADDR ? 27-PAGE_SHIFT : 36-PAGE_SHIFT)
+#define PAX_DELTA_STACK_LEN	(TASK_IS_32BIT_ADDR ? 27-PAGE_SHIFT : 36-PAGE_SHIFT)
+#endif
+
 #define ARCH_DLINFO							\
 do {									\
 	NEW_AUX_ENT(AT_SYSINFO_EHDR,					\
