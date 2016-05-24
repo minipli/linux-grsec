@@ -43,4 +43,3 @@ colorize_plugin-objs := colorize_plugin.o
 latent_entropy_plugin-objs := latent_entropy_plugin.o
 structleak_plugin-objs := structleak_plugin.o
 initify_plugin-objs := initify_plugin.o
-rap_plugin-objs := rap_plugin.o sip.o

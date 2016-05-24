@@ -33,7 +33,7 @@ static bool is_empty_dir(struct ctl_table_header *head)
 static void set_empty_dir(struct ctl_dir *dir)
 {
 	pax_open_kernel();
-	*(const void **)&dir->header.ctl_table[0].child = sysctl_mount_point;
+	const_cast(dir->header.ctl_table[0].child) = sysctl_mount_point;
 	pax_close_kernel();
 }
 
@@ -41,7 +41,7 @@ static void clear_empty_dir(struct ctl_dir *dir)
 
 {
 	pax_open_kernel();
-	*(void **)&dir->header.ctl_table[0].child = NULL;
+	const_cast(dir->header.ctl_table[0].child) = NULL;
 	pax_close_kernel();
 }
 
