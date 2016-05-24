@@ -140,7 +140,7 @@
  */
 
 /* returns the page unlocked, but with a reference */
-static int ll_dir_filler(void *_hash, struct page *page0)
+static int ll_dir_filler(struct file *_hash, struct page *page0)
 {
 	struct inode *inode = page0->mapping->host;
 	int hash64 = ll_i2sbi(inode)->ll_flags & LL_SBI_64BIT_HASH;

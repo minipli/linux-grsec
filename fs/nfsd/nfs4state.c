@@ -2362,8 +2362,9 @@ static bool client_has_state(struct nfs4_client *clp)
 __be32
 nfsd4_exchange_id(struct svc_rqst *rqstp,
 		  struct nfsd4_compound_state *cstate,
-		  struct nfsd4_exchange_id *exid)
+		  void *_exid)
 {
+	struct nfsd4_exchange_id *exid = _exid;
 	struct nfs4_client *conf, *new;
 	struct nfs4_client *unconf = NULL;
 	__be32 status;
@@ -2639,8 +2640,9 @@ static __be32 nfsd4_check_cb_sec(struct nfsd4_cb_sec *cbs)
 __be32
 nfsd4_create_session(struct svc_rqst *rqstp,
 		     struct nfsd4_compound_state *cstate,
-		     struct nfsd4_create_session *cr_ses)
+		     void *_cr_ses)
 {
+	struct nfsd4_create_session *cr_ses = _cr_ses;
 	struct sockaddr *sa = svc_addr(rqstp);
 	struct nfs4_client *conf, *unconf;
 	struct nfs4_client *old = NULL;
@@ -2764,8 +2766,9 @@ static __be32 nfsd4_map_bcts_dir(u32 *dir)
 	return nfserr_inval;
 }
 
-__be32 nfsd4_backchannel_ctl(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate, struct nfsd4_backchannel_ctl *bc)
+__be32 nfsd4_backchannel_ctl(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate, void *_bc)
 {
+	struct nfsd4_backchannel_ctl *bc = _bc;
 	struct nfsd4_session *session = cstate->session;
 	struct nfsd_net *nn = net_generic(SVC_NET(rqstp), nfsd_net_id);
 	__be32 status;
@@ -2785,8 +2788,9 @@ __be32 nfsd4_backchannel_ctl(struct svc_rqst *rqstp, struct nfsd4_compound_state
 
 __be32 nfsd4_bind_conn_to_session(struct svc_rqst *rqstp,
 		     struct nfsd4_compound_state *cstate,
-		     struct nfsd4_bind_conn_to_session *bcts)
+		     void *_bcts)
 {
+	struct nfsd4_bind_conn_to_session *bcts = _bcts;
 	__be32 status;
 	struct nfsd4_conn *conn;
 	struct nfsd4_session *session;
@@ -2828,8 +2832,9 @@ static bool nfsd4_compound_in_session(struct nfsd4_session *session, struct nfs4
 __be32
 nfsd4_destroy_session(struct svc_rqst *r,
 		      struct nfsd4_compound_state *cstate,
-		      struct nfsd4_destroy_session *sessionid)
+		      void *_sessionid)
 {
+	struct nfsd4_destroy_session *sessionid = _sessionid;
 	struct nfsd4_session *ses;
 	__be32 status;
 	int ref_held_by_me = 0;
@@ -2925,8 +2930,9 @@ static bool nfsd4_request_too_big(struct svc_rqst *rqstp,
 __be32
 nfsd4_sequence(struct svc_rqst *rqstp,
 	       struct nfsd4_compound_state *cstate,
-	       struct nfsd4_sequence *seq)
+	       void *_seq)
 {
+	struct nfsd4_sequence *seq = _seq;
 	struct nfsd4_compoundres *resp = rqstp->rq_resp;
 	struct xdr_stream *xdr = &resp->xdr;
 	struct nfsd4_session *session;
@@ -3060,8 +3066,9 @@ nfsd4_sequence_done(struct nfsd4_compoundres *resp)
 }
 
 __be32
-nfsd4_destroy_clientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate, struct nfsd4_destroy_clientid *dc)
+nfsd4_destroy_clientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate, void *_dc)
 {
+	struct nfsd4_destroy_clientid *dc = _dc;
 	struct nfs4_client *conf, *unconf;
 	struct nfs4_client *clp = NULL;
 	__be32 status = 0;
@@ -3101,8 +3108,9 @@ out:
 }
 
 __be32
-nfsd4_reclaim_complete(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate, struct nfsd4_reclaim_complete *rc)
+nfsd4_reclaim_complete(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate, void *_rc)
 {
+	struct nfsd4_reclaim_complete *rc = _rc;
 	__be32 status = 0;
 
 	if (rc->rca_one_fs) {
@@ -3139,8 +3147,9 @@ out:
 
 __be32
 nfsd4_setclientid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
-		  struct nfsd4_setclientid *setclid)
+		  void *_setclid)
 {
+	struct nfsd4_setclientid *setclid = _setclid;
 	struct xdr_netobj 	clname = setclid->se_name;
 	nfs4_verifier		clverifier = setclid->se_verf;
 	struct nfs4_client	*conf, *new;
@@ -3198,8 +3207,9 @@ out:
 __be32
 nfsd4_setclientid_confirm(struct svc_rqst *rqstp,
 			 struct nfsd4_compound_state *cstate,
-			 struct nfsd4_setclientid_confirm *setclientid_confirm)
+			 void *_setclientid_confirm)
 {
+	struct nfsd4_setclientid_confirm *setclientid_confirm = _setclientid_confirm;
 	struct nfs4_client *conf, *unconf;
 	struct nfs4_client *old = NULL;
 	nfs4_verifier confirm = setclientid_confirm->sc_confirm; 
@@ -4436,8 +4446,9 @@ void nfsd4_cleanup_open_state(struct nfsd4_compound_state *cstate,
 
 __be32
 nfsd4_renew(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
-	    clientid_t *clid)
+	    void *_clid)
 {
+	clientid_t *clid = _clid;
 	struct nfs4_client *clp;
 	__be32 status;
 	struct nfsd_net *nn = net_generic(SVC_NET(rqstp), nfsd_net_id);
@@ -4893,8 +4904,9 @@ out:
  */
 __be32
 nfsd4_test_stateid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
-		   struct nfsd4_test_stateid *test_stateid)
+		   void *_test_stateid)
 {
+	struct nfsd4_test_stateid *test_stateid = _test_stateid;
 	struct nfsd4_test_stateid_id *stateid;
 	struct nfs4_client *cl = cstate->session->se_client;
 
@@ -4907,8 +4919,9 @@ nfsd4_test_stateid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 
 __be32
 nfsd4_free_stateid(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
-		   struct nfsd4_free_stateid *free_stateid)
+		   void *_free_stateid)
 {
+	struct nfsd4_free_stateid *free_stateid = _free_stateid;
 	stateid_t *stateid = &free_stateid->fr_stateid;
 	struct nfs4_stid *s;
 	struct nfs4_delegation *dp;
@@ -5046,8 +5059,9 @@ static __be32 nfs4_preprocess_confirmed_seqid_op(struct nfsd4_compound_state *cs
 
 __be32
 nfsd4_open_confirm(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
-		   struct nfsd4_open_confirm *oc)
+		   void *_oc)
 {
+	struct nfsd4_open_confirm *oc = _oc;
 	__be32 status;
 	struct nfs4_openowner *oo;
 	struct nfs4_ol_stateid *stp;
@@ -5115,8 +5129,9 @@ static inline void nfs4_stateid_downgrade(struct nfs4_ol_stateid *stp, u32 to_ac
 __be32
 nfsd4_open_downgrade(struct svc_rqst *rqstp,
 		     struct nfsd4_compound_state *cstate,
-		     struct nfsd4_open_downgrade *od)
+		     void *_od)
 {
+	struct nfsd4_open_downgrade *od = _od;
 	__be32 status;
 	struct nfs4_ol_stateid *stp;
 	struct nfsd_net *nn = net_generic(SVC_NET(rqstp), nfsd_net_id);
@@ -5184,8 +5199,9 @@ static void nfsd4_close_open_stateid(struct nfs4_ol_stateid *s)
  */
 __be32
 nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
-	    struct nfsd4_close *close)
+	    void *_close)
 {
+	struct nfsd4_close *close = _close;
 	__be32 status;
 	struct nfs4_ol_stateid *stp;
 	struct net *net = SVC_NET(rqstp);
@@ -5214,8 +5230,9 @@ out:
 
 __be32
 nfsd4_delegreturn(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
-		  struct nfsd4_delegreturn *dr)
+		  void *_dr)
 {
+	struct nfsd4_delegreturn *dr = _dr;
 	struct nfs4_delegation *dp;
 	stateid_t *stateid = &dr->dr_stateid;
 	struct nfs4_stid *s;
@@ -5549,8 +5566,9 @@ out:
  */
 __be32
 nfsd4_lock(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
-	   struct nfsd4_lock *lock)
+	   void *_lock)
 {
+	struct nfsd4_lock *lock = _lock;
 	struct nfs4_openowner *open_sop = NULL;
 	struct nfs4_lockowner *lock_sop = NULL;
 	struct nfs4_ol_stateid *lock_stp = NULL;
@@ -5753,8 +5771,9 @@ static __be32 nfsd_test_lock(struct svc_rqst *rqstp, struct svc_fh *fhp, struct 
  */
 __be32
 nfsd4_lockt(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
-	    struct nfsd4_lockt *lockt)
+	    void *_lockt)
 {
+	struct nfsd4_lockt *lockt = _lockt;
 	struct file_lock *file_lock = NULL;
 	struct nfs4_lockowner *lo = NULL;
 	__be32 status;
@@ -5826,8 +5845,9 @@ out:
 
 __be32
 nfsd4_locku(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
-	    struct nfsd4_locku *locku)
+	    void *_locku)
 {
+	struct nfsd4_locku *locku = _locku;
 	struct nfs4_ol_stateid *stp;
 	struct file *filp = NULL;
 	struct file_lock *file_lock = NULL;
@@ -5933,8 +5953,9 @@ check_for_locks(struct nfs4_file *fp, struct nfs4_lockowner *lowner)
 __be32
 nfsd4_release_lockowner(struct svc_rqst *rqstp,
 			struct nfsd4_compound_state *cstate,
-			struct nfsd4_release_lockowner *rlockowner)
+			void *_rlockowner)
 {
+	struct nfsd4_release_lockowner *rlockowner = _rlockowner;
 	clientid_t *clid = &rlockowner->rl_clientid;
 	struct nfs4_stateowner *sop;
 	struct nfs4_lockowner *lo = NULL;
@@ -6878,26 +6899,34 @@ clear_current_stateid(struct nfsd4_compound_state *cstate)
  * functions to set current state id
  */
 void
-nfsd4_set_opendowngradestateid(struct nfsd4_compound_state *cstate, struct nfsd4_open_downgrade *odp)
+nfsd4_set_opendowngradestateid(struct nfsd4_compound_state *cstate, void *_odp)
 {
+	struct nfsd4_open_downgrade *odp = _odp;
+
 	put_stateid(cstate, &odp->od_stateid);
 }
 
 void
-nfsd4_set_openstateid(struct nfsd4_compound_state *cstate, struct nfsd4_open *open)
+nfsd4_set_openstateid(struct nfsd4_compound_state *cstate, void *_open)
 {
+	struct nfsd4_open *open = _open;
+
 	put_stateid(cstate, &open->op_stateid);
 }
 
 void
-nfsd4_set_closestateid(struct nfsd4_compound_state *cstate, struct nfsd4_close *close)
+nfsd4_set_closestateid(struct nfsd4_compound_state *cstate, void *_close)
 {
+	struct nfsd4_close *close = _close;
+
 	put_stateid(cstate, &close->cl_stateid);
 }
 
 void
-nfsd4_set_lockstateid(struct nfsd4_compound_state *cstate, struct nfsd4_lock *lock)
+nfsd4_set_lockstateid(struct nfsd4_compound_state *cstate, void *_lock)
 {
+	struct nfsd4_lock *lock = _lock;
+
 	put_stateid(cstate, &lock->lk_resp_stateid);
 }
 
@@ -6906,49 +6935,65 @@ nfsd4_set_lockstateid(struct nfsd4_compound_state *cstate, struct nfsd4_lock *lo
  */
 
 void
-nfsd4_get_opendowngradestateid(struct nfsd4_compound_state *cstate, struct nfsd4_open_downgrade *odp)
+nfsd4_get_opendowngradestateid(struct nfsd4_compound_state *cstate, void *_odp)
 {
+	struct nfsd4_open_downgrade *odp = _odp;
+
 	get_stateid(cstate, &odp->od_stateid);
 }
 
 void
-nfsd4_get_delegreturnstateid(struct nfsd4_compound_state *cstate, struct nfsd4_delegreturn *drp)
+nfsd4_get_delegreturnstateid(struct nfsd4_compound_state *cstate, void *_drp)
 {
+	struct nfsd4_delegreturn *drp = _drp;
+
 	get_stateid(cstate, &drp->dr_stateid);
 }
 
 void
-nfsd4_get_freestateid(struct nfsd4_compound_state *cstate, struct nfsd4_free_stateid *fsp)
+nfsd4_get_freestateid(struct nfsd4_compound_state *cstate, void *_fsp)
 {
+	struct nfsd4_free_stateid *fsp = _fsp;
+
 	get_stateid(cstate, &fsp->fr_stateid);
 }
 
 void
-nfsd4_get_setattrstateid(struct nfsd4_compound_state *cstate, struct nfsd4_setattr *setattr)
+nfsd4_get_setattrstateid(struct nfsd4_compound_state *cstate, void *_setattr)
 {
+	struct nfsd4_setattr *setattr = _setattr;
+
 	get_stateid(cstate, &setattr->sa_stateid);
 }
 
 void
-nfsd4_get_closestateid(struct nfsd4_compound_state *cstate, struct nfsd4_close *close)
+nfsd4_get_closestateid(struct nfsd4_compound_state *cstate, void *_close)
 {
+	struct nfsd4_close *close = _close;
+
 	get_stateid(cstate, &close->cl_stateid);
 }
 
 void
-nfsd4_get_lockustateid(struct nfsd4_compound_state *cstate, struct nfsd4_locku *locku)
+nfsd4_get_lockustateid(struct nfsd4_compound_state *cstate, void *_locku)
 {
+	struct nfsd4_locku *locku = _locku;
+
 	get_stateid(cstate, &locku->lu_stateid);
 }
 
 void
-nfsd4_get_readstateid(struct nfsd4_compound_state *cstate, struct nfsd4_read *read)
+nfsd4_get_readstateid(struct nfsd4_compound_state *cstate, void *_read)
 {
+	struct nfsd4_read *read = _read;
+
 	get_stateid(cstate, &read->rd_stateid);
 }
 
 void
-nfsd4_get_writestateid(struct nfsd4_compound_state *cstate, struct nfsd4_write *write)
+nfsd4_get_writestateid(struct nfsd4_compound_state *cstate, void *_write)
 {
+	struct nfsd4_write *write = _write;
+
 	get_stateid(cstate, &write->wr_stateid);
 }

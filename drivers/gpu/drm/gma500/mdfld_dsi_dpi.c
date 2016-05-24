@@ -645,6 +645,9 @@ static void mdfld_dsi_dpi_set_power(struct drm_encoder *encoder, bool on)
 	if (!gma_power_begin(dev, true))
 		return;
 
+	if (pipe == -1)
+		return;
+
 	if (on) {
 		if (mdfld_get_panel_type(dev, pipe) == TMD_VID)
 			mdfld_dsi_dpi_turn_on(dpi_output, pipe);

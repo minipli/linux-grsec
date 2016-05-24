@@ -1512,7 +1512,7 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static struct rtnl_link_ops geneve_link_ops __read_mostly = {
+static struct rtnl_link_ops geneve_link_ops = {
 	.kind		= "geneve",
 	.maxtype	= IFLA_GENEVE_MAX,
 	.policy		= geneve_policy,

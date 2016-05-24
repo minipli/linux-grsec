@@ -92,60 +92,6 @@ static const struct cpu_dev default_cpu = {
 
 static const struct cpu_dev *this_cpu = &default_cpu;
 
-DEFINE_PER_CPU_PAGE_ALIGNED(struct gdt_page, gdt_page) = { .gdt = {
-#ifdef CONFIG_X86_64
-	/*
-	 * We need valid kernel segments for data and code in long mode too
-	 * IRET will check the segment types  kkeil 2000/10/28
-	 * Also sysret mandates a special GDT layout
-	 *
-	 * TLS descriptors are currently at a different place compared to i386.
-	 * Hopefully nobody expects them at a fixed place (Wine?)
-	 */
-	[GDT_ENTRY_KERNEL32_CS]		= GDT_ENTRY_INIT(0xc09b, 0, 0xfffff),
-	[GDT_ENTRY_KERNEL_CS]		= GDT_ENTRY_INIT(0xa09b, 0, 0xfffff),
-	[GDT_ENTRY_KERNEL_DS]		= GDT_ENTRY_INIT(0xc093, 0, 0xfffff),
-	[GDT_ENTRY_DEFAULT_USER32_CS]	= GDT_ENTRY_INIT(0xc0fb, 0, 0xfffff),
-	[GDT_ENTRY_DEFAULT_USER_DS]	= GDT_ENTRY_INIT(0xc0f3, 0, 0xfffff),
-	[GDT_ENTRY_DEFAULT_USER_CS]	= GDT_ENTRY_INIT(0xa0fb, 0, 0xfffff),
-#else
-	[GDT_ENTRY_KERNEL_CS]		= GDT_ENTRY_INIT(0xc09a, 0, 0xfffff),
-	[GDT_ENTRY_KERNEL_DS]		= GDT_ENTRY_INIT(0xc092, 0, 0xfffff),
-	[GDT_ENTRY_DEFAULT_USER_CS]	= GDT_ENTRY_INIT(0xc0fa, 0, 0xfffff),
-	[GDT_ENTRY_DEFAULT_USER_DS]	= GDT_ENTRY_INIT(0xc0f2, 0, 0xfffff),
-	/*
-	 * Segments used for calling PnP BIOS have byte granularity.
-	 * They code segments and data segments have fixed 64k limits,
-	 * the transfer segment sizes are set at run time.
-	 */
-	/* 32-bit code */
-	[GDT_ENTRY_PNPBIOS_CS32]	= GDT_ENTRY_INIT(0x409a, 0, 0xffff),
-	/* 16-bit code */
-	[GDT_ENTRY_PNPBIOS_CS16]	= GDT_ENTRY_INIT(0x009a, 0, 0xffff),
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_DS]		= GDT_ENTRY_INIT(0x0092, 0, 0xffff),
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_TS1]		= GDT_ENTRY_INIT(0x0092, 0, 0),
-	/* 16-bit data */
-	[GDT_ENTRY_PNPBIOS_TS2]		= GDT_ENTRY_INIT(0x0092, 0, 0),
-	/*
-	 * The APM segments have byte granularity and their bases
-	 * are set at run time.  All have 64k limits.
-	 */
-	/* 32-bit code */
-	[GDT_ENTRY_APMBIOS_BASE]	= GDT_ENTRY_INIT(0x409a, 0, 0xffff),
-	/* 16-bit code */
-	[GDT_ENTRY_APMBIOS_BASE+1]	= GDT_ENTRY_INIT(0x009a, 0, 0xffff),
-	/* data */
-	[GDT_ENTRY_APMBIOS_BASE+2]	= GDT_ENTRY_INIT(0x4092, 0, 0xffff),
-
-	[GDT_ENTRY_ESPFIX_SS]		= GDT_ENTRY_INIT(0xc092, 0, 0xfffff),
-	[GDT_ENTRY_PERCPU]		= GDT_ENTRY_INIT(0xc092, 0, 0xfffff),
-	GDT_STACK_CANARY_INIT
-#endif
-} };
-EXPORT_PER_CPU_SYMBOL_GPL(gdt_page);
-
 static int __init x86_mpx_setup(char *s)
 {
 	/* require an exact match without trailing characters */
@@ -303,6 +249,109 @@ static __always_inline void setup_smap(struct cpuinfo_x86 *c)
 	}
 }
 
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+#ifdef CONFIG_X86_64
+static bool uderef_enabled __read_only = true;
+unsigned long pax_user_shadow_base __read_only;
+EXPORT_SYMBOL(pax_user_shadow_base);
+extern char pax_enter_kernel_user[];
+extern char pax_exit_kernel_user[];
+
+static int __init setup_pax_weakuderef(char *str)
+{
+	if (uderef_enabled)
+		pax_user_shadow_base = 1UL << TASK_SIZE_MAX_SHIFT;
+	return 1;
+}
+__setup("pax_weakuderef", setup_pax_weakuderef);
+#endif
+
+static int __init setup_pax_nouderef(char *str)
+{
+#ifdef CONFIG_X86_32
+	unsigned int cpu;
+	struct desc_struct *gdt;
+
+	for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
+		gdt = get_cpu_gdt_table(cpu);
+		gdt[GDT_ENTRY_KERNEL_DS].type = 3;
+		gdt[GDT_ENTRY_KERNEL_DS].limit = 0xf;
+		gdt[GDT_ENTRY_DEFAULT_USER_CS].limit = 0xf;
+		gdt[GDT_ENTRY_DEFAULT_USER_DS].limit = 0xf;
+	}
+	loadsegment(ds, __KERNEL_DS);
+	loadsegment(es, __KERNEL_DS);
+	loadsegment(ss, __KERNEL_DS);
+#else
+	memcpy(pax_enter_kernel_user, (unsigned char []){0xc3}, 1);
+	memcpy(pax_exit_kernel_user, (unsigned char []){0xc3}, 1);
+	clone_pgd_mask = ~(pgdval_t)0UL;
+	pax_user_shadow_base = 0UL;
+	setup_clear_cpu_cap(X86_FEATURE_PCIDUDEREF);
+	uderef_enabled = false;
+#endif
+
+	return 0;
+}
+early_param("pax_nouderef", setup_pax_nouderef);
+#endif
+
+#ifdef CONFIG_X86_64
+static __init int setup_disable_pcid(char *arg)
+{
+	setup_clear_cpu_cap(X86_FEATURE_PCID);
+	setup_clear_cpu_cap(X86_FEATURE_INVPCID);
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	if (uderef_enabled)
+		pax_user_shadow_base = 1UL << TASK_SIZE_MAX_SHIFT;
+#endif
+
+	return 1;
+}
+__setup("nopcid", setup_disable_pcid);
+
+static void setup_pcid(struct cpuinfo_x86 *c)
+{
+	if (cpu_has(c, X86_FEATURE_PCID)) {
+		printk("PAX: PCID detected\n");
+		cr4_set_bits(X86_CR4_PCIDE);
+	} else
+		clear_cpu_cap(c, X86_FEATURE_INVPCID);
+
+	if (cpu_has(c, X86_FEATURE_INVPCID))
+		printk("PAX: INVPCID detected\n");
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	if (!uderef_enabled) {
+		printk("PAX: UDEREF disabled\n");
+		return;
+	}
+
+	if (!cpu_has(c, X86_FEATURE_PCID)) {
+		pax_open_kernel();
+		pax_user_shadow_base = 1UL << TASK_SIZE_MAX_SHIFT;
+		pax_close_kernel();
+		printk("PAX: slow and weak UDEREF enabled\n");
+		return;
+	}
+
+	set_cpu_cap(c, X86_FEATURE_PCIDUDEREF);
+
+	pax_open_kernel();
+	clone_pgd_mask = ~(pgdval_t)0UL;
+	pax_close_kernel();
+	if (pax_user_shadow_base)
+		printk("PAX: weak UDEREF enabled\n");
+	else {
+		set_cpu_cap(c, X86_FEATURE_STRONGUDEREF);
+		printk("PAX: strong UDEREF enabled\n");
+	}
+#endif
+
+}
+#endif
+
 /*
  * Protection Keys are not available in 32-bit mode.
  */
@@ -444,7 +493,7 @@ void switch_to_new_gdt(int cpu)
 {
 	struct desc_ptr gdt_descr;
 
-	gdt_descr.address = (long)get_cpu_gdt_table(cpu);
+	gdt_descr.address = (unsigned long)get_cpu_gdt_table(cpu);
 	gdt_descr.size = GDT_SIZE - 1;
 	load_gdt(&gdt_descr);
 	/* Reload the per-cpu base */
@@ -1000,6 +1049,20 @@ static void identify_cpu(struct cpuinfo_x86 *c)
 	setup_smep(c);
 	setup_smap(c);
 
+#ifdef CONFIG_X86_32
+#ifdef CONFIG_PAX_PAGEEXEC
+	if (!(__supported_pte_mask & _PAGE_NX))
+		clear_cpu_cap(c, X86_FEATURE_PSE);
+#endif
+#if defined(CONFIG_PAX_SEGMEXEC) || defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+	clear_cpu_cap(c, X86_FEATURE_SEP);
+#endif
+#endif
+
+#ifdef CONFIG_X86_64
+	setup_pcid(c);
+#endif
+
 	/*
 	 * The vendor-specific functions might have changed features.
 	 * Now we do "generic changes."
@@ -1077,7 +1140,7 @@ void enable_sep_cpu(void)
 	int cpu;
 
 	cpu = get_cpu();
-	tss = &per_cpu(cpu_tss, cpu);
+	tss = cpu_tss + cpu;
 
 	if (!boot_cpu_has(X86_FEATURE_SEP))
 		goto out;
@@ -1223,10 +1286,12 @@ static __init int setup_disablecpuid(char *arg)
 }
 __setup("clearcpuid=", setup_disablecpuid);
 
+DEFINE_PER_CPU(struct thread_info *, current_tinfo) = &init_task.tinfo;
+EXPORT_PER_CPU_SYMBOL(current_tinfo);
+
 #ifdef CONFIG_X86_64
-struct desc_ptr idt_descr = { NR_VECTORS * 16 - 1, (unsigned long) idt_table };
-struct desc_ptr debug_idt_descr = { NR_VECTORS * 16 - 1,
-				    (unsigned long) debug_idt_table };
+struct desc_ptr idt_descr __read_only = { NR_VECTORS * 16 - 1, (unsigned long) idt_table };
+const struct desc_ptr debug_idt_descr = { NR_VECTORS * 16 - 1, (unsigned long) debug_idt_table };
 
 DEFINE_PER_CPU_FIRST(union irq_stack_union,
 		     irq_stack_union) __aligned(PAGE_SIZE) __visible;
@@ -1338,20 +1403,20 @@ EXPORT_PER_CPU_SYMBOL(current_task);
 DEFINE_PER_CPU(int, __preempt_count) = INIT_PREEMPT_COUNT;
 EXPORT_PER_CPU_SYMBOL(__preempt_count);
 
+#ifdef CONFIG_CC_STACKPROTECTOR
+DEFINE_PER_CPU_ALIGNED(struct stack_canary, stack_canary);
+#endif
+
+#endif	/* CONFIG_X86_64 */
+
 /*
  * On x86_32, vm86 modifies tss.sp0, so sp0 isn't a reliable way to find
  * the top of the kernel stack.  Use an extra percpu variable to track the
  * top of the kernel stack directly.
  */
 DEFINE_PER_CPU(unsigned long, cpu_current_top_of_stack) =
-	(unsigned long)&init_thread_union + THREAD_SIZE;
+	(unsigned long)&init_thread_union - 16 + THREAD_SIZE;
 EXPORT_PER_CPU_SYMBOL(cpu_current_top_of_stack);
-
-#ifdef CONFIG_CC_STACKPROTECTOR
-DEFINE_PER_CPU_ALIGNED(struct stack_canary, stack_canary);
-#endif
-
-#endif	/* CONFIG_X86_64 */
 
 /*
  * Clear all 6 debug registers:
@@ -1428,7 +1493,7 @@ void cpu_init(void)
 	 */
 	load_ucode_ap();
 
-	t = &per_cpu(cpu_tss, cpu);
+	t = cpu_tss + cpu;
 	oist = &per_cpu(orig_ist, cpu);
 
 #ifdef CONFIG_NUMA
@@ -1460,7 +1525,6 @@ void cpu_init(void)
 	wrmsrl(MSR_KERNEL_GS_BASE, 0);
 	barrier();
 
-	x86_configure_nx();
 	x2apic_setup();
 
 	/*
@@ -1512,7 +1576,7 @@ void cpu_init(void)
 {
 	int cpu = smp_processor_id();
 	struct task_struct *curr = current;
-	struct tss_struct *t = &per_cpu(cpu_tss, cpu);
+	struct tss_struct *t = cpu_tss + cpu;
 	struct thread_struct *thread = &curr->thread;
 
 	wait_for_master_cpu(cpu);

@@ -25,6 +25,7 @@
 
 #include <linux/linkage.h>
 #include <asm/frame.h>
+#include <asm/alternative-asm.h>
 #include "glue_helper-asm-avx.S"
 
 .file "twofish-avx-x86_64-asm_64.S"
@@ -285,6 +286,7 @@ __twofish_enc_blk8:
 	outunpack_blocks(RC1, RD1, RA1, RB1, RK1, RX0, RY0, RK2);
 	outunpack_blocks(RC2, RD2, RA2, RB2, RK1, RX0, RY0, RK2);
 
+	pax_force_retaddr
 	ret;
 ENDPROC(__twofish_enc_blk8)
 
@@ -325,10 +327,11 @@ __twofish_dec_blk8:
 	outunpack_blocks(RA1, RB1, RC1, RD1, RK1, RX0, RY0, RK2);
 	outunpack_blocks(RA2, RB2, RC2, RD2, RK1, RX0, RY0, RK2);
 
+	pax_force_retaddr
 	ret;
 ENDPROC(__twofish_dec_blk8)
 
-ENTRY(twofish_ecb_enc_8way)
+RAP_ENTRY(twofish_ecb_enc_8way)
 	/* input:
 	 *	%rdi: ctx, CTX
 	 *	%rsi: dst
@@ -345,10 +348,11 @@ ENTRY(twofish_ecb_enc_8way)
 	store_8way(%r11, RC1, RD1, RA1, RB1, RC2, RD2, RA2, RB2);
 
 	FRAME_END
+	pax_force_retaddr
 	ret;
 ENDPROC(twofish_ecb_enc_8way)
 
-ENTRY(twofish_ecb_dec_8way)
+RAP_ENTRY(twofish_ecb_dec_8way)
 	/* input:
 	 *	%rdi: ctx, CTX
 	 *	%rsi: dst
@@ -365,10 +369,11 @@ ENTRY(twofish_ecb_dec_8way)
 	store_8way(%r11, RA1, RB1, RC1, RD1, RA2, RB2, RC2, RD2);
 
 	FRAME_END
+	pax_force_retaddr
 	ret;
 ENDPROC(twofish_ecb_dec_8way)
 
-ENTRY(twofish_cbc_dec_8way)
+RAP_ENTRY(twofish_cbc_dec_8way)
 	/* input:
 	 *	%rdi: ctx, CTX
 	 *	%rsi: dst
@@ -376,24 +381,24 @@ ENTRY(twofish_cbc_dec_8way)
 	 */
 	FRAME_BEGIN
 
-	pushq %r12;
+	pushq %r14;
 
 	movq %rsi, %r11;
-	movq %rdx, %r12;
+	movq %rdx, %r14;
 
 	load_8way(%rdx, RC1, RD1, RA1, RB1, RC2, RD2, RA2, RB2);
 
 	call __twofish_dec_blk8;
 
-	store_cbc_8way(%r12, %r11, RA1, RB1, RC1, RD1, RA2, RB2, RC2, RD2);
+	store_cbc_8way(%r14, %r11, RA1, RB1, RC1, RD1, RA2, RB2, RC2, RD2);
 
-	popq %r12;
+	popq %r14;
 
 	FRAME_END
 	ret;
 ENDPROC(twofish_cbc_dec_8way)
 
-ENTRY(twofish_ctr_8way)
+RAP_ENTRY(twofish_ctr_8way)
 	/* input:
 	 *	%rdi: ctx, CTX
 	 *	%rsi: dst
@@ -402,25 +407,26 @@ ENTRY(twofish_ctr_8way)
 	 */
 	FRAME_BEGIN
 
-	pushq %r12;
+	pushq %r14;
 
 	movq %rsi, %r11;
-	movq %rdx, %r12;
+	movq %rdx, %r14;
 
 	load_ctr_8way(%rcx, .Lbswap128_mask, RA1, RB1, RC1, RD1, RA2, RB2, RC2,
 		      RD2, RX0, RX1, RY0);
 
 	call __twofish_enc_blk8;
 
-	store_ctr_8way(%r12, %r11, RC1, RD1, RA1, RB1, RC2, RD2, RA2, RB2);
+	store_ctr_8way(%r14, %r11, RC1, RD1, RA1, RB1, RC2, RD2, RA2, RB2);
 
-	popq %r12;
+	popq %r14;
 
 	FRAME_END
+	pax_force_retaddr
 	ret;
 ENDPROC(twofish_ctr_8way)
 
-ENTRY(twofish_xts_enc_8way)
+RAP_ENTRY(twofish_xts_enc_8way)
 	/* input:
 	 *	%rdi: ctx, CTX
 	 *	%rsi: dst
@@ -441,10 +447,11 @@ ENTRY(twofish_xts_enc_8way)
 	store_xts_8way(%r11, RC1, RD1, RA1, RB1, RC2, RD2, RA2, RB2);
 
 	FRAME_END
+	pax_force_retaddr
 	ret;
 ENDPROC(twofish_xts_enc_8way)
 
-ENTRY(twofish_xts_dec_8way)
+RAP_ENTRY(twofish_xts_dec_8way)
 	/* input:
 	 *	%rdi: ctx, CTX
 	 *	%rsi: dst
@@ -465,5 +472,6 @@ ENTRY(twofish_xts_dec_8way)
 	store_xts_8way(%r11, RA1, RB1, RC1, RD1, RA2, RB2, RC2, RD2);
 
 	FRAME_END
+	pax_force_retaddr
 	ret;
 ENDPROC(twofish_xts_dec_8way)

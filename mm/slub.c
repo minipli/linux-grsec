@@ -34,6 +34,7 @@
 #include <linux/stacktrace.h>
 #include <linux/prefetch.h>
 #include <linux/memcontrol.h>
+#include <linux/vmalloc.h>
 
 #include <trace/events/kmem.h>
 
@@ -2778,6 +2779,21 @@ static __always_inline void slab_free(struct kmem_cache *s, struct page *page,
 
 	slab_free_freelist_hook(s, head, tail);
 
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	if (!(s->flags & SLAB_NO_SANITIZE)) {
+		void *x = head;
+
+		while (1) {
+			memset(x, PAX_MEMORY_SANITIZE_VALUE, s->object_size);
+			if (s->ctor)
+				s->ctor(x);
+			if (x == tail_obj)
+				break;
+			x = get_freepointer(s, x);
+		}
+	}
+#endif
+
 redo:
 	/*
 	 * Determine the currently cpus per cpu slab.
@@ -3291,6 +3307,9 @@ static int calculate_sizes(struct kmem_cache *s, int forced_order)
 	s->inuse = size;
 
 	if (((flags & (SLAB_DESTROY_BY_RCU | SLAB_POISON)) ||
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+		(!(flags & SLAB_NO_SANITIZE)) ||
+#endif
 		s->ctor)) {
 		/*
 		 * Relocate free pointer after the object if it is not
@@ -3545,7 +3564,7 @@ static int __init setup_slub_min_objects(char *str)
 
 __setup("slub_min_objects=", setup_slub_min_objects);
 
-void *__kmalloc(size_t size, gfp_t flags)
+void * __size_overflow(1) __kmalloc(size_t size, gfp_t flags)
 {
 	struct kmem_cache *s;
 	void *ret;
@@ -3583,7 +3602,7 @@ static void *kmalloc_large_node(size_t size, gfp_t flags, int node)
 	return ptr;
 }
 
-void *__kmalloc_node(size_t size, gfp_t flags, int node)
+void * __size_overflow(1) __kmalloc_node(size_t size, gfp_t flags, int node)
 {
 	struct kmem_cache *s;
 	void *ret;
@@ -3631,6 +3650,59 @@ static size_t __ksize(const void *object)
 	return slab_ksize(page->slab_cache);
 }
 
+bool is_usercopy_object(const void *ptr)
+{
+	struct page *page;
+	struct kmem_cache *s;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		return false;
+
+	if (!slab_is_available())
+		return false;
+
+	if (!virt_addr_valid(ptr))
+		return false;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page))
+		return false;
+
+	s = page->slab_cache;
+	return s->flags & SLAB_USERCOPY;
+}
+
+#ifdef CONFIG_PAX_USERCOPY
+const char *check_heap_object(const void *ptr, unsigned long n)
+{
+	struct page *page;
+	struct kmem_cache *s;
+	unsigned long offset;
+
+	if (ZERO_OR_NULL_PTR(ptr))
+		return "<null>";
+
+	if (!virt_addr_valid(ptr))
+		return NULL;
+
+	page = virt_to_head_page(ptr);
+
+	if (!PageSlab(page))
+		return NULL;
+
+	s = page->slab_cache;
+	if (!(s->flags & SLAB_USERCOPY))
+		return s->name;
+
+	offset = (ptr - page_address(page)) % s->size;
+	if (offset <= s->object_size && n <= s->object_size - offset)
+		return NULL;
+
+	return s->name;
+}
+#endif
+
 size_t ksize(const void *object)
 {
 	size_t size = __ksize(object);
@@ -3651,6 +3723,7 @@ void kfree(const void *x)
 	if (unlikely(ZERO_OR_NULL_PTR(x)))
 		return;
 
+	VM_BUG_ON(!virt_addr_valid(x));
 	page = virt_to_head_page(x);
 	if (unlikely(!PageSlab(page))) {
 		BUG_ON(!PageCompound(page));
@@ -3968,7 +4041,7 @@ __kmem_cache_alias(const char *name, size_t size, size_t align,
 
 	s = find_mergeable(size, align, flags, name, ctor);
 	if (s) {
-		s->refcount++;
+		atomic_inc(&s->refcount);
 
 		/*
 		 * Adjust the object sizes so that we clear
@@ -3984,7 +4057,7 @@ __kmem_cache_alias(const char *name, size_t size, size_t align,
 		}
 
 		if (sysfs_slab_alias(s, name)) {
-			s->refcount--;
+			atomic_dec(&s->refcount);
 			s = NULL;
 		}
 	}
@@ -4728,7 +4801,7 @@ SLAB_ATTR_RO(ctor);
 
 static ssize_t aliases_show(struct kmem_cache *s, char *buf)
 {
-	return sprintf(buf, "%d\n", s->refcount < 0 ? 0 : s->refcount - 1);
+	return sprintf(buf, "%d\n", atomic_read(&s->refcount) < 0 ? 0 : atomic_read(&s->refcount) - 1);
 }
 SLAB_ATTR_RO(aliases);
 
@@ -4816,6 +4889,22 @@ static ssize_t cache_dma_show(struct kmem_cache *s, char *buf)
 SLAB_ATTR_RO(cache_dma);
 #endif
 
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+static ssize_t usercopy_show(struct kmem_cache *s, char *buf)
+{
+	return sprintf(buf, "%d\n", !!(s->flags & SLAB_USERCOPY));
+}
+SLAB_ATTR_RO(usercopy);
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+static ssize_t sanitize_show(struct kmem_cache *s, char *buf)
+{
+	return sprintf(buf, "%d\n", !(s->flags & SLAB_NO_SANITIZE));
+}
+SLAB_ATTR_RO(sanitize);
+#endif
+
 static ssize_t destroy_by_rcu_show(struct kmem_cache *s, char *buf)
 {
 	return sprintf(buf, "%d\n", !!(s->flags & SLAB_DESTROY_BY_RCU));
@@ -4871,7 +4960,7 @@ static ssize_t trace_store(struct kmem_cache *s, const char *buf,
 	 * as well as cause other issues like converting a mergeable
 	 * cache into an umergeable one.
 	 */
-	if (s->refcount > 1)
+	if (atomic_read(&s->refcount) > 1)
 		return -EINVAL;
 
 	s->flags &= ~SLAB_TRACE;
@@ -4989,7 +5078,7 @@ static ssize_t failslab_show(struct kmem_cache *s, char *buf)
 static ssize_t failslab_store(struct kmem_cache *s, const char *buf,
 							size_t length)
 {
-	if (s->refcount > 1)
+	if (atomic_read(&s->refcount) > 1)
 		return -EINVAL;
 
 	s->flags &= ~SLAB_FAILSLAB;
@@ -5121,7 +5210,7 @@ STAT_ATTR(CPU_PARTIAL_NODE, cpu_partial_node);
 STAT_ATTR(CPU_PARTIAL_DRAIN, cpu_partial_drain);
 #endif
 
-static struct attribute *slab_attrs[] = {
+static struct attribute *slab_attrs[] __read_only = {
 	&slab_size_attr.attr,
 	&object_size_attr.attr,
 	&objs_per_slab_attr.attr,
@@ -5155,6 +5244,12 @@ static struct attribute *slab_attrs[] = {
 #endif
 #ifdef CONFIG_ZONE_DMA
 	&cache_dma_attr.attr,
+#endif
+#ifdef CONFIG_PAX_USERCOPY_SLABS
+	&usercopy_attr.attr,
+#endif
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+	&sanitize_attr.attr,
 #endif
 #ifdef CONFIG_NUMA
 	&remote_node_defrag_ratio_attr.attr,

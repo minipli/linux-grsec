@@ -223,7 +223,7 @@ static void rxrpc_resend(struct rxrpc_call *call)
 
 	_enter("{%d,%d,%d,%d},",
 	       call->acks_hard, call->acks_unacked,
-	       atomic_read(&call->sequence),
+	       atomic_read_unchecked(&call->sequence),
 	       CIRC_CNT(call->acks_head, call->acks_tail, call->acks_winsz));
 
 	stop = false;
@@ -246,7 +246,7 @@ static void rxrpc_resend(struct rxrpc_call *call)
 			sp->need_resend = false;
 
 			/* each Tx packet has a new serial number */
-			sp->hdr.serial = atomic_inc_return(&call->conn->serial);
+			sp->hdr.serial = atomic_inc_return_unchecked(&call->conn->serial);
 
 			whdr = (struct rxrpc_wire_header *)txb->head;
 			whdr->serial = htonl(sp->hdr.serial);
@@ -450,7 +450,7 @@ static void rxrpc_rotate_tx_window(struct rxrpc_call *call, u32 hard)
  */
 static void rxrpc_clear_tx_window(struct rxrpc_call *call)
 {
-	rxrpc_rotate_tx_window(call, atomic_read(&call->sequence));
+	rxrpc_rotate_tx_window(call, atomic_read_unchecked(&call->sequence));
 }
 
 /*
@@ -673,7 +673,7 @@ process_further:
 
 		latest = sp->hdr.serial;
 		hard = ntohl(ack.firstPacket);
-		tx = atomic_read(&call->sequence);
+		tx = atomic_read_unchecked(&call->sequence);
 
 		_proto("Rx ACK %%%u { m=%hu f=#%u p=#%u s=%%%u r=%s n=%u }",
 		       latest,
@@ -1206,7 +1206,7 @@ void rxrpc_process_call(struct work_struct *work)
 	goto maybe_reschedule;
 
 send_ACK_with_skew:
-	ack.maxSkew = htons(atomic_read(&call->conn->hi_serial) -
+	ack.maxSkew = htons(atomic_read_unchecked(&call->conn->hi_serial) -
 			    ntohl(ack.serial));
 send_ACK:
 	mtu = call->conn->trans->peer->if_mtu;
@@ -1218,7 +1218,7 @@ send_ACK:
 	ackinfo.rxMTU	= htonl(rxrpc_rx_mtu);
 	ackinfo.jumbo_max = htonl(rxrpc_rx_jumbo_max);
 
-	serial = atomic_inc_return(&call->conn->serial);
+	serial = atomic_inc_return_unchecked(&call->conn->serial);
 	whdr.serial = htonl(serial);
 	_proto("Tx ACK %%%u { m=%hu f=#%u p=#%u s=%%%u r=%s n=%u }",
 	       serial,
@@ -1237,7 +1237,7 @@ send_ACK:
 send_message:
 	_debug("send message");
 
-	serial = atomic_inc_return(&call->conn->serial);
+	serial = atomic_inc_return_unchecked(&call->conn->serial);
 	whdr.serial = htonl(serial);
 	_proto("Tx %s %%%u", rxrpc_pkts[whdr.type], serial);
 send_message_2:
