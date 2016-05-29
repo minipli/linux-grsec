@@ -109,7 +109,7 @@ static inline int atomic_##op##_return##suffix##_relaxed(int a, atomic##suffix##
 	int t;								\
 									\
 	__asm__ __volatile__(						\
-+"1:	lwarx	%0,0,%2		# atomic_" #op "_return" #suffix "_relaxed\n"\
+"1:	lwarx	%0,0,%2		# atomic_" #op "_return" #suffix "_relaxed\n"\
 	pre_op								\
 	#asm_op " %0,%2,%0\n"						\
 	post_op								\
