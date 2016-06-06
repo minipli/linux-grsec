@@ -168,7 +168,7 @@ static ssize_t usbdev_read(struct file *file, char __user *buf, size_t nbytes,
 	struct usb_dev_state *ps = file->private_data;
 	struct usb_device *dev = ps->dev;
 	ssize_t ret = 0;
-	unsigned len;
+	size_t len;
 	loff_t pos;
 	int i;
 
@@ -210,22 +210,22 @@ static ssize_t usbdev_read(struct file *file, char __user *buf, size_t nbytes,
 	for (i = 0; nbytes && i < dev->descriptor.bNumConfigurations; i++) {
 		struct usb_config_descriptor *config =
 			(struct usb_config_descriptor *)dev->rawdescriptors[i];
-		unsigned int length = le16_to_cpu(config->wTotalLength);
+		size_t length = le16_to_cpu(config->wTotalLength);
 
 		if (*ppos < pos + length) {
 
 			/* The descriptor may claim to be longer than it
 			 * really is.  Here is the actual allocated length. */
-			unsigned alloclen =
+			size_t alloclen =
 				le16_to_cpu(dev->config[i].desc.wTotalLength);
 
-			len = length - (*ppos - pos);
+			len = length + pos - *ppos;
 			if (len > nbytes)
 				len = nbytes;
 
 			/* Simply don't write (skip over) unallocated parts */
 			if (alloclen > (*ppos - pos)) {
-				alloclen -= (*ppos - pos);
+				alloclen = alloclen + pos - *ppos;
 				if (copy_to_user(buf,
 				    dev->rawdescriptors[i] + (*ppos - pos),
 				    min(len, alloclen))) {
@@ -1186,10 +1186,11 @@ static int proc_getdriver(struct usb_dev_state *ps, void __user *arg)
 
 static int proc_connectinfo(struct usb_dev_state *ps, void __user *arg)
 {
-	struct usbdevfs_connectinfo ci = {
-		.devnum = ps->dev->devnum,
-		.slow = ps->dev->speed == USB_SPEED_LOW
-	};
+	struct usbdevfs_connectinfo ci;
+
+	memset(&ci, 0, sizeof(ci));
+	ci.devnum = ps->dev->devnum;
+	ci.slow = ps->dev->speed == USB_SPEED_LOW;
 
 	if (copy_to_user(arg, &ci, sizeof(ci)))
 		return -EFAULT;
@@ -1485,7 +1486,7 @@ static int proc_do_submiturb(struct usb_dev_state *ps, struct usbdevfs_urb *uurb
 		}
 	}
 	as->urb->dev = ps->dev;
-	as->urb->pipe = (uurb->type << 30) |
+	as->urb->pipe = ((unsigned int)uurb->type << 30) |
 			__create_pipe(ps->dev, uurb->endpoint & 0xf) |
 			(uurb->endpoint & USB_DIR_IN);
 

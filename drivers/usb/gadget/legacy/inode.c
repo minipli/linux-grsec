@@ -1702,6 +1702,8 @@ static struct usb_gadget_driver gadgetfs_driver = {
 
 static void gadgetfs_nop(struct usb_gadget *arg) { }
 
+static int gadgetfs_nop2(struct usb_gadget *arg, const struct usb_ctrlrequest *req) { }
+
 static int gadgetfs_probe(struct usb_gadget *gadget,
 		struct usb_gadget_driver *driver)
 {
@@ -1713,7 +1715,7 @@ static struct usb_gadget_driver probe_driver = {
 	.max_speed	= USB_SPEED_HIGH,
 	.bind		= gadgetfs_probe,
 	.unbind		= gadgetfs_nop,
-	.setup		= (void *)gadgetfs_nop,
+	.setup		= gadgetfs_nop2,
 	.disconnect	= gadgetfs_nop,
 	.driver	= {
 		.name		= "nop",
