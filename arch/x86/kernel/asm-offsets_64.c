@@ -58,6 +58,7 @@ int main(void)
 	BLANK();
 #undef ENTRY
 
+	DEFINE(TSS_size, sizeof(struct tss_struct));
 	OFFSET(TSS_ist, tss_struct, x86_tss.ist);
 	OFFSET(TSS_sp0, tss_struct, x86_tss.sp0);
 	BLANK();

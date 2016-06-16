@@ -298,7 +298,9 @@ CONFIG_SHELL := $(shell if [ -x "$$BASH" ]; then echo $$BASH; \
 HOSTCC       = gcc
 HOSTCXX      = g++
 HOSTCFLAGS   = -Wall -Wmissing-prototypes -Wstrict-prototypes -O2 -fomit-frame-pointer -std=gnu89
-HOSTCXXFLAGS = -O2
+HOSTCFLAGS   = -W -Wno-unused-parameter -Wno-missing-field-initializers -fno-delete-null-pointer-checks
+HOSTCFLAGS  += $(call cc-option, -Wno-empty-body)
+HOSTCXXFLAGS = -O2 -Wall -W -Wno-array-bounds
 
 ifeq ($(shell $(HOSTCC) -v 2>&1 | grep -c "clang version"), 1)
 HOSTCFLAGS  += -Wno-unused-value -Wno-unused-parameter \
@@ -416,6 +418,8 @@ export KBUILD_AFLAGS AFLAGS_KERNEL AFLAGS_MODULE
 export KBUILD_AFLAGS_MODULE KBUILD_CFLAGS_MODULE KBUILD_LDFLAGS_MODULE
 export KBUILD_AFLAGS_KERNEL KBUILD_CFLAGS_KERNEL
 export KBUILD_ARFLAGS
+
+export PLUGINCC GCC_PLUGINS_CFLAGS GCC_PLUGINS_AFLAGS
 
 # When compiling out-of-tree modules, put MODVERDIR in the module
 # tree rather than in the kernel tree. The kernel tree might
@@ -547,7 +551,7 @@ ifeq ($(KBUILD_EXTMOD),)
 # in parallel
 PHONY += scripts
 scripts: scripts_basic include/config/auto.conf include/config/tristate.conf \
-	 asm-generic
+	 asm-generic gcc-plugins
 	$(Q)$(MAKE) $(build)=$(@)
 
 # Objects we will link into vmlinux / subdirs we need to visit
@@ -621,6 +625,15 @@ endif
 
 # Tell gcc to never replace conditional load with a non-conditional one
 KBUILD_CFLAGS	+= $(call cc-option,--param=allow-store-data-races=0)
+
+PHONY += gcc-plugins
+gcc-plugins: scripts_basic
+ifdef CONFIG_GCC_PLUGINS
+	$(Q)$(MAKE) $(build)=scripts/gcc-plugins
+endif
+	@:
+
+include scripts/Makefile.gcc-plugins
 
 ifdef CONFIG_READABLE_ASM
 # Disable optimizations that make assembler listings hard to read.
@@ -715,7 +728,7 @@ KBUILD_CFLAGS   += $(call cc-option, -gsplit-dwarf, -g)
 else
 KBUILD_CFLAGS	+= -g
 endif
-KBUILD_AFLAGS	+= -Wa,-gdwarf-2
+KBUILD_AFLAGS	+= -Wa,--gdwarf-2
 endif
 ifdef CONFIG_DEBUG_INFO_DWARF4
 KBUILD_CFLAGS	+= $(call cc-option, -gdwarf-4,)
@@ -990,7 +1003,7 @@ prepare1: prepare2 $(version_h) include/generated/utsrelease.h \
 
 archprepare: archheaders archscripts prepare1 scripts_basic
 
-prepare0: archprepare FORCE
+prepare0: archprepare gcc-plugins FORCE
 	$(Q)$(MAKE) $(build)=.
 
 # All the preparing..
@@ -1185,7 +1198,10 @@ MRPROPER_FILES += .config .config.old .version .old_version \
 		  Module.symvers tags TAGS cscope* GPATH GTAGS GRTAGS GSYMS \
 		  signing_key.pem signing_key.priv signing_key.x509	\
 		  x509.genkey extra_certificates signing_key.x509.keyid	\
-		  signing_key.x509.signer vmlinux-gdb.py
+		  signing_key.x509.signer vmlinux-gdb.py \
+		  tools/gcc/size_overflow_plugin/size_overflow_hash_aux.h \
+		  tools/gcc/size_overflow_plugin/size_overflow_hash.h \
+		  tools/gcc/size_overflow_plugin/disable_size_overflow_hash.h
 
 # clean - Delete most, but leave enough to build external modules
 #
@@ -1224,7 +1240,7 @@ distclean: mrproper
 	@find $(srctree) $(RCS_FIND_IGNORE) \
 		\( -name '*.orig' -o -name '*.rej' -o -name '*~' \
 		-o -name '*.bak' -o -name '#*#' -o -name '.*.orig' \
-		-o -name '.*.rej' -o -name '*%'  -o -name 'core' \) \
+		-o -name '.*.rej' -o -name '*.so' -o -name '*%' -o -name 'core' \) \
 		-type f -print | xargs rm -f
 
 

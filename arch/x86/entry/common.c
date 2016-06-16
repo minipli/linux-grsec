@@ -32,9 +32,7 @@
 
 static struct thread_info *pt_regs_to_thread_info(struct pt_regs *regs)
 {
-	unsigned long top_of_stack =
-		(unsigned long)(regs + 1) + TOP_OF_KERNEL_STACK_PADDING;
-	return (struct thread_info *)(top_of_stack - THREAD_SIZE);
+	return current_thread_info();
 }
 
 #ifdef CONFIG_CONTEXT_TRACKING
@@ -44,6 +42,12 @@ __visible void enter_from_user_mode(void)
 	CT_WARN_ON(ct_state() != CONTEXT_USER);
 	user_exit();
 }
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+asmlinkage void pax_erase_kstack(void);
+#else
+static void pax_erase_kstack(void) {}
 #endif
 
 static void do_audit_syscall_entry(struct pt_regs *regs, u32 arch)
@@ -207,15 +211,14 @@ long syscall_trace_enter_phase2(struct pt_regs *regs, u32 arch,
 	return ret ?: regs->orig_ax;
 }
 
-long syscall_trace_enter(struct pt_regs *regs)
+static long syscall_trace_enter(struct pt_regs *regs)
 {
 	u32 arch = is_ia32_task() ? AUDIT_ARCH_I386 : AUDIT_ARCH_X86_64;
 	unsigned long phase1_result = syscall_trace_enter_phase1(regs, arch);
 
-	if (phase1_result == 0)
-		return regs->orig_ax;
-	else
-		return syscall_trace_enter_phase2(regs, arch, phase1_result);
+	phase1_result = phase1_result ? syscall_trace_enter_phase2(regs, arch, phase1_result) : regs->orig_ax;
+	pax_erase_kstack();
+	return phase1_result;
 }
 
 #define EXIT_TO_USERMODE_LOOP_FLAGS				\
@@ -317,7 +320,7 @@ static void syscall_slow_exit_work(struct pt_regs *regs, u32 cached_flags)
 	step = unlikely(
 		(cached_flags & (_TIF_SINGLESTEP | _TIF_SYSCALL_EMU))
 		== _TIF_SINGLESTEP);
-	if (step || cached_flags & _TIF_SYSCALL_TRACE)
+	if (step || (cached_flags & _TIF_SYSCALL_TRACE))
 		tracehook_report_syscall_exit(regs, step);
 }
 
@@ -387,10 +390,51 @@ __always_inline void do_syscall_32_irqs_on(struct pt_regs *regs)
 		 * the high bits are zero.  Make sure we zero-extend all
 		 * of the args.
 		 */
+#ifdef CONFIG_PAX_RAP
+#ifdef CONFIG_X86_64
+		asm volatile("movl %[param1],%%edi\n\t"
+			     "movl %[param2],%%esi\n\t"
+			     "movl %[param3],%%edx\n\t"
+			     "movl %[param4],%%ecx\n\t"
+			     "movl %[param5],%%r8d\n\t"
+			     "movl %[param6],%%r9d\n\t"
+			     "call *%P[syscall]\n\t"
+			     "mov %%rax,%[result]\n\t"
+			: [result] "=m" (regs->ax)
+			: [syscall] "m" (ia32_sys_call_table[nr]),
+			  [param1] "m" (regs->bx),
+			  [param2] "m" (regs->cx),
+			  [param3] "m" (regs->dx),
+			  [param4] "m" (regs->si),
+			  [param5] "m" (regs->di),
+			  [param6] "m" (regs->bp)
+			: "ax", "di", "si", "dx", "cx", "r8", "r9", "r10", "r11", "memory");
+#else
+		asm volatile("pushl %[param6]\n\t"
+			     "pushl %[param5]\n\t"
+			     "pushl %[param4]\n\t"
+			     "pushl %[param3]\n\t"
+			     "pushl %[param2]\n\t"
+			     "pushl %[param1]\n\t"
+			     "call *%P[syscall]\n\t"
+			     "addl $6*8,%%esp\n\t"
+			     "mov %%eax,%[result]\n\t"
+			: [result] "=m" (regs->ax)
+			: [syscall] "m" (ia32_sys_call_table[nr]),
+			  [param1] "m" (regs->bx),
+			  [param2] "m" (regs->cx),
+			  [param3] "m" (regs->dx),
+			  [param4] "m" (regs->si),
+			  [param5] "m" (regs->di),
+			  [param6] "m" (regs->bp)
+			: "ax", "dx", "cx", "memory");
+#endif
+#else
 		regs->ax = ia32_sys_call_table[nr](
 			(unsigned int)regs->bx, (unsigned int)regs->cx,
 			(unsigned int)regs->dx, (unsigned int)regs->si,
 			(unsigned int)regs->di, (unsigned int)regs->bp);
+#endif
 	}
 
 	syscall_return_slowpath(regs);
@@ -415,6 +459,7 @@ __visible long do_fast_syscall_32(struct pt_regs *regs)
 
 	unsigned long landing_pad = (unsigned long)current->mm->context.vdso +
 		vdso_image_32.sym_int80_landing_pad;
+	u32 __user *saved_bp = (u32 __force_user *)(unsigned long)(u32)regs->sp;
 
 	/*
 	 * SYSENTER loses EIP, and even SYSCALL32 needs us to skip forward
@@ -435,11 +480,9 @@ __visible long do_fast_syscall_32(struct pt_regs *regs)
 		 * Micro-optimization: the pointer we're following is explicitly
 		 * 32 bits, so it can't be out of range.
 		 */
-		__get_user(*(u32 *)&regs->bp,
-			    (u32 __user __force *)(unsigned long)(u32)regs->sp)
+		__get_user_nocheck(*(u32 *)&regs->bp, saved_bp, sizeof(u32))
 #else
-		get_user(*(u32 *)&regs->bp,
-			 (u32 __user __force *)(unsigned long)(u32)regs->sp)
+		get_user(regs->bp, saved_bp)
 #endif
 		) {
 
