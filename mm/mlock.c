@@ -573,7 +573,7 @@ static int apply_vma_lock_flags(unsigned long start, size_t len,
 {
 	unsigned long nstart, end, tmp;
 	struct vm_area_struct * vma, * prev;
-	int error;
+	int error = 0;
 
 	VM_BUG_ON(offset_in_page(start));
 	VM_BUG_ON(len != PAGE_ALIGN(len));
@@ -582,6 +582,9 @@ static int apply_vma_lock_flags(unsigned long start, size_t len,
 		return -EINVAL;
 	if (end == start)
 		return 0;
+	if (end > TASK_SIZE)
+		return -EINVAL;
+
 	vma = find_vma(current->mm, start);
 	if (!vma || vma->vm_start > start)
 		return -ENOMEM;
@@ -591,8 +594,14 @@ static int apply_vma_lock_flags(unsigned long start, size_t len,
 		prev = vma;
 
 	for (nstart = start ; ; ) {
-		vm_flags_t newflags = vma->vm_flags & VM_LOCKED_CLEAR_MASK;
+		vm_flags_t newflags;
 
+#ifdef CONFIG_PAX_SEGMEXEC
+		if ((current->mm->pax_flags & MF_PAX_SEGMEXEC) && (vma->vm_start >= SEGMEXEC_TASK_SIZE))
+			break;
+#endif
+
+		newflags = vma->vm_flags & VM_LOCKED_CLEAR_MASK;
 		newflags |= flags;
 
 		/* Here we know that  vma->vm_start <= nstart < vma->vm_end. */
@@ -719,6 +728,11 @@ static int apply_mlockall_flags(int flags)
 
 	for (vma = current->mm->mmap; vma ; vma = prev->vm_next) {
 		vm_flags_t newflags;
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if ((current->mm->pax_flags & MF_PAX_SEGMEXEC) && (vma->vm_start >= SEGMEXEC_TASK_SIZE))
+			break;
+#endif
 
 		newflags = vma->vm_flags & VM_LOCKED_CLEAR_MASK;
 		newflags |= to_add;

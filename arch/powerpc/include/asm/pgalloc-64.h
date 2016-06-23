@@ -54,6 +54,7 @@ static inline void pgd_free(struct mm_struct *mm, pgd_t *pgd)
 #ifndef CONFIG_PPC_64K_PAGES
 
 #define pgd_populate(MM, PGD, PUD)	pgd_set(PGD, __pgtable_ptr_val(PUD))
+#define pgd_populate_kernel(MM, PGD, PUD)	pgd_populate((MM), (PGD), (PUD))
 
 static inline pud_t *pud_alloc_one(struct mm_struct *mm, unsigned long addr)
 {
@@ -69,6 +70,11 @@ static inline void pud_free(struct mm_struct *mm, pud_t *pud)
 static inline void pud_populate(struct mm_struct *mm, pud_t *pud, pmd_t *pmd)
 {
 	pud_set(pud, __pgtable_ptr_val(pmd));
+}
+
+static inline void pud_populate_kernel(struct mm_struct *mm, pud_t *pud, pmd_t *pmd)
+{
+	pud_populate(mm, pud, pmd);
 }
 
 static inline void pmd_populate_kernel(struct mm_struct *mm, pmd_t *pmd,
@@ -193,6 +199,11 @@ static inline void pud_free(struct mm_struct *mm, pud_t *pud)
 static inline void pud_populate(struct mm_struct *mm, pud_t *pud, pmd_t *pmd)
 {
 	pud_set(pud, __pgtable_ptr_val(pmd));
+}
+
+static inline void pud_populate_kernel(struct mm_struct *mm, pud_t *pud, pmd_t *pmd)
+{
+	pud_populate(mm, pud, pmd);
 }
 
 static inline void pmd_populate_kernel(struct mm_struct *mm, pmd_t *pmd,

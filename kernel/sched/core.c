@@ -2148,7 +2148,7 @@ void set_numabalancing_state(bool enabled)
 int sysctl_numa_balancing(struct ctl_table *table, int write,
 			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table t;
+	ctl_table_no_const t;
 	int err;
 	int state = static_branch_likely(&sched_numa_balancing);
 
@@ -2211,7 +2211,7 @@ __setup("schedstats=", setup_schedstats);
 int sysctl_schedstats(struct ctl_table *table, int write,
 			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table t;
+	ctl_table_no_const t;
 	int err;
 	int state = static_branch_likely(&sched_schedstats);
 
@@ -2650,7 +2650,7 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 /* rq->lock is NOT held, but preemption is disabled */
 static void __balance_callback(struct rq *rq)
 {
-	struct callback_head *head, *next;
+	struct balance_callback *head, *next;
 	void (*func)(struct rq *rq);
 	unsigned long flags;
 
@@ -2658,7 +2658,7 @@ static void __balance_callback(struct rq *rq)
 	head = rq->balance_callback;
 	rq->balance_callback = NULL;
 	while (head) {
-		func = (void (*)(struct rq *))head->func;
+		func = head->func;
 		next = head->next;
 		head->next = NULL;
 		head = next;
