@@ -1778,7 +1778,7 @@ void nf_conntrack_init_end(void)
 
 int nf_conntrack_init_net(struct net *net)
 {
-	static atomic64_t unique_id;
+	static atomic64_unchecked_t unique_id;
 	int ret = -ENOMEM;
 	int cpu;
 
@@ -1802,7 +1802,7 @@ int nf_conntrack_init_net(struct net *net)
 		goto err_pcpu_lists;
 
 	net->ct.slabname = kasprintf(GFP_KERNEL, "nf_conntrack_%llu",
-				(u64)atomic64_inc_return(&unique_id));
+				(u64)atomic64_inc_return_unchecked(&unique_id));
 	if (!net->ct.slabname)
 		goto err_slabname;
 

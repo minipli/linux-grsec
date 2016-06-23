@@ -104,6 +104,7 @@ ENTRY(call_rwsem_down_write_failed)
 	call rwsem_down_write_failed
 	restore_common_regs
 	FRAME_END
+	pax_force_retaddr
 	ret
 ENDPROC(call_rwsem_down_write_failed)
 

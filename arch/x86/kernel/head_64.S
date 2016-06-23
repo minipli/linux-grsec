@@ -99,6 +99,9 @@ startup_64:
 	addq	%rbp, early_level4_pgt + (L4_START_KERNEL*8)(%rip)
 	addq	%rbp, init_level4_pgt + (L4_PAGE_OFFSET*8)(%rip)
 	addq	%rbp, init_level4_pgt + (L4_VMALLOC_START*8)(%rip)
+	addq	%rbp, init_level4_pgt + (L4_VMALLOC_START*8) + 8(%rip)
+	addq	%rbp, init_level4_pgt + (L4_VMALLOC_START*8) + 16(%rip)
+	addq	%rbp, init_level4_pgt + (L4_VMALLOC_START*8) + 24(%rip)
 	addq	%rbp, init_level4_pgt + (L4_VMALLOC_END*8)(%rip)
 	addq	%rbp, init_level4_pgt + (L4_VMEMMAP_START*8)(%rip)
 	addq	%rbp, init_level4_pgt + (L4_START_KERNEL*8)(%rip)
@@ -504,7 +507,10 @@ NEXT_PAGE(init_level4_pgt)
 	.org    init_level4_pgt + L4_PAGE_OFFSET*8, 0
 	.quad   level3_ident_pgt - __START_KERNEL_map + _KERNPG_TABLE
 	.org	init_level4_pgt + L4_VMALLOC_START*8, 0
-	.quad	level3_vmalloc_start_pgt - __START_KERNEL_map + _KERNPG_TABLE
+	.quad	level3_vmalloc_start_pgt - __START_KERNEL_map + PAGE_SIZE*0 + _KERNPG_TABLE
+	.quad	level3_vmalloc_start_pgt - __START_KERNEL_map + PAGE_SIZE*1 + _KERNPG_TABLE
+	.quad	level3_vmalloc_start_pgt - __START_KERNEL_map + PAGE_SIZE*2 + _KERNPG_TABLE
+	.quad	level3_vmalloc_start_pgt - __START_KERNEL_map + PAGE_SIZE*3 + _KERNPG_TABLE
 	.org	init_level4_pgt + L4_VMALLOC_END*8, 0
 	.quad	level3_vmalloc_end_pgt - __START_KERNEL_map + _KERNPG_TABLE
 	.org	init_level4_pgt + L4_VMEMMAP_START*8, 0
@@ -530,7 +536,7 @@ NEXT_PAGE(level3_ident_pgt)
 #endif
 
 NEXT_PAGE(level3_vmalloc_start_pgt)
-	.fill	512,8,0
+	.fill	4*512,8,0
 
 NEXT_PAGE(level3_vmalloc_end_pgt)
 	.fill	512,8,0

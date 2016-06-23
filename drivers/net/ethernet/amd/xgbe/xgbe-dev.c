@@ -2885,8 +2885,6 @@ static int xgbe_init(struct xgbe_prv_data *pdata)
 const struct xgbe_hw_if default_xgbe_hw_if = {
 	.tx_complete = xgbe_tx_complete,
 
-	.tx_complete = xgbe_tx_complete,
-
 	.set_mac_address = xgbe_set_mac_address,
 	.config_rx_mode = xgbe_config_rx_mode,
 

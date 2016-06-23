@@ -2028,6 +2028,8 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 #endif
 #endif
 
+	flags = pax_sanitize_slab_flags(flags);
+
 	/*
 	 * Check that size is in terms of words.  This is needed to avoid
 	 * unaligned accesses for some archs when redzoning is used, and makes

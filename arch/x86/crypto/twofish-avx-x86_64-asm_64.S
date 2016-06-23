@@ -395,6 +395,7 @@ RAP_ENTRY(twofish_cbc_dec_8way)
 	popq %r14;
 
 	FRAME_END
+	pax_force_retaddr
 	ret;
 ENDPROC(twofish_cbc_dec_8way)
 

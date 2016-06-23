@@ -765,13 +765,13 @@ ENTRY(stub_ptregs_64)
 1:
 	/* Called from C */
 	jmp	*%rax				/* called from C */
-END(stub_ptregs_64)
+ENDPROC(stub_ptregs_64)
 
 .macro ptregs_stub func
 ENTRY(ptregs_\func)
 	leaq	\func(%rip), %rax
 	jmp	stub_ptregs_64
-END(ptregs_\func)
+ENDPROC(ptregs_\func)
 .endm
 
 /* Instantiate ptregs_stub for each ptregs-using syscall */
