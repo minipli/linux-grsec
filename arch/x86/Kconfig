@@ -39,14 +39,13 @@ config X86
 	select ARCH_MIGHT_HAVE_PC_SERIO
 	select ARCH_SUPPORTS_ATOMIC_RMW
 	select ARCH_SUPPORTS_DEFERRED_STRUCT_PAGE_INIT
-	select ARCH_SUPPORTS_INT128		if X86_64
+	select ARCH_SUPPORTS_INT128		if X86_64 && !PAX_SIZE_OVERFLOW
 	select ARCH_SUPPORTS_NUMA_BALANCING	if X86_64
 	select ARCH_USE_BUILTIN_BSWAP
 	select ARCH_USE_CMPXCHG_LOCKREF		if X86_64
 	select ARCH_USE_QUEUED_RWLOCKS
 	select ARCH_USE_QUEUED_SPINLOCKS
 	select ARCH_WANT_BATCHED_UNMAP_TLB_FLUSH if SMP
-	select ARCH_WANTS_DYNAMIC_TASK_STRUCT
 	select ARCH_WANT_FRAME_POINTERS
 	select ARCH_WANT_IPC_PARSE_VERSION	if X86_32
 	select ARCH_WANT_OPTIONAL_GPIOLIB
@@ -92,7 +91,7 @@ config X86
 	select HAVE_ARCH_TRACEHOOK
 	select HAVE_ARCH_TRANSPARENT_HUGEPAGE
 	select HAVE_BPF_JIT			if X86_64
-	select HAVE_CC_STACKPROTECTOR
+	select HAVE_CC_STACKPROTECTOR		if X86_64 || !PAX_MEMORY_UDEREF
 	select HAVE_CMPXCHG_DOUBLE
 	select HAVE_CMPXCHG_LOCAL
 	select HAVE_CONTEXT_TRACKING		if X86_64
@@ -110,6 +109,7 @@ config X86
 	select HAVE_FUNCTION_GRAPH_FP_TEST
 	select HAVE_FUNCTION_GRAPH_TRACER
 	select HAVE_FUNCTION_TRACER
+	select HAVE_GCC_PLUGINS
 	select HAVE_GENERIC_DMA_COHERENT	if X86_32
 	select HAVE_HW_BREAKPOINT
 	select HAVE_IDE
@@ -294,7 +294,7 @@ config X86_64_SMP
 
 config X86_32_LAZY_GS
 	def_bool y
-	depends on X86_32 && !CC_STACKPROTECTOR
+	depends on X86_32 && !CC_STACKPROTECTOR && !PAX_MEMORY_UDEREF
 
 config ARCH_HWEIGHT_CFLAGS
 	string
@@ -1331,7 +1331,7 @@ config PAGE_OFFSET
 	hex
 	default 0xB0000000 if VMSPLIT_3G_OPT
 	default 0x80000000 if VMSPLIT_2G
-	default 0x78000000 if VMSPLIT_2G_OPT
+	default 0x70000000 if VMSPLIT_2G_OPT
 	default 0x40000000 if VMSPLIT_1G
 	default 0xC0000000
 	depends on X86_32
@@ -1352,7 +1352,6 @@ config X86_PAE
 
 config ARCH_PHYS_ADDR_T_64BIT
 	def_bool y
-	depends on X86_64 || X86_PAE
 
 config ARCH_DMA_ADDR_T_64BIT
 	def_bool y
@@ -1483,7 +1482,7 @@ config ARCH_PROC_KCORE_TEXT
 
 config ILLEGAL_POINTER_VALUE
        hex
-       default 0 if X86_32
+       default 0xfffff000 if X86_32
        default 0xdead000000000000 if X86_64
 
 source "mm/Kconfig"
@@ -1988,7 +1987,9 @@ config X86_NEED_RELOCS
 
 config PHYSICAL_ALIGN
 	hex "Alignment value to which kernel should be aligned"
-	default "0x200000"
+	default "0x1000000"
+	range 0x200000 0x1000000 if PAX_KERNEXEC && X86_PAE
+	range 0x400000 0x1000000 if PAX_KERNEXEC && !X86_PAE
 	range 0x2000 0x1000000 if X86_32
 	range 0x200000 0x1000000 if X86_64
 	---help---
@@ -2071,6 +2072,7 @@ config COMPAT_VDSO
 	def_bool n
 	prompt "Disable the 32-bit vDSO (needed for glibc 2.3.3)"
 	depends on X86_32 || IA32_EMULATION
+	depends on !PAX_PAGEEXEC && !PAX_SEGMEXEC && !PAX_KERNEXEC && !PAX_MEMORY_UDEREF
 	---help---
 	  Certain buggy versions of glibc will crash if they are
 	  presented with a 32-bit vDSO that is not mapped at the address
@@ -2110,15 +2112,6 @@ choice
 	  to improve security.
 
 	  If unsure, select "Emulate".
-
-	config LEGACY_VSYSCALL_NATIVE
-		bool "Native"
-		help
-		  Actual executable code is located in the fixed vsyscall
-		  address mapping, implementing time() efficiently. Since
-		  this makes the mapping executable, it can be used during
-		  security vulnerability exploitation (traditionally as
-		  ROP gadgets). This configuration is not recommended.
 
 	config LEGACY_VSYSCALL_EMULATE
 		bool "Emulate"

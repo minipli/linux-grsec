@@ -28,6 +28,7 @@
  */
 #ifndef __ro_after_init
 #define __ro_after_init __attribute__((__section__(".data..ro_after_init")))
+#define __read_only __ro_after_init
 #endif
 
 #ifndef ____cacheline_aligned

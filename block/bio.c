@@ -1149,7 +1149,7 @@ struct bio *bio_copy_user_iov(struct request_queue *q,
 		/*
 		 * Overflow, abort
 		 */
-		if (end < start)
+		if (end < start || end - start > INT_MAX - nr_pages)
 			return ERR_PTR(-EINVAL);
 
 		nr_pages += end - start;
@@ -1274,7 +1274,7 @@ struct bio *bio_map_user_iov(struct request_queue *q,
 		/*
 		 * Overflow, abort
 		 */
-		if (end < start)
+		if (end < start || end - start > INT_MAX - nr_pages)
 			return ERR_PTR(-EINVAL);
 
 		nr_pages += end - start;

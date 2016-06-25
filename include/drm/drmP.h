@@ -59,6 +59,7 @@
 
 #include <asm/mman.h>
 #include <asm/pgalloc.h>
+#include <asm/local.h>
 #include <asm/uaccess.h>
 
 #include <uapi/drm/drm.h>
@@ -243,10 +244,12 @@ void drm_err(const char *format, ...);
  * \param cmd command.
  * \param arg argument.
  */
-typedef int drm_ioctl_t(struct drm_device *dev, void *data,
+typedef int (* const drm_ioctl_t)(struct drm_device *dev, void *data,
+			struct drm_file *file_priv);
+typedef int (* drm_ioctl_no_const_t)(struct drm_device *dev, void *data,
 			struct drm_file *file_priv);
 
-typedef int drm_ioctl_compat_t(struct file *filp, unsigned int cmd,
+typedef int (* const drm_ioctl_compat_t)(struct file *filp, unsigned int cmd,
 			       unsigned long arg);
 
 #define DRM_IOCTL_NR(n)                _IOC_NR(n)
@@ -262,9 +265,9 @@ typedef int drm_ioctl_compat_t(struct file *filp, unsigned int cmd,
 struct drm_ioctl_desc {
 	unsigned int cmd;
 	int flags;
-	drm_ioctl_t *func;
+	drm_ioctl_t func;
 	const char *name;
-};
+} __do_const;
 
 /**
  * Creates a driver or general drm_ioctl_desc array entry for the given
@@ -656,7 +659,8 @@ struct drm_driver {
 
 	/* List of devices hanging off this driver with stealth attach. */
 	struct list_head legacy_dev_list;
-};
+} __do_const;
+typedef struct drm_driver __no_const drm_driver_no_const;
 
 enum drm_minor_type {
 	DRM_MINOR_LEGACY,
@@ -674,7 +678,8 @@ struct drm_info_list {
 	int (*show)(struct seq_file*, void*); /** show callback */
 	u32 driver_features; /**< Required driver features for this entry */
 	void *data;
-};
+} __do_const;
+typedef struct drm_info_list __no_const drm_info_list_no_const;
 
 /**
  * debugfs node structure. This structure represents a debugfs file.
@@ -763,7 +768,7 @@ struct drm_device {
 
 	/** \name Usage Counters */
 	/*@{ */
-	int open_count;			/**< Outstanding files open, protected by drm_global_mutex. */
+	local_t open_count;		/**< Outstanding files open, protected by drm_global_mutex. */
 	spinlock_t buf_lock;		/**< For drm_device::buf_use and a few other things. */
 	int buf_use;			/**< Buffers in use -- cannot alloc */
 	atomic_t buf_alloc;		/**< Buffer allocation in progress */
