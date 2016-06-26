@@ -25,6 +25,7 @@ ifdef CONFIG_GCC_PLUGINS
 
   gcc-plugin-y						+= colorize_plugin.so
 
+  gcc-plugin-subdir-$(CONFIG_PAX_SIZE_OVERFLOW)		+= size_overflow_plugin
   gcc-plugin-$(CONFIG_PAX_SIZE_OVERFLOW)		+= size_overflow_plugin/size_overflow_plugin.so
   gcc-plugin-cflags-$(CONFIG_PAX_SIZE_OVERFLOW)		+= -DSIZE_OVERFLOW_PLUGIN
 
@@ -40,6 +41,7 @@ ifdef CONFIG_GCC_PLUGINS
   gcc-plugin-y						+= initify_plugin.so
   gcc-plugin-cflags-y					+= -DINITIFY_PLUGIN
 
+  gcc-plugin-subdir-$(CONFIG_PAX_RAP)			+= rap_plugin
   gcc-plugin-$(CONFIG_PAX_RAP)				+= rap_plugin/rap_plugin.so
   gcc-plugin-cflags-$(CONFIG_PAX_RAP)			+= -DRAP_PLUGIN -fplugin-arg-rap_plugin-check=call
 #  gcc-plugin-cflags-$(CONFIG_PAX_RAP)			+= -fplugin-arg-rap_plugin-report=func,fptr,abs
@@ -52,12 +54,13 @@ ifdef CONFIG_GCC_PLUGINS
   GCC_PLUGINS_CFLAGS := $(strip $(addprefix -fplugin=$(objtree)/scripts/gcc-plugins/, $(gcc-plugin-y)) $(gcc-plugin-cflags-y))
   GCC_PLUGINS_AFLAGS := $(gcc-plugin-aflags-y)
 
-  export PLUGINCC GCC_PLUGINS_CFLAGS GCC_PLUGINS_AFLAGS
+  export PLUGINCC GCC_PLUGIN GCC_PLUGIN_SUBDIR GCC_PLUGINS_CFLAGS GCC_PLUGINS_AFLAGS
   export DISABLE_LATENT_ENTROPY_PLUGIN RAP_PLUGIN_ABS_CFLAGS
 
   KBUILD_CFLAGS += $(GCC_PLUGINS_CFLAGS)
   KBUILD_AFLAGS += $(GCC_PLUGINS_AFLAGS)
   GCC_PLUGIN := $(gcc-plugin-y)
+  GCC_PLUGIN_SUBDIR := $(gcc-plugin-subdir-y)
 endif
 
 # If plugins aren't supported, abort the build before hard-to-read compiler
