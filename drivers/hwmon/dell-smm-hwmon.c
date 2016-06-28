@@ -929,7 +929,7 @@ static const struct dmi_system_id i8k_dmi_table[] __initconst = {
 
 MODULE_DEVICE_TABLE(dmi, i8k_dmi_table);
 
-static struct dmi_system_id i8k_blacklist_dmi_table[] __initdata = {
+static struct dmi_system_id i8k_blacklist_dmi_table[] __initconst = {
 	{
 		/*
 		 * CPU fan speed going up and down on Dell Studio XPS 8000

@@ -27,8 +27,13 @@
  * but may get written to during init, so can't live in .rodata (via "const").
  */
 #ifndef __ro_after_init
-#define __ro_after_init __attribute__((__section__(".data..ro_after_init")))
-#define __read_only __ro_after_init
+# define __ro_after_init __read_only
+# define __read_only __attribute__((__section__(".data..read_only")))
+#else
+# ifdef CONFIG_PAX_KERNEXEC
+#  error KERNEXEC requires __read_only
+# endif
+# define __read_only __ro_after_init
 #endif
 
 #ifndef ____cacheline_aligned
