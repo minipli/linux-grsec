@@ -98,7 +98,7 @@ static int socfpga_clk_prepare(struct clk_hw *hwclk)
 	return 0;
 }
 
-static struct clk_ops gateclk_ops = {
+static clk_ops_no_const gateclk_ops __read_only = {
 	.prepare = socfpga_clk_prepare,
 	.recalc_rate = socfpga_gate_clk_recalc_rate,
 };
