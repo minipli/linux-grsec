@@ -421,23 +421,23 @@ static void check_section_mismatch(varpool_node_ptr node)
 	var = NODE_DECL(node);
 	section = lookup_attribute("section", DECL_ATTRIBUTES(var));
 	if (!section) {
-		gcc_assert(!DECL_SECTION_NAME(var));
+		gcc_assert(!get_decl_section_name(var));
 		return;
 	} else
-		gcc_assert(DECL_SECTION_NAME(var));
+		gcc_assert(get_decl_section_name(var));
 
-//fprintf(stderr, "SECTIONAME: [%s] ", DECL_SECTION_NAME(var));
+//fprintf(stderr, "SECTIONAME: [%s] ", get_decl_section_name(var));
 //debug_tree(var);
 
 	gcc_assert(!TREE_CHAIN(section));
 	gcc_assert(TREE_VALUE(section));
 
 	section = TREE_VALUE(TREE_VALUE(section));
-	gcc_assert(!strcmp(TREE_STRING_POINTER(section), DECL_SECTION_NAME(var)));
+	gcc_assert(!strcmp(TREE_STRING_POINTER(section), get_decl_section_name(var)));
 //debug_tree(section);
 
 	for (i = 0; i < ARRAY_SIZE(const_sections); i++)
-		if (!strcmp(const_sections[i].name, DECL_SECTION_NAME(var)))
+		if (!strcmp(const_sections[i].name, get_decl_section_name(var)))
 			return;
 
 	error_at(DECL_SOURCE_LOCATION(var), "constified variable %qD placed into writable section %E", var, section);
