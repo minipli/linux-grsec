@@ -539,8 +539,8 @@ typedef struct rtx_def rtx_insn;
 
 static inline const char *get_decl_section_name(const_tree decl)
 {
-	if (!DECL_SECTION_NAME(decl))
-		return  NULL;
+	if (DECL_SECTION_NAME(decl) == NULL_TREE)
+		return NULL;
 
 	return TREE_STRING_POINTER(DECL_SECTION_NAME(decl));
 }
