@@ -190,7 +190,7 @@ static struct drm_info_list mixer1_debugfs_files[] = {
 static int mixer_debugfs_init(struct sti_mixer *mixer, struct drm_minor *minor)
 {
 	unsigned int i;
-	struct drm_info_list *mixer_debugfs_files;
+	drm_info_list_no_const *mixer_debugfs_files;
 	int nb_files;
 
 	switch (mixer->id) {
@@ -206,8 +206,10 @@ static int mixer_debugfs_init(struct sti_mixer *mixer, struct drm_minor *minor)
 		return -EINVAL;
 	}
 
+	pax_open_kernel();
 	for (i = 0; i < nb_files; i++)
-		mixer_debugfs_files[i].data = mixer;
+		const_cast(mixer_debugfs_files[i].data) = mixer;
+	pax_close_kernel();
 
 	return drm_debugfs_create_files(mixer_debugfs_files,
 					nb_files,

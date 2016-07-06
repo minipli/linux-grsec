@@ -210,11 +210,11 @@ out:
 }
 
 struct cfs_psdev_ops libcfs_psdev_ops = {
-	libcfs_psdev_open,
-	libcfs_psdev_release,
-	NULL,
-	NULL,
-	libcfs_ioctl
+	.p_open = libcfs_psdev_open,
+	.p_close = libcfs_psdev_release,
+	.p_read = NULL,
+	.p_write = NULL,
+	.p_ioctl = libcfs_ioctl
 };
 
 int lprocfs_call_handler(void *data, int write, loff_t *ppos,

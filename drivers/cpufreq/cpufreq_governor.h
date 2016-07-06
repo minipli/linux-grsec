@@ -176,7 +176,7 @@ static inline struct dbs_governor *dbs_governor_of(struct cpufreq_policy *policy
 struct od_ops {
 	unsigned int (*powersave_bias_target)(struct cpufreq_policy *policy,
 			unsigned int freq_next, unsigned int relation);
-};
+} __no_const;
 
 unsigned int dbs_update(struct cpufreq_policy *policy);
 int cpufreq_governor_dbs(struct cpufreq_policy *policy, unsigned int event);

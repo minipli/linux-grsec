@@ -2148,7 +2148,7 @@ void set_numabalancing_state(bool enabled)
 int sysctl_numa_balancing(struct ctl_table *table, int write,
 			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table t;
+	ctl_table_no_const t;
 	int err;
 	int state = static_branch_likely(&sched_numa_balancing);
 
@@ -2211,7 +2211,7 @@ __setup("schedstats=", setup_schedstats);
 int sysctl_schedstats(struct ctl_table *table, int write,
 			 void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table t;
+	ctl_table_no_const t;
 	int err;
 	int state = static_branch_likely(&sched_schedstats);
 
@@ -2650,7 +2650,7 @@ static struct rq *finish_task_switch(struct task_struct *prev)
 /* rq->lock is NOT held, but preemption is disabled */
 static void __balance_callback(struct rq *rq)
 {
-	struct callback_head *head, *next;
+	struct balance_callback *head, *next;
 	void (*func)(struct rq *rq);
 	unsigned long flags;
 
@@ -2658,7 +2658,7 @@ static void __balance_callback(struct rq *rq)
 	head = rq->balance_callback;
 	rq->balance_callback = NULL;
 	while (head) {
-		func = (void (*)(struct rq *))head->func;
+		func = head->func;
 		next = head->next;
 		head->next = NULL;
 		head = next;
@@ -2732,8 +2732,9 @@ context_switch(struct rq *rq, struct task_struct *prev,
 		next->active_mm = oldmm;
 		atomic_inc(&oldmm->mm_count);
 		enter_lazy_tlb(oldmm, next);
-	} else
+	} else {
 		switch_mm(oldmm, mm, next);
+	}
 
 	if (!prev->mm) {
 		prev->active_mm = NULL;
@@ -3552,6 +3553,8 @@ int can_nice(const struct task_struct *p, const int nice)
 	/* convert nice value [19,-20] to rlimit style value [1,40] */
 	int nice_rlim = nice_to_rlimit(nice);
 
+	gr_learn_resource(p, RLIMIT_NICE, nice_rlim, 1);
+
 	return (nice_rlim <= task_rlimit(p, RLIMIT_NICE) ||
 		capable(CAP_SYS_NICE));
 }
@@ -3578,7 +3581,8 @@ SYSCALL_DEFINE1(nice, int, increment)
 	nice = task_nice(current) + increment;
 
 	nice = clamp_val(nice, MIN_NICE, MAX_NICE);
-	if (increment < 0 && !can_nice(current, nice))
+	if (increment < 0 && (!can_nice(current, nice) ||
+			      gr_handle_chroot_nice()))
 		return -EPERM;
 
 	retval = security_task_setnice(current, nice);
@@ -3888,6 +3892,7 @@ recheck:
 			if (policy != p->policy && !rlim_rtprio)
 				return -EPERM;
 
+			gr_learn_resource(p, RLIMIT_RTPRIO, attr->sched_priority, 1);
 			/* can't increase priority */
 			if (attr->sched_priority > p->rt_priority &&
 			    attr->sched_priority > rlim_rtprio)
