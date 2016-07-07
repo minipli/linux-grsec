@@ -772,6 +772,7 @@ struct drm_connector_helper_funcs {
 	struct drm_encoder *(*atomic_best_encoder)(struct drm_connector *connector,
 						   struct drm_connector_state *connector_state);
 };
+typedef struct drm_connector_helper_funcs __no_const drm_connector_helper_funcs_no_const;
 
 /**
  * drm_connector_helper_add - sets the helper vtable for a connector

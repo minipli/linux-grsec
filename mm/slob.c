@@ -568,15 +568,15 @@ const char *check_heap_object(const void *ptr, unsigned long n)
 
 	/* some tricky double walking to find the chunk */
 	spin_lock_irqsave(&slob_lock, flags);
-	base = (void *)((unsigned long)ptr & PAGE_MASK);
+	base = (const void *)((unsigned long)ptr & PAGE_MASK);
 	free = page->freelist;
 
-	while (!slob_last(free) && (void *)free <= ptr) {
+	while (!slob_last(free) && (const void *)free <= ptr) {
 		base = free + slob_units(free);
 		free = slob_next(free);
 	}
 
-	while (base < (void *)free) {
+	while (base < (const void *)free) {
 		slobidx_t m = ((slob_t *)base)[0].units, align = ((slob_t *)base)[1].units;
 		int size = SLOB_UNIT * SLOB_UNITS(m + align);
 		int offset;

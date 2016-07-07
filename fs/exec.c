@@ -2048,14 +2048,14 @@ void pax_report_refcount_overflow(struct pt_regs *regs)
 
 #ifdef CONFIG_PAX_USERCOPY
 /* 0: not at all, 1: fully, 2: fully inside frame, -1: partially (implies an error) */
-static noinline int check_stack_object(const void *obj, unsigned long len)
+static noinline int check_stack_object(unsigned long obj, unsigned long len)
 {
-	const void * const stack = task_stack_page(current);
-	const void * const stackend = stack + THREAD_SIZE;
+	unsigned long stack = (unsigned long)task_stack_page(current);
+	unsigned long stackend = (unsigned long)stack + THREAD_SIZE;
 
 #if defined(CONFIG_FRAME_POINTER) && defined(CONFIG_X86)
-	const void *frame = NULL;
-	const void *oldframe;
+	unsigned long frame = 0;
+	unsigned long oldframe;
 #endif
 
 	if (obj + len < obj)
@@ -2068,9 +2068,9 @@ static noinline int check_stack_object(const void *obj, unsigned long len)
 		return -1;
 
 #if defined(CONFIG_FRAME_POINTER) && defined(CONFIG_X86)
-	oldframe = __builtin_frame_address(1);
+	oldframe = (unsigned long)__builtin_frame_address(1);
 	if (oldframe)
-		frame = __builtin_frame_address(2);
+		frame = (unsigned long)__builtin_frame_address(2);
 	/*
 	  low ----------------------------------------------> high
 	  [saved bp][saved ip][args][local vars][saved bp][saved ip]
@@ -2084,9 +2084,9 @@ static noinline int check_stack_object(const void *obj, unsigned long len)
 		   the copy as invalid
 		*/
 		if (obj + len <= frame)
-			return obj >= oldframe + 2 * sizeof(void *) ? 2 : -1;
+			return obj >= oldframe + 2 * sizeof(unsigned long) ? 2 : -1;
 		oldframe = frame;
-		frame = *(const void * const *)frame;
+		frame = *(unsigned long *)frame;
 	}
 	return -1;
 #else
@@ -2114,7 +2114,7 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
 
 	type = check_heap_object(ptr, n);
 	if (!type) {
-		if (check_stack_object(ptr, n) != -1)
+		if (check_stack_object((unsigned long)ptr, n) != -1)
 			return;
 		type = "<process stack>";
 	}
