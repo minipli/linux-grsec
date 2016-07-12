@@ -110,7 +110,7 @@ struct mtk_iommu_domain {
 	spinlock_t			pgtlock; /* lock for page table */
 
 	struct io_pgtable_cfg		cfg;
-	struct io_pgtable_ops		*iop;
+	struct io_pgtable		*iop;
 
 	struct iommu_domain		domain;
 };
@@ -257,14 +257,16 @@ static int mtk_iommu_domain_finalise(struct mtk_iommu_data *data)
 		.iommu_dev = data->dev,
 	};
 
-	dom->iop = alloc_io_pgtable_ops(ARM_V7S, &dom->cfg, data);
+	dom->iop = alloc_io_pgtable(ARM_V7S, &dom->cfg, data);
 	if (!dom->iop) {
 		dev_err(data->dev, "Failed to alloc io pgtable\n");
 		return -EINVAL;
 	}
 
 	/* Update our support page sizes bitmap */
-	mtk_iommu_ops.pgsize_bitmap = dom->cfg.pgsize_bitmap;
+	pax_open_kernel();
+	const_cast(mtk_iommu_ops.pgsize_bitmap) = dom->cfg.pgsize_bitmap;
+	pax_close_kernel();
 
 	writel(data->m4u_dom->cfg.arm_v7s_cfg.ttbr[0],
 	       data->base + REG_MMU_PT_BASE_ADDR);
@@ -350,7 +352,7 @@ static int mtk_iommu_map(struct iommu_domain *domain, unsigned long iova,
 	int ret;
 
 	spin_lock_irqsave(&dom->pgtlock, flags);
-	ret = dom->iop->map(dom->iop, iova, paddr, size, prot);
+	ret = dom->iop->ops->map(dom->iop, iova, paddr, size, prot);
 	spin_unlock_irqrestore(&dom->pgtlock, flags);
 
 	return ret;
@@ -364,7 +366,7 @@ static size_t mtk_iommu_unmap(struct iommu_domain *domain,
 	size_t unmapsz;
 
 	spin_lock_irqsave(&dom->pgtlock, flags);
-	unmapsz = dom->iop->unmap(dom->iop, iova, size);
+	unmapsz = dom->iop->ops->unmap(dom->iop, iova, size);
 	spin_unlock_irqrestore(&dom->pgtlock, flags);
 
 	return unmapsz;
@@ -378,7 +380,7 @@ static phys_addr_t mtk_iommu_iova_to_phys(struct iommu_domain *domain,
 	phys_addr_t pa;
 
 	spin_lock_irqsave(&dom->pgtlock, flags);
-	pa = dom->iop->iova_to_phys(dom->iop, iova);
+	pa = dom->iop->ops->iova_to_phys(dom->iop, iova);
 	spin_unlock_irqrestore(&dom->pgtlock, flags);
 
 	return pa;
@@ -654,7 +656,7 @@ static int mtk_iommu_remove(struct platform_device *pdev)
 	if (iommu_present(&platform_bus_type))
 		bus_set_iommu(&platform_bus_type, NULL);
 
-	free_io_pgtable_ops(data->m4u_dom->iop);
+	free_io_pgtable(data->m4u_dom->iop);
 	clk_disable_unprepare(data->bclk);
 	devm_free_irq(&pdev->dev, data->irq, data);
 	component_master_del(&pdev->dev, &mtk_iommu_com_ops);

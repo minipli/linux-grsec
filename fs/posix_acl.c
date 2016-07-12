@@ -20,6 +20,7 @@
 #include <linux/xattr.h>
 #include <linux/export.h>
 #include <linux/user_namespace.h>
+#include <linux/grsecurity.h>
 
 struct posix_acl **acl_by_type(struct inode *inode, int type)
 {
@@ -277,7 +278,7 @@ posix_acl_equiv_mode(const struct posix_acl *acl, umode_t *mode_p)
 		}
 	}
         if (mode_p)
-                *mode_p = (*mode_p & ~S_IRWXUGO) | mode;
+                *mode_p = ((*mode_p & ~S_IRWXUGO) | mode) & ~gr_acl_umask();
         return not_equiv;
 }
 EXPORT_SYMBOL(posix_acl_equiv_mode);
@@ -427,7 +428,7 @@ static int posix_acl_create_masq(struct posix_acl *acl, umode_t *mode_p)
 		mode &= (group_obj->e_perm << 3) | ~S_IRWXG;
 	}
 
-	*mode_p = (*mode_p & ~S_IRWXUGO) | mode;
+	*mode_p = ((*mode_p & ~S_IRWXUGO) | mode) & ~gr_acl_umask();
         return not_equiv;
 }
 
@@ -485,6 +486,8 @@ __posix_acl_create(struct posix_acl **acl, gfp_t gfp, umode_t *mode_p)
 	struct posix_acl *clone = posix_acl_clone(*acl, gfp);
 	int err = -ENOMEM;
 	if (clone) {
+		*mode_p &= ~gr_acl_umask();
+
 		err = posix_acl_create_masq(clone, mode_p);
 		if (err < 0) {
 			posix_acl_release(clone);
@@ -657,11 +660,12 @@ struct posix_acl *
 posix_acl_from_xattr(struct user_namespace *user_ns,
 		     const void *value, size_t size)
 {
-	posix_acl_xattr_header *header = (posix_acl_xattr_header *)value;
-	posix_acl_xattr_entry *entry = (posix_acl_xattr_entry *)(header+1), *end;
+	const posix_acl_xattr_header *header = (const posix_acl_xattr_header *)value;
+	const posix_acl_xattr_entry *entry = (const posix_acl_xattr_entry *)(header+1), *end;
 	int count;
 	struct posix_acl *acl;
 	struct posix_acl_entry *acl_e;
+	umode_t umask = gr_acl_umask();
 
 	if (!value)
 		return NULL;
@@ -687,12 +691,18 @@ posix_acl_from_xattr(struct user_namespace *user_ns,
 
 		switch(acl_e->e_tag) {
 			case ACL_USER_OBJ:
+				acl_e->e_perm &= ~((umask & S_IRWXU) >> 6);
+				break;
 			case ACL_GROUP_OBJ:
 			case ACL_MASK:
+				acl_e->e_perm &= ~((umask & S_IRWXG) >> 3);
+				break;
 			case ACL_OTHER:
+				acl_e->e_perm &= ~(umask & S_IRWXO);
 				break;
 
 			case ACL_USER:
+				acl_e->e_perm &= ~((umask & S_IRWXU) >> 6);
 				acl_e->e_uid =
 					make_kuid(user_ns,
 						  le32_to_cpu(entry->e_id));
@@ -700,6 +710,7 @@ posix_acl_from_xattr(struct user_namespace *user_ns,
 					goto fail;
 				break;
 			case ACL_GROUP:
+				acl_e->e_perm &= ~((umask & S_IRWXG) >> 3);
 				acl_e->e_gid =
 					make_kgid(user_ns,
 						  le32_to_cpu(entry->e_id));
@@ -786,39 +797,47 @@ posix_acl_xattr_get(const struct xattr_handler *handler,
 	return error;
 }
 
-static int
-posix_acl_xattr_set(const struct xattr_handler *handler,
-		    struct dentry *dentry, const char *name,
-		    const void *value, size_t size, int flags)
+int
+set_posix_acl(struct inode *inode, int type, struct posix_acl *acl)
 {
-	struct inode *inode = d_backing_inode(dentry);
-	struct posix_acl *acl = NULL;
-	int ret;
-
 	if (!IS_POSIXACL(inode))
 		return -EOPNOTSUPP;
 	if (!inode->i_op->set_acl)
 		return -EOPNOTSUPP;
 
-	if (handler->flags == ACL_TYPE_DEFAULT && !S_ISDIR(inode->i_mode))
-		return value ? -EACCES : 0;
+	if (type == ACL_TYPE_DEFAULT && !S_ISDIR(inode->i_mode))
+		return acl ? -EACCES : 0;
 	if (!inode_owner_or_capable(inode))
 		return -EPERM;
+
+	if (acl) {
+		int ret = posix_acl_valid(acl);
+		if (ret)
+			return ret;
+	}
+	return inode->i_op->set_acl(inode, acl, type);
+}
+EXPORT_SYMBOL(set_posix_acl);
+
+static int
+posix_acl_xattr_set(const struct xattr_handler *handler,
+		    struct dentry *dentry,
+		    const char *name, const void *value,
+		    size_t size, int flags)
+{
+	struct inode *inode = d_backing_inode(dentry);
+	struct posix_acl *acl = NULL;
+	int ret;
+
+	if (strcmp(name, "") != 0)
+		return -EINVAL;
 
 	if (value) {
 		acl = posix_acl_from_xattr(&init_user_ns, value, size);
 		if (IS_ERR(acl))
 			return PTR_ERR(acl);
-
-		if (acl) {
-			ret = posix_acl_valid(acl);
-			if (ret)
-				goto out;
-		}
 	}
-
-	ret = inode->i_op->set_acl(inode, acl, handler->flags);
-out:
+	ret = set_posix_acl(inode, handler->flags, acl);
 	posix_acl_release(acl);
 	return ret;
 }

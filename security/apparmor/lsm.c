@@ -176,7 +176,7 @@ static int common_perm_dir_dentry(int op, struct path *dir,
 				  struct dentry *dentry, u32 mask,
 				  struct path_cond *cond)
 {
-	struct path path = { dir->mnt, dentry };
+	struct path path = { .mnt = dir->mnt, .dentry = dentry };
 
 	return common_perm(op, &path, mask, cond);
 }
@@ -193,7 +193,7 @@ static int common_perm_dir_dentry(int op, struct path *dir,
 static int common_perm_mnt_dentry(int op, struct vfsmount *mnt,
 				  struct dentry *dentry, u32 mask)
 {
-	struct path path = { mnt, dentry };
+	struct path path = { .mnt = mnt, .dentry = dentry };
 	struct path_cond cond = { d_backing_inode(dentry)->i_uid,
 				  d_backing_inode(dentry)->i_mode
 	};
@@ -315,8 +315,8 @@ static int apparmor_path_rename(struct path *old_dir, struct dentry *old_dentry,
 
 	profile = aa_current_profile();
 	if (!unconfined(profile)) {
-		struct path old_path = { old_dir->mnt, old_dentry };
-		struct path new_path = { new_dir->mnt, new_dentry };
+		struct path old_path = { .mnt = old_dir->mnt, .dentry = old_dentry };
+		struct path new_path = { .mnt = new_dir->mnt, .dentry = new_dentry };
 		struct path_cond cond = { d_backing_inode(old_dentry)->i_uid,
 					  d_backing_inode(old_dentry)->i_mode
 		};
@@ -523,34 +523,34 @@ static int apparmor_setprocattr(struct task_struct *task, char *name,
 {
 	struct common_audit_data sa;
 	struct apparmor_audit_data aad = {0,};
-	char *command, *args = value;
+	char *command, *largs = NULL, *args = value;
 	size_t arg_size;
 	int error;
 
 	if (size == 0)
 		return -EINVAL;
-	/* args points to a PAGE_SIZE buffer, AppArmor requires that
-	 * the buffer must be null terminated or have size <= PAGE_SIZE -1
-	 * so that AppArmor can null terminate them
-	 */
-	if (args[size - 1] != '\0') {
-		if (size == PAGE_SIZE)
-			return -EINVAL;
-		args[size] = '\0';
-	}
-
 	/* task can only write its own attributes */
 	if (current != task)
 		return -EACCES;
 
-	args = value;
+	/* AppArmor requires that the buffer must be null terminated atm */
+	if (args[size - 1] != '\0') {
+		/* null terminate */
+		largs = args = kmalloc(size + 1, GFP_KERNEL);
+		if (!args)
+			return -ENOMEM;
+		memcpy(args, value, size);
+		args[size] = '\0';
+	}
+
+	error = -EINVAL;
 	args = strim(args);
 	command = strsep(&args, " ");
 	if (!args)
-		return -EINVAL;
+		goto out;
 	args = skip_spaces(args);
 	if (!*args)
-		return -EINVAL;
+		goto out;
 
 	arg_size = size - (args - (char *) value);
 	if (strcmp(name, "current") == 0) {
@@ -576,10 +576,12 @@ static int apparmor_setprocattr(struct task_struct *task, char *name,
 			goto fail;
 	} else
 		/* only support the "current" and "exec" process attributes */
-		return -EINVAL;
+		goto fail;
 
 	if (!error)
 		error = size;
+out:
+	kfree(largs);
 	return error;
 
 fail:
@@ -588,9 +590,9 @@ fail:
 	aad.profile = aa_current_profile();
 	aad.op = OP_SETPROCATTR;
 	aad.info = name;
-	aad.error = -EINVAL;
+	aad.error = error = -EINVAL;
 	aa_audit_msg(AUDIT_APPARMOR_DENIED, &sa, NULL);
-	return -EINVAL;
+	goto out;
 }
 
 static int apparmor_task_setrlimit(struct task_struct *task,
@@ -677,11 +679,11 @@ static const struct kernel_param_ops param_ops_aalockpolicy = {
 	.get = param_get_aalockpolicy
 };
 
-static int param_set_audit(const char *val, struct kernel_param *kp);
-static int param_get_audit(char *buffer, struct kernel_param *kp);
+static int param_set_audit(const char *val, const struct kernel_param *kp);
+static int param_get_audit(char *buffer, const struct kernel_param *kp);
 
-static int param_set_mode(const char *val, struct kernel_param *kp);
-static int param_get_mode(char *buffer, struct kernel_param *kp);
+static int param_set_mode(const char *val, const struct kernel_param *kp);
+static int param_get_mode(char *buffer, const struct kernel_param *kp);
 
 /* Flag values, also controllable via /sys/module/apparmor/parameters
  * We define special types as we want to do additional mediation.
@@ -791,7 +793,7 @@ static int param_get_aauint(char *buffer, const struct kernel_param *kp)
 	return param_get_uint(buffer, kp);
 }
 
-static int param_get_audit(char *buffer, struct kernel_param *kp)
+static int param_get_audit(char *buffer, const struct kernel_param *kp)
 {
 	if (!capable(CAP_MAC_ADMIN))
 		return -EPERM;
@@ -802,7 +804,7 @@ static int param_get_audit(char *buffer, struct kernel_param *kp)
 	return sprintf(buffer, "%s", audit_mode_names[aa_g_audit]);
 }
 
-static int param_set_audit(const char *val, struct kernel_param *kp)
+static int param_set_audit(const char *val, const struct kernel_param *kp)
 {
 	int i;
 	if (!capable(CAP_MAC_ADMIN))
@@ -824,7 +826,7 @@ static int param_set_audit(const char *val, struct kernel_param *kp)
 	return -EINVAL;
 }
 
-static int param_get_mode(char *buffer, struct kernel_param *kp)
+static int param_get_mode(char *buffer, const struct kernel_param *kp)
 {
 	if (!capable(CAP_MAC_ADMIN))
 		return -EPERM;
@@ -835,7 +837,7 @@ static int param_get_mode(char *buffer, struct kernel_param *kp)
 	return sprintf(buffer, "%s", aa_profile_mode_names[aa_g_profile_mode]);
 }
 
-static int param_set_mode(const char *val, struct kernel_param *kp)
+static int param_set_mode(const char *val, const struct kernel_param *kp)
 {
 	int i;
 	if (!capable(CAP_MAC_ADMIN))
