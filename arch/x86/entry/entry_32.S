@@ -162,18 +162,13 @@
 #endif /* CONFIG_X86_32_LAZY_GS */
 
 .macro pax_enter_kernel
-#ifdef CONFIG_PAX_KERNEXEC
 	call pax_enter_kernel
-#endif
 .endm
 
 .macro pax_exit_kernel
-#ifdef CONFIG_PAX_KERNEXEC
 	call pax_exit_kernel
-#endif
 .endm
 
-#ifdef CONFIG_PAX_KERNEXEC
 ENTRY(pax_enter_kernel)
 #ifdef CONFIG_PARAVIRT
 	pushl %eax
@@ -235,7 +230,6 @@ ENTRY(pax_exit_kernel)
 #endif
 	ret
 ENDPROC(pax_exit_kernel)
-#endif
 
 	.macro pax_erase_kstack
 #ifdef CONFIG_PAX_MEMORY_STACKLEAK
@@ -319,12 +313,8 @@ ENDPROC(pax_erase_kstack)
 .endm
 
 .macro SAVE_ALL pt_regs_ax=%eax
-#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
 	__SAVE_ALL \pt_regs_ax, __KERNEL_DS
 	pax_enter_kernel
-#else
-	__SAVE_ALL \pt_regs_ax, __USER_DS
-#endif
 .endm
 
 .macro RESTORE_INT_REGS
@@ -418,14 +408,10 @@ ret_from_intr:
 #endif
 	cmpl	$USER_RPL, %eax
 
-#ifdef CONFIG_PAX_KERNEXEC
 	jae	resume_userspace
 
 	pax_exit_kernel
-	jmp	resume_kernel
-#else
-	jb	resume_kernel			# not returning to v8086 or userspace
-#endif
+	jmp	resume_kernel			# not returning to v8086 or userspace
 
 ENTRY(resume_userspace)
 	DISABLE_INTERRUPTS(CLBR_ANY)
@@ -616,19 +602,15 @@ ldt_ss:
 #endif
 	shr	$16, %edx
 
-#ifdef CONFIG_PAX_KERNEXEC
 	mov	%cr0, %esi
 	btr	$X86_CR0_WP_BIT, %esi
 	mov	%esi, %cr0
-#endif
 
 	mov	%dl, 4 + GDT_ESPFIX_SS /* bits 16..23 */
 	mov	%dh, 7 + GDT_ESPFIX_SS /* bits 24..31 */
 
-#ifdef CONFIG_PAX_KERNEXEC
 	bts	$X86_CR0_WP_BIT, %esi
 	mov	%esi, %cr0
-#endif
 
 	pushl	$__ESPFIX_SS
 	pushl	%eax				/* new kernel esp */

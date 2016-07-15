@@ -503,7 +503,7 @@ dotraplinkage notrace void
 do_nmi(struct pt_regs *regs, long error_code)
 {
 
-#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+#ifdef CONFIG_X86_32
 	if (!user_mode(regs)) {
 		unsigned long cs = regs->cs & 0xFFFF;
 		unsigned long ip = ktva_ktla(regs->ip);

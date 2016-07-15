@@ -877,11 +877,7 @@ ENTRY(cpu_gdt_table)
 	.quad 0x0000000000000000	/* 0x13 reserved */
 	.quad 0x0000000000000000	/* 0x1b reserved */
 
-#ifdef CONFIG_PAX_KERNEXEC
 	.quad 0x00cf9b000000ffff	/* 0x20 alternate kernel 4GB code at 0x00000000 */
-#else
-	.quad 0x0000000000000000	/* 0x20 unused */
-#endif
 
 	.quad 0x0000000000000000	/* 0x28 unused */
 	.quad 0x0000000000000000	/* 0x33 TLS entry 1 */

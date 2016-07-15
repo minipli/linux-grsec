@@ -96,7 +96,6 @@ extern struct mm_struct *pgd_page_get_mm(struct page *page);
 #define  __HAVE_ARCH_PAX_OPEN_KERNEL
 #define  __HAVE_ARCH_PAX_CLOSE_KERNEL
 
-#ifdef CONFIG_PAX_KERNEXEC
 static inline unsigned long native_pax_open_kernel(void)
 {
 	unsigned long cr0;
@@ -122,10 +121,6 @@ static inline unsigned long native_pax_close_kernel(void)
 	preempt_enable_no_resched();
 	return cr0 ^ X86_CR0_WP;
 }
-#else
-static inline unsigned long native_pax_open_kernel(void) { return 0; }
-static inline unsigned long native_pax_close_kernel(void) { return 0; }
-#endif
 
 /*
  * The following only work if pte_present() is true.
