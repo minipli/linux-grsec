@@ -151,11 +151,9 @@ ENTRY(switch_to_guest)
 	// For after we switch over our page tables
 	// That entry will be read-only: we'd crash.
 
-#ifdef CONFIG_PAX_KERNEXEC
 	mov	%cr0, %edx
 	xor	$X86_CR0_WP, %edx
 	mov	%edx, %cr0
-#endif
 
 	movl	$(GDT_ENTRY_TSS*8), %edx
 	ltr	%dx
@@ -169,11 +167,9 @@ ENTRY(switch_to_guest)
 	// Clear "used" from type field (byte 5, bit 2)
 	andb	$0xFD, (GDT_ENTRY_TSS*8 + 5)(%eax)
 
-#ifdef CONFIG_PAX_KERNEXEC
 	mov	%cr0, %eax
 	xor	$X86_CR0_WP, %eax
 	mov	%eax, %cr0
-#endif
 
 	// Once our page table's switched, the Guest is live!
 	// The Host fades as we run this final step.

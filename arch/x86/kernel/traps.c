@@ -189,7 +189,7 @@ do_trap_no_signal(struct task_struct *tsk, int trapnr, const char *str,
 			tsk->thread.error_code = error_code;
 			tsk->thread.trap_nr = trapnr;
 
-#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+#ifdef CONFIG_X86_32
 			if (trapnr == X86_TRAP_SS && ((regs->cs & 0xFFFF) == __KERNEL_CS || (regs->cs & 0xFFFF) == __KERNEXEC_KERNEL_CS))
 				str = "PAX: suspicious stack segment fault";
 #endif
@@ -462,7 +462,7 @@ do_general_protection(struct pt_regs *regs, long error_code)
 		if (notify_die(DIE_GPF, "general protection fault", regs, error_code,
 			       X86_TRAP_GP, SIGSEGV) != NOTIFY_STOP) {
 
-#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+#ifdef CONFIG_X86_32
 			if ((regs->cs & 0xFFFF) == __KERNEL_CS || (regs->cs & 0xFFFF) == __KERNEXEC_KERNEL_CS)
 				die("PAX: suspicious general protection fault", regs, error_code);
 			else

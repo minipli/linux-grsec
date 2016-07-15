@@ -756,11 +756,9 @@ show_fault_oops(struct pt_regs *regs, unsigned long error_code,
 			printk(smep_warning, from_kuid(&init_user_ns, current_uid()), current->comm, task_pid_nr(current));
 	}
 
-#ifdef CONFIG_PAX_KERNEXEC
 	if (init_mm.start_code <= address && address < init_mm.end_code)
 		printk(KERN_EMERG "PAX: %s:%d, uid/euid: %u/%u, attempted to modify kernel code\n", current->comm, task_pid_nr(current),
 				from_kuid_munged(&init_user_ns, current_uid()), from_kuid_munged(&init_user_ns, current_euid()));
-#endif
 
 	printk(KERN_ALERT "BUG: unable to handle kernel ");
 	if (address < PAGE_SIZE)

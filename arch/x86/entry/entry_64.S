@@ -71,18 +71,13 @@ ENDPROC(native_usergs_sysret64)
 
 	.macro pax_enter_kernel
 	pax_set_fptr_mask
-#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
 	call	pax_enter_kernel
-#endif
 	.endm
 
 	.macro pax_exit_kernel
-#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
 	call	pax_exit_kernel
-#endif
 	.endm
 
-#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
 ENTRY(pax_enter_kernel)
 	pushq	%rdi
 
@@ -90,7 +85,6 @@ ENTRY(pax_enter_kernel)
 	PV_SAVE_REGS(CLBR_RDI)
 #endif
 
-#ifdef CONFIG_PAX_KERNEXEC
 	GET_CR0_INTO_RDI
 	bts	$X86_CR0_WP_BIT,%rdi
 	jnc	3f
@@ -98,7 +92,6 @@ ENTRY(pax_enter_kernel)
 	cmp	$__KERNEL_CS,%edi
 	jnz	2f
 1:
-#endif
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
 	ALTERNATIVE "jmp 111f", "", X86_FEATURE_PCID
@@ -127,12 +120,10 @@ ENTRY(pax_enter_kernel)
 	pax_force_retaddr
 	retq
 
-#ifdef CONFIG_PAX_KERNEXEC
 2:	ljmpq	__KERNEL_CS,1b
 3:	ljmpq	__KERNEXEC_KERNEL_CS,4f
 4:	SET_RDI_INTO_CR0
 	jmp	1b
-#endif
 ENDPROC(pax_enter_kernel)
 
 ENTRY(pax_exit_kernel)
@@ -142,7 +133,6 @@ ENTRY(pax_exit_kernel)
 	PV_SAVE_REGS(CLBR_RDI)
 #endif
 
-#ifdef CONFIG_PAX_KERNEXEC
 	mov	%cs,%rdi
 	cmp	$__KERNEXEC_KERNEL_CS,%edi
 	jz	2f
@@ -150,7 +140,6 @@ ENTRY(pax_exit_kernel)
 	bts	$X86_CR0_WP_BIT,%rdi
 	jnc	4f
 1:
-#endif
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
 	ALTERNATIVE "jmp 111f", "", X86_FEATURE_PCID
@@ -177,7 +166,6 @@ ENTRY(pax_exit_kernel)
 	pax_force_retaddr
 	retq
 
-#ifdef CONFIG_PAX_KERNEXEC
 2:	GET_CR0_INTO_RDI
 	btr	$X86_CR0_WP_BIT,%rdi
 	jnc	4f
@@ -186,9 +174,7 @@ ENTRY(pax_exit_kernel)
 	jmp	1b
 4:	ud2
 	jmp	4b
-#endif
 ENDPROC(pax_exit_kernel)
-#endif
 
 	.macro pax_enter_kernel_user
 	pax_set_fptr_mask
@@ -259,12 +245,9 @@ ENTRY(pax_enter_kernel_user)
 
 2:	SET_RDI_INTO_CR3
 
-#ifdef CONFIG_PAX_KERNEXEC
 	GET_CR0_INTO_RDI
 	bts	$X86_CR0_WP_BIT,%rdi
 	SET_RDI_INTO_CR0
-#endif
-
 3:
 
 #ifdef CONFIG_PARAVIRT
@@ -298,12 +281,10 @@ ENTRY(pax_exit_kernel_user)
 
 	mov	%rdi,%rbx
 
-#ifdef CONFIG_PAX_KERNEXEC
 	GET_CR0_INTO_RDI
 	btr	$X86_CR0_WP_BIT,%rdi
 	jnc	3f
 	SET_RDI_INTO_CR0
-#endif
 
 	add	$__START_KERNEL_map,%rbx
 	sub	phys_base(%rip),%rbx
@@ -345,14 +326,12 @@ ENDPROC(pax_exit_kernel_user)
 	.macro pax_enter_kernel_nmi
 	pax_set_fptr_mask
 
-#ifdef CONFIG_PAX_KERNEXEC
 	GET_CR0_INTO_RDI
 	bts	$X86_CR0_WP_BIT,%rdi
 	jc	110f
 	SET_RDI_INTO_CR0
 	or	$2,%ebx
 110:
-#endif
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
 	ALTERNATIVE "jmp 111f", "", X86_FEATURE_PCID
@@ -370,14 +349,12 @@ ENDPROC(pax_exit_kernel_user)
 	.endm
 
 	.macro pax_exit_kernel_nmi
-#ifdef CONFIG_PAX_KERNEXEC
 	btr	$1,%ebx
 	jnc	110f
 	GET_CR0_INTO_RDI
 	btr	$X86_CR0_WP_BIT,%rdi
 	SET_RDI_INTO_CR0
 110:
-#endif
 
 #ifdef CONFIG_PAX_MEMORY_UDEREF
 	ALTERNATIVE "jmp 111f", "", X86_FEATURE_PCID
@@ -948,7 +925,7 @@ retint_kernel:
 
 	pax_exit_kernel
 
-#if defined(CONFIG_EFI) && defined(CONFIG_PAX_KERNEXEC)
+#if defined(CONFIG_EFI) && defined(CONFIG_PAX_KERNEXEC_PLUGIN)
 	/* This is a quirk to allow IRQs/NMIs/MCEs during early EFI setup,
 	 * namely calling EFI runtime services with a phys mapping. We're
 	 * starting off with NOPs and patch in the real instrumentation
@@ -1665,10 +1642,7 @@ ENTRY(nmi)
 	pushq	%r14		/* pt_regs->r14 */
 	pushq	%r15		/* pt_regs->r15 */
 
-#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
 	xorl	%ebx, %ebx
-#endif
-
 	pax_enter_kernel_nmi
 
 	/*
@@ -1690,10 +1664,7 @@ ENTRY(nmi)
 	 */
 	SWAPGS
 
-#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
 	movq	RBX(%rsp), %rbx
-#endif
-
 	jmp	restore_c_regs_and_iret
 
 .Lnmi_from_kernel:

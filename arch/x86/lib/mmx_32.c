@@ -49,18 +49,14 @@ void *_mmx_memcpy(void *to, const void *from, size_t len)
 		".section .fixup, \"ax\"\n"
 		"3:  \n"
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %%cr0, %0\n"
 		"   movl %0, %%eax\n"
 		"   andl $0xFFFEFFFF, %%eax\n"
 		"   movl %%eax, %%cr0\n"
-#endif
 
 		"   movw $0x1AEB, 1b\n"	/* jmp on 26 bytes */
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %0, %%cr0\n"
-#endif
 
 		"   jmp 2b\n"
 		".previous\n"
@@ -89,18 +85,14 @@ void *_mmx_memcpy(void *to, const void *from, size_t len)
 		".section .fixup, \"ax\"\n"
 		"3:\n"
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %%cr0, %0\n"
 		"   movl %0, %%eax\n"
 		"   andl $0xFFFEFFFF, %%eax\n"
 		"   movl %%eax, %%cr0\n"
-#endif
 
 		"   movw $0x05EB, 1b\n"	/* jmp on 5 bytes */
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %0, %%cr0\n"
-#endif
 
 		"   jmp 2b\n"
 		".previous\n"
@@ -205,18 +197,14 @@ static void fast_copy_page(void *to, void *from)
 		".section .fixup, \"ax\"\n"
 		"3:  \n"
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %%cr0, %0\n"
 		"   movl %0, %%eax\n"
 		"   andl $0xFFFEFFFF, %%eax\n"
 		"   movl %%eax, %%cr0\n"
-#endif
 
 		"   movw $0x1AEB, 1b\n"	/* jmp on 26 bytes */
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %0, %%cr0\n"
-#endif
 
 		"   jmp 2b\n"
 		".previous\n"
@@ -244,18 +232,14 @@ static void fast_copy_page(void *to, void *from)
 		".section .fixup, \"ax\"\n"
 		"3:\n"
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %%cr0, %0\n"
 		"   movl %0, %%eax\n"
 		"   andl $0xFFFEFFFF, %%eax\n"
 		"   movl %%eax, %%cr0\n"
-#endif
 
 		"   movw $0x05EB, 1b\n"	/* jmp on 5 bytes */
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %0, %%cr0\n"
-#endif
 
 		"   jmp 2b\n"
 		".previous\n"
@@ -352,18 +336,14 @@ static void fast_copy_page(void *to, void *from)
 		".section .fixup, \"ax\"\n"
 		"3:  \n"
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %%cr0, %0\n"
 		"   movl %0, %%eax\n"
 		"   andl $0xFFFEFFFF, %%eax\n"
 		"   movl %%eax, %%cr0\n"
-#endif
 
 		"   movw $0x1AEB, 1b\n"	/* jmp on 26 bytes */
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %0, %%cr0\n"
-#endif
 
 		"   jmp 2b\n"
 		".previous\n"
@@ -391,18 +371,14 @@ static void fast_copy_page(void *to, void *from)
 		".section .fixup, \"ax\"\n"
 		"3:\n"
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %%cr0, %0\n"
 		"   movl %0, %%eax\n"
 		"   andl $0xFFFEFFFF, %%eax\n"
 		"   movl %%eax, %%cr0\n"
-#endif
 
 		"   movw $0x05EB, 1b\n"	/* jmp on 5 bytes */
 
-#ifdef CONFIG_PAX_KERNEXEC
 		"   movl %0, %%cr0\n"
-#endif
 
 		"   jmp 2b\n"
 		".previous\n"
