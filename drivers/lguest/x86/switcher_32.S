@@ -87,6 +87,7 @@
 #include <asm/page.h>
 #include <asm/segment.h>
 #include <asm/lguest.h>
+#include <asm/processor-flags.h>
 
 // We mark the start of the code to copy
 // It's placed in .text tho it's never run here
@@ -149,6 +150,11 @@ ENTRY(switch_to_guest)
 	// Changes type when we load it: damn Intel!
 	// For after we switch over our page tables
 	// That entry will be read-only: we'd crash.
+
+	mov	%cr0, %edx
+	xor	$X86_CR0_WP, %edx
+	mov	%edx, %cr0
+
 	movl	$(GDT_ENTRY_TSS*8), %edx
 	ltr	%dx
 
@@ -157,9 +163,13 @@ ENTRY(switch_to_guest)
 	// Let's clear it again for our return.
 	// The GDT descriptor of the Host
 	// Points to the table after two "size" bytes
-	movl	(LGUEST_PAGES_host_gdt_desc+2)(%eax), %edx
+	movl	(LGUEST_PAGES_host_gdt_desc+2)(%eax), %eax
 	// Clear "used" from type field (byte 5, bit 2)
-	andb	$0xFD, (GDT_ENTRY_TSS*8 + 5)(%edx)
+	andb	$0xFD, (GDT_ENTRY_TSS*8 + 5)(%eax)
+
+	mov	%cr0, %eax
+	xor	$X86_CR0_WP, %eax
+	mov	%eax, %cr0
 
 	// Once our page table's switched, the Guest is live!
 	// The Host fades as we run this final step.
@@ -295,13 +305,12 @@ deliver_to_host:
 	// I consulted gcc, and it gave
 	// These instructions, which I gladly credit:
 	leal	(%edx,%ebx,8), %eax
-	movzwl	(%eax),%edx
-	movl	4(%eax), %eax
-	xorw	%ax, %ax
-	orl	%eax, %edx
+	movl	4(%eax), %edx
+	movw	(%eax), %dx
 	// Now the address of the handler's in %edx
 	// We call it now: its "iret" drops us home.
-	jmp	*%edx
+	ljmp	$__KERNEL_CS, $1f
+1:	jmp	*%edx
 
 // Every interrupt can come to us here
 // But we must truly tell each apart.

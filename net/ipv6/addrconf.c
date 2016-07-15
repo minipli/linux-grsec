@@ -651,7 +651,7 @@ static int inet6_netconf_dump_devconf(struct sk_buff *skb,
 		idx = 0;
 		head = &net->dev_index_head[h];
 		rcu_read_lock();
-		cb->seq = atomic_read(&net->ipv6.dev_addr_genid) ^
+		cb->seq = atomic_read_unchecked(&net->ipv6.dev_addr_genid) ^
 			  net->dev_base_seq;
 		hlist_for_each_entry_rcu(dev, head, index_hlist) {
 			if (idx < s_idx)
@@ -2597,7 +2597,7 @@ int addrconf_set_dstaddr(struct net *net, void __user *arg)
 		p.iph.ihl = 5;
 		p.iph.protocol = IPPROTO_IPV6;
 		p.iph.ttl = 64;
-		ifr.ifr_ifru.ifru_data = (__force void __user *)&p;
+		ifr.ifr_ifru.ifru_data = (void __force_user *)&p;
 
 		if (ops->ndo_do_ioctl) {
 			mm_segment_t oldfs = get_fs();
@@ -4654,7 +4654,7 @@ static int inet6_dump_addr(struct sk_buff *skb, struct netlink_callback *cb,
 	s_ip_idx = ip_idx = cb->args[2];
 
 	rcu_read_lock();
-	cb->seq = atomic_read(&net->ipv6.dev_addr_genid) ^ net->dev_base_seq;
+	cb->seq = atomic_read_unchecked(&net->ipv6.dev_addr_genid) ^ net->dev_base_seq;
 	for (h = s_h; h < NETDEV_HASHENTRIES; h++, s_idx = 0) {
 		idx = 0;
 		head = &net->dev_index_head[h];
@@ -4867,7 +4867,7 @@ static inline size_t inet6_if_nlmsg_size(void)
 	       + nla_total_size(inet6_ifla6_size()); /* IFLA_PROTINFO */
 }
 
-static inline void __snmp6_fill_statsdev(u64 *stats, atomic_long_t *mib,
+static inline void __snmp6_fill_statsdev(u64 *stats, atomic_long_unchecked_t *mib,
 				      int items, int bytes)
 {
 	int i;
@@ -4877,7 +4877,7 @@ static inline void __snmp6_fill_statsdev(u64 *stats, atomic_long_t *mib,
 	/* Use put_unaligned() because stats may not be aligned for u64. */
 	put_unaligned(items, &stats[0]);
 	for (i = 1; i < items; i++)
-		put_unaligned(atomic_long_read(&mib[i]), &stats[i]);
+		put_unaligned(atomic_long_read_unchecked(&mib[i]), &stats[i]);
 
 	memset(&stats[items], 0, pad);
 }
@@ -5332,7 +5332,7 @@ static void __ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 		rt_genid_bump_ipv6(net);
 		break;
 	}
-	atomic_inc(&net->ipv6.dev_addr_genid);
+	atomic_inc_unchecked(&net->ipv6.dev_addr_genid);
 }
 
 static void ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
@@ -5352,7 +5352,7 @@ int addrconf_sysctl_forward(struct ctl_table *ctl, int write,
 	int *valp = ctl->data;
 	int val = *valp;
 	loff_t pos = *ppos;
-	struct ctl_table lctl;
+	ctl_table_no_const lctl;
 	int ret;
 
 	/*
@@ -5375,7 +5375,7 @@ static
 int addrconf_sysctl_hop_limit(struct ctl_table *ctl, int write,
                               void __user *buffer, size_t *lenp, loff_t *ppos)
 {
-	struct ctl_table lctl;
+	ctl_table_no_const lctl;
 	int min_hl = 1, max_hl = 255;
 
 	lctl = *ctl;
@@ -5391,7 +5391,7 @@ int addrconf_sysctl_mtu(struct ctl_table *ctl, int write,
 {
 	struct inet6_dev *idev = ctl->extra1;
 	int min_mtu = IPV6_MIN_MTU;
-	struct ctl_table lctl;
+	ctl_table_no_const lctl;
 
 	lctl = *ctl;
 	lctl.extra1 = &min_mtu;
@@ -5466,7 +5466,7 @@ int addrconf_sysctl_disable(struct ctl_table *ctl, int write,
 	int *valp = ctl->data;
 	int val = *valp;
 	loff_t pos = *ppos;
-	struct ctl_table lctl;
+	ctl_table_no_const lctl;
 	int ret;
 
 	/*
@@ -5531,7 +5531,7 @@ static int addrconf_sysctl_stable_secret(struct ctl_table *ctl, int write,
 	int err;
 	struct in6_addr addr;
 	char str[IPV6_MAX_STRLEN];
-	struct ctl_table lctl = *ctl;
+	ctl_table_no_const lctl = *ctl;
 	struct net *net = ctl->extra2;
 	struct ipv6_stable_secret *secret = ctl->data;
 
@@ -5600,7 +5600,7 @@ int addrconf_sysctl_ignore_routes_with_linkdown(struct ctl_table *ctl,
 	int *valp = ctl->data;
 	int val = *valp;
 	loff_t pos = *ppos;
-	struct ctl_table lctl;
+	ctl_table_no_const lctl;
 	int ret;
 
 	/* ctl->data points to idev->cnf.ignore_routes_when_linkdown

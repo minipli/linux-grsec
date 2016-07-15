@@ -162,9 +162,10 @@ int copy_thread_tls(unsigned long clone_flags, unsigned long sp,
 	struct pt_regs *childregs;
 	struct task_struct *me = current;
 
-	p->thread.sp0 = (unsigned long)task_stack_page(p) + THREAD_SIZE;
+	p->thread.sp0 = (unsigned long)task_stack_page(p) + THREAD_SIZE - 16;
 	childregs = task_pt_regs(p);
 	p->thread.sp = (unsigned long) childregs;
+	p->tinfo.lowest_stack = (unsigned long)task_stack_page(p) + 2 * sizeof(unsigned long);
 	set_tsk_thread_flag(p, TIF_FORK);
 	p->thread.io_bitmap_ptr = NULL;
 
@@ -174,6 +175,8 @@ int copy_thread_tls(unsigned long clone_flags, unsigned long sp,
 	p->thread.fs = p->thread.fsindex ? 0 : me->thread.fs;
 	savesegment(es, p->thread.es);
 	savesegment(ds, p->thread.ds);
+	savesegment(ss, p->thread.ss);
+	BUG_ON(p->thread.ss == __UDEREF_KERNEL_DS);
 	memset(p->thread.ptrace_bps, 0, sizeof(p->thread.ptrace_bps));
 
 	if (unlikely(p->flags & PF_KTHREAD)) {
@@ -281,7 +284,7 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	struct fpu *prev_fpu = &prev->fpu;
 	struct fpu *next_fpu = &next->fpu;
 	int cpu = smp_processor_id();
-	struct tss_struct *tss = &per_cpu(cpu_tss, cpu);
+	struct tss_struct *tss = cpu_tss + cpu;
 	unsigned fsindex, gsindex;
 	fpu_switch_t fpu_switch;
 
@@ -331,6 +334,10 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	savesegment(ds, prev->ds);
 	if (unlikely(next->ds | prev->ds))
 		loadsegment(ds, next->ds);
+
+	savesegment(ss, prev->ss);
+	if (unlikely(next->ss != prev->ss))
+		loadsegment(ss, next->ss);
 
 	/*
 	 * Switch FS and GS.
@@ -403,9 +410,12 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	 * Switch the PDA and FPU contexts.
 	 */
 	this_cpu_write(current_task, next_p);
+	this_cpu_write(current_tinfo, &next_p->tinfo);
 
 	/* Reload esp0 and ss1.  This changes current_thread_info(). */
 	load_sp0(tss, next);
+
+	this_cpu_write(cpu_current_top_of_stack, next->sp0);
 
 	/*
 	 * Now maybe reload the debug registers and handle I/O bitmaps
