@@ -16,12 +16,15 @@
 #define __read_mostly
 #endif
 
-#ifndef __read_only
 #ifdef CONFIG_PAX_KERNEXEC
-#error KERNEXEC requires __read_only
+# ifndef __read_only
+# error KERNEXEC requires __read_only
+# endif
 #else
-#define __read_only __read_mostly
-#endif
+# ifdef __read_only
+# undef __read_only
+# endif
+# define __read_only __read_mostly
 #endif
 
 #ifndef ____cacheline_aligned

@@ -6,23 +6,19 @@ menu "Security options"
 
 menu "PaX"
 
-	config ARCH_TRACK_EXEC_LIMIT
+config ARCH_TRACK_EXEC_LIMIT
 	bool
 
-	config PAX_KERNEXEC_PLUGIN
-	bool
-	depends on GCC_PLUGINS
-
-	config PAX_PER_CPU_PGD
+config PAX_PER_CPU_PGD
 	bool
 
-	config TASK_SIZE_MAX_SHIFT
+config TASK_SIZE_MAX_SHIFT
 	int
 	depends on X86_64
 	default 47 if !PAX_PER_CPU_PGD
 	default 42 if PAX_PER_CPU_PGD
 
-	config PAX_USERCOPY_SLABS
+config PAX_USERCOPY_SLABS
 	bool
 
 config PAX
@@ -345,7 +341,6 @@ config PAX_KERNEXEC
 	bool "Enforce non-executable kernel pages"
 	depends on (X86 || (ARM && (CPU_V6 || CPU_V6K || CPU_V7) && !(ARM_LPAE && MODULES))) && !XEN
 	select PAX_PER_CPU_PGD if X86_64 || (X86_32 && X86_PAE)
-	select PAX_KERNEXEC_PLUGIN if X86_64
 	select DEBUG_RODATA if X86
 	select ARM_KERNMEM_PERMS if ARM
 	help
@@ -353,20 +348,51 @@ config PAX_KERNEXEC
 	  that is, enabling this option will make it harder to inject
 	  and execute 'foreign' code in kernel memory itself.
 
+config PAX_KERNEXEC_PLUGIN
+	bool
+	depends on GCC_PLUGINS && X86_64
+
 choice
-	prompt "Return Address Instrumentation Method"
+	prompt "Code Pointer Instrumentation Method"
 	default PAX_KERNEXEC_PLUGIN_METHOD_BTS
-	depends on PAX_KERNEXEC_PLUGIN
+	depends on GCC_PLUGINS && X86_64 && (PAX_KERNEXEC || PAX_RAP)
 	help
-	  Select the method used to instrument function pointer dereferences.
+	  KERNEXEC on amd64 is not as secure as its i386 variant due to the
+	  lack of certain processor features. This option can bring back some
+	  of the security by forcing all code pointers at runtime to fall into
+	  kernel memory. This is achieved via compile time instrumentation of
+	  all code pointer dereferences (indirect calls and function returns).
+
+	  While there are alternative mechanisms (SMEP, UDEREF) that can achieve
+	  the same or even more, they also have their own drawbacks in terms of
+	  performance impact and/or being processor dependent so this feature
+	  offers a choice by having a low performance impact and being processor
+	  independent.
+
+	  If you enabled RAP (see PAX_RAP) and have an amd64 processor that does
+	  not support SMEP then you must also enable a KERNEXEC code pointer
+	  instrumentation method.
+
 	  Note that binary modules cannot be instrumented by this approach.
 
 	  Note that the implementation requires a gcc with plugin support,
 	  i.e., gcc 4.5 or newer.  You may need to install the supporting
 	  headers explicitly in addition to the normal gcc package.
 
+	config PAX_KERNEXEC_PLUGIN_METHOD_NONE
+		bool "none"
+		help
+		  In case your processor supports Supervisor Mode Execution
+		  Prevention (SMEP) you should choose this option to disable
+		  compile time instrumentation.
+
+		  Note that the kernel will refuse to boot if SMEP is not
+		  supported by the processor or is disabled on the kernel
+		  command line.
+
 	config PAX_KERNEXEC_PLUGIN_METHOD_BTS
 		bool "bts"
+		select PAX_KERNEXEC_PLUGIN
 		help
 		  This method is compatible with binary only modules but has
 		  a higher runtime overhead.
@@ -374,16 +400,11 @@ choice
 	config PAX_KERNEXEC_PLUGIN_METHOD_OR
 		bool "or"
 		depends on !PARAVIRT
+		select PAX_KERNEXEC_PLUGIN
 		help
 		  This method is incompatible with binary only modules but has
 		  a lower runtime overhead.
 endchoice
-
-config PAX_KERNEXEC_PLUGIN_METHOD
-	string
-	default "bts" if PAX_KERNEXEC_PLUGIN_METHOD_BTS
-	default "or" if PAX_KERNEXEC_PLUGIN_METHOD_OR
-	default ""
 
 config PAX_KERNEXEC_MODULE_TEXT
 	int "Minimum amount of memory reserved for module code"
@@ -697,11 +718,15 @@ config PAX_LATENT_ENTROPY
 
 config PAX_RAP
 	bool "Prevent code reuse attacks"
-	depends on X86_64
+	depends on X86_64 && GCC_PLUGINS
 	help
 	  By saying Y here the kernel will check indirect control transfers
 	  in order to detect and prevent attacks that try to hijack control
 	  flow by overwriting code pointers.
+
+	  If you have an amd64 processor that does not support SMEP then you
+	  must also enable a KERNEXEC code pointer instrumentation method
+	  (see PAX_KERNEXEC_PLUGIN).
 
 	  Note that binary modules cannot be instrumented by this approach.
 
