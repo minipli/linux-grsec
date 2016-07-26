@@ -443,7 +443,6 @@ struct user_namespace;
 
 #ifdef CONFIG_MMU
 extern bool check_heap_stack_gap(const struct vm_area_struct *vma, unsigned long addr, unsigned long len);
-extern unsigned long skip_heap_stack_gap(const struct vm_area_struct *vma, unsigned long len);
 extern void arch_pick_mmap_layout(struct mm_struct *mm);
 extern unsigned long
 arch_get_unmapped_area(struct file *, unsigned long, unsigned long,

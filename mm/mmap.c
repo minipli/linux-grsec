@@ -1758,15 +1758,12 @@ bool check_heap_stack_gap(const struct vm_area_struct *vma, unsigned long addr, 
 	return true;
 }
 
-unsigned long skip_heap_stack_gap(const struct vm_area_struct *vma, unsigned long len)
+unsigned long skip_heap_stack_gap(const struct vm_area_struct *vma, unsigned long flag, unsigned long gap_start, unsigned long gap_end)
 {
-	if (vma->vm_start < len)
-		return -ENOMEM;
-	if (!(vma->vm_flags & VM_GROWSDOWN))
-		return vma->vm_start - len;
-	if (sysctl_heap_stack_gap <= vma->vm_start - len)
-		return vma->vm_start - len - sysctl_heap_stack_gap;
-	return -ENOMEM;
+	if (!vma || !(vma->vm_flags & flag))
+		return 0;
+
+	return min(sysctl_heap_stack_gap, gap_end - gap_start);
 }
 
 unsigned long unmapped_area(const struct vm_unmapped_area_info *info)
@@ -1822,18 +1819,10 @@ check_current:
 		/* Check if current node has a suitable gap */
 		if (gap_start > high_limit)
 			return -ENOMEM;
-		if (vma->vm_prev && (vma->vm_prev->vm_flags & VM_GROWSUP)) {
-			if (gap_end - gap_start > sysctl_heap_stack_gap)
-				gap_start += sysctl_heap_stack_gap;
-			else
-				gap_start = gap_end;
-		}
-		if (vma->vm_flags & VM_GROWSDOWN) {
-			if (gap_end - gap_start > sysctl_heap_stack_gap)
-				gap_end -= sysctl_heap_stack_gap;
-			else
-				gap_end = gap_start;
-		}
+
+		gap_start += skip_heap_stack_gap(vma->vm_prev, VM_GROWSUP, gap_start, gap_end);
+		gap_end -= skip_heap_stack_gap(vma, VM_GROWSDOWN, gap_start, gap_end);
+
 		if (gap_end >= low_limit && gap_end - gap_start >= length)
 			goto found;
 
@@ -1937,18 +1926,10 @@ check_current:
 		gap_end = vma->vm_start;
 		if (gap_end < low_limit)
 			return -ENOMEM;
-		if (vma->vm_prev && (vma->vm_prev->vm_flags & VM_GROWSUP)) {
-			if (gap_end - gap_start > sysctl_heap_stack_gap)
-				gap_start += sysctl_heap_stack_gap;
-			else
-				gap_start = gap_end;
-		}
-		if (vma->vm_flags & VM_GROWSDOWN) {
-			if (gap_end - gap_start > sysctl_heap_stack_gap)
-				gap_end -= sysctl_heap_stack_gap;
-			else
-				gap_end = gap_start;
-		}
+
+		gap_start += skip_heap_stack_gap(vma->vm_prev, VM_GROWSUP, gap_start, gap_end);
+		gap_end -= skip_heap_stack_gap(vma, VM_GROWSDOWN, gap_start, gap_end);
+
 		if (gap_start <= high_limit && gap_end - gap_start >= length)
 			goto found;
 
@@ -2906,7 +2887,6 @@ int vm_munmap(unsigned long start, size_t len)
 {
 	int ret;
 	struct mm_struct *mm = current->mm;
-
 
 #ifdef CONFIG_PAX_SEGMEXEC
 	if ((mm->pax_flags & MF_PAX_SEGMEXEC) &&
