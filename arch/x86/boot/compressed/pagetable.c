@@ -11,6 +11,7 @@
  */
 #define __pa(x)  ((unsigned long)(x))
 #define __va(x)  ((void *)((unsigned long)(x)))
+#undef CONFIG_PAX_KERNEXEC
 
 #include "misc.h"
 

@@ -36,6 +36,8 @@
 #include <asm/smap.h>
 #include <asm/pgtable_types.h>
 #include <linux/err.h>
+#include <asm/pgtable.h>
+#include <asm/alternative-asm.h>
 
 /* Avoid __ASSEMBLER__'ifying <linux/audit.h> just for this.  */
 #include <linux/elf-em.h>
@@ -52,6 +54,395 @@ ENTRY(native_usergs_sysret64)
 	sysretq
 ENDPROC(native_usergs_sysret64)
 #endif /* CONFIG_PARAVIRT */
+
+	.macro ljmpq sel, off
+#if defined(CONFIG_MPSC) || defined(CONFIG_MCORE2) || defined (CONFIG_MATOM)
+	.byte 0x48; ljmp *1234f(%rip)
+	.pushsection .rodata
+	.align 16
+	1234: .quad \off; .word \sel
+	.popsection
+#else
+	pushq	$\sel
+	pushq	$\off
+	lretq
+#endif
+	.endm
+
+	.macro pax_enter_kernel
+	pax_set_fptr_mask
+#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+	call	pax_enter_kernel
+#endif
+	.endm
+
+	.macro pax_exit_kernel
+#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+	call	pax_exit_kernel
+#endif
+	.endm
+
+#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+ENTRY(pax_enter_kernel)
+	pushq	%rdi
+
+#ifdef CONFIG_PARAVIRT
+	PV_SAVE_REGS(CLBR_RDI)
+#endif
+
+#ifdef CONFIG_PAX_KERNEXEC
+	GET_CR0_INTO_RDI
+	bts	$X86_CR0_WP_BIT,%rdi
+	jnc	3f
+	mov	%cs,%edi
+	cmp	$__KERNEL_CS,%edi
+	jnz	2f
+1:
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	ALTERNATIVE "jmp 111f", "", X86_FEATURE_PCID
+	GET_CR3_INTO_RDI
+	cmp	$0,%dil
+	jnz	112f
+	mov	$__KERNEL_DS,%edi
+	mov	%edi,%ss
+	jmp	111f
+112:	cmp	$1,%dil
+	jz	113f
+	ud2
+113:	sub	$4097,%rdi
+	bts	$63,%rdi
+	SET_RDI_INTO_CR3
+	mov	$__UDEREF_KERNEL_DS,%edi
+	mov	%edi,%ss
+111:
+#endif
+
+#ifdef CONFIG_PARAVIRT
+	PV_RESTORE_REGS(CLBR_RDI)
+#endif
+
+	popq	%rdi
+	pax_force_retaddr
+	retq
+
+#ifdef CONFIG_PAX_KERNEXEC
+2:	ljmpq	__KERNEL_CS,1b
+3:	ljmpq	__KERNEXEC_KERNEL_CS,4f
+4:	SET_RDI_INTO_CR0
+	jmp	1b
+#endif
+ENDPROC(pax_enter_kernel)
+
+ENTRY(pax_exit_kernel)
+	pushq	%rdi
+
+#ifdef CONFIG_PARAVIRT
+	PV_SAVE_REGS(CLBR_RDI)
+#endif
+
+#ifdef CONFIG_PAX_KERNEXEC
+	mov	%cs,%rdi
+	cmp	$__KERNEXEC_KERNEL_CS,%edi
+	jz	2f
+	GET_CR0_INTO_RDI
+	bts	$X86_CR0_WP_BIT,%rdi
+	jnc	4f
+1:
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	ALTERNATIVE "jmp 111f", "", X86_FEATURE_PCID
+	mov	%ss,%edi
+	cmp	$__UDEREF_KERNEL_DS,%edi
+	jnz	111f
+	GET_CR3_INTO_RDI
+	cmp	$0,%dil
+	jz	112f
+	ud2
+112:	add	$4097,%rdi
+	bts	$63,%rdi
+	SET_RDI_INTO_CR3
+	mov	$__KERNEL_DS,%edi
+	mov	%edi,%ss
+111:
+#endif
+
+#ifdef CONFIG_PARAVIRT
+	PV_RESTORE_REGS(CLBR_RDI);
+#endif
+
+	popq	%rdi
+	pax_force_retaddr
+	retq
+
+#ifdef CONFIG_PAX_KERNEXEC
+2:	GET_CR0_INTO_RDI
+	btr	$X86_CR0_WP_BIT,%rdi
+	jnc	4f
+	ljmpq	__KERNEL_CS,3f
+3:	SET_RDI_INTO_CR0
+	jmp	1b
+4:	ud2
+	jmp	4b
+#endif
+ENDPROC(pax_exit_kernel)
+#endif
+
+	.macro pax_enter_kernel_user
+	pax_set_fptr_mask
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	call	pax_enter_kernel_user
+#endif
+	.endm
+
+	.macro pax_exit_kernel_user
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	call	pax_exit_kernel_user
+#endif
+#ifdef CONFIG_PAX_RANDKSTACK
+	pushq	%rax
+	pushq	%r11
+	call	pax_randomize_kstack
+	popq	%r11
+	popq	%rax
+#endif
+	.endm
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+ENTRY(pax_enter_kernel_user)
+	pushq	%rdi
+	pushq	%rbx
+
+#ifdef CONFIG_PARAVIRT
+	PV_SAVE_REGS(CLBR_RDI)
+#endif
+
+	ALTERNATIVE "jmp 111f", "", X86_FEATURE_PCID
+	GET_CR3_INTO_RDI
+	cmp	$1,%dil
+	jnz	4f
+	sub	$4097,%rdi
+	bts	$63,%rdi
+	SET_RDI_INTO_CR3
+	jmp	3f
+111:
+
+	GET_CR3_INTO_RDI
+	mov	%rdi,%rbx
+	add	$__START_KERNEL_map,%rbx
+	sub	phys_base(%rip),%rbx
+
+#ifdef CONFIG_PARAVIRT
+	pushq %rdi
+	i = 0
+	.rept USER_PGD_PTRS
+	mov	i*8(%rbx),%rsi
+	mov	$0,%sil
+	lea	i*8(%rbx),%rdi
+	call	PARA_INDIRECT(pv_mmu_ops+PV_MMU_set_pgd_batched)
+	i = i + 1
+	.endr
+	popq	%rdi
+#else
+	i = 0
+	.rept USER_PGD_PTRS
+	movb	$0,i*8(%rbx)
+	i = i + 1
+	.endr
+#endif
+
+	SET_RDI_INTO_CR3
+
+#ifdef CONFIG_PAX_KERNEXEC
+	GET_CR0_INTO_RDI
+	bts	$X86_CR0_WP_BIT,%rdi
+	SET_RDI_INTO_CR0
+#endif
+
+3:
+
+#ifdef CONFIG_PARAVIRT
+	PV_RESTORE_REGS(CLBR_RDI)
+#endif
+
+	popq	%rbx
+	popq	%rdi
+	pax_force_retaddr
+	retq
+4:	ud2
+ENDPROC(pax_enter_kernel_user)
+
+ENTRY(pax_exit_kernel_user)
+	pushq	%rdi
+	pushq	%rbx
+
+#ifdef CONFIG_PARAVIRT
+	PV_SAVE_REGS(CLBR_RDI)
+#endif
+
+	GET_CR3_INTO_RDI
+	ALTERNATIVE "jmp 1f", "", X86_FEATURE_PCID
+	cmp	$0,%dil
+	jnz	3f
+	add	$4097,%rdi
+	bts	$63,%rdi
+	SET_RDI_INTO_CR3
+	jmp	2f
+1:
+
+	mov	%rdi,%rbx
+
+#ifdef CONFIG_PAX_KERNEXEC
+	GET_CR0_INTO_RDI
+	btr	$X86_CR0_WP_BIT,%rdi
+	jnc	3f
+	SET_RDI_INTO_CR0
+#endif
+
+	add	$__START_KERNEL_map,%rbx
+	sub	phys_base(%rip),%rbx
+
+#ifdef CONFIG_PARAVIRT
+	i = 0
+	.rept USER_PGD_PTRS
+	mov	i*8(%rbx),%rsi
+	mov	$0x67,%sil
+	lea	i*8(%rbx),%rdi
+	call	PARA_INDIRECT(pv_mmu_ops+PV_MMU_set_pgd_batched)
+	i = i + 1
+	.endr
+#else
+	i = 0
+	.rept USER_PGD_PTRS
+	movb	$0x67,i*8(%rbx)
+	i = i + 1
+	.endr
+#endif
+
+2:
+
+#ifdef CONFIG_PARAVIRT
+	PV_RESTORE_REGS(CLBR_RDI)
+#endif
+
+	popq	%rbx
+	popq	%rdi
+	pax_force_retaddr
+	retq
+3:	ud2
+ENDPROC(pax_exit_kernel_user)
+#endif
+
+	.macro pax_enter_kernel_nmi
+	pax_set_fptr_mask
+
+#ifdef CONFIG_PAX_KERNEXEC
+	GET_CR0_INTO_RDI
+	bts	$X86_CR0_WP_BIT,%rdi
+	jc	110f
+	SET_RDI_INTO_CR0
+	or	$2,%ebx
+110:
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	ALTERNATIVE "jmp 111f", "", X86_FEATURE_PCID
+	GET_CR3_INTO_RDI
+	cmp	$0,%dil
+	jz	111f
+	sub	$4097,%rdi
+	or	$4,%ebx
+	bts	$63,%rdi
+	SET_RDI_INTO_CR3
+	mov	$__UDEREF_KERNEL_DS,%edi
+	mov	%edi,%ss
+111:
+#endif
+	.endm
+
+	.macro pax_exit_kernel_nmi
+#ifdef CONFIG_PAX_KERNEXEC
+	btr	$1,%ebx
+	jnc	110f
+	GET_CR0_INTO_RDI
+	btr	$X86_CR0_WP_BIT,%rdi
+	SET_RDI_INTO_CR0
+110:
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	ALTERNATIVE "jmp 111f", "", X86_FEATURE_PCID
+	btr	$2,%ebx
+	jnc	111f
+	GET_CR3_INTO_RDI
+	add	$4097,%rdi
+	bts	$63,%rdi
+	SET_RDI_INTO_CR3
+	mov	$__KERNEL_DS,%edi
+	mov	%edi,%ss
+111:
+#endif
+	.endm
+
+	.macro pax_erase_kstack
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+	call	pax_erase_kstack
+#endif
+	.endm
+
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+ENTRY(pax_erase_kstack)
+	pushq	%rdi
+	pushq	%rcx
+	pushq	%rax
+	pushq	%r11
+
+	GET_THREAD_INFO(%r11)
+	mov	TI_lowest_stack(%r11), %rdi
+	mov	$0xB4DD00D5BADBABE5, %rax
+	std
+
+1:	mov	%edi, %ecx
+	and	$THREAD_SIZE_asm - 1, %ecx
+	shr	$3, %ecx
+	repne	scasq
+	jecxz	2f
+
+	cmp	$2*8, %ecx
+	jc	2f
+
+	mov	$2*8, %ecx
+	repe	scasq
+	jecxz	2f
+	jne	1b
+
+2:	cld
+	or	$2*8, %rdi
+	mov	%esp, %ecx
+	sub	%edi, %ecx
+
+	cmp	$THREAD_SIZE_asm, %rcx
+	jb	3f
+	ud2
+3:
+
+	shr	$3, %ecx
+	rep	stosq
+
+	mov	TI_task_thread_sp0(%r11), %rdi
+	sub	$256, %rdi
+	mov	%rdi, TI_lowest_stack(%r11)
+
+	popq	%r11
+	popq	%rax
+	popq	%rcx
+	popq	%rdi
+	pax_force_retaddr
+	ret
+ENDPROC(pax_erase_kstack)
+#endif
 
 .macro TRACE_IRQS_IRETQ
 #ifdef CONFIG_TRACE_IRQFLAGS
@@ -88,7 +479,7 @@ ENDPROC(native_usergs_sysret64)
 .endm
 
 .macro TRACE_IRQS_IRETQ_DEBUG
-	bt	$9, EFLAGS(%rsp)		/* interrupts off? */
+	bt	$X86_EFLAGS_IF_BIT, EFLAGS(%rsp)	/* interrupts off? */
 	jnc	1f
 	TRACE_IRQS_ON_DEBUG
 1:
@@ -175,11 +566,22 @@ GLOBAL(entry_SYSCALL_64_after_swapgs)
 	pushq	%r11				/* pt_regs->r11 */
 	sub	$(6*8), %rsp			/* pt_regs->bp, bx, r12-15 not saved */
 
+#ifdef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
+	movq	%r12, R12(%rsp)
+#endif
+
+	pax_enter_kernel_user
+
+#ifdef CONFIG_PAX_RANDKSTACK
+	pax_erase_kstack
+#endif
+
 	/*
 	 * If we need to do entry work or if we guess we'll need to do
 	 * exit work, go straight to the slow path.
 	 */
-	testl	$_TIF_WORK_SYSCALL_ENTRY|_TIF_ALLWORK_MASK, ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+	GET_THREAD_INFO(%rcx)
+	testl	$_TIF_WORK_SYSCALL_ENTRY|_TIF_ALLWORK_MASK, TI_flags(%rcx)
 	jnz	entry_SYSCALL64_slow_path
 
 entry_SYSCALL_64_fastpath:
@@ -217,8 +619,12 @@ entry_SYSCALL_64_fastpath:
 	 */
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	TRACE_IRQS_OFF
-	testl	$_TIF_ALLWORK_MASK, ASM_THREAD_INFO(TI_flags, %rsp, SIZEOF_PTREGS)
+	GET_THREAD_INFO(%rcx)
+	testl	$_TIF_ALLWORK_MASK, TI_flags(%rcx)
 	jnz	1f
+
+	pax_exit_kernel_user
+	pax_erase_kstack
 
 	LOCKDEP_SYS_EXIT
 	TRACE_IRQS_ON		/* user mode is traced as IRQs on */
@@ -248,6 +654,9 @@ entry_SYSCALL64_slow_path:
 	call	do_syscall_64		/* returns with IRQs disabled */
 
 return_from_SYSCALL_64:
+	pax_exit_kernel_user
+	pax_erase_kstack
+
 	RESTORE_EXTRA_REGS
 	TRACE_IRQS_IRETQ		/* we're about to change IF */
 
@@ -322,7 +731,7 @@ syscall_return_via_sysret:
 opportunistic_sysret_failed:
 	SWAPGS
 	jmp	restore_c_regs_and_iret
-END(entry_SYSCALL_64)
+ENDPROC(entry_SYSCALL_64)
 
 ENTRY(stub_ptregs_64)
 	/*
@@ -349,13 +758,13 @@ ENTRY(stub_ptregs_64)
 1:
 	/* Called from C */
 	jmp	*%rax				/* called from C */
-END(stub_ptregs_64)
+ENDPROC(stub_ptregs_64)
 
 .macro ptregs_stub func
 ENTRY(ptregs_\func)
 	leaq	\func(%rip), %rax
 	jmp	stub_ptregs_64
-END(ptregs_\func)
+ENDPROC(ptregs_\func)
 .endm
 
 /* Instantiate ptregs_stub for each ptregs-using syscall */
@@ -397,10 +806,12 @@ ENTRY(ret_from_fork)
 1:
 	movq	%rsp, %rdi
 	call	syscall_return_slowpath	/* returns with IRQs disabled */
+	pax_exit_kernel_user
+	pax_erase_kstack
 	TRACE_IRQS_ON			/* user mode is traced as IRQS on */
 	SWAPGS
 	jmp	restore_regs_and_iret
-END(ret_from_fork)
+ENDPROC(ret_from_fork)
 
 /*
  * Build the entry stubs with some assembler magic.
@@ -415,7 +826,7 @@ ENTRY(irq_entries_start)
 	jmp	common_interrupt
 	.align	8
     .endr
-END(irq_entries_start)
+ENDPROC(irq_entries_start)
 
 /*
  * Interrupt entry/exit.
@@ -441,6 +852,12 @@ END(irq_entries_start)
 	 */
 	SWAPGS
 
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	pax_enter_kernel_user
+#else
+	pax_enter_kernel
+#endif
+
 	/*
 	 * We need to tell lockdep that IRQs are off.  We can't do this until
 	 * we fix gsbase, and we should do it before enter_from_user_mode
@@ -453,7 +870,9 @@ END(irq_entries_start)
 
 	CALL_enter_from_user_mode
 
-1:
+	jmp	2f
+1:	pax_enter_kernel
+2:
 	/*
 	 * Save previous stack pointer, optionally switch to interrupt stack.
 	 * irq_count is used to check if a CPU is already on an interrupt stack
@@ -465,6 +884,7 @@ END(irq_entries_start)
 	incl	PER_CPU_VAR(irq_count)
 	cmovzq	PER_CPU_VAR(irq_stack_ptr), %rsp
 	pushq	%rdi
+
 	/* We entered an interrupt context - irqs are off: */
 	TRACE_IRQS_OFF
 
@@ -496,6 +916,8 @@ ret_from_intr:
 GLOBAL(retint_user)
 	mov	%rsp,%rdi
 	call	prepare_exit_to_usermode
+	pax_exit_kernel_user
+#	pax_erase_kstack
 	TRACE_IRQS_IRETQ
 	SWAPGS
 	jmp	restore_regs_and_iret
@@ -513,6 +935,21 @@ retint_kernel:
 	jmp	0b
 1:
 #endif
+
+	pax_exit_kernel
+
+#if defined(CONFIG_EFI) && defined(CONFIG_PAX_KERNEXEC_PLUGIN)
+	/* This is a quirk to allow IRQs/NMIs/MCEs during early EFI setup,
+	 * namely calling EFI runtime services with a phys mapping. We're
+	 * starting off with NOPs and patch in the real instrumentation
+	 * (BTS/OR) before starting any userland process; even before starting
+	 * up the APs.
+	 */
+	ALTERNATIVE "", "pax_force_retaddr 16*8", X86_FEATURE_ALWAYS
+#else
+	pax_force_retaddr RIP
+#endif
+
 	/*
 	 * The iretq could re-enable interrupts:
 	 */
@@ -556,15 +993,15 @@ native_irq_return_ldt:
 	SWAPGS
 	movq	PER_CPU_VAR(espfix_waddr), %rdi
 	movq	%rax, (0*8)(%rdi)		/* RAX */
-	movq	(2*8)(%rsp), %rax		/* RIP */
+	movq	(2*8 + RIP-RIP)(%rsp), %rax	/* RIP */
 	movq	%rax, (1*8)(%rdi)
-	movq	(3*8)(%rsp), %rax		/* CS */
+	movq	(2*8 + CS-RIP)(%rsp), %rax	/* CS */
 	movq	%rax, (2*8)(%rdi)
-	movq	(4*8)(%rsp), %rax		/* RFLAGS */
+	movq	(2*8 + EFLAGS-RIP)(%rsp), %rax	/* RFLAGS */
 	movq	%rax, (3*8)(%rdi)
-	movq	(6*8)(%rsp), %rax		/* SS */
+	movq	(2*8 + SS-RIP)(%rsp), %rax	/* SS */
 	movq	%rax, (5*8)(%rdi)
-	movq	(5*8)(%rsp), %rax		/* RSP */
+	movq	(2*8 + RSP-RIP)(%rsp), %rax	/* RSP */
 	movq	%rax, (4*8)(%rdi)
 	andl	$0xffff0000, %eax
 	popq	%rdi
@@ -574,7 +1011,7 @@ native_irq_return_ldt:
 	popq	%rax
 	jmp	native_irq_return_iret
 #endif
-END(common_interrupt)
+ENDPROC(common_interrupt)
 
 /*
  * APIC interrupts.
@@ -586,7 +1023,7 @@ ENTRY(\sym)
 .Lcommon_\sym:
 	interrupt \do_sym
 	jmp	ret_from_intr
-END(\sym)
+ENDPROC(\sym)
 .endm
 
 #ifdef CONFIG_TRACING
@@ -651,7 +1088,7 @@ apicinterrupt IRQ_WORK_VECTOR			irq_work_interrupt		smp_irq_work_interrupt
 /*
  * Exception entry points.
  */
-#define CPU_TSS_IST(x) PER_CPU_VAR(cpu_tss) + (TSS_ist + ((x) - 1) * 8)
+#define CPU_TSS_IST(x) (TSS_ist + ((x) - 1) * 8)(%r13)
 
 .macro idtentry sym do_sym has_error_code:req paranoid=0 shift_ist=-1
 ENTRY(\sym)
@@ -698,6 +1135,12 @@ ENTRY(\sym)
 	.endif
 
 	.if \shift_ist != -1
+#ifdef CONFIG_SMP
+	imul	$TSS_size, PER_CPU_VAR(cpu_number), %r13d
+	leaq	cpu_tss(%r13), %r13
+#else
+	leaq	cpu_tss(%rip), %r13
+#endif
 	subq	$EXCEPTION_STKSZ, CPU_TSS_IST(\shift_ist)
 	.endif
 
@@ -741,7 +1184,7 @@ ENTRY(\sym)
 
 	jmp	error_exit			/* %ebx: no swapgs flag */
 	.endif
-END(\sym)
+ENDPROC(\sym)
 .endm
 
 #ifdef CONFIG_TRACING
@@ -783,8 +1226,9 @@ ENTRY(native_load_gs_index)
 2:	ALTERNATIVE "", "mfence", X86_BUG_SWAPGS_FENCE
 	SWAPGS
 	popfq
+	pax_force_retaddr
 	ret
-END(native_load_gs_index)
+ENDPROC(native_load_gs_index)
 
 	_ASM_EXTABLE(.Lgs_change, bad_gs)
 	.section .fixup, "ax"
@@ -812,8 +1256,9 @@ ENTRY(do_softirq_own_stack)
 	call	__do_softirq
 	leaveq
 	decl	PER_CPU_VAR(irq_count)
+	pax_force_retaddr
 	ret
-END(do_softirq_own_stack)
+ENDPROC(do_softirq_own_stack)
 
 #ifdef CONFIG_XEN
 idtentry xen_hypervisor_callback xen_do_hypervisor_callback has_error_code=0
@@ -849,7 +1294,7 @@ ENTRY(xen_do_hypervisor_callback)		/* do_hypervisor_callback(struct *pt_regs) */
 	call	xen_maybe_preempt_hcall
 #endif
 	jmp	error_exit
-END(xen_do_hypervisor_callback)
+ENDPROC(xen_do_hypervisor_callback)
 
 /*
  * Hypervisor uses this for application faults while it executes.
@@ -894,7 +1339,7 @@ ENTRY(xen_failsafe_callback)
 	SAVE_C_REGS
 	SAVE_EXTRA_REGS
 	jmp	error_exit
-END(xen_failsafe_callback)
+ENDPROC(xen_failsafe_callback)
 
 apicinterrupt3 HYPERVISOR_CALLBACK_VECTOR \
 	xen_hvm_callback_vector xen_evtchn_do_upcall
@@ -906,7 +1351,7 @@ apicinterrupt3 HYPERVISOR_CALLBACK_VECTOR \
 	hyperv_callback_vector hyperv_vector_handler
 #endif /* CONFIG_HYPERV */
 
-idtentry debug			do_debug		has_error_code=0	paranoid=1 shift_ist=DEBUG_STACK
+idtentry int1			do_debug		has_error_code=0	paranoid=1 shift_ist=DEBUG_STACK
 idtentry int3			do_int3			has_error_code=0	paranoid=1 shift_ist=DEBUG_STACK
 idtentry stack_segment		do_stack_segment	has_error_code=1
 
@@ -943,8 +1388,34 @@ ENTRY(paranoid_entry)
 	js	1f				/* negative -> in kernel */
 	SWAPGS
 	xorl	%ebx, %ebx
-1:	ret
-END(paranoid_entry)
+1:
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	testb	$3, CS+8(%rsp)
+	jz	1f
+	pax_enter_kernel_user
+	jmp	2f
+#endif
+1:	pax_enter_kernel
+2:
+	pax_force_retaddr
+	ret
+ENDPROC(paranoid_entry)
+
+ENTRY(paranoid_entry_nmi)
+	cld
+	SAVE_C_REGS 8
+	SAVE_EXTRA_REGS 8
+	movl	$1, %ebx
+	movl	$MSR_GS_BASE, %ecx
+	rdmsr
+	testl	%edx, %edx
+	js	1f	/* negative -> in kernel */
+	SWAPGS
+	xorl	%ebx, %ebx
+1:	pax_enter_kernel_nmi
+	pax_force_retaddr
+	ret
+ENDPROC(paranoid_entry_nmi)
 
 /*
  * "Paranoid" exit path from exception stack.  This is invoked
@@ -961,19 +1432,26 @@ END(paranoid_entry)
 ENTRY(paranoid_exit)
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	TRACE_IRQS_OFF_DEBUG
-	testl	%ebx, %ebx			/* swapgs needed? */
+	testl	$1, %ebx			/* swapgs needed? */
 	jnz	paranoid_exit_no_swapgs
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	pax_exit_kernel_user
+#else
+	pax_exit_kernel
+#endif
 	TRACE_IRQS_IRETQ
 	SWAPGS_UNSAFE_STACK
 	jmp	paranoid_exit_restore
 paranoid_exit_no_swapgs:
+	pax_exit_kernel
 	TRACE_IRQS_IRETQ_DEBUG
 paranoid_exit_restore:
 	RESTORE_EXTRA_REGS
 	RESTORE_C_REGS
 	REMOVE_PT_GPREGS_FROM_STACK 8
+	pax_force_retaddr_bts
 	INTERRUPT_RETURN
-END(paranoid_exit)
+ENDPROC(paranoid_exit)
 
 /*
  * Save all registers in pt_regs, and switch gs if needed.
@@ -987,12 +1465,17 @@ ENTRY(error_entry)
 	testb	$3, CS+8(%rsp)
 	jz	.Lerror_kernelspace
 
-.Lerror_entry_from_usermode_swapgs:
 	/*
 	 * We entered from user mode or we're pretending to have entered
 	 * from user mode due to an IRET fault.
 	 */
 	SWAPGS
+
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	pax_enter_kernel_user
+#else
+	pax_enter_kernel
+#endif
 
 .Lerror_entry_from_usermode_after_swapgs:
 	/*
@@ -1002,10 +1485,12 @@ ENTRY(error_entry)
 	 */
 	TRACE_IRQS_OFF
 	CALL_enter_from_user_mode
+	pax_force_retaddr
 	ret
 
 .Lerror_entry_done:
 	TRACE_IRQS_OFF
+	pax_force_retaddr
 	ret
 
 	/*
@@ -1023,14 +1508,16 @@ ENTRY(error_entry)
 	cmpq	%rax, RIP+8(%rsp)
 	je	.Lbstep_iret
 	cmpq	$.Lgs_change, RIP+8(%rsp)
-	jne	.Lerror_entry_done
+	jne	1f
 
 	/*
 	 * hack: .Lgs_change can fail with user gsbase.  If this happens, fix up
 	 * gsbase and proceed.  We'll fix up the exception and land in
 	 * .Lgs_change's error handler with kernel gsbase.
 	 */
-	jmp	.Lerror_entry_from_usermode_swapgs
+	SWAPGS
+1:	pax_enter_kernel
+	jmp	.Lerror_entry_done
 
 .Lbstep_iret:
 	/* Fix truncated RIP */
@@ -1044,6 +1531,12 @@ ENTRY(error_entry)
 	 */
 	SWAPGS
 
+#ifdef CONFIG_PAX_MEMORY_UDEREF
+	pax_enter_kernel_user
+#else
+	pax_enter_kernel
+#endif
+
 	/*
 	 * Pretend that the exception came from user mode: set up pt_regs
 	 * as if we faulted immediately after IRET and clear EBX so that
@@ -1054,11 +1547,11 @@ ENTRY(error_entry)
 	mov	%rax, %rsp
 	decl	%ebx
 	jmp	.Lerror_entry_from_usermode_after_swapgs
-END(error_entry)
+ENDPROC(error_entry)
 
 
 /*
- * On entry, EBS is a "return to kernel mode" flag:
+ * On entry, EBX is a "return to kernel mode" flag:
  *   1: already in kernel mode, don't need SWAPGS
  *   0: user gsbase is loaded, we need SWAPGS and standard preparation for return to usermode
  */
@@ -1066,10 +1559,10 @@ ENTRY(error_exit)
 	movl	%ebx, %eax
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	TRACE_IRQS_OFF
-	testl	%eax, %eax
+	testl	$1, %eax
 	jnz	retint_kernel
 	jmp	retint_user
-END(error_exit)
+ENDPROC(error_exit)
 
 /* Runs on exception stack */
 ENTRY(nmi)
@@ -1123,6 +1616,8 @@ ENTRY(nmi)
 	 * other IST entries.
 	 */
 
+	ASM_CLAC
+
 	/* Use %rdx as our temp variable throughout */
 	pushq	%rdx
 
@@ -1166,6 +1661,12 @@ ENTRY(nmi)
 	pushq	%r14		/* pt_regs->r14 */
 	pushq	%r15		/* pt_regs->r15 */
 
+#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+	xorl	%ebx, %ebx
+#endif
+
+	pax_enter_kernel_nmi
+
 	/*
 	 * At this point we no longer need to worry about stack damage
 	 * due to nesting -- we're on the normal thread stack and we're
@@ -1176,12 +1677,19 @@ ENTRY(nmi)
 	movq	$-1, %rsi
 	call	do_nmi
 
+	pax_exit_kernel_nmi
+
 	/*
 	 * Return back to user mode.  We must *not* do the normal exit
 	 * work, because we don't want to enable interrupts.  Fortunately,
 	 * do_nmi doesn't modify pt_regs.
 	 */
 	SWAPGS
+
+#if defined(CONFIG_PAX_KERNEXEC) || defined(CONFIG_PAX_MEMORY_UDEREF)
+	movq	RBX(%rsp), %rbx
+#endif
+
 	jmp	restore_c_regs_and_iret
 
 .Lnmi_from_kernel:
@@ -1303,6 +1811,7 @@ nested_nmi_out:
 	popq	%rdx
 
 	/* We are returning to kernel mode, so this cannot result in a fault. */
+#	pax_force_retaddr_bts
 	INTERRUPT_RETURN
 
 first_nmi:
@@ -1331,7 +1840,7 @@ first_nmi:
 	pushq	%rsp		/* RSP (minus 8 because of the previous push) */
 	addq	$8, (%rsp)	/* Fix up RSP */
 	pushfq			/* RFLAGS */
-	pushq	$__KERNEL_CS	/* CS */
+	pushq	4*8(%rsp)	/* CS */
 	pushq	$1f		/* RIP */
 	INTERRUPT_RETURN	/* continues at repeat_nmi below */
 1:
@@ -1376,20 +1885,22 @@ end_repeat_nmi:
 	ALLOC_PT_GPREGS_ON_STACK
 
 	/*
-	 * Use paranoid_entry to handle SWAPGS, but no need to use paranoid_exit
+	 * Use paranoid_entry_nmi to handle SWAPGS, but no need to use paranoid_exit
 	 * as we should not be calling schedule in NMI context.
 	 * Even with normal interrupts enabled. An NMI should not be
 	 * setting NEED_RESCHED or anything that normal interrupts and
 	 * exceptions might do.
 	 */
-	call	paranoid_entry
+	call	paranoid_entry_nmi
 
 	/* paranoidentry do_nmi, 0; without TRACE_IRQS_OFF */
 	movq	%rsp, %rdi
 	movq	$-1, %rsi
 	call	do_nmi
 
-	testl	%ebx, %ebx			/* swapgs needed? */
+	pax_exit_kernel_nmi
+
+	testl	$1, %ebx			/* swapgs needed? */
 	jnz	nmi_restore
 nmi_swapgs:
 	SWAPGS_UNSAFE_STACK
@@ -1399,6 +1910,8 @@ nmi_restore:
 
 	/* Point RSP at the "iret" frame. */
 	REMOVE_PT_GPREGS_FROM_STACK 6*8
+
+	pax_force_retaddr_bts
 
 	/*
 	 * Clear "NMI executing".  Set DF first so that we can easily
@@ -1417,9 +1930,9 @@ nmi_restore:
 	 * mode, so this cannot result in a fault.
 	 */
 	INTERRUPT_RETURN
-END(nmi)
+ENDPROC(nmi)
 
 ENTRY(ignore_sysret)
 	mov	$-ENOSYS, %eax
 	sysret
-END(ignore_sysret)
+ENDPROC(ignore_sysret)

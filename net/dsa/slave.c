@@ -893,7 +893,7 @@ static const struct ethtool_ops dsa_slave_ethtool_ops = {
 	.get_eee		= dsa_slave_get_eee,
 };
 
-static struct ethtool_ops dsa_cpu_port_ethtool_ops;
+static ethtool_ops_no_const dsa_cpu_port_ethtool_ops __read_only;
 
 static const struct net_device_ops dsa_slave_netdev_ops = {
 	.ndo_open	 	= dsa_slave_open,
@@ -1127,6 +1127,7 @@ int dsa_slave_create(struct dsa_switch *ds, struct device *parent,
 	if (master->ethtool_ops != &dsa_cpu_port_ethtool_ops) {
 		memcpy(&dst->master_ethtool_ops, master->ethtool_ops,
 		       sizeof(struct ethtool_ops));
+		pax_open_kernel();
 		memcpy(&dsa_cpu_port_ethtool_ops, &dst->master_ethtool_ops,
 		       sizeof(struct ethtool_ops));
 		dsa_cpu_port_ethtool_ops.get_sset_count =
@@ -1135,6 +1136,7 @@ int dsa_slave_create(struct dsa_switch *ds, struct device *parent,
 					dsa_cpu_port_get_ethtool_stats;
 		dsa_cpu_port_ethtool_ops.get_strings =
 					dsa_cpu_port_get_strings;
+		pax_close_kernel();
 		master->ethtool_ops = &dsa_cpu_port_ethtool_ops;
 	}
 	eth_hw_addr_inherit(slave_dev, master);

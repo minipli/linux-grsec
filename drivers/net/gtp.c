@@ -752,7 +752,7 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static struct rtnl_link_ops gtp_link_ops __read_mostly = {
+static struct rtnl_link_ops gtp_link_ops = {
 	.kind		= "gtp",
 	.maxtype	= IFLA_GTP_MAX,
 	.policy		= gtp_policy,
