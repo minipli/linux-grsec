@@ -74,7 +74,7 @@ static int sysvipc_shm_proc_show(struct seq_file *s, void *it);
 
 void shm_init_ns(struct ipc_namespace *ns)
 {
-	ns->shm_ctlmax = SHMMAX;
+	ns->shm_ctlmax = BITS_PER_LONG == 32 ? SHMMAX : LONG_MAX;
 	ns->shm_ctlall = SHMALL;
 	ns->shm_ctlmni = SHMMNI;
 	ns->shm_rmid_forced = 0;
@@ -1131,6 +1131,12 @@ long do_shmat(int shmid, char __user *shmaddr, int shmflg, ulong *raddr,
 		f_mode = FMODE_READ | FMODE_WRITE;
 	}
 	if (shmflg & SHM_EXEC) {
+
+#ifdef CONFIG_PAX_MPROTECT
+		if (current->mm->pax_flags & MF_PAX_MPROTECT)
+			goto out;
+#endif
+
 		prot |= PROT_EXEC;
 		acc_mode |= S_IXUGO;
 	}

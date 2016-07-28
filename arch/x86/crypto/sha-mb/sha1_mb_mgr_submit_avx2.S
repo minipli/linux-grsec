@@ -98,7 +98,7 @@ lane_data       = %r10
 # JOB* submit_mb_mgr_submit_avx2(MB_MGR *state, job_sha1 *job)
 # arg 1 : rcx : state
 # arg 2 : rdx : job
-ENTRY(sha1_mb_mgr_submit_avx2)
+RAP_ENTRY(sha1_mb_mgr_submit_avx2)
 	FRAME_BEGIN
 	push	%rbx
 	push	%r12

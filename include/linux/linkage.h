@@ -5,6 +5,7 @@
 #include <linux/stringify.h>
 #include <linux/export.h>
 #include <asm/linkage.h>
+#include <asm/bitsperlong.h>
 
 /* Some toolchains use other characters (e.g. '`') to mark new line in macro */
 #ifndef ASM_NL
@@ -36,6 +37,7 @@
 #endif
 
 #define __page_aligned_data	__section(.data..page_aligned) __aligned(PAGE_SIZE)
+#define __page_aligned_rodata	__read_only __aligned(PAGE_SIZE)
 #define __page_aligned_bss	__section(.bss..page_aligned) __aligned(PAGE_SIZE)
 
 /*
@@ -79,11 +81,29 @@
 #define ALIGN_STR __ALIGN_STR
 
 #ifndef ENTRY
-#define ENTRY(name) \
+#define __ENTRY(name, rap_hash) \
 	.globl name ASM_NL \
 	ALIGN ASM_NL \
+	rap_hash \
 	name:
+
+#define ENTRY(name) __ENTRY(name,)
+
+#ifdef CONFIG_PAX_RAP
+#if BITS_PER_LONG == 64
+#define __ASM_RAP_HASH(hash) .quad 0, hash ASM_NL
+#elif BITS_PER_LONG == 32
+#define __ASM_RAP_HASH(hash) .long 0, 0, 0, hash ASM_NL
+#else
+#error incompatible BITS_PER_LONG
 #endif
+#define RAP_ENTRY(name) __ENTRY(name, __ASM_RAP_HASH(__rap_hash_##name))
+#else
+#define RAP_ENTRY(name) ENTRY(name)
+#endif
+
+#endif
+
 #endif /* LINKER_SCRIPT */
 
 #ifndef WEAK
