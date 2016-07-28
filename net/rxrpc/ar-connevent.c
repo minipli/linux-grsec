@@ -110,7 +110,7 @@ static int rxrpc_abort_connection(struct rxrpc_connection *conn,
 
 	len = iov[0].iov_len + iov[1].iov_len;
 
-	serial = atomic_inc_return(&conn->serial);
+	serial = atomic_inc_return_unchecked(&conn->serial);
 	whdr.serial = htonl(serial);
 	_proto("Tx CONN ABORT %%%u { %d }", serial, abort_code);
 
