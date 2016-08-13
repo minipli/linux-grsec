@@ -294,7 +294,7 @@ static inline unsigned long nf_ct_expires(const struct nf_conn *ct)
 
 struct kernel_param;
 
-int nf_conntrack_set_hashsize(const char *val, struct kernel_param *kp);
+int nf_conntrack_set_hashsize(const char *val, const struct kernel_param *kp);
 extern unsigned int nf_conntrack_htable_size;
 extern unsigned int nf_conntrack_max;
 
