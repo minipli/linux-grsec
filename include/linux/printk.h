@@ -43,7 +43,7 @@ static inline const char *printk_skip_level(const char *buffer)
 #define CONSOLE_LOGLEVEL_DEBUG	10 /* issue debug messages */
 #define CONSOLE_LOGLEVEL_MOTORMOUTH 15	/* You can't shut this one up */
 
-extern int console_printk[];
+extern int console_printk[4];
 
 #define console_loglevel (console_printk[0])
 #define default_message_loglevel (console_printk[1])
@@ -136,6 +136,8 @@ static inline void printk_nmi_flush(void) { }
 static inline void printk_nmi_flush_on_panic(void) { }
 #endif /* PRINTK_NMI */
 
+extern int kptr_restrict;
+
 #ifdef CONFIG_PRINTK
 asmlinkage __printf(5, 0)
 int vprintk_emit(int facility, int level,
@@ -170,7 +172,6 @@ extern bool printk_timed_ratelimit(unsigned long *caller_jiffies,
 
 extern int printk_delay_msec;
 extern int dmesg_restrict;
-extern int kptr_restrict;
 
 extern void wake_up_klogd(void);
 
