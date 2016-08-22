@@ -122,14 +122,14 @@ EXPORT_SYMBOL_GPL(cpu_has_xfeatures);
  */
 void fpstate_sanitize_xstate(struct fpu *fpu)
 {
-	struct fxregs_state *fx = &fpu->state.fxsave;
+	struct fxregs_state *fx = &fpu->state->fxsave;
 	int feature_bit;
 	u64 xfeatures;
 
 	if (!use_xsaveopt())
 		return;
 
-	xfeatures = fpu->state.xsave.header.xfeatures;
+	xfeatures = fpu->state->xsave.header.xfeatures;
 
 	/*
 	 * None of the feature bits are in init state. So nothing else
@@ -775,7 +775,7 @@ const void *get_xsave_field_ptr(int xsave_state)
 	 */
 	fpu__save(fpu);
 
-	return get_xsave_addr(&fpu->state.xsave, xsave_state);
+	return get_xsave_addr(&fpu->state->xsave, xsave_state);
 }
 
 
@@ -808,7 +808,7 @@ static void fpu__xfeature_set_non_init(struct xregs_state *xsave,
 static void fpu__xfeature_set_state(int xstate_feature_mask,
 		void *xstate_feature_src, size_t len)
 {
-	struct xregs_state *xsave = &current->thread.fpu.state.xsave;
+	struct xregs_state *xsave = &current->thread.fpu.state->xsave;
 	struct fpu *fpu = &current->thread.fpu;
 	void *dst;
 
@@ -836,7 +836,7 @@ static void fpu__xfeature_set_state(int xstate_feature_mask,
 	}
 
 	/* find the location in the xsave buffer of the desired state */
-	dst = __raw_xsave_addr(&fpu->state.xsave, xstate_feature_mask);
+	dst = __raw_xsave_addr(&fpu->state->xsave, xstate_feature_mask);
 
 	/*
 	 * Make sure that the pointer being passed in did not
@@ -874,7 +874,7 @@ out:
 int arch_set_user_pkey_access(struct task_struct *tsk, int pkey,
 		unsigned long init_val)
 {
-	struct xregs_state *xsave = &tsk->thread.fpu.state.xsave;
+	struct xregs_state *xsave = &tsk->thread.fpu.state->xsave;
 	struct pkru_state *old_pkru_state;
 	struct pkru_state new_pkru_state;
 	int pkey_shift = (pkey * PKRU_BITS_PER_PKEY);
