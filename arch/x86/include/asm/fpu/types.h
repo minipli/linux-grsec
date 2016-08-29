@@ -357,10 +357,9 @@ struct fpu {
 	 * logic, which unconditionally saves/restores all FPU state
 	 * across context switches. (if FPU state exists.)
 	 */
-	union fpregs_state		state;
+	union fpregs_state		*state;
 	/*
-	 * WARNING: 'state' is dynamically-sized.  Do not put
-	 * anything after it here.
+	 * WARNING: 'state' is dynamically-sized.
 	 */
 };
 

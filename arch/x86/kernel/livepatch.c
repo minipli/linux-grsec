@@ -38,8 +38,10 @@ int klp_write_module_reloc(struct module *mod, unsigned long type,
 {
 	size_t size = 4;
 	unsigned long val;
-	unsigned long core = (unsigned long)mod->core_layout.base;
-	unsigned long core_size = mod->core_layout.size;
+	unsigned long core_rx = (unsigned long)mod->core_layout.base_rx;
+	unsigned long core_rw = (unsigned long)mod->core_layout.base_rw;
+	unsigned long core_size_rx = mod->core_layout.size_rx;
+	unsigned long core_size_rw = mod->core_layout.size_rw;
 
 	switch (type) {
 	case R_X86_64_NONE:
@@ -62,7 +64,8 @@ int klp_write_module_reloc(struct module *mod, unsigned long type,
 		return -EINVAL;
 	}
 
-	if (loc < core || loc >= core + core_size)
+	if ((loc < core_rx || loc >= core_rx + core_size_rx) &&
+	    (loc < core_rw || loc >= core_rw + core_size_rw))
 		/* loc does not point to any symbol inside the module */
 		return -EINVAL;
 

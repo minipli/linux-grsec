@@ -986,7 +986,7 @@ static int inet_diag_rcv_msg_compat(struct sk_buff *skb, struct nlmsghdr *nlh)
 				return -EINVAL;
 		}
 		{
-			struct netlink_dump_control c = {
+			static struct netlink_dump_control c = {
 				.dump = inet_diag_dump_compat,
 			};
 			return netlink_dump_start(net->diag_nlsk, skb, nlh, &c);
@@ -1017,7 +1017,7 @@ static int inet_diag_handler_cmd(struct sk_buff *skb, struct nlmsghdr *h)
 				return -EINVAL;
 		}
 		{
-			struct netlink_dump_control c = {
+			static struct netlink_dump_control c = {
 				.dump = inet_diag_dump,
 			};
 			return netlink_dump_start(net->diag_nlsk, skb, h, &c);

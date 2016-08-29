@@ -107,16 +107,32 @@ static LIST_HEAD(modules);
 
 static __always_inline unsigned long __mod_tree_val(struct latch_tree_node *n)
 {
-	struct module_layout *layout = container_of(n, struct module_layout, mtn.node);
+	struct mod_tree_node *mtn = container_of(n, struct mod_tree_node, node);
+	struct module *mod = mtn->mod;
 
-	return (unsigned long)layout->base;
+	if (unlikely(mtn == &mod->init_layout.mtn_rw))
+		return (unsigned long)mod->init_layout.base_rw;
+	if (unlikely(mtn == &mod->init_layout.mtn_rx))
+		return (unsigned long)mod->init_layout.base_rx;
+
+	if (unlikely(mtn == &mod->core_layout.mtn_rw))
+		return (unsigned long)mod->core_layout.base_rw;
+	return (unsigned long)mod->core_layout.base_rx;
 }
 
 static __always_inline unsigned long __mod_tree_size(struct latch_tree_node *n)
 {
-	struct module_layout *layout = container_of(n, struct module_layout, mtn.node);
+	struct mod_tree_node *mtn = container_of(n, struct mod_tree_node, node);
+	struct module *mod = mtn->mod;
 
-	return (unsigned long)layout->size;
+	if (unlikely(mtn == &mod->init_layout.mtn_rw))
+		return (unsigned long)mod->init_layout.size_rw;
+	if (unlikely(mtn == &mod->init_layout.mtn_rx))
+		return (unsigned long)mod->init_layout.size_rx;
+
+	if (unlikely(mtn == &mod->core_layout.mtn_rw))
+		return (unsigned long)mod->core_layout.size_rw;
+	return (unsigned long)mod->core_layout.size_rx;
 }
 
 static __always_inline bool
@@ -149,14 +165,19 @@ static const struct latch_tree_ops mod_tree_ops = {
 
 static struct mod_tree_root {
 	struct latch_tree_root root;
-	unsigned long addr_min;
-	unsigned long addr_max;
+	unsigned long addr_min_rw;
+	unsigned long addr_min_rx;
+	unsigned long addr_max_rw;
+	unsigned long addr_max_rx;
 } mod_tree __cacheline_aligned = {
-	.addr_min = -1UL,
+	.addr_min_rw = -1UL,
+	.addr_min_rx = -1UL,
 };
 
-#define module_addr_min mod_tree.addr_min
-#define module_addr_max mod_tree.addr_max
+#define module_addr_min_rw mod_tree.addr_min_rw
+#define module_addr_min_rx mod_tree.addr_min_rx
+#define module_addr_max_rw mod_tree.addr_max_rw
+#define module_addr_max_rx mod_tree.addr_max_rx
 
 static noinline void __mod_tree_insert(struct mod_tree_node *node)
 {
@@ -174,23 +195,31 @@ static void __mod_tree_remove(struct mod_tree_node *node)
  */
 static void mod_tree_insert(struct module *mod)
 {
-	mod->core_layout.mtn.mod = mod;
-	mod->init_layout.mtn.mod = mod;
+	mod->core_layout.mtn_rx.mod = mod;
+	mod->core_layout.mtn_rw.mod = mod;
+	mod->init_layout.mtn_rx.mod = mod;
+	mod->init_layout.mtn_rw.mod = mod;
 
-	__mod_tree_insert(&mod->core_layout.mtn);
-	if (mod->init_layout.size)
-		__mod_tree_insert(&mod->init_layout.mtn);
+	__mod_tree_insert(&mod->core_layout.mtn_rx);
+	__mod_tree_insert(&mod->core_layout.mtn_rw);
+	if (mod->init_layout.size_rx)
+		__mod_tree_insert(&mod->init_layout.mtn_rx);
+	if (mod->init_layout.size_rw)
+		__mod_tree_insert(&mod->init_layout.mtn_rw);
 }
 
 static void mod_tree_remove_init(struct module *mod)
 {
-	if (mod->init_layout.size)
-		__mod_tree_remove(&mod->init_layout.mtn);
+	if (mod->init_layout.size_rx)
+		__mod_tree_remove(&mod->init_layout.mtn_rx);
+	if (mod->init_layout.size_rw)
+		__mod_tree_remove(&mod->init_layout.mtn_rw);
 }
 
 static void mod_tree_remove(struct module *mod)
 {
-	__mod_tree_remove(&mod->core_layout.mtn);
+	__mod_tree_remove(&mod->core_layout.mtn_rx);
+	__mod_tree_remove(&mod->core_layout.mtn_rw);
 	mod_tree_remove_init(mod);
 }
 
@@ -207,7 +236,8 @@ static struct module *mod_find(unsigned long addr)
 
 #else /* MODULES_TREE_LOOKUP */
 
-static unsigned long module_addr_min = -1UL, module_addr_max = 0;
+static unsigned long module_addr_min_rw = -1UL, module_addr_max_rw = 0;
+static unsigned long module_addr_min_rx = -1UL, module_addr_max_rx = 0;
 
 static void mod_tree_insert(struct module *mod) { }
 static void mod_tree_remove_init(struct module *mod) { }
@@ -231,22 +261,36 @@ static struct module *mod_find(unsigned long addr)
  * Bounds of module text, for speeding up __module_address.
  * Protected by module_mutex.
  */
-static void __mod_update_bounds(void *base, unsigned int size)
+static void __mod_update_bounds_rx(void *base, unsigned int size)
 {
 	unsigned long min = (unsigned long)base;
 	unsigned long max = min + size;
 
-	if (min < module_addr_min)
-		module_addr_min = min;
-	if (max > module_addr_max)
-		module_addr_max = max;
+	if (min < module_addr_min_rx)
+		module_addr_min_rx = min;
+	if (max > module_addr_max_rx)
+		module_addr_max_rx = max;
+}
+
+static void __mod_update_bounds_rw(void *base, unsigned int size)
+{
+	unsigned long min = (unsigned long)base;
+	unsigned long max = min + size;
+
+	if (min < module_addr_min_rw)
+		module_addr_min_rw = min;
+	if (max > module_addr_max_rw)
+		module_addr_max_rw = max;
 }
 
 static void mod_update_bounds(struct module *mod)
 {
-	__mod_update_bounds(mod->core_layout.base, mod->core_layout.size);
-	if (mod->init_layout.size)
-		__mod_update_bounds(mod->init_layout.base, mod->init_layout.size);
+	__mod_update_bounds_rx(mod->core_layout.base_rx, mod->core_layout.size_rx);
+	__mod_update_bounds_rw(mod->core_layout.base_rw, mod->core_layout.size_rw);
+	if (mod->init_layout.size_rx)
+		__mod_update_bounds_rx(mod->init_layout.base_rx, mod->init_layout.size_rx);
+	if (mod->init_layout.size_rw)
+		__mod_update_bounds_rw(mod->init_layout.base_rw, mod->init_layout.size_rw);
 }
 
 #ifdef CONFIG_KGDB_KDB
@@ -453,7 +497,7 @@ bool each_symbol_section(bool (*fn)(const struct symsearch *arr,
 		return true;
 
 	list_for_each_entry_rcu(mod, &modules, list) {
-		struct symsearch arr[] = {
+		struct symsearch modarr[] = {
 			{ mod->syms, mod->syms + mod->num_syms, mod->crcs,
 			  NOT_GPL_ONLY, false },
 			{ mod->gpl_syms, mod->gpl_syms + mod->num_gpl_syms,
@@ -478,7 +522,7 @@ bool each_symbol_section(bool (*fn)(const struct symsearch *arr,
 		if (mod->state == MODULE_STATE_UNFORMED)
 			continue;
 
-		if (each_symbol_in_section(arr, ARRAY_SIZE(arr), mod, fn, data))
+		if (each_symbol_in_section(modarr, ARRAY_SIZE(modarr), mod, fn, data))
 			return true;
 	}
 	return false;
@@ -624,7 +668,7 @@ static int percpu_modalloc(struct module *mod, struct load_info *info)
 	if (!pcpusec->sh_size)
 		return 0;
 
-	if (align > PAGE_SIZE) {
+	if (align-1 >= PAGE_SIZE) {
 		pr_warn("%s: per-cpu alignment %li > %li\n",
 			mod->name, align, PAGE_SIZE);
 		align = PAGE_SIZE;
@@ -1197,7 +1241,7 @@ struct module_attribute module_uevent =
 static ssize_t show_coresize(struct module_attribute *mattr,
 			     struct module_kobject *mk, char *buffer)
 {
-	return sprintf(buffer, "%u\n", mk->mod->core_layout.size);
+	return sprintf(buffer, "%u\n", mk->mod->core_layout.size_rx + mk->mod->core_layout.size_rw);
 }
 
 static struct module_attribute modinfo_coresize =
@@ -1206,7 +1250,7 @@ static struct module_attribute modinfo_coresize =
 static ssize_t show_initsize(struct module_attribute *mattr,
 			     struct module_kobject *mk, char *buffer)
 {
-	return sprintf(buffer, "%u\n", mk->mod->init_layout.size);
+	return sprintf(buffer, "%u\n", mk->mod->init_layout.size_rx + mk->mod->init_layout.size_rw);
 }
 
 static struct module_attribute modinfo_initsize =
@@ -1569,7 +1613,7 @@ static void add_notes_attrs(struct module *mod, const struct load_info *info)
 {
 	unsigned int notes, loaded, i;
 	struct module_notes_attrs *notes_attrs;
-	struct bin_attribute *nattr;
+	bin_attribute_no_const *nattr;
 
 	/* failed to create section attributes, so can't create notes */
 	if (!mod->sect_attrs)
@@ -1681,7 +1725,7 @@ static void del_usage_links(struct module *mod)
 static int module_add_modinfo_attrs(struct module *mod)
 {
 	struct module_attribute *attr;
-	struct module_attribute *temp_attr;
+	module_attribute_no_const *temp_attr;
 	int error = 0;
 	int i;
 
@@ -1868,30 +1912,28 @@ static void mod_sysfs_teardown(struct module *mod)
 static void frob_text(const struct module_layout *layout,
 		      int (*set_memory)(unsigned long start, int num_pages))
 {
-	BUG_ON((unsigned long)layout->base & (PAGE_SIZE-1));
-	BUG_ON((unsigned long)layout->text_size & (PAGE_SIZE-1));
-	set_memory((unsigned long)layout->base,
-		   layout->text_size >> PAGE_SHIFT);
+	BUG_ON((unsigned long)layout->base_rx & (PAGE_SIZE-1));
+	BUG_ON((unsigned long)layout->size_rx & (PAGE_SIZE-1));
+	set_memory((unsigned long)layout->base_rx,
+		   layout->size_rx >> PAGE_SHIFT);
 }
 
 static void frob_rodata(const struct module_layout *layout,
 			int (*set_memory)(unsigned long start, int num_pages))
 {
-	BUG_ON((unsigned long)layout->base & (PAGE_SIZE-1));
-	BUG_ON((unsigned long)layout->text_size & (PAGE_SIZE-1));
-	BUG_ON((unsigned long)layout->ro_size & (PAGE_SIZE-1));
-	set_memory((unsigned long)layout->base + layout->text_size,
-		   (layout->ro_size - layout->text_size) >> PAGE_SHIFT);
+	BUG_ON((unsigned long)layout->base_rx & (PAGE_SIZE-1));
+	BUG_ON((unsigned long)layout->size_rx & (PAGE_SIZE-1));
+//	BUG_ON((unsigned long)layout->size_ro & (PAGE_SIZE-1));
+//	set_memory((unsigned long)layout->base_rx + layout->size_rx,
+//		   (layout->size_ro - layout->size_rx) >> PAGE_SHIFT);
 }
 
 static void frob_writable_data(const struct module_layout *layout,
 			       int (*set_memory)(unsigned long start, int num_pages))
 {
-	BUG_ON((unsigned long)layout->base & (PAGE_SIZE-1));
-	BUG_ON((unsigned long)layout->ro_size & (PAGE_SIZE-1));
-	BUG_ON((unsigned long)layout->size & (PAGE_SIZE-1));
-	set_memory((unsigned long)layout->base + layout->ro_size,
-		   (layout->size - layout->ro_size) >> PAGE_SHIFT);
+	BUG_ON((unsigned long)layout->base_rw & (PAGE_SIZE-1));
+	BUG_ON((unsigned long)layout->size_rw & (PAGE_SIZE-1));
+	set_memory((unsigned long)layout->base_rw, layout->size_rw  >> PAGE_SHIFT);
 }
 
 /* livepatching wants to disable read-only so it can frob module. */
@@ -1968,7 +2010,15 @@ static void disable_ro_nx(const struct module_layout *layout)
 }
 
 #else
-static void disable_ro_nx(const struct module_layout *layout) { }
+static void disable_ro_nx(const struct module_layout *layout)
+{
+
+#ifdef CONFIG_PAX_KERNEXEC
+	set_memory_nx((unsigned long)layout->base_rx, PFN_UP(layout->size_rx));
+	set_memory_rw((unsigned long)layout->base_rx, PFN_UP(layout->size_rx));
+#endif
+
+}
 static void module_enable_nx(const struct module *mod) { }
 static void module_disable_nx(const struct module *mod) { }
 #endif
@@ -2025,16 +2075,19 @@ static void free_module(struct module *mod)
 	/* This may be empty, but that's OK */
 	disable_ro_nx(&mod->init_layout);
 	module_arch_freeing_init(mod);
-	module_memfree(mod->init_layout.base);
+	module_memfree(mod->init_layout.base_rw);
+	module_memfree_exec(mod->init_layout.base_rx);
 	kfree(mod->args);
 	percpu_modfree(mod);
 
 	/* Free lock-classes; relies on the preceding sync_rcu(). */
-	lockdep_free_key_range(mod->core_layout.base, mod->core_layout.size);
+	lockdep_free_key_range(mod->core_layout.base_rw, mod->core_layout.size_rw);
+	lockdep_free_key_range(mod->core_layout.base_rx, mod->core_layout.size_rx);
 
 	/* Finally, free the core (containing the module structure) */
 	disable_ro_nx(&mod->core_layout);
-	module_memfree(mod->core_layout.base);
+	module_memfree_exec(mod->core_layout.base_rx);
+	module_memfree(mod->core_layout.base_rw);
 
 #ifdef CONFIG_MPU
 	update_protections(current->mm);
@@ -2130,7 +2183,9 @@ static int simplify_symbols(struct module *mod, const struct load_info *info)
 			ksym = resolve_symbol_wait(mod, info, name);
 			/* Ok if resolved.  */
 			if (ksym && !IS_ERR(ksym)) {
+				pax_open_kernel();
 				sym[i].st_value = ksym->value;
+				pax_close_kernel();
 				break;
 			}
 
@@ -2149,7 +2204,9 @@ static int simplify_symbols(struct module *mod, const struct load_info *info)
 				secbase = (unsigned long)mod_percpu(mod);
 			else
 				secbase = info->sechdrs[sym[i].st_shndx].sh_addr;
+			pax_open_kernel();
 			sym[i].st_value += secbase;
+			pax_close_kernel();
 			break;
 		}
 	}
@@ -2237,21 +2294,11 @@ static void layout_sections(struct module *mod, struct load_info *info)
 			    || s->sh_entsize != ~0UL
 			    || strstarts(sname, ".init"))
 				continue;
-			s->sh_entsize = get_offset(mod, &mod->core_layout.size, s, i);
+			if ((s->sh_flags & SHF_WRITE) || !(s->sh_flags & SHF_ALLOC))
+				s->sh_entsize = get_offset(mod, &mod->core_layout.size_rw, s, i);
+			else
+				s->sh_entsize = get_offset(mod, &mod->core_layout.size_rx, s, i);
 			pr_debug("\t%s\n", sname);
-		}
-		switch (m) {
-		case 0: /* executable */
-			mod->core_layout.size = debug_align(mod->core_layout.size);
-			mod->core_layout.text_size = mod->core_layout.size;
-			break;
-		case 1: /* RO: text and ro-data */
-			mod->core_layout.size = debug_align(mod->core_layout.size);
-			mod->core_layout.ro_size = mod->core_layout.size;
-			break;
-		case 3: /* whole core */
-			mod->core_layout.size = debug_align(mod->core_layout.size);
-			break;
 		}
 	}
 
@@ -2266,22 +2313,12 @@ static void layout_sections(struct module *mod, struct load_info *info)
 			    || s->sh_entsize != ~0UL
 			    || !strstarts(sname, ".init"))
 				continue;
-			s->sh_entsize = (get_offset(mod, &mod->init_layout.size, s, i)
-					 | INIT_OFFSET_MASK);
+			if ((s->sh_flags & SHF_WRITE) || !(s->sh_flags & SHF_ALLOC))
+				s->sh_entsize = get_offset(mod, &mod->init_layout.size_rw, s, i);
+			else
+				s->sh_entsize = get_offset(mod, &mod->init_layout.size_rx, s, i);
+			s->sh_entsize |= INIT_OFFSET_MASK;
 			pr_debug("\t%s\n", sname);
-		}
-		switch (m) {
-		case 0: /* executable */
-			mod->init_layout.size = debug_align(mod->init_layout.size);
-			mod->init_layout.text_size = mod->init_layout.size;
-			break;
-		case 1: /* RO: text and ro-data */
-			mod->init_layout.size = debug_align(mod->init_layout.size);
-			mod->init_layout.ro_size = mod->init_layout.size;
-			break;
-		case 3: /* whole init */
-			mod->init_layout.size = debug_align(mod->init_layout.size);
-			break;
 		}
 	}
 }
@@ -2460,7 +2497,7 @@ static void layout_symtab(struct module *mod, struct load_info *info)
 
 	/* Put symbol section at end of init part of module. */
 	symsect->sh_flags |= SHF_ALLOC;
-	symsect->sh_entsize = get_offset(mod, &mod->init_layout.size, symsect,
+	symsect->sh_entsize = get_offset(mod, &mod->init_layout.size_rx, symsect,
 					 info->index.sym) | INIT_OFFSET_MASK;
 	pr_debug("\t%s\n", info->secstrings + symsect->sh_name);
 
@@ -2478,23 +2515,23 @@ static void layout_symtab(struct module *mod, struct load_info *info)
 	}
 
 	/* Append room for core symbols at end of core part. */
-	info->symoffs = ALIGN(mod->core_layout.size, symsect->sh_addralign ?: 1);
-	info->stroffs = mod->core_layout.size = info->symoffs + ndst * sizeof(Elf_Sym);
-	mod->core_layout.size += strtab_size;
-	mod->core_layout.size = debug_align(mod->core_layout.size);
+	info->symoffs = ALIGN(mod->core_layout.size_rx, symsect->sh_addralign ?: 1);
+	info->stroffs = mod->core_layout.size_rx = info->symoffs + ndst * sizeof(Elf_Sym);
+	mod->core_layout.size_rx += strtab_size;
+	mod->core_layout.size_rx = debug_align(mod->core_layout.size_rx);
 
 	/* Put string table section at end of init part of module. */
 	strsect->sh_flags |= SHF_ALLOC;
-	strsect->sh_entsize = get_offset(mod, &mod->init_layout.size, strsect,
+	strsect->sh_entsize = get_offset(mod, &mod->init_layout.size_rx, strsect,
 					 info->index.str) | INIT_OFFSET_MASK;
 	pr_debug("\t%s\n", info->secstrings + strsect->sh_name);
 
 	/* We'll tack temporary mod_kallsyms on the end. */
-	mod->init_layout.size = ALIGN(mod->init_layout.size,
+	mod->init_layout.size_rx = ALIGN(mod->init_layout.size_rx,
 				      __alignof__(struct mod_kallsyms));
-	info->mod_kallsyms_init_off = mod->init_layout.size;
-	mod->init_layout.size += sizeof(struct mod_kallsyms);
-	mod->init_layout.size = debug_align(mod->init_layout.size);
+	info->mod_kallsyms_init_off = mod->init_layout.size_rx;
+	mod->init_layout.size_rx += sizeof(struct mod_kallsyms);
+	mod->init_layout.size_rx = debug_align(mod->init_layout.size_rx);
 }
 
 /*
@@ -2511,7 +2548,9 @@ static void add_kallsyms(struct module *mod, const struct load_info *info)
 	Elf_Shdr *symsec = &info->sechdrs[info->index.sym];
 
 	/* Set up to point into init section. */
-	mod->kallsyms = mod->init_layout.base + info->mod_kallsyms_init_off;
+	mod->kallsyms = mod->init_layout.base_rx + info->mod_kallsyms_init_off;
+
+	pax_open_kernel();
 
 	mod->kallsyms->symtab = (void *)symsec->sh_addr;
 	mod->kallsyms->num_symtab = symsec->sh_size / sizeof(Elf_Sym);
@@ -2524,8 +2563,8 @@ static void add_kallsyms(struct module *mod, const struct load_info *info)
 			= elf_type(&mod->kallsyms->symtab[i], info);
 
 	/* Now populate the cut down core kallsyms for after init. */
-	mod->core_kallsyms.symtab = dst = mod->core_layout.base + info->symoffs;
-	mod->core_kallsyms.strtab = s = mod->core_layout.base + info->stroffs;
+	mod->core_kallsyms.symtab = dst = mod->core_layout.base_rx + info->symoffs;
+	mod->core_kallsyms.strtab = s = mod->core_layout.base_rx + info->stroffs;
 	src = mod->kallsyms->symtab;
 	for (ndst = i = 0; i < mod->kallsyms->num_symtab; i++) {
 		if (i == 0 ||
@@ -2538,6 +2577,8 @@ static void add_kallsyms(struct module *mod, const struct load_info *info)
 		}
 	}
 	mod->core_kallsyms.num_symtab = ndst;
+
+	pax_close_kernel();
 }
 #else
 static inline void layout_symtab(struct module *mod, struct load_info *info)
@@ -2796,7 +2837,15 @@ static struct module *setup_load_info(struct load_info *info, int flags)
 static int check_modinfo(struct module *mod, struct load_info *info, int flags)
 {
 	const char *modmagic = get_modinfo(info, "vermagic");
+	const char *license = get_modinfo(info, "license");
 	int err;
+
+#if defined(CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR) || defined(CONFIG_PAX_RAP)
+	if (!license || !license_is_gpl_compatible(license)) {
+		pr_err("%s: module is not compatible with the KERNEXEC 'or' method and RAP\n", mod->name);
+		return -ENOEXEC;
+	}
+#endif
 
 	if (flags & MODULE_INIT_IGNORE_VERMAGIC)
 		modmagic = NULL;
@@ -2822,7 +2871,7 @@ static int check_modinfo(struct module *mod, struct load_info *info, int flags)
 	}
 
 	/* Set up license info based on the info section */
-	set_license(mod, get_modinfo(info, "license"));
+	set_license(mod, license);
 
 	return 0;
 }
@@ -2919,7 +2968,7 @@ static int move_module(struct module *mod, struct load_info *info)
 	void *ptr;
 
 	/* Do the allocs. */
-	ptr = module_alloc(mod->core_layout.size);
+	ptr = module_alloc(mod->core_layout.size_rw);
 	/*
 	 * The pointer to this block is stored in the module structure
 	 * which is inside the block. Just mark it as not being a
@@ -2929,11 +2978,11 @@ static int move_module(struct module *mod, struct load_info *info)
 	if (!ptr)
 		return -ENOMEM;
 
-	memset(ptr, 0, mod->core_layout.size);
-	mod->core_layout.base = ptr;
+	memset(ptr, 0, mod->core_layout.size_rw);
+	mod->core_layout.base_rw = ptr;
 
-	if (mod->init_layout.size) {
-		ptr = module_alloc(mod->init_layout.size);
+	if (mod->init_layout.size_rw) {
+		ptr = module_alloc(mod->init_layout.size_rw);
 		/*
 		 * The pointer to this block is stored in the module structure
 		 * which is inside the block. This block doesn't need to be
@@ -2942,13 +2991,45 @@ static int move_module(struct module *mod, struct load_info *info)
 		 */
 		kmemleak_ignore(ptr);
 		if (!ptr) {
-			module_memfree(mod->core_layout.base);
+			module_memfree(mod->core_layout.base_rw);
 			return -ENOMEM;
 		}
-		memset(ptr, 0, mod->init_layout.size);
-		mod->init_layout.base = ptr;
+		memset(ptr, 0, mod->init_layout.size_rw);
+		mod->init_layout.base_rw = ptr;
 	} else
-		mod->init_layout.base = NULL;
+		mod->init_layout.base_rw = NULL;
+
+	ptr = module_alloc_exec(mod->core_layout.size_rx);
+	kmemleak_not_leak(ptr);
+	if (!ptr) {
+		if (mod->init_layout.base_rw)
+			module_memfree(mod->init_layout.base_rw);
+		module_memfree(mod->core_layout.base_rw);
+		return -ENOMEM;
+	}
+
+	pax_open_kernel();
+	memset(ptr, 0, mod->core_layout.size_rx);
+	pax_close_kernel();
+	mod->core_layout.base_rx = ptr;
+
+	if (mod->init_layout.size_rx) {
+		ptr = module_alloc_exec(mod->init_layout.size_rx);
+		kmemleak_ignore(ptr);
+		if (!ptr) {
+			module_memfree(mod->core_layout.base_rx);
+			if (mod->init_layout.base_rw)
+				module_memfree(mod->init_layout.base_rw);
+			module_memfree(mod->core_layout.base_rw);
+			return -ENOMEM;
+		}
+
+		pax_open_kernel();
+		memset(ptr, 0, mod->init_layout.size_rx);
+		pax_close_kernel();
+		mod->init_layout.base_rx = ptr;
+	} else
+		mod->init_layout.base_rx = NULL;
 
 	/* Transfer each section which specifies SHF_ALLOC */
 	pr_debug("final section addresses:\n");
@@ -2959,16 +3040,45 @@ static int move_module(struct module *mod, struct load_info *info)
 		if (!(shdr->sh_flags & SHF_ALLOC))
 			continue;
 
-		if (shdr->sh_entsize & INIT_OFFSET_MASK)
-			dest = mod->init_layout.base
-				+ (shdr->sh_entsize & ~INIT_OFFSET_MASK);
-		else
-			dest = mod->core_layout.base + shdr->sh_entsize;
+		if (shdr->sh_entsize & INIT_OFFSET_MASK) {
+			if ((shdr->sh_flags & SHF_WRITE) || !(shdr->sh_flags & SHF_ALLOC))
+				dest = mod->init_layout.base_rw
+					+ (shdr->sh_entsize & ~INIT_OFFSET_MASK);
+			else
+				dest = mod->init_layout.base_rx
+					+ (shdr->sh_entsize & ~INIT_OFFSET_MASK);
+		} else {
+			if ((shdr->sh_flags & SHF_WRITE) || !(shdr->sh_flags & SHF_ALLOC))
+				dest = mod->core_layout.base_rw + shdr->sh_entsize;
+			else
+				dest = mod->core_layout.base_rx + shdr->sh_entsize;
+		}
 
-		if (shdr->sh_type != SHT_NOBITS)
+		if (shdr->sh_type != SHT_NOBITS) {
+
+#ifdef CONFIG_PAX_KERNEXEC
+#ifdef CONFIG_X86_64
+			if ((shdr->sh_flags & SHF_WRITE) && (shdr->sh_flags & SHF_EXECINSTR))
+				set_memory_x((unsigned long)dest, (shdr->sh_size + PAGE_SIZE) >> PAGE_SHIFT);
+#endif
+			if (!(shdr->sh_flags & SHF_WRITE) && (shdr->sh_flags & SHF_ALLOC)) {
+				pax_open_kernel();
+				memcpy(dest, (void *)shdr->sh_addr, shdr->sh_size);
+				pax_close_kernel();
+			} else
+#endif
+
 			memcpy(dest, (void *)shdr->sh_addr, shdr->sh_size);
+		}
 		/* Update sh_addr to point to copy in image. */
-		shdr->sh_addr = (unsigned long)dest;
+
+#ifdef CONFIG_PAX_KERNEXEC
+		if (shdr->sh_flags & SHF_EXECINSTR)
+			shdr->sh_addr = ktva_ktla((unsigned long)dest);
+		else
+#endif
+
+			shdr->sh_addr = (unsigned long)dest;
 		pr_debug("\t0x%lx %s\n",
 			 (long)shdr->sh_addr, info->secstrings + shdr->sh_name);
 	}
@@ -3025,12 +3135,12 @@ static void flush_module_icache(const struct module *mod)
 	 * Do it before processing of module parameters, so the module
 	 * can provide parameter accessor functions of its own.
 	 */
-	if (mod->init_layout.base)
-		flush_icache_range((unsigned long)mod->init_layout.base,
-				   (unsigned long)mod->init_layout.base
-				   + mod->init_layout.size);
-	flush_icache_range((unsigned long)mod->core_layout.base,
-			   (unsigned long)mod->core_layout.base + mod->core_layout.size);
+	if (mod->init_layout.base_rx)
+		flush_icache_range((unsigned long)mod->init_layout.base_rx,
+				   (unsigned long)mod->init_layout.base_rx
+				   + mod->init_layout.size_rx);
+	flush_icache_range((unsigned long)mod->core_layout.base_rx,
+			   (unsigned long)mod->core_layout.base_rx + mod->core_layout.size_rx);
 
 	set_fs(old_fs);
 }
@@ -3088,8 +3198,10 @@ static void module_deallocate(struct module *mod, struct load_info *info)
 {
 	percpu_modfree(mod);
 	module_arch_freeing_init(mod);
-	module_memfree(mod->init_layout.base);
-	module_memfree(mod->core_layout.base);
+	module_memfree_exec(mod->init_layout.base_rx);
+	module_memfree_exec(mod->core_layout.base_rx);
+	module_memfree(mod->init_layout.base_rw);
+	module_memfree(mod->core_layout.base_rw);
 }
 
 int __weak module_finalize(const Elf_Ehdr *hdr,
@@ -3102,7 +3214,9 @@ int __weak module_finalize(const Elf_Ehdr *hdr,
 static int post_relocation(struct module *mod, const struct load_info *info)
 {
 	/* Sort exception table now relocations are done. */
+	pax_open_kernel();
 	sort_extable(mod->extable, mod->extable + mod->num_exentries);
+	pax_close_kernel();
 
 	/* Copy relocated percpu area over. */
 	percpu_modcopy(mod, (void *)info->sechdrs[info->index.pcpu].sh_addr,
@@ -3150,13 +3264,15 @@ static void do_mod_ctors(struct module *mod)
 /* For freeing module_init on success, in case kallsyms traversing */
 struct mod_initfree {
 	struct rcu_head rcu;
-	void *module_init;
+	void *module_init_rw;
+	void *module_init_rx;
 };
 
 static void do_free_init(struct rcu_head *head)
 {
 	struct mod_initfree *m = container_of(head, struct mod_initfree, rcu);
-	module_memfree(m->module_init);
+	module_memfree(m->module_init_rw);
+	module_memfree_exec(m->module_init_rx);
 	kfree(m);
 }
 
@@ -3176,7 +3292,8 @@ static noinline int do_init_module(struct module *mod)
 		ret = -ENOMEM;
 		goto fail;
 	}
-	freeinit->module_init = mod->init_layout.base;
+	freeinit->module_init_rx = mod->init_layout.base_rx;
+	freeinit->module_init_rw = mod->init_layout.base_rw;
 
 	/*
 	 * We want to find out whether @mod uses async during init.  Clear
@@ -3235,10 +3352,10 @@ static noinline int do_init_module(struct module *mod)
 	mod_tree_remove_init(mod);
 	disable_ro_nx(&mod->init_layout);
 	module_arch_freeing_init(mod);
-	mod->init_layout.base = NULL;
-	mod->init_layout.size = 0;
-	mod->init_layout.ro_size = 0;
-	mod->init_layout.text_size = 0;
+	mod->init_layout.base_rx = NULL;
+	mod->init_layout.base_rw = NULL;
+	mod->init_layout.size_rx = 0;
+	mod->init_layout.size_rw = 0;
 	/*
 	 * We want to free module_init, but be aware that kallsyms may be
 	 * walking this with preempt disabled.  In all the failure paths, we
@@ -3544,7 +3661,8 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	 */
 	ftrace_release_mod(mod);
 	/* Free lock-classes; relies on the preceding sync_rcu() */
-	lockdep_free_key_range(mod->core_layout.base, mod->core_layout.size);
+	lockdep_free_key_range(mod->core_layout.base_rw, mod->core_layout.size_rw);
+	lockdep_free_key_range(mod->core_layout.base_rx, mod->core_layout.size_rx);
 
 	module_deallocate(mod, info);
  free_copy:
@@ -3632,10 +3750,16 @@ static const char *get_ksymbol(struct module *mod,
 	struct mod_kallsyms *kallsyms = rcu_dereference_sched(mod->kallsyms);
 
 	/* At worse, next value is at end of module */
-	if (within_module_init(addr, mod))
-		nextval = (unsigned long)mod->init_layout.base+mod->init_layout.text_size;
+	if (within_module_rx(addr, &mod->init_layout))
+		nextval = (unsigned long)mod->init_layout.base_rx+mod->init_layout.size_rx;
+	else if (within_module_rw(addr, &mod->init_layout))
+		nextval = (unsigned long)mod->init_layout.base_rw+mod->init_layout.size_rw;
+	else if (within_module_rx(addr, &mod->core_layout))
+		nextval = (unsigned long)mod->core_layout.base_rx+mod->core_layout.size_rx;
+	else if (within_module_rw(addr, &mod->core_layout))
+		nextval = (unsigned long)mod->core_layout.base_rw+mod->core_layout.size_rw;
 	else
-		nextval = (unsigned long)mod->core_layout.base+mod->core_layout.text_size;
+		return NULL;
 
 	/* Scan for closest preceding symbol, and next symbol. (ELF
 	   starts real symbols at 1). */
@@ -3888,7 +4012,7 @@ static int m_show(struct seq_file *m, void *p)
 		return 0;
 
 	seq_printf(m, "%s %u",
-		   mod->name, mod->init_layout.size + mod->core_layout.size);
+		   mod->name, mod->init_layout.size_rx + mod->init_layout.size_rw + mod->core_layout.size_rx + mod->core_layout.size_rw);
 	print_unload_info(m, mod);
 
 	/* Informative for users. */
@@ -3897,7 +4021,7 @@ static int m_show(struct seq_file *m, void *p)
 		   mod->state == MODULE_STATE_COMING ? "Loading" :
 		   "Live");
 	/* Used by oprofile and other similar tools. */
-	seq_printf(m, " 0x%pK", mod->core_layout.base);
+	seq_printf(m, " 0x%pK 0x%pK", mod->core_layout.base_rx, mod->core_layout.base_rw);
 
 	/* Taints info */
 	if (mod->taints)
@@ -3994,7 +4118,8 @@ struct module *__module_address(unsigned long addr)
 {
 	struct module *mod;
 
-	if (addr < module_addr_min || addr > module_addr_max)
+	if ((addr < module_addr_min_rx || addr > module_addr_max_rx) &&
+	    (addr < module_addr_min_rw || addr > module_addr_max_rw))
 		return NULL;
 
 	module_assert_mutex_or_preempt();
@@ -4037,11 +4162,21 @@ bool is_module_text_address(unsigned long addr)
  */
 struct module *__module_text_address(unsigned long addr)
 {
-	struct module *mod = __module_address(addr);
+	struct module *mod;
+
+#ifdef CONFIG_X86_32
+	addr = ktla_ktva(addr);
+#endif
+
+	if (addr < module_addr_min_rx || addr > module_addr_max_rx)
+		return NULL;
+
+	mod = __module_address(addr);
+
 	if (mod) {
 		/* Make sure it's within the text section. */
-		if (!within(addr, mod->init_layout.base, mod->init_layout.text_size)
-		    && !within(addr, mod->core_layout.base, mod->core_layout.text_size))
+		if (!within_module_rx(addr, &mod->init_layout)
+		    && !within_module_rx(addr, &mod->core_layout))
 			mod = NULL;
 	}
 	return mod;

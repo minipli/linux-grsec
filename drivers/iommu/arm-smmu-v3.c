@@ -1562,7 +1562,7 @@ static int arm_smmu_domain_finalise(struct iommu_domain *domain)
 		.iommu_dev	= smmu->dev,
 	};
 
-	pgtbl_ops = alloc_io_pgtable_ops(fmt, &pgtbl_cfg, smmu_domain);
+	pgtbl_ops = alloc_io_pgtable(fmt, &pgtbl_cfg, smmu_domain);
 	if (!pgtbl_ops)
 		return -ENOMEM;
 

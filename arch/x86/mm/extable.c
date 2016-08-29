@@ -1,5 +1,6 @@
 #include <linux/module.h>
 #include <asm/uaccess.h>
+#include <asm/boot.h>
 
 typedef bool (*ex_handler_t)(const struct exception_table_entry *,
 			    struct pt_regs *, int);
@@ -7,12 +8,25 @@ typedef bool (*ex_handler_t)(const struct exception_table_entry *,
 static inline unsigned long
 ex_fixup_addr(const struct exception_table_entry *x)
 {
-	return (unsigned long)&x->fixup + x->fixup;
+	unsigned long reloc = 0;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	reloc = ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
+	return (unsigned long)&x->fixup + x->fixup + reloc;
 }
+
 static inline ex_handler_t
 ex_fixup_handler(const struct exception_table_entry *x)
 {
-	return (ex_handler_t)((unsigned long)&x->handler + x->handler);
+	unsigned long reloc = 0;
+
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	reloc = ____LOAD_PHYSICAL_ADDR - LOAD_PHYSICAL_ADDR;
+#endif
+
+	return (ex_handler_t)((unsigned long)&x->handler + x->handler + reloc);
 }
 
 bool ex_handler_default(const struct exception_table_entry *fixup,
@@ -61,7 +75,7 @@ int fixup_exception(struct pt_regs *regs, int trapnr)
 	ex_handler_t handler;
 
 #ifdef CONFIG_PNPBIOS
-	if (unlikely(SEGMENT_IS_PNP_CODE(regs->cs))) {
+	if (unlikely(!v8086_mode(regs) && SEGMENT_IS_PNP_CODE(regs->cs))) {
 		extern u32 pnp_bios_fault_eip, pnp_bios_fault_esp;
 		extern u32 pnp_bios_is_utter_crap;
 		pnp_bios_is_utter_crap = 1;
