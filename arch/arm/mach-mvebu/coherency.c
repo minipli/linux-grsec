@@ -163,7 +163,7 @@ exit:
 
 /*
  * This ioremap hook is used on Armada 375/38x to ensure that all MMIO
- * areas are mapped as MT_UNCACHED instead of MT_DEVICE. This is
+ * areas are mapped as MT_UNCACHED_RW instead of MT_DEVICE. This is
  * needed for the HW I/O coherency mechanism to work properly without
  * deadlock.
  */
@@ -171,7 +171,7 @@ static void __iomem *
 armada_wa_ioremap_caller(phys_addr_t phys_addr, size_t size,
 			 unsigned int mtype, void *caller)
 {
-	mtype = MT_UNCACHED;
+	mtype = MT_UNCACHED_RW;
 	return __arm_ioremap_caller(phys_addr, size, mtype, caller);
 }
 

@@ -3214,8 +3214,8 @@ int i915_ggtt_init_hw(struct drm_device *dev)
 	/* GMADR is the PCI mmio aperture into the global GTT. */
 	DRM_INFO("Memory usable by graphics device = %lluM\n",
 		 ggtt->base.total >> 20);
-	DRM_DEBUG_DRIVER("GMADR size = %lldM\n", ggtt->mappable_end >> 20);
-	DRM_DEBUG_DRIVER("GTT stolen size = %zdM\n", ggtt->stolen_size >> 20);
+	DRM_DEBUG_DRIVER("GMADR size = %lluM\n", ggtt->mappable_end >> 20);
+	DRM_DEBUG_DRIVER("GTT stolen size = %lluM\n", ggtt->stolen_size >> 20);
 #ifdef CONFIG_INTEL_IOMMU
 	if (intel_iommu_gfx_mapped)
 		DRM_INFO("VT-d active for gfx access\n");

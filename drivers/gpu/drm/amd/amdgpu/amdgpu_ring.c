@@ -414,7 +414,12 @@ static int amdgpu_debugfs_ring_info(struct seq_file *m, void *data)
 	return 0;
 }
 
-static struct drm_info_list amdgpu_debugfs_ring_info_list[AMDGPU_MAX_RINGS];
+static drm_info_list_no_const amdgpu_debugfs_ring_info_list[AMDGPU_MAX_RINGS] __read_only = {
+	[0 ... AMDGPU_MAX_RINGS - 1] = {
+		.show = amdgpu_debugfs_ring_info,
+		.driver_features = 0,
+	}
+};
 static char amdgpu_debugfs_ring_names[AMDGPU_MAX_RINGS][32];
 
 #endif
@@ -425,7 +430,7 @@ static int amdgpu_debugfs_ring_init(struct amdgpu_device *adev,
 #if defined(CONFIG_DEBUG_FS)
 	unsigned offset = (uint8_t*)ring - (uint8_t*)adev;
 	unsigned i;
-	struct drm_info_list *info;
+	drm_info_list_no_const *info;
 	char *name;
 
 	for (i = 0; i < ARRAY_SIZE(amdgpu_debugfs_ring_info_list); ++i) {
@@ -440,8 +445,6 @@ static int amdgpu_debugfs_ring_init(struct amdgpu_device *adev,
 	name = &amdgpu_debugfs_ring_names[i][0];
 	sprintf(name, "amdgpu_ring_%s", ring->name);
 	info->name = name;
-	info->show = amdgpu_debugfs_ring_info;
-	info->driver_features = 0;
 	info->data = (void*)(uintptr_t)offset;
 
 	return amdgpu_debugfs_add_files(adev, info, 1);

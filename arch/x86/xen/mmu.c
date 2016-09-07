@@ -1939,7 +1939,14 @@ void __init xen_setup_kernel_pagetable(pgd_t *pgd, unsigned long max_pfn)
 		 * L3_k[511] -> level2_fixmap_pgt */
 		convert_pfn_mfn(level3_kernel_pgt);
 
+		convert_pfn_mfn(level3_vmalloc_start_pgt[0]);
+		convert_pfn_mfn(level3_vmalloc_start_pgt[1]);
+		convert_pfn_mfn(level3_vmalloc_start_pgt[2]);
+		convert_pfn_mfn(level3_vmalloc_start_pgt[3]);
+		convert_pfn_mfn(level3_vmalloc_end_pgt);
+		convert_pfn_mfn(level3_vmemmap_pgt);
 		/* L3_k[511][506] -> level1_fixmap_pgt */
+		/* L3_k[511][507] -> level1_vsyscall_pgt */
 		convert_pfn_mfn(level2_fixmap_pgt);
 	}
 	/* We get [511][511] and have Xen's version of level2_kernel_pgt */
@@ -1969,11 +1976,25 @@ void __init xen_setup_kernel_pagetable(pgd_t *pgd, unsigned long max_pfn)
 		set_page_prot(init_level4_pgt, PAGE_KERNEL_RO);
 		set_page_prot(level3_ident_pgt, PAGE_KERNEL_RO);
 		set_page_prot(level3_kernel_pgt, PAGE_KERNEL_RO);
+		set_page_prot(level3_vmalloc_start_pgt[0], PAGE_KERNEL_RO);
+		set_page_prot(level3_vmalloc_start_pgt[1], PAGE_KERNEL_RO);
+		set_page_prot(level3_vmalloc_start_pgt[2], PAGE_KERNEL_RO);
+		set_page_prot(level3_vmalloc_start_pgt[3], PAGE_KERNEL_RO);
+		set_page_prot(level3_vmalloc_end_pgt, PAGE_KERNEL_RO);
+		set_page_prot(level3_vmemmap_pgt, PAGE_KERNEL_RO);
 		set_page_prot(level3_user_vsyscall, PAGE_KERNEL_RO);
 		set_page_prot(level2_ident_pgt, PAGE_KERNEL_RO);
+		set_page_prot(level2_vmemmap_pgt, PAGE_KERNEL_RO);
 		set_page_prot(level2_kernel_pgt, PAGE_KERNEL_RO);
 		set_page_prot(level2_fixmap_pgt, PAGE_KERNEL_RO);
-		set_page_prot(level1_fixmap_pgt, PAGE_KERNEL_RO);
+		set_page_prot(level1_modules_pgt[0], PAGE_KERNEL_RO);
+		set_page_prot(level1_modules_pgt[1], PAGE_KERNEL_RO);
+		set_page_prot(level1_modules_pgt[2], PAGE_KERNEL_RO);
+		set_page_prot(level1_modules_pgt[3], PAGE_KERNEL_RO);
+		set_page_prot(level1_fixmap_pgt[0], PAGE_KERNEL_RO);
+		set_page_prot(level1_fixmap_pgt[1], PAGE_KERNEL_RO);
+		set_page_prot(level1_fixmap_pgt[2], PAGE_KERNEL_RO);
+		set_page_prot(level1_vsyscall_pgt, PAGE_KERNEL_RO);
 
 		/* Pin down new L4 */
 		pin_pagetable_pfn(MMUEXT_PIN_L4_TABLE,
@@ -2384,6 +2405,7 @@ static void __init xen_post_allocator_init(void)
 	pv_mmu_ops.set_pud = xen_set_pud;
 #if CONFIG_PGTABLE_LEVELS == 4
 	pv_mmu_ops.set_pgd = xen_set_pgd;
+	pv_mmu_ops.set_pgd_batched = xen_set_pgd;
 #endif
 
 	/* This will work as long as patching hasn't happened yet
@@ -2413,6 +2435,10 @@ static void xen_leave_lazy_mmu(void)
 	preempt_enable();
 }
 
+static void xen_pte_update(struct mm_struct *mm, unsigned long addr, pte_t *ptep)
+{
+}
+
 static const struct pv_mmu_ops xen_mmu_ops __initconst = {
 	.read_cr2 = xen_read_cr2,
 	.write_cr2 = xen_write_cr2,
@@ -2425,7 +2451,7 @@ static const struct pv_mmu_ops xen_mmu_ops __initconst = {
 	.flush_tlb_single = xen_flush_tlb_single,
 	.flush_tlb_others = xen_flush_tlb_others,
 
-	.pte_update = paravirt_nop,
+	.pte_update = xen_pte_update,
 
 	.pgd_alloc = xen_pgd_alloc,
 	.pgd_free = xen_pgd_free,
@@ -2462,6 +2488,7 @@ static const struct pv_mmu_ops xen_mmu_ops __initconst = {
 	.pud_val = PV_CALLEE_SAVE(xen_pud_val),
 	.make_pud = PV_CALLEE_SAVE(xen_make_pud),
 	.set_pgd = xen_set_pgd_hyper,
+	.set_pgd_batched = xen_set_pgd_hyper,
 
 	.alloc_pud = xen_alloc_pmd_init,
 	.release_pud = xen_release_pmd_init,

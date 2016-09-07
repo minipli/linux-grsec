@@ -1187,7 +1187,7 @@ struct ib_sge {
 
 struct ib_cqe {
 	void (*done)(struct ib_cq *cq, struct ib_wc *wc);
-};
+} __no_const;
 
 struct ib_send_wr {
 	struct ib_send_wr      *next;

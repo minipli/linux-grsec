@@ -1495,7 +1495,7 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
-static struct rtnl_link_ops geneve_link_ops __read_mostly = {
+static struct rtnl_link_ops geneve_link_ops = {
 	.kind		= "geneve",
 	.maxtype	= IFLA_GENEVE_MAX,
 	.policy		= geneve_policy,
@@ -1561,7 +1561,7 @@ static int geneve_netdevice_event(struct notifier_block *unused,
 	return NOTIFY_DONE;
 }
 
-static struct notifier_block geneve_notifier_block __read_mostly = {
+static struct notifier_block geneve_notifier_block = {
 	.notifier_call = geneve_netdevice_event,
 };
 
