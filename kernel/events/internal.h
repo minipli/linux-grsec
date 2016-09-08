@@ -123,10 +123,10 @@ static inline unsigned long perf_aux_size(struct ring_buffer *rb)
 	return rb->aux_nr_pages << PAGE_SHIFT;
 }
 
-#define DEFINE_OUTPUT_COPY(func_name, memcpy_func)			\
+#define DEFINE_OUTPUT_COPY(func_name, memcpy_func, user)		\
 static inline unsigned long						\
 func_name(struct perf_output_handle *handle,				\
-	  const void *buf, unsigned long len)				\
+	  const void user *buf, unsigned long len)			\
 {									\
 	unsigned long size, written;					\
 									\
@@ -159,7 +159,7 @@ memcpy_common(void *dst, const void *src, unsigned long n)
 	return 0;
 }
 
-DEFINE_OUTPUT_COPY(__output_copy, memcpy_common)
+DEFINE_OUTPUT_COPY(__output_copy, memcpy_common, )
 
 static inline unsigned long
 memcpy_skip(void *dst, const void *src, unsigned long n)
@@ -167,7 +167,7 @@ memcpy_skip(void *dst, const void *src, unsigned long n)
 	return 0;
 }
 
-DEFINE_OUTPUT_COPY(__output_skip, memcpy_skip)
+DEFINE_OUTPUT_COPY(__output_skip, memcpy_skip, )
 
 #ifndef arch_perf_out_copy_user
 #define arch_perf_out_copy_user arch_perf_out_copy_user
@@ -185,7 +185,7 @@ arch_perf_out_copy_user(void *dst, const void *src, unsigned long n)
 }
 #endif
 
-DEFINE_OUTPUT_COPY(__output_copy_user, arch_perf_out_copy_user)
+DEFINE_OUTPUT_COPY(__output_copy_user, arch_perf_out_copy_user, __user)
 
 /* Callchain handling */
 extern struct perf_callchain_entry *
