@@ -68,6 +68,12 @@ static struct cftype hugetlb_files[HUGE_MAX_HSTATE][5] = {
 	[1] = CFTYPE_INIT(1),
 # endif
 # if HUGE_MAX_HSTATE > 2
+	[2] = CFTYPE_INIT(2),
+# endif
+# if HUGE_MAX_HSTATE > 3
+	[3] = CFTYPE_INIT(3),
+# endif
+# if HUGE_MAX_HSTATE > 4
 #  error PaX: add more initializers...
 # endif
 
@@ -86,6 +92,12 @@ struct hstate hstates[HUGE_MAX_HSTATE] = {
 	HSTATE_INIT(1),
 # endif
 # if HUGE_MAX_HSTATE > 2
+	HSTATE_INIT(2),
+# endif
+# if HUGE_MAX_HSTATE > 3
+	HSTATE_INIT(3),
+# endif
+# if HUGE_MAX_HSTATE > 4
 #  error PaX: add more initializers...
 # endif
 

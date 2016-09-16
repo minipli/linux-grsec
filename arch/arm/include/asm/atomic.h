@@ -305,10 +305,7 @@ ATOMIC_OP(xor, ^=, eor)
 #undef __ATOMIC_OP
 
 #define atomic_xchg(v, new) (xchg(&((v)->counter), new))
-static inline int atomic_xchg_unchecked(atomic_unchecked_t *v, int new)
-{
-	return xchg_relaxed(&v->counter, new);
-}
+#define atomic_xchg_unchecked(v, new) (xchg_unchecked(&((v)->counter), new))
 
 #define atomic_inc(v)		atomic_add(1, v)
 static inline void atomic_inc_unchecked(atomic_unchecked_t *v)
@@ -567,13 +564,12 @@ atomic64_cmpxchg_relaxed(atomic64_t *ptr, long long old, long long new)
 #define atomic64_cmpxchg_unchecked	atomic64_cmpxchg_unchecked_relaxed
 
 static inline long long
-atomic64_cmpxchg_unchecked_relaxed(atomic64_unchecked_t *ptr, long long old,
-					long long new)
+atomic64_cmpxchg_unchecked_relaxed(atomic64_unchecked_t *ptr, long long old, long long new)
 {
 	long long oldval;
 	unsigned long res;
 
-	smp_mb();
+	prefetchw(&ptr->counter);
 
 	do {
 		__asm__ __volatile__("@ atomic64_cmpxchg_unchecked\n"
@@ -586,8 +582,6 @@ atomic64_cmpxchg_unchecked_relaxed(atomic64_unchecked_t *ptr, long long old,
 		: "r" (&ptr->counter), "r" (old), "r" (new)
 		: "cc");
 	} while (res);
-
-	smp_mb();
 
 	return oldval;
 }
