@@ -19,6 +19,7 @@
 #include <linux/linkage.h>
 #include <asm/inst.h>
 #include <asm/frame.h>
+#include <asm/alternative-asm.h>
 
 .data
 
@@ -90,6 +91,7 @@ __clmul_gf128mul_ble:
 	psrlq $1, T2
 	pxor T2, T1
 	pxor T1, DATA
+	pax_force_retaddr
 	ret
 ENDPROC(__clmul_gf128mul_ble)
 
@@ -104,6 +106,7 @@ ENTRY(clmul_ghash_mul)
 	PSHUFB_XMM BSWAP DATA
 	movups DATA, (%rdi)
 	FRAME_END
+	pax_force_retaddr
 	ret
 ENDPROC(clmul_ghash_mul)
 
@@ -133,5 +136,6 @@ ENTRY(clmul_ghash_update)
 	movups DATA, (%rdi)
 .Lupdate_just_ret:
 	FRAME_END
+	pax_force_retaddr
 	ret
 ENDPROC(clmul_ghash_update)

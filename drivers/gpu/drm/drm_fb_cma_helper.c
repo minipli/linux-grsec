@@ -322,7 +322,7 @@ static int drm_fbdev_cma_defio_init(struct fb_info *fbi,
 				    struct drm_gem_cma_object *cma_obj)
 {
 	struct fb_deferred_io *fbdefio;
-	struct fb_ops *fbops;
+	fb_ops_no_const *fbops;
 
 	/*
 	 * Per device structures are needed because:
@@ -333,6 +333,7 @@ static int drm_fbdev_cma_defio_init(struct fb_info *fbi,
 	fbops = kzalloc(sizeof(*fbops), GFP_KERNEL);
 	if (!fbdefio || !fbops) {
 		kfree(fbdefio);
+		kfree(fbops);
 		return -ENOMEM;
 	}
 
@@ -348,7 +349,7 @@ static int drm_fbdev_cma_defio_init(struct fb_info *fbi,
 	fbdefio->deferred_io = drm_fb_helper_deferred_io;
 	fbi->fbdefio = fbdefio;
 	fb_deferred_io_init(fbi);
-	fbi->fbops->fb_mmap = drm_fbdev_cma_deferred_io_mmap;
+	fbops->fb_mmap = drm_fbdev_cma_deferred_io_mmap;
 
 	return 0;
 }
