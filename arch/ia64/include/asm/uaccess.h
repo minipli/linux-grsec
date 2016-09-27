@@ -70,6 +70,7 @@
 	 && ((segment).seg == KERNEL_DS.seg						\
 	     || likely(REGION_OFFSET((unsigned long) (addr)) < RGN_MAP_LIMIT)));	\
 })
+#define access_ok_noprefault(type, addr, size) access_ok((type), (addr), (size))
 #define access_ok(type, addr, size)	__access_ok((addr), (size), get_fs())
 
 /*
@@ -241,12 +242,24 @@ extern unsigned long __must_check __copy_user (void __user *to, const void __use
 static inline unsigned long
 __copy_to_user (void __user *to, const void *from, unsigned long count)
 {
+	if (count > INT_MAX)
+		return count;
+
+	if (!__builtin_constant_p(count))
+		check_object_size(from, count, true);
+
 	return __copy_user(to, (__force void __user *) from, count);
 }
 
 static inline unsigned long
 __copy_from_user (void *to, const void __user *from, unsigned long count)
 {
+	if (count > INT_MAX)
+		return count;
+
+	if (!__builtin_constant_p(count))
+		check_object_size(to, count, false);
+
 	return __copy_user((__force void __user *) to, from, count);
 }
 
@@ -256,19 +269,22 @@ __copy_from_user (void *to, const void __user *from, unsigned long count)
 ({											\
 	void __user *__cu_to = (to);							\
 	const void *__cu_from = (from);							\
-	long __cu_len = (n);								\
+	unsigned long __cu_len = (n);							\
 											\
-	if (__access_ok(__cu_to, __cu_len, get_fs()))					\
+	if (__cu_len <= INT_MAX && __access_ok(__cu_to, __cu_len, get_fs())) {		\
+		check_object_size(__cu_from, __cu_len, true);				\
 		__cu_len = __copy_user(__cu_to, (__force void __user *) __cu_from, __cu_len);	\
+	}										\
 	__cu_len;									\
 })
 
 static inline unsigned long
 copy_from_user(void *to, const void __user *from, unsigned long n)
 {
-	if (likely(__access_ok(from, n, get_fs())))
-		n = __copy_user((__force void __user *) to, from, n);
-	else
+	if (likely(__access_ok(from, n, get_fs()))) {
+		check_object_size(to, n, false);
+		n = __copy_user((void __force_user *) to, from, n);
+	} else if ((long)n > 0)
 		memset(to, 0, n);
 	return n;
 }
@@ -339,11 +355,13 @@ extern unsigned long __strnlen_user (const char __user *, long);
 	__su_ret;						\
 })
 
-#define ARCH_HAS_RELATIVE_EXTABLE
+/* Generic code can't deal with the location-relative format that we use for compactness.  */
+#define ARCH_HAS_SORT_EXTABLE
+#define ARCH_HAS_SEARCH_EXTABLE
 
 struct exception_table_entry {
-	int insn;	/* location-relative address of insn this fixup is for */
-	int fixup;	/* location-relative continuation addr.; if bit 2 is set, r9 is set to 0 */
+	int addr;	/* location-relative address of insn this fixup is for */
+	int cont;	/* location-relative continuation addr.; if bit 2 is set, r9 is set to 0 */
 };
 
 extern void ia64_handle_exception (struct pt_regs *regs, const struct exception_table_entry *e);

@@ -1659,12 +1659,10 @@ sfw_startup(void)
 	INIT_LIST_HEAD(&sfw_data.fw_zombie_rpcs);
 	INIT_LIST_HEAD(&sfw_data.fw_zombie_sessions);
 
-	brw_init_test_client();
 	brw_init_test_service();
 	rc = sfw_register_test(&brw_test_service, &brw_test_client);
 	LASSERT(!rc);
 
-	ping_init_test_client();
 	ping_init_test_service();
 	rc = sfw_register_test(&ping_test_service, &ping_test_client);
 	LASSERT(!rc);
