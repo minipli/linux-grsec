@@ -1072,7 +1072,9 @@ int tmio_mmc_host_probe(struct tmio_mmc_host *_host,
 		goto host_free;
 	}
 
-	tmio_mmc_ops.start_signal_voltage_switch = _host->start_signal_voltage_switch;
+	pax_open_kernel();
+	const_cast(tmio_mmc_ops.start_signal_voltage_switch) = _host->start_signal_voltage_switch;
+	pax_close_kernel();
 	mmc->ops = &tmio_mmc_ops;
 
 	mmc->caps |= MMC_CAP_4_BIT_DATA | pdata->capabilities;

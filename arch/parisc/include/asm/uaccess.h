@@ -221,14 +221,14 @@ static inline unsigned long __must_check copy_from_user(void *to,
                                           const void __user *from,
                                           unsigned long n)
 {
-        int sz = __compiletime_object_size(to);
+        size_t sz = __compiletime_object_size(to);
         unsigned long ret = n;
 
-        if (likely(sz == -1 || !__builtin_constant_p(n) || sz >= n))
+        if (likely(sz == (size_t)-1 || !__builtin_constant_p(n) || sz >= n))
                 ret = __copy_from_user(to, from, n);
         else
                 copy_from_user_overflow();
-	if (unlikely(ret))
+	if (unlikely(ret && (long)ret > 0))
 		memset(to + (n - ret), 0, ret);
         return ret;
 }
