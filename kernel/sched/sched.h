@@ -641,7 +641,10 @@ struct rq {
 	unsigned long cpu_capacity;
 	unsigned long cpu_capacity_orig;
 
-	struct callback_head *balance_callback;
+	struct balance_callback {
+		struct balance_callback *next;
+		void (*func)(struct rq *rq);
+	} *balance_callback;
 
 	unsigned char idle_balance;
 	/* For active balancing */
@@ -787,7 +790,7 @@ extern int migrate_swap(struct task_struct *, struct task_struct *);
 
 static inline void
 queue_balance_callback(struct rq *rq,
-		       struct callback_head *head,
+		       struct balance_callback *head,
 		       void (*func)(struct rq *rq))
 {
 	lockdep_assert_held(&rq->lock);
@@ -795,7 +798,7 @@ queue_balance_callback(struct rq *rq,
 	if (unlikely(head->next))
 		return;
 
-	head->func = (void (*)(struct callback_head *))func;
+	head->func = func;
 	head->next = rq->balance_callback;
 	rq->balance_callback = head;
 }
@@ -1249,7 +1252,7 @@ struct sched_class {
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	void (*task_move_group) (struct task_struct *p);
 #endif
-};
+} __do_const;
 
 static inline void put_prev_task(struct rq *rq, struct task_struct *prev)
 {
@@ -1319,7 +1322,7 @@ extern struct dl_bandwidth def_dl_bandwidth;
 extern void init_dl_bandwidth(struct dl_bandwidth *dl_b, u64 period, u64 runtime);
 extern void init_dl_task_timer(struct sched_dl_entity *dl_se);
 
-unsigned long to_ratio(u64 period, u64 runtime);
+unsigned long __attribute_const__ to_ratio(u64 period, u64 runtime);
 
 extern void init_entity_runnable_average(struct sched_entity *se);
 extern void post_init_entity_util_avg(struct sched_entity *se);

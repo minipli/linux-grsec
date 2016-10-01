@@ -51,7 +51,7 @@ void task_mem(struct seq_file *m, struct mm_struct *mm)
 	else
 		bytes += kobjsize(mm);
 	
-	if (current->fs && current->fs->users > 1)
+	if (current->fs && atomic_read(&current->fs->users) > 1)
 		sbytes += kobjsize(current->fs);
 	else
 		bytes += kobjsize(current->fs);
@@ -142,7 +142,7 @@ static int is_stack(struct proc_maps_private *priv,
 			stack = vma_is_stack_for_task(vma, task);
 		rcu_read_unlock();
 	}
-	return stack;
+	return stack || (vma->vm_flags & (VM_GROWSDOWN | VM_GROWSUP));
 }
 
 /*
@@ -183,7 +183,7 @@ static int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma,
 
 	if (file) {
 		seq_pad(m, ' ');
-		seq_file_path(m, file, "");
+		seq_file_path(m, file, "\n\\");
 	} else if (mm && is_stack(priv, vma, is_pid)) {
 		seq_pad(m, ' ');
 		seq_printf(m, "[stack]");

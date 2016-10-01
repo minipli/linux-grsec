@@ -619,7 +619,18 @@ void __init init_mem_mapping(void)
 	early_ioremap_page_table_range_init();
 #endif
 
+#ifdef CONFIG_PAX_PER_CPU_PGD
+	clone_pgd_range(get_cpu_pgd(0, kernel) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+	clone_pgd_range(get_cpu_pgd(0, user) + KERNEL_PGD_BOUNDARY,
+			swapper_pg_dir + KERNEL_PGD_BOUNDARY,
+			KERNEL_PGD_PTRS);
+	load_cr3(get_cpu_pgd(0, kernel));
+#else
 	load_cr3(swapper_pg_dir);
+#endif
+
 	__flush_tlb_all();
 
 	early_memtest(0, max_pfn_mapped << PAGE_SHIFT);
@@ -637,7 +648,13 @@ void __init init_mem_mapping(void)
  */
 int devmem_is_allowed(unsigned long pagenr)
 {
-	if (pagenr < 256)
+	if (!pagenr)
+		return 1;
+#ifdef CONFIG_VM86
+	if (pagenr < (ISA_START_ADDRESS >> PAGE_SHIFT))
+		return 1;
+#endif
+	if ((ISA_START_ADDRESS >> PAGE_SHIFT) <= pagenr && pagenr < (ISA_END_ADDRESS >> PAGE_SHIFT))
 		return 1;
 	if (iomem_is_exclusive(pagenr << PAGE_SHIFT))
 		return 0;
