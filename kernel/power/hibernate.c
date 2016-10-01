@@ -305,8 +305,10 @@ static int create_image(int platform_mode)
 	if (error)
 		printk(KERN_ERR "PM: Error %d creating hibernation image\n",
 			error);
-	if (!in_suspend)
+	if (!in_suspend) {
 		events_check_enabled = false;
+		clear_free_pages();
+	}
 
 	platform_leave(platform_mode);
 

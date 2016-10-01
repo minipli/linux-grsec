@@ -694,7 +694,7 @@ static int hdmi_dbg_show(struct seq_file *s, void *data)
 	return 0;
 }
 
-static struct drm_info_list hdmi_debugfs_files[] = {
+static drm_info_list_no_const hdmi_debugfs_files[] __read_only = {
 	{ "hdmi", hdmi_dbg_show, 0, NULL },
 };
 
@@ -709,8 +709,10 @@ static int hdmi_debugfs_init(struct sti_hdmi *hdmi, struct drm_minor *minor)
 {
 	unsigned int i;
 
+	pax_open_kernel();
 	for (i = 0; i < ARRAY_SIZE(hdmi_debugfs_files); i++)
 		hdmi_debugfs_files[i].data = hdmi;
+	pax_close_kernel();
 
 	return drm_debugfs_create_files(hdmi_debugfs_files,
 					ARRAY_SIZE(hdmi_debugfs_files),

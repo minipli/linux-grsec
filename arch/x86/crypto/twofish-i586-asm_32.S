@@ -220,7 +220,7 @@
 	xor	%esi,		d ## D;\
 	ror	$1,		d ## D;
 
-ENTRY(twofish_enc_blk)
+RAP_ENTRY(twofish_enc_blk)
 	push	%ebp			/* save registers according to calling convention*/
 	push    %ebx
 	push    %esi
@@ -276,7 +276,7 @@ ENTRY(twofish_enc_blk)
 	ret
 ENDPROC(twofish_enc_blk)
 
-ENTRY(twofish_dec_blk)
+RAP_ENTRY(twofish_dec_blk)
 	push	%ebp			/* save registers according to calling convention*/
 	push    %ebx
 	push    %esi
