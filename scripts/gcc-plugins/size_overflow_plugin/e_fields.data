@@ -2798,7 +2798,6 @@ e_stat_ethoc_bd_9775 stat ethoc_bd 0 9775 &e_dvb_ringbuffer_write_fndecl_9775
 e_vmlfb_alloc_vram_area_fndecl_9776 vmlfb_alloc_vram_area fndecl 2 9776 NULL
 e_ctl_dev_e752x_dev_info_9777 ctl_dev e752x_dev_info 0 9777 NULL
 e_encap_hlen_ip_tunnel_9779 encap_hlen ip_tunnel 0 9779 NULL
-e_cnt_bictcp_9780 cnt bictcp 0 9780 NULL
 e_valuelen_xfs_da_args_9786 valuelen xfs_da_args 0 9786 NULL
 e_max_pll_op_freq_hz_smiapp_pll_limits_9787 max_pll_op_freq_hz smiapp_pll_limits 0 9787 NULL
 e_irda_recvmsg_dgram_fndecl_9788 irda_recvmsg_dgram fndecl 3 9788 NULL nohasharray
@@ -5814,7 +5813,6 @@ e_dma_limit_tg3_20210 dma_limit tg3 0 20210 NULL
 e_objlayout_write_done_fndecl_20211 objlayout_write_done fndecl 2 20211 NULL
 e_compr_fill_fndecl_20214 compr_fill fndecl 2 20214 NULL
 e_rx_buffer_size_freelQ_20218 rx_buffer_size freelQ 0 20218 NULL
-e_epoch_start_bictcp_20220 epoch_start bictcp 0 20220 NULL
 e_sound_write_fndecl_20221 sound_write fndecl 3 20221 NULL nohasharray
 e_dmah_acm_wb_20221 dmah acm_wb 0 20221 &e_sound_write_fndecl_20221
 e_produce_va_vmci_qp_page_file_info_20224 produce_va vmci_qp_page_file_info 0 20224 NULL
@@ -6470,7 +6468,6 @@ e_tlv_put_string_fndecl_22356 tlv_put_string fndecl 0-4 22356 NULL
 e____pskb_trim_fndecl_22365 ___pskb_trim fndecl 2 22365 NULL
 e_kvm_gfn_to_hva_cache_init_fndecl_22367 kvm_gfn_to_hva_cache_init fndecl 3 22367 NULL
 e_digi_write_fndecl_22372 digi_write fndecl 4 22372 NULL
-e_last_max_cwnd_bictcp_22377 last_max_cwnd bictcp 0 22377 NULL
 e_nr_luns_rrpc_22379 nr_luns rrpc 0 22379 NULL
 e_exposure_step_sd_22386 exposure_step sd 0 22386 NULL
 e_ecc_size_persistent_ram_ecc_info_22390 ecc_size persistent_ram_ecc_info 0 22390 NULL
@@ -9755,8 +9752,7 @@ e_btt_do_bvec_fndecl_33585 btt_do_bvec fndecl 0 33585 NULL
 e_qed_sriov_enable_fndecl_33587 qed_sriov_enable fndecl 2 33587 NULL
 e_bfad_iocmd_port_cfg_mode_fndecl_33588 bfad_iocmd_port_cfg_mode fndecl 0 33588 NULL
 e_i2c_readregs_fndecl_33590 i2c_readregs fndecl 5 33590 NULL
-e_bic_K_bictcp_33591 bic_K bictcp 0 33591 NULL nohasharray
-e_hci_mgmt_cmd_fndecl_33591 hci_mgmt_cmd fndecl 4 33591 &e_bic_K_bictcp_33591
+e_hci_mgmt_cmd_fndecl_33591 hci_mgmt_cmd fndecl 4 33591 NULL
 e_fsl_spi_bufs_fndecl_33599 fsl_spi_bufs fndecl 0 33599 NULL
 e___kfifo_out_fndecl_33612 __kfifo_out fndecl 0-3 33612 NULL nohasharray
 e_drm_prime_pages_to_sg_fndecl_33612 drm_prime_pages_to_sg fndecl 2 33612 &e___kfifo_out_fndecl_33612
@@ -13379,7 +13375,6 @@ e_musb_readb_vardecl_46199 musb_readb vardecl 0 46199 NULL nohasharray
 e_snd_interval_refine_set_fndecl_46199 snd_interval_refine_set fndecl 2 46199 &e_musb_readb_vardecl_46199
 e_efx_rx_packet_gro_fndecl_46201 efx_rx_packet_gro fndecl 3 46201 NULL
 e_count_raw_sock_46204 count raw_sock 0 46204 NULL
-e_rtt_us_ack_sample_46205 rtt_us ack_sample 0 46205 NULL
 e_bfad_iocmd_boot_query_fndecl_46207 bfad_iocmd_boot_query fndecl 0 46207 NULL
 e_hdrlen_ip_beet_phdr_46210 hdrlen ip_beet_phdr 0 46210 NULL nohasharray
 e_sync_request_md_personality_46210 sync_request md_personality 0 46210 &e_hdrlen_ip_beet_phdr_46210
@@ -18130,8 +18125,7 @@ e_send_cmd_fndecl_62899 send_cmd fndecl 0 62899 NULL
 e_midi_in_ports_snd_efw_62902 midi_in_ports snd_efw 0 62902 NULL
 e_xfs_init_local_fork_fndecl_62904 xfs_init_local_fork fndecl 4 62904 NULL
 e_arg2__cdrp_cmd_62906 arg2 _cdrp_cmd 0 62906 NULL
-e_length_uvc_buffer_62907 length uvc_buffer 0 62907 NULL nohasharray
-e_srtt_us_tcp_sock_62907 srtt_us tcp_sock 0 62907 &e_length_uvc_buffer_62907
+e_length_uvc_buffer_62907 length uvc_buffer 0 62907 NULL
 e_buflen_xdr_buf_62914 buflen xdr_buf 0 62914 NULL
 e_elf_core_extra_phdrs_fndecl_62917 elf_core_extra_phdrs fndecl 0 62917 NULL
 e_out_size_ide_task_request_s_62924 out_size ide_task_request_s 0 62924 NULL
@@ -18546,8 +18540,7 @@ e_cw_putcs_fndecl_64311 cw_putcs fndecl 4-5-6 64311 NULL
 e___wa_xfer_setup_fndecl_64316 __wa_xfer_setup fndecl 0 64316 NULL
 e_tx_padding_usbatm_driver_64341 tx_padding usbatm_driver 0 64341 NULL
 e_vif_data_size_ieee80211_hw_64342 vif_data_size ieee80211_hw 0 64342 NULL
-e_apply_vma_lock_flags_fndecl_64346 apply_vma_lock_flags fndecl 2-1 64346 NULL nohasharray
-e_tcp_cwnd_bictcp_64346 tcp_cwnd bictcp 0 64346 &e_apply_vma_lock_flags_fndecl_64346
+e_apply_vma_lock_flags_fndecl_64346 apply_vma_lock_flags fndecl 2-1 64346 NULL
 e_part_start_hfsplus_sb_info_64347 part_start hfsplus_sb_info 0 64347 NULL
 e_bytesperline_au0828_dev_64350 bytesperline au0828_dev 0 64350 NULL
 e_r592_test_fifo_empty_fndecl_64351 r592_test_fifo_empty fndecl 0 64351 NULL
@@ -18569,7 +18562,6 @@ e_oobretlen_mtd_oob_ops_64400 oobretlen mtd_oob_ops 0 64400 NULL
 e_init_data_si_sm_handlers_64406 init_data si_sm_handlers 0 64406 NULL
 e___blk_end_request_cur_fndecl_64409 __blk_end_request_cur fndecl 2 64409 NULL nohasharray
 e___get_user_pages_unlocked_fndecl_64409 __get_user_pages_unlocked fndecl 3 64409 &e___blk_end_request_cur_fndecl_64409
-e_bic_origin_point_bictcp_64414 bic_origin_point bictcp 0 64414 NULL
 e_cdc_ncm_max_dgram_size_fndecl_64415 cdc_ncm_max_dgram_size fndecl 0 64415 NULL
 e_l2tp_xmit_skb_fndecl_64419 l2tp_xmit_skb fndecl 3 64419 NULL
 e_ssid_len_cfg80211_ap_settings_64422 ssid_len cfg80211_ap_settings 0 64422 NULL
