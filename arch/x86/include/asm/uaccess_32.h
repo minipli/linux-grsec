@@ -34,9 +34,14 @@ unsigned long __must_check __copy_from_user_ll_nocache_nozero
  * The caller should also make sure he pins the user space address
  * so that we don't result in page fault and sleep.
  */
-static __always_inline unsigned long __must_check
+static __always_inline __size_overflow(3) unsigned long __must_check
 __copy_to_user_inatomic(void __user *to, const void *from, unsigned long n)
 {
+	if ((long)n < 0)
+		return n;
+
+	check_object_size(from, n, true);
+
 	return __copy_to_user_ll(to, from, n);
 }
 
@@ -59,12 +64,16 @@ static __always_inline unsigned long __must_check
 __copy_to_user(void __user *to, const void *from, unsigned long n)
 {
 	might_fault();
+
 	return __copy_to_user_inatomic(to, from, n);
 }
 
-static __always_inline unsigned long
+static __always_inline __size_overflow(3) unsigned long
 __copy_from_user_inatomic(void *to, const void __user *from, unsigned long n)
 {
+	if ((long)n < 0)
+		return n;
+
 	return __copy_from_user_ll_nozero(to, from, n);
 }
 
@@ -95,6 +104,12 @@ static __always_inline unsigned long
 __copy_from_user(void *to, const void __user *from, unsigned long n)
 {
 	might_fault();
+
+	if ((long)n < 0)
+		return n;
+
+	check_object_size(to, n, false);
+
 	if (__builtin_constant_p(n)) {
 		unsigned long ret;
 
@@ -123,6 +138,10 @@ static __always_inline unsigned long __copy_from_user_nocache(void *to,
 				const void __user *from, unsigned long n)
 {
 	might_fault();
+
+	if ((long)n < 0)
+		return n;
+
 	if (__builtin_constant_p(n)) {
 		unsigned long ret;
 
@@ -151,7 +170,10 @@ static __always_inline unsigned long
 __copy_from_user_inatomic_nocache(void *to, const void __user *from,
 				  unsigned long n)
 {
-       return __copy_from_user_ll_nocache_nozero(to, from, n);
+	if ((long)n < 0)
+		return n;
+
+	return __copy_from_user_ll_nocache_nozero(to, from, n);
 }
 
 #endif /* _ASM_X86_UACCESS_32_H */

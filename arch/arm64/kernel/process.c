@@ -63,7 +63,7 @@ EXPORT_SYMBOL(__stack_chk_guard);
 /*
  * Function pointers to optional machine specific functions
  */
-void (*pm_power_off)(void);
+void (* pm_power_off)(void);
 EXPORT_SYMBOL_GPL(pm_power_off);
 
 void (*arm_pm_restart)(enum reboot_mode reboot_mode, const char *cmd);
@@ -109,7 +109,7 @@ void machine_shutdown(void)
  * activity (executing tasks, handling interrupts). smp_send_stop()
  * achieves this.
  */
-void machine_halt(void)
+void __noreturn machine_halt(void)
 {
 	local_irq_disable();
 	smp_send_stop();
@@ -122,12 +122,13 @@ void machine_halt(void)
  * achieves this. When the system power is turned off, it will take all CPUs
  * with it.
  */
-void machine_power_off(void)
+void __noreturn machine_power_off(void)
 {
 	local_irq_disable();
 	smp_send_stop();
 	if (pm_power_off)
 		pm_power_off();
+	while(1);
 }
 
 /*
@@ -139,7 +140,7 @@ void machine_power_off(void)
  * executing pre-reset code, and using RAM that the primary CPU's code wishes
  * to use. Implementing such co-ordination would be essentially impossible.
  */
-void machine_restart(char *cmd)
+void __noreturn machine_restart(char *cmd)
 {
 	/* Disable interrupts first */
 	local_irq_disable();
