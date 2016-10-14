@@ -16,7 +16,7 @@ $(addprefix $(objtree)/$(obj)/,$(addsuffix .h,$(1))): $(addprefix $(src)/,$(adds
 	$$(call if_changed,build_size_overflow_hash)
 endef
 
-size_overflow_hash_tables := e_fns e_fields e_fptrs e_vars aux disable
+size_overflow_hash_tables := e_fns e_fields e_fptrs e_vars e_aux disable
 $(foreach h,$(size_overflow_hash_tables),$(eval $(call build_size_overflow_hash,$(h))))
 
 clean-files += *.so

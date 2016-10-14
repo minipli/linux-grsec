@@ -2054,15 +2054,23 @@ void pax_report_fault(struct pt_regs *regs, void *pc, void *sp)
 #endif
 
 #ifdef CONFIG_PAX_REFCOUNT
+static DEFINE_RATELIMIT_STATE(refcount_ratelimit, 15 * HZ, 3);
+
 void pax_report_refcount_overflow(struct pt_regs *regs)
 {
-	printk(KERN_EMERG "PAX: refcount overflow detected in: %s:%d, uid/euid: %u/%u\n", current->comm, task_pid_nr(current),
-			from_kuid_munged(&init_user_ns, current_uid()), from_kuid_munged(&init_user_ns, current_euid()));
+	force_sig_info(SIGKILL, SEND_SIG_FORCED, current);
+
+	if (!__ratelimit(&refcount_ratelimit))
+		return;
+
+	pr_emerg("PAX: refcount overflow detected in: %s:%d, uid/euid: %u/%u\n",
+		 current->comm, task_pid_nr(current),
+		 from_kuid_munged(&init_user_ns, current_uid()),
+		 from_kuid_munged(&init_user_ns, current_euid()));
 	print_symbol(KERN_EMERG "PAX: refcount overflow occured at: %s\n", instruction_pointer(regs));
 	preempt_disable();
 	show_regs(regs);
 	preempt_enable();
-	force_sig_info(SIGKILL, SEND_SIG_FORCED, current);
 }
 #endif
 
@@ -2114,11 +2122,15 @@ static noinline int check_stack_object(unsigned long obj, unsigned long len)
 #endif
 }
 
+static DEFINE_RATELIMIT_STATE(usercopy_ratelimit, 15 * HZ, 3);
+
 static __noreturn void pax_report_usercopy(const void *ptr, unsigned long len, bool to_user, const char *type)
 {
-	printk(KERN_EMERG "PAX: kernel memory %s attempt detected %s %p (%s) (%lu bytes)\n",
-		to_user ? "leak" : "overwrite", to_user ? "from" : "to", ptr, type ? : "unknown", len);
-	dump_stack();
+	if (__ratelimit(&usercopy_ratelimit)) {
+		pr_emerg("PAX: kernel memory %s attempt detected %s %p (%s) (%lu bytes)\n",
+			 to_user ? "leak" : "overwrite", to_user ? "from" : "to", ptr, type ? : "unknown", len);
+		dump_stack();
+	}
 	do_group_exit(SIGKILL);
 }
 #endif

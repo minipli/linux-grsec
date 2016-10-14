@@ -19,8 +19,8 @@
 
 #include "size_overflow.h"
 
-#include "aux.h"
 #include "disable.h"
+#include "e_aux.h"
 #include "e_fields.h"
 #include "e_fns.h"
 #include "e_fptrs.h"
