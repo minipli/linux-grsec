@@ -72,6 +72,7 @@
 #define  atomic_add_return_relaxed	atomic_add_return
 #define  atomic_add_return_acquire	atomic_add_return
 #define  atomic_add_return_release	atomic_add_return
+#define atomic_add_return_unchecked_relaxed	atomic_add_return_unchecked
 
 #else /* atomic_add_return_relaxed */
 
@@ -88,6 +89,11 @@
 #ifndef atomic_add_return
 #define  atomic_add_return(...)						\
 	__atomic_op_fence(atomic_add_return, __VA_ARGS__)
+#endif
+
+#ifndef atomic_add_return_unchecked
+#define  atomic_add_return_unchecked(...)				\
+	__atomic_op_fence(atomic_add_return_unchecked, __VA_ARGS__)
 #endif
 #endif /* atomic_add_return_relaxed */
 
@@ -112,6 +118,11 @@
 #ifndef atomic_inc_return
 #define  atomic_inc_return(...)						\
 	__atomic_op_fence(atomic_inc_return, __VA_ARGS__)
+#endif
+
+#ifndef atomic_inc_return_unchecked
+#define  atomic_inc_return_unchecked(...)				\
+	__atomic_op_fence(atomic_inc_return_unchecked, __VA_ARGS__)
 #endif
 #endif /* atomic_inc_return_relaxed */
 
@@ -241,6 +252,11 @@
 #define  atomic64_add_return(...)					\
 	__atomic_op_fence(atomic64_add_return, __VA_ARGS__)
 #endif
+
+#ifndef atomic64_add_return_unchecked
+#define  atomic64_add_return_unchecked(...)				\
+	__atomic_op_fence(atomic64_add_return_unchecked, __VA_ARGS__)
+#endif
 #endif /* atomic64_add_return_relaxed */
 
 /* atomic64_inc_return_relaxed */
@@ -264,6 +280,11 @@
 #ifndef atomic64_inc_return
 #define  atomic64_inc_return(...)					\
 	__atomic_op_fence(atomic64_inc_return, __VA_ARGS__)
+#endif
+
+#ifndef atomic64_inc_return_unchecked
+#define  atomic64_inc_return_unchecked(...)				\
+	__atomic_op_fence(atomic64_inc_return_unchecked, __VA_ARGS__)
 #endif
 #endif /* atomic64_inc_return_relaxed */
 
@@ -338,6 +359,11 @@
 #define  atomic64_xchg(...)						\
 	__atomic_op_fence(atomic64_xchg, __VA_ARGS__)
 #endif
+
+#ifndef atomic64_xchg_unchecked
+#define  atomic64_xchg_unchecked(...)					\
+	__atomic_op_fence(atomic64_xchg_unchecked, __VA_ARGS__)
+#endif
 #endif /* atomic64_xchg_relaxed */
 
 /* atomic64_cmpxchg_relaxed */
@@ -361,6 +387,11 @@
 #ifndef atomic64_cmpxchg
 #define  atomic64_cmpxchg(...)						\
 	__atomic_op_fence(atomic64_cmpxchg, __VA_ARGS__)
+#endif
+
+#ifndef atomic64_cmpxchg_unchecked
+#define  atomic64_cmpxchg_unchecked(...)				\
+	__atomic_op_fence(atomic64_cmpxchg_unchecked, __VA_ARGS__)
 #endif
 #endif /* atomic64_cmpxchg_relaxed */
 
@@ -431,6 +462,10 @@
 #ifndef xchg
 #define  xchg(...)			__atomic_op_fence(xchg, __VA_ARGS__)
 #endif
+
+#ifndef xchg_unchecked
+#define  xchg_unchecked(...)		__atomic_op_fence(xchg_unchecked, __VA_ARGS__)
+#endif
 #endif /* xchg_relaxed */
 
 /**
@@ -442,7 +477,7 @@
  * Atomically adds @a to @v, so long as @v was not already @u.
  * Returns non-zero if @v was not @u, and zero otherwise.
  */
-static inline int atomic_add_unless(atomic_t *v, int a, int u)
+static inline int __intentional_overflow(-1) atomic_add_unless(atomic_t *v, int a, int u)
 {
 	return __atomic_add_unless(v, a, u) != u;
 }
