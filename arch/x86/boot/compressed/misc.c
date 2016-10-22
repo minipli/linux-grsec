@@ -175,13 +175,17 @@ static void handle_relocations(void *output, unsigned long output_len)
 	int *reloc;
 	unsigned long delta, map, ptr;
 	unsigned long min_addr = (unsigned long)output;
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	unsigned long max_addr = min_addr + (VO___bss_start - VO__text - __PAGE_OFFSET - ____LOAD_PHYSICAL_ADDR);
+#else
 	unsigned long max_addr = min_addr + (VO___bss_start - VO__text);
+#endif
 
 	/*
 	 * Calculate the delta between where vmlinux was linked to load
 	 * and where it was actually loaded.
 	 */
-	delta = min_addr - LOAD_PHYSICAL_ADDR;
+	delta = min_addr - ____LOAD_PHYSICAL_ADDR;
 	if (!delta) {
 		debug_putstr("No relocation needed... ");
 		return;
@@ -263,7 +267,7 @@ static void parse_elf(void *output)
 	Elf32_Ehdr ehdr;
 	Elf32_Phdr *phdrs, *phdr;
 #endif
-	void *dest;
+	void *dest, *prev;
 	int i;
 
 	memcpy(&ehdr, output, sizeof(ehdr));
@@ -290,11 +294,14 @@ static void parse_elf(void *output)
 		case PT_LOAD:
 #ifdef CONFIG_RELOCATABLE
 			dest = output;
-			dest += (phdr->p_paddr - LOAD_PHYSICAL_ADDR);
+			dest += (phdr->p_paddr - ____LOAD_PHYSICAL_ADDR);
 #else
 			dest = (void *)(phdr->p_paddr);
 #endif
 			memmove(dest, output + phdr->p_offset, phdr->p_filesz);
+			if (i)
+				memset(prev, 0xff, dest - prev);
+			prev = dest + phdr->p_filesz;
 			break;
 		default: /* Ignore other PT_* */ break;
 		}
@@ -326,7 +333,11 @@ asmlinkage __visible void *extract_kernel(void *rmode, memptr heap,
 				  unsigned char *output,
 				  unsigned long output_len)
 {
+#if defined(CONFIG_X86_32) && defined(CONFIG_PAX_KERNEXEC)
+	const unsigned long kernel_total_size = VO__end - VO__text - __PAGE_OFFSET - ____LOAD_PHYSICAL_ADDR;
+#else
 	const unsigned long kernel_total_size = VO__end - VO__text;
+#endif
 	unsigned char *output_orig = output;
 
 	/* Retain x86 boot parameters pointer passed from startup_32/64. */
@@ -381,7 +392,7 @@ asmlinkage __visible void *extract_kernel(void *rmode, memptr heap,
 		error("Destination address too large");
 #endif
 #ifndef CONFIG_RELOCATABLE
-	if ((unsigned long)output != LOAD_PHYSICAL_ADDR)
+	if ((unsigned long)output != ____LOAD_PHYSICAL_ADDR)
 		error("Wrong destination address");
 #endif
 
