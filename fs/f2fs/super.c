@@ -54,7 +54,7 @@ char *fault_name[FAULT_MAX] = {
 static void f2fs_build_fault_attr(unsigned int rate)
 {
 	if (rate) {
-		atomic_set(&f2fs_fault.inject_ops, 0);
+		atomic_set_unchecked(&f2fs_fault.inject_ops, 0);
 		f2fs_fault.inject_rate = rate;
 		f2fs_fault.inject_type = (1 << FAULT_MAX) - 1;
 	} else {
