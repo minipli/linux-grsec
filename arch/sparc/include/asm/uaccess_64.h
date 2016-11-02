@@ -10,6 +10,7 @@
 #include <linux/compiler.h>
 #include <linux/string.h>
 #include <linux/thread_info.h>
+#include <linux/kernel.h>
 #include <asm/asi.h>
 #include <asm/spitfire.h>
 #include <asm-generic/uaccess-unaligned.h>
@@ -72,6 +73,11 @@ static inline bool __chk_range_not_ok(unsigned long addr, unsigned long size, un
 })
 
 static inline int __access_ok(const void __user * addr, unsigned long size)
+{
+	return 1;
+}
+
+static inline int access_ok_noprefault(int type, const void __user * addr, unsigned long size)
 {
 	return 1;
 }
@@ -212,6 +218,9 @@ copy_from_user(void *to, const void __user *from, unsigned long size)
 {
 	unsigned long ret;
 
+	if ((long)size < 0 || size > INT_MAX)
+		return size;
+
 	check_object_size(to, size, false);
 
 	ret = ___copy_from_user(to, from, size);
@@ -231,6 +240,9 @@ static inline unsigned long __must_check
 copy_to_user(void __user *to, const void *from, unsigned long size)
 {
 	unsigned long ret;
+
+	if ((long)size < 0 || size > INT_MAX)
+		return size;
 
 	check_object_size(from, size, true);
 

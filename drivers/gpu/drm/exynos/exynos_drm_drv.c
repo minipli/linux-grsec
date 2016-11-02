@@ -548,6 +548,11 @@ static int compare_dev(struct device *dev, void *data)
 	return dev == (struct device *)data;
 }
 
+static int platform_bus_type_match(struct device *dev, void *data)
+{
+	return platform_bus_type.match(dev, data);
+}
+
 static struct component_match *exynos_drm_match_add(struct device *dev)
 {
 	struct component_match *match = NULL;
@@ -562,7 +567,7 @@ static struct component_match *exynos_drm_match_add(struct device *dev)
 
 		while ((d = bus_find_device(&platform_bus_type, p,
 					    &info->driver->driver,
-					    (void *)platform_bus_type.match))) {
+					    platform_bus_type_match))) {
 			put_device(p);
 			component_match_add(dev, &match, compare_dev, d);
 			p = d;
@@ -593,7 +598,6 @@ static int exynos_drm_platform_probe(struct platform_device *pdev)
 	struct component_match *match;
 
 	pdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
-	exynos_drm_driver.num_ioctls = ARRAY_SIZE(exynos_ioctls);
 
 	match = exynos_drm_match_add(&pdev->dev);
 	if (IS_ERR(match))
@@ -631,7 +635,7 @@ static struct device *exynos_drm_get_dma_device(void)
 
 		while ((dev = bus_find_device(&platform_bus_type, NULL,
 					    &info->driver->driver,
-					    (void *)platform_bus_type.match))) {
+					    platform_bus_type_match))) {
 			put_device(dev);
 			return dev;
 		}
@@ -652,7 +656,7 @@ static void exynos_drm_unregister_devices(void)
 
 		while ((dev = bus_find_device(&platform_bus_type, NULL,
 					    &info->driver->driver,
-					    (void *)platform_bus_type.match))) {
+					    platform_bus_type_match))) {
 			put_device(dev);
 			platform_device_unregister(to_platform_device(dev));
 		}

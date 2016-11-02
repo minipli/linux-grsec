@@ -2334,7 +2334,7 @@ int generic_file_mmap(struct file * file, struct vm_area_struct * vma)
 	struct address_space *mapping = file->f_mapping;
 
 	if (!mapping->a_ops->readpage)
-		return -ENOEXEC;
+		return -ENODEV;
 	file_accessed(file);
 	vma->vm_ops = &generic_file_vm_ops;
 	return 0;
@@ -2377,7 +2377,7 @@ static struct page *wait_on_page_read(struct page *page)
 
 static struct page *do_read_cache_page(struct address_space *mapping,
 				pgoff_t index,
-				int (*filler)(void *, struct page *),
+				filler_t *filler,
 				void *data,
 				gfp_t gfp)
 {
@@ -2484,7 +2484,7 @@ out:
  */
 struct page *read_cache_page(struct address_space *mapping,
 				pgoff_t index,
-				int (*filler)(void *, struct page *),
+				filler_t *filler,
 				void *data)
 {
 	return do_read_cache_page(mapping, index, filler, data, mapping_gfp_mask(mapping));
@@ -2506,7 +2506,7 @@ struct page *read_cache_page_gfp(struct address_space *mapping,
 				pgoff_t index,
 				gfp_t gfp)
 {
-	filler_t *filler = (filler_t *)mapping->a_ops->readpage;
+	filler_t *filler = mapping->a_ops->readpage;
 
 	return do_read_cache_page(mapping, index, filler, NULL, gfp);
 }
