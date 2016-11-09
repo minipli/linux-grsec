@@ -50,6 +50,13 @@ struct restart_block {
 
 extern long do_no_restart_syscall(struct restart_block *parm);
 
+enum {
+	BAD_STACK = -1,
+	NOT_STACK = 0,
+	GOOD_STACK,
+	GOOD_FRAME,
+};
+
 #include <linux/bitops.h>
 #include <asm/thread_info.h>
 
@@ -106,11 +113,11 @@ static inline int test_ti_thread_flag(struct thread_info *ti, int flag)
 #define tif_need_resched() test_thread_flag(TIF_NEED_RESCHED)
 
 #ifndef CONFIG_HAVE_ARCH_WITHIN_STACK_FRAMES
-static inline int arch_within_stack_frames(const void * const stack,
-					   const void * const stackend,
-					   const void *obj, unsigned long len)
+static inline int arch_within_stack_frames(unsigned long stack,
+					   unsigned long stackend,
+					   unsigned long obj, unsigned long len)
 {
-	return 0;
+	return GOOD_STACK;
 }
 #endif
 

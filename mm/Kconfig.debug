@@ -10,6 +10,7 @@ config PAGE_EXTENSION
 config DEBUG_PAGEALLOC
 	bool "Debug page memory allocations"
 	depends on DEBUG_KERNEL
+	depends on !PAX_MEMORY_SANITIZE
 	depends on !HIBERNATION || ARCH_SUPPORTS_DEBUG_PAGEALLOC && !PPC && !SPARC
 	depends on !KMEMCHECK
 	select PAGE_EXTENSION
@@ -75,8 +76,6 @@ config PAGE_POISONING_ZERO
 	   due to sanitization but the zeroing at free means that it is
 	   no longer necessary to write zeros when GFP_ZERO is used on
 	   allocation.
-
-	   Enabling page poisoning with this option will disable hibernation
 
 	   If unsure, say N
 	bool
