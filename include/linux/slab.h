@@ -15,6 +15,7 @@
 #include <linux/types.h>
 #include <linux/workqueue.h>
 
+#include <linux/err.h>
 
 /*
  * Flags to pass to kmem_cache_create().
@@ -23,6 +24,13 @@
 #define SLAB_CONSISTENCY_CHECKS	0x00000100UL	/* DEBUG: Perform (expensive) checks on alloc/free */
 #define SLAB_RED_ZONE		0x00000400UL	/* DEBUG: Red zone objs in a cache */
 #define SLAB_POISON		0x00000800UL	/* DEBUG: Poison objects */
+
+#ifdef CONFIG_PAX_MEMORY_SANITIZE
+#define SLAB_NO_SANITIZE	0x00001000UL	/* PaX: Do not sanitize objs on free */
+#else
+#define SLAB_NO_SANITIZE	0x00000000UL
+#endif
+
 #define SLAB_HWCACHE_ALIGN	0x00002000UL	/* Align objs on cache lines */
 #define SLAB_CACHE_DMA		0x00004000UL	/* Use GFP_DMA memory */
 #define SLAB_STORE_USER		0x00010000UL	/* DEBUG: Store the last owner for bug hunting */
@@ -109,10 +117,13 @@
  * ZERO_SIZE_PTR can be passed to kfree though in the same way that NULL can.
  * Both make kfree a no-op.
  */
-#define ZERO_SIZE_PTR ((void *)16)
+#define ZERO_SIZE_PTR				\
+({						\
+	BUILD_BUG_ON(!(MAX_ERRNO & ~PAGE_MASK));\
+	(void *)(-MAX_ERRNO-1L);		\
+})
 
-#define ZERO_OR_NULL_PTR(x) ((unsigned long)(x) <= \
-				(unsigned long)ZERO_SIZE_PTR)
+#define ZERO_OR_NULL_PTR(x) ((unsigned long)(x) - 1 >= (unsigned long)ZERO_SIZE_PTR - 1)
 
 #include <linux/kmemleak.h>
 #include <linux/kasan.h>
@@ -126,6 +137,9 @@ bool slab_is_available(void);
 
 struct kmem_cache *kmem_cache_create(const char *, size_t, size_t,
 			unsigned long,
+			void (*)(void *));
+struct kmem_cache *kmem_cache_create_usercopy(const char *, size_t, size_t,
+			unsigned long, size_t, size_t,
 			void (*)(void *));
 void kmem_cache_destroy(struct kmem_cache *);
 int kmem_cache_shrink(struct kmem_cache *);
@@ -146,6 +160,11 @@ void memcg_destroy_kmem_caches(struct mem_cgroup *);
 		sizeof(struct __struct), __alignof__(struct __struct),\
 		(__flags), NULL)
 
+#define KMEM_CACHE_USERCOPY(__struct, __flags, __field) kmem_cache_create_usercopy(#__struct,\
+		sizeof(struct __struct), __alignof__(struct __struct),\
+		(__flags), offsetof(struct __struct, __field),\
+		sizeof(((struct __struct *)0)->__field), NULL)
+
 /*
  * Common kmalloc functions provided by all allocators
  */
@@ -154,18 +173,10 @@ void * __must_check krealloc(const void *, size_t, gfp_t);
 void kfree(const void *);
 void kzfree(const void *);
 size_t ksize(const void *);
+bool is_usercopy_object(const void *ptr);
 
-#ifdef CONFIG_HAVE_HARDENED_USERCOPY_ALLOCATOR
 const char *__check_heap_object(const void *ptr, unsigned long n,
 				struct page *page);
-#else
-static inline const char *__check_heap_object(const void *ptr,
-					      unsigned long n,
-					      struct page *page)
-{
-	return NULL;
-}
-#endif
 
 /*
  * Some archs want to perform DMA into kmalloc caches and need a guaranteed
@@ -276,6 +287,10 @@ extern struct kmem_cache *kmalloc_caches[KMALLOC_SHIFT_HIGH + 1];
 extern struct kmem_cache *kmalloc_dma_caches[KMALLOC_SHIFT_HIGH + 1];
 #endif
 
+#ifdef CONFIG_PAX_USERCOPY
+extern struct kmem_cache *kmalloc_usercopy_caches[KMALLOC_SHIFT_HIGH + 1];
+#endif
+
 /*
  * Figure out which kmalloc slab an allocation of a certain size
  * belongs to.
@@ -284,7 +299,7 @@ extern struct kmem_cache *kmalloc_dma_caches[KMALLOC_SHIFT_HIGH + 1];
  * 2 = 129 .. 192 bytes
  * n = 2^(n-1)+1 .. 2^n
  */
-static __always_inline int kmalloc_index(size_t size)
+static __always_inline __size_overflow(1) int kmalloc_index(size_t size)
 {
 	if (!size)
 		return 0;
@@ -327,7 +342,7 @@ static __always_inline int kmalloc_index(size_t size)
 }
 #endif /* !CONFIG_SLOB */
 
-void *__kmalloc(size_t size, gfp_t flags) __assume_kmalloc_alignment __malloc;
+void *__kmalloc(size_t size, gfp_t flags) __assume_kmalloc_alignment __malloc __alloc_size(1) __size_overflow(1);
 void *kmem_cache_alloc(struct kmem_cache *, gfp_t flags) __assume_slab_alignment __malloc;
 void kmem_cache_free(struct kmem_cache *, void *);
 
@@ -351,10 +366,10 @@ static __always_inline void kfree_bulk(size_t size, void **p)
 }
 
 #ifdef CONFIG_NUMA
-void *__kmalloc_node(size_t size, gfp_t flags, int node) __assume_kmalloc_alignment __malloc;
+void *__kmalloc_node(size_t size, gfp_t flags, int node) __assume_kmalloc_alignment __malloc __alloc_size(1) __size_overflow(1);
 void *kmem_cache_alloc_node(struct kmem_cache *, gfp_t flags, int node) __assume_slab_alignment __malloc;
 #else
-static __always_inline void *__kmalloc_node(size_t size, gfp_t flags, int node)
+static __always_inline void * __alloc_size(1) __size_overflow(1) __kmalloc_node(size_t size, gfp_t flags, int node)
 {
 	return __kmalloc(size, flags);
 }
@@ -567,6 +582,13 @@ struct memcg_cache_params {
 
 int memcg_update_all_caches(int num_memcgs);
 
+extern void kmalloc_array_error(void)
+#if defined(CONFIG_GCOV_KERNEL) && defined(PAX_SIZE_OVERFLOW)
+__compiletime_warning("kmalloc_array called with swapped arguments?");
+#else
+__compiletime_error("kmalloc_array called with swapped arguments?");
+#endif
+
 /**
  * kmalloc_array - allocate memory for an array.
  * @n: number of elements.
@@ -575,6 +597,8 @@ int memcg_update_all_caches(int num_memcgs);
  */
 static inline void *kmalloc_array(size_t n, size_t size, gfp_t flags)
 {
+	if (__builtin_constant_p(n) && !__builtin_constant_p(size))
+		kmalloc_array_error();
 	if (size != 0 && n > SIZE_MAX / size)
 		return NULL;
 	if (__builtin_constant_p(n) && __builtin_constant_p(size))

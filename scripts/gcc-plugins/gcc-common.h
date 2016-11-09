@@ -21,14 +21,20 @@
 #include "rtl.h"
 #include "tm_p.h"
 #include "flags.h"
+//#include "insn-attr.h"
+//#include "insn-config.h"
+//#include "insn-flags.h"
 #include "hard-reg-set.h"
+//#include "recog.h"
 #include "output.h"
 #include "except.h"
 #include "function.h"
 #include "toplev.h"
+//#include "expr.h"
 #include "basic-block.h"
 #include "intl.h"
 #include "ggc.h"
+//#include "regs.h"
 #include "timevar.h"
 
 #include "params.h"
@@ -40,12 +46,18 @@
 #endif
 
 #include "emit-rtl.h"
+//#include "reload.h"
+//#include "ira.h"
+//#include "dwarf2asm.h"
 #include "debug.h"
 #include "target.h"
 #include "langhooks.h"
 #include "cfgloop.h"
+//#include "hosthooks.h"
 #include "cgraph.h"
 #include "opts.h"
+//#include "coverage.h"
+//#include "value-prof.h"
 
 #if BUILDING_GCC_VERSION == 4005
 #include <sys/mman.h>
@@ -57,6 +69,8 @@
 #endif
 
 #if BUILDING_GCC_VERSION >= 4006
+//#include "c-tree.h"
+//#include "cp/cp-tree.h"
 #include "c-family/c-common.h"
 #else
 #include "c-common.h"
@@ -75,8 +89,10 @@
 #endif
 
 #include "diagnostic.h"
+//#include "tree-diagnostic.h"
 #include "tree-dump.h"
 #include "tree-pass.h"
+//#include "df.h"
 #include "predict.h"
 #include "ipa-utils.h"
 
@@ -87,6 +103,7 @@
 #include "internal-fn.h"
 #include "gimple-expr.h"
 #include "gimple-fold.h"
+//#include "diagnostic-color.h"
 #include "context.h"
 #include "tree-ssa-alias.h"
 #include "tree-ssa.h"
@@ -109,7 +126,15 @@
 #include "ssa-iterators.h"
 #endif
 
+//#include "lto/lto.h"
+#if BUILDING_GCC_VERSION >= 4007
+//#include "data-streamer.h"
+#else
+//#include "lto-streamer.h"
+#endif
+//#include "lto-compress.h"
 #if BUILDING_GCC_VERSION >= 5000
+//#include "lto-section-names.h"
 #include "builtins.h"
 #endif
 
@@ -130,6 +155,7 @@ extern void dump_gimple_stmt(pretty_printer *, gimple, int, int);
 #endif
 
 #define __unused __attribute__((__unused__))
+#define __visible __attribute__((visibility("default")))
 
 #define DECL_NAME_POINTER(node) IDENTIFIER_POINTER(DECL_NAME(node))
 #define DECL_NAME_LENGTH(node) IDENTIFIER_LENGTH(DECL_NAME(node))
@@ -165,6 +191,7 @@ static inline bool gimple_call_builtin_p(gimple stmt, enum built_in_function cod
 	fndecl = gimple_call_fndecl(stmt);
 	if (!fndecl || DECL_BUILT_IN_CLASS(fndecl) != BUILT_IN_NORMAL)
 		return false;
+//	print_node(stderr, "pax", fndecl, 4);
 	return DECL_FUNCTION_CODE(fndecl) == code;
 }
 
@@ -284,6 +311,22 @@ static inline struct cgraph_node *cgraph_next_function_with_gimple_body(struct c
 		if (cgraph_function_with_gimple_body_p(node))
 			return node;
 	return NULL;
+}
+
+static inline bool cgraph_for_node_and_aliases(cgraph_node_ptr node, bool (*callback)(cgraph_node_ptr, void *), void *data, bool include_overwritable)
+{
+	cgraph_node_ptr alias;
+
+	if (callback(node, data))
+		return true;
+
+	for (alias = node->same_body; alias; alias = alias->next) {
+		if (include_overwritable || cgraph_function_body_availability(alias) > AVAIL_OVERWRITABLE)
+			if (cgraph_for_node_and_aliases(alias, callback, data, include_overwritable))
+				return true;
+	}
+
+	return false;
 }
 
 #define FOR_EACH_FUNCTION_WITH_GIMPLE_BODY(node) \
@@ -495,6 +538,14 @@ static inline const greturn *as_a_const_greturn(const_gimple stmt)
 
 typedef struct rtx_def rtx_insn;
 
+static inline const char *get_decl_section_name(const_tree decl)
+{
+	if (DECL_SECTION_NAME(decl) == NULL_TREE)
+		return NULL;
+
+	return TREE_STRING_POINTER(DECL_SECTION_NAME(decl));
+}
+
 static inline void set_decl_section_name(tree node, const char *value)
 {
 	if (value)
@@ -608,7 +659,14 @@ inline bool is_a_helper<const gassign *>::test(const_gimple gs)
 #define TODO_verify_stmts TODO_verify_il
 #define TODO_verify_rtl_sharing TODO_verify_il
 
+//#define TREE_INT_CST_HIGH(NODE) ({ TREE_INT_CST_EXT_NUNITS(NODE) > 1 ? (unsigned HOST_WIDE_INT)TREE_INT_CST_ELT(NODE, 1) : 0; })
+
 #define INSN_DELETED_P(insn) (insn)->deleted()
+
+static inline const char *get_decl_section_name(const_tree decl)
+{
+	return DECL_SECTION_NAME(decl);
+}
 
 /* symtab/cgraph related */
 #define debug_cgraph_node(node) (node)->debug()
@@ -618,6 +676,7 @@ inline bool is_a_helper<const gassign *>::test(const_gimple gs)
 #define cgraph_n_nodes symtab->cgraph_count
 #define cgraph_max_uid symtab->cgraph_max_uid
 #define varpool_get_node(decl) varpool_node::get(decl)
+#define dump_varpool_node(file, node) (node)->dump(file)
 
 #define cgraph_create_edge(caller, callee, call_stmt, count, freq, nest) \
 	(caller)->create_edge((callee), (call_stmt), (count), (freq))
@@ -671,6 +730,11 @@ static inline enum availability cgraph_function_body_availability(cgraph_node_pt
 static inline cgraph_node_ptr cgraph_alias_target(cgraph_node_ptr node)
 {
 	return node->get_alias_target();
+}
+
+static inline bool cgraph_for_node_and_aliases(cgraph_node_ptr node, bool (*callback)(cgraph_node_ptr, void *), void *data, bool include_overwritable)
+{
+	return node->call_for_symbol_thunks_and_aliases(callback, data, include_overwritable);
 }
 
 static inline struct cgraph_node_hook_list *cgraph_add_function_insertion_hook(cgraph_node_hook hook, void *data)
