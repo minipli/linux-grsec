@@ -18,6 +18,7 @@ rx_buf_sz_vardecl_r8169_c_9136_vars rx_buf_sz vardecl_r8169.c 0 9136 NULL
 _max_socket_vardecl_x2apic_uv_x_c_9456_vars _max_socket vardecl_x2apic_uv_x.c 0 9456 NULL
 kdb_max_commands_vardecl_kdb_main_c_9529_vars kdb_max_commands vardecl_kdb_main.c 0 9529 NULL
 legacy_count_vardecl_pty_c_9908_vars legacy_count vardecl_pty.c 0 9908 NULL
+max_ptlrpcds_vardecl_ptlrpcd_c_9939_vars max_ptlrpcds vardecl_ptlrpcd.c 0 9939 NULL
 read_buffer_size_vardecl_legousbtower_c_10184_vars read_buffer_size vardecl_legousbtower.c 0 10184 NULL
 agg_buf_sz_vardecl_r8152_c_10254_vars agg_buf_sz vardecl_r8152.c 0 10254 NULL
 dma_rx_num_vardecl_altera_tse_main_c_10728_vars dma_rx_num vardecl_altera_tse_main.c 0 10728 NULL
@@ -72,6 +73,8 @@ num_rcv_urbs_vardecl_usbatm_c_32830_vars num_rcv_urbs vardecl_usbatm.c 0 32830 N
 _min_socket_vardecl_x2apic_uv_x_c_33176_vars _min_socket vardecl_x2apic_uv_x.c 0 33176 NULL
 num_ae_requests_vardecl_33594_vars num_ae_requests vardecl 0 33594 NULL
 blkdev_minors_vardecl_dev_c_34365_vars blkdev_minors vardecl_dev.c 0 34365 NULL
+cpu_npartitions_vardecl_linux_cpu_c_34622_vars cpu_npartitions vardecl_linux-cpu.c 0 34622 NULL
+at_max_vardecl_35692_vars at_max vardecl 0 35692 NULL
 mod_num_sdma_vardecl_35721_vars mod_num_sdma vardecl 0 35721 NULL
 nwriters_stress_vardecl_locktorture_c_36080_vars nwriters_stress vardecl_locktorture.c 0 36080 NULL
 sdma_descq_cnt_vardecl_sdma_c_36526_vars sdma_descq_cnt vardecl_sdma.c 0 36526 NULL

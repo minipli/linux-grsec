@@ -1261,9 +1261,8 @@ MRPROPER_FILES += .config .config.old .version .old_version \
 		  signing_key.pem signing_key.priv signing_key.x509	\
 		  x509.genkey extra_certificates signing_key.x509.keyid	\
 		  signing_key.x509.signer vmlinux-gdb.py \
-		  tools/gcc/size_overflow_plugin/size_overflow_hash_aux.h \
-		  tools/gcc/size_overflow_plugin/size_overflow_hash.h \
-		  tools/gcc/size_overflow_plugin/disable_size_overflow_hash.h
+		  scripts/gcc-plugins/size_overflow_plugin/e_*.h \
+		  scripts/gcc-plugins/size_overflow_plugin/disable.h
 
 # clean - Delete most, but leave enough to build external modules
 #
