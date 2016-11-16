@@ -380,7 +380,7 @@ try_again:
 	if (unlikely(err)) {
 		trace_kfree_skb(skb, udpv6_recvmsg);
 		if (!peeked) {
-			atomic_inc(&sk->sk_drops);
+			atomic_inc_unchecked(&sk->sk_drops);
 			if (is_udp4)
 				UDP_INC_STATS(sock_net(sk), UDP_MIB_INERRORS,
 					      is_udplite);
@@ -647,7 +647,7 @@ csum_error:
 	__UDP6_INC_STATS(sock_net(sk), UDP_MIB_CSUMERRORS, is_udplite);
 drop:
 	__UDP6_INC_STATS(sock_net(sk), UDP_MIB_INERRORS, is_udplite);
-	atomic_inc(&sk->sk_drops);
+	atomic_inc_unchecked(&sk->sk_drops);
 	kfree_skb(skb);
 	return -1;
 }
@@ -728,7 +728,7 @@ start_lookup:
 		}
 		nskb = skb_clone(skb, GFP_ATOMIC);
 		if (unlikely(!nskb)) {
-			atomic_inc(&sk->sk_drops);
+			atomic_inc_unchecked(&sk->sk_drops);
 			__UDP6_INC_STATS(net, UDP_MIB_RCVBUFERRORS,
 					 IS_UDPLITE(sk));
 			__UDP6_INC_STATS(net, UDP_MIB_INERRORS,

@@ -1931,7 +1931,7 @@ u64 hashlen_string(const void *salt, const char *name)
 {
 	unsigned long a = 0, x = 0, y = (unsigned long)salt;
 	unsigned long adata, mask, len;
-	const struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;
+	static const struct word_at_a_time constants = WORD_AT_A_TIME_CONSTANTS;
 
 	len = 0;
 	goto inside;
