@@ -1020,6 +1020,26 @@ static void swsusp_unset_page_forbidden(struct page *page)
 		memory_bm_clear_bit(forbidden_pages_map, page_to_pfn(page));
 }
 
+void clear_free_pages(void)
+{
+	struct memory_bitmap *bm = free_pages_map;
+	unsigned long pfn;
+
+	if (WARN_ON(!(free_pages_map)))
+		return;
+
+	memory_bm_position_reset(bm);
+	pfn = memory_bm_next_pfn(bm);
+	while (pfn != BM_END_OF_MAP) {
+		if (pfn_valid(pfn))
+			clear_highpage(pfn_to_page(pfn));
+
+		pfn = memory_bm_next_pfn(bm);
+	}
+	memory_bm_position_reset(bm);
+	pr_info("PM: free pages cleared after restore\n");
+}
+
 /**
  * mark_nosave_pages - Mark pages that should not be saved.
  * @bm: Memory bitmap.

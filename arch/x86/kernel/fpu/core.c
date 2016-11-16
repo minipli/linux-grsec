@@ -135,7 +135,7 @@ void __kernel_fpu_end(void)
 	struct fpu *fpu = &current->thread.fpu;
 
 	if (fpu->fpregs_active)
-		copy_kernel_to_fpregs(&fpu->state);
+		copy_kernel_to_fpregs(fpu->state);
 	else
 		__fpregs_deactivate_hw();
 
@@ -200,7 +200,7 @@ void fpu__save(struct fpu *fpu)
 	if (fpu->fpregs_active) {
 		if (!copy_fpregs_to_fpstate(fpu)) {
 			if (use_eager_fpu())
-				copy_kernel_to_fpregs(&fpu->state);
+				copy_kernel_to_fpregs(fpu->state);
 			else
 				fpregs_deactivate(fpu);
 		}
@@ -260,7 +260,7 @@ int fpu__copy(struct fpu *dst_fpu, struct fpu *src_fpu)
 	 * leak into the child task:
 	 */
 	if (use_eager_fpu())
-		memset(&dst_fpu->state.xsave, 0, fpu_kernel_xstate_size);
+		memset(&dst_fpu->state->xsave, 0, fpu_kernel_xstate_size);
 
 	/*
 	 * Save current FPU registers directly into the child
@@ -279,11 +279,10 @@ int fpu__copy(struct fpu *dst_fpu, struct fpu *src_fpu)
 	 */
 	preempt_disable();
 	if (!copy_fpregs_to_fpstate(dst_fpu)) {
-		memcpy(&src_fpu->state, &dst_fpu->state,
-		       fpu_kernel_xstate_size);
+		memcpy(src_fpu->state, dst_fpu->state, fpu_kernel_xstate_size);
 
 		if (use_eager_fpu())
-			copy_kernel_to_fpregs(&src_fpu->state);
+			copy_kernel_to_fpregs(src_fpu->state);
 		else
 			fpregs_deactivate(src_fpu);
 	}
@@ -304,7 +303,7 @@ void fpu__activate_curr(struct fpu *fpu)
 	WARN_ON_FPU(fpu != &current->thread.fpu);
 
 	if (!fpu->fpstate_active) {
-		fpstate_init(&fpu->state);
+		fpstate_init(fpu->state);
 		trace_x86_fpu_init_state(fpu);
 
 		trace_x86_fpu_activate_state(fpu);
@@ -332,7 +331,7 @@ void fpu__activate_fpstate_read(struct fpu *fpu)
 		fpu__save(fpu);
 	} else {
 		if (!fpu->fpstate_active) {
-			fpstate_init(&fpu->state);
+			fpstate_init(fpu->state);
 			trace_x86_fpu_init_state(fpu);
 
 			trace_x86_fpu_activate_state(fpu);
@@ -367,7 +366,7 @@ void fpu__activate_fpstate_write(struct fpu *fpu)
 		/* Invalidate any lazy state: */
 		fpu->last_cpu = -1;
 	} else {
-		fpstate_init(&fpu->state);
+		fpstate_init(fpu->state);
 		trace_x86_fpu_init_state(fpu);
 
 		trace_x86_fpu_activate_state(fpu);
@@ -430,7 +429,7 @@ void fpu__current_fpstate_write_end(void)
 	 * an XRSTOR if they are active.
 	 */
 	if (fpregs_active())
-		copy_kernel_to_fpregs(&fpu->state);
+		copy_kernel_to_fpregs(fpu->state);
 
 	/*
 	 * Our update is done and the fpregs/fpstate are in sync
@@ -457,7 +456,7 @@ void fpu__restore(struct fpu *fpu)
 	kernel_fpu_disable();
 	trace_x86_fpu_before_restore(fpu);
 	fpregs_activate(fpu);
-	copy_kernel_to_fpregs(&fpu->state);
+	copy_kernel_to_fpregs(fpu->state);
 	fpu->counter++;
 	trace_x86_fpu_after_restore(fpu);
 	kernel_fpu_enable();
@@ -550,11 +549,11 @@ int fpu__exception_code(struct fpu *fpu, int trap_nr)
 		 * fully reproduce the context of the exception.
 		 */
 		if (boot_cpu_has(X86_FEATURE_FXSR)) {
-			cwd = fpu->state.fxsave.cwd;
-			swd = fpu->state.fxsave.swd;
+			cwd = fpu->state->fxsave.cwd;
+			swd = fpu->state->fxsave.swd;
 		} else {
-			cwd = (unsigned short)fpu->state.fsave.cwd;
-			swd = (unsigned short)fpu->state.fsave.swd;
+			cwd = (unsigned short)fpu->state->fsave.cwd;
+			swd = (unsigned short)fpu->state->fsave.swd;
 		}
 
 		err = swd & ~cwd;
@@ -568,7 +567,7 @@ int fpu__exception_code(struct fpu *fpu, int trap_nr)
 		unsigned short mxcsr = MXCSR_DEFAULT;
 
 		if (boot_cpu_has(X86_FEATURE_XMM))
-			mxcsr = fpu->state.fxsave.mxcsr;
+			mxcsr = fpu->state->fxsave.mxcsr;
 
 		err = ~(mxcsr >> 7) & mxcsr;
 	}
