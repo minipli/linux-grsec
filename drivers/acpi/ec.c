@@ -1559,7 +1559,7 @@ static int ec_correct_ecdt(const struct dmi_system_id *id)
 	return 0;
 }
 
-static struct dmi_system_id ec_dmi_table[] __initdata = {
+static const struct dmi_system_id ec_dmi_table[] __initconst = {
 	{
 	ec_correct_ecdt, "MSI MS-171F", {
 	DMI_MATCH(DMI_SYS_VENDOR, "Micro-Star"),
@@ -1619,7 +1619,7 @@ error:
 	return ret;
 }
 
-static int param_set_event_clearing(const char *val, struct kernel_param *kp)
+static int param_set_event_clearing(const char *val, const struct kernel_param *kp)
 {
 	int result = 0;
 
@@ -1637,7 +1637,7 @@ static int param_set_event_clearing(const char *val, struct kernel_param *kp)
 	return result;
 }
 
-static int param_get_event_clearing(char *buffer, struct kernel_param *kp)
+static int param_get_event_clearing(char *buffer, const struct kernel_param *kp)
 {
 	switch (ec_event_clearing) {
 	case ACPI_EC_EVT_TIMING_STATUS:

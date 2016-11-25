@@ -841,7 +841,7 @@ static int acpi_processor_setup_cstates(struct acpi_processor *pr)
 {
 	int i, count = CPUIDLE_DRIVER_STATE_START;
 	struct acpi_processor_cx *cx;
-	struct cpuidle_state *state;
+	cpuidle_state_no_const *state;
 	struct cpuidle_driver *drv = &acpi_idle_driver;
 
 	if (max_cstate == 0)
@@ -1250,7 +1250,7 @@ static int acpi_processor_setup_lpi_states(struct acpi_processor *pr)
 {
 	int i;
 	struct acpi_lpi_state *lpi;
-	struct cpuidle_state *state;
+	cpuidle_state_no_const *state;
 	struct cpuidle_driver *drv = &acpi_idle_driver;
 
 	if (!pr->flags.has_lpi)
