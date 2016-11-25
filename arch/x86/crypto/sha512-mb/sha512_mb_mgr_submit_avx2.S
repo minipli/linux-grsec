@@ -98,7 +98,7 @@
 # JOB* sha512_mb_mgr_submit_avx2(MB_MGR *state, JOB *job)
 # arg 1 : rcx : state
 # arg 2 : rdx : job
-ENTRY(sha512_mb_mgr_submit_avx2)
+RAP_ENTRY(sha512_mb_mgr_submit_avx2)
 	FRAME_BEGIN
 	push	%rbx
 	push	%r12
