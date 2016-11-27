@@ -50,6 +50,18 @@ ENTRY(startup_xen)
 	mov %_ASM_SI, xen_start_info
 	mov $init_thread_union+THREAD_SIZE, %_ASM_SP
 
+#if defined(CONFIG_X86_32) && defined(CONFIG_SMP)
+	movl $cpu_gdt_table,%edi
+	movl $__per_cpu_load,%eax
+	movw %ax,__KERNEL_PERCPU + 2(%edi)
+	rorl $16,%eax
+	movb %al,__KERNEL_PERCPU + 4(%edi)
+	movb %ah,__KERNEL_PERCPU + 7(%edi)
+	movl $__per_cpu_end - 1,%eax
+	subl $__per_cpu_start,%eax
+	movw %ax,__KERNEL_PERCPU + 0(%edi)
+#endif
+
 	jmp xen_start_kernel
 
 	__FINIT

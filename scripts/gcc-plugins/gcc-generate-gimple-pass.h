@@ -119,7 +119,7 @@ public:
 #endif
 #endif
 
-	virtual opt_pass * clone () { return new _PASS_NAME_PASS(); }
+	virtual opt_pass *clone() { return new _PASS_NAME_PASS(); }
 
 #ifndef NO_EXECUTE
 #if BUILDING_GCC_VERSION >= 5000
