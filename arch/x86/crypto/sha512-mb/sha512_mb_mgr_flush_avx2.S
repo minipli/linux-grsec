@@ -107,7 +107,7 @@ offset = \_offset
 
 # JOB* sha512_mb_mgr_flush_avx2(MB_MGR *state)
 # arg 1 : rcx : state
-ENTRY(sha512_mb_mgr_flush_avx2)
+RAP_ENTRY(sha512_mb_mgr_flush_avx2)
 	FRAME_BEGIN
 	push	%rbx
 
@@ -220,7 +220,7 @@ return_null:
 ENDPROC(sha512_mb_mgr_flush_avx2)
 .align 16
 
-ENTRY(sha512_mb_mgr_get_comp_job_avx2)
+RAP_ENTRY(sha512_mb_mgr_get_comp_job_avx2)
         push    %rbx
 
 	mov     _unused_lanes(state), unused_lanes

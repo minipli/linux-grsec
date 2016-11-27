@@ -16,11 +16,22 @@
 	 * barriers.
 	 */
 
-#define ATOMIC_OP(op)							\
-ENTRY(atomic_##op) /* %o0 = increment, %o1 = atomic_ptr */		\
+#ifdef CONFIG_PAX_REFCOUNT
+#define __REFCOUNT_OP(op) op##cc
+#define __OVERFLOW_IOP tvs	%icc, 6;
+#define __OVERFLOW_XOP tvs	%xcc, 6;
+#else
+#define __REFCOUNT_OP(op) op
+#define __OVERFLOW_IOP
+#define __OVERFLOW_XOP
+#endif
+
+#define __ATOMIC_OP(op, suffix, asm_op, post_op)			\
+ENTRY(atomic_##op##suffix) /* %o0 = increment, %o1 = atomic_ptr */	\
 	BACKOFF_SETUP(%o2);						\
 1:	lduw	[%o1], %g1;						\
-	op	%g1, %o0, %g7;						\
+	asm_op	%g1, %o0, %g7;						\
+	post_op								\
 	cas	[%o1], %g1, %g7;					\
 	cmp	%g1, %g7;						\
 	bne,pn	%icc, BACKOFF_LABEL(2f, 1b);				\
@@ -30,11 +41,15 @@ ENTRY(atomic_##op) /* %o0 = increment, %o1 = atomic_ptr */		\
 2:	BACKOFF_SPIN(%o2, %o3, 1b);					\
 ENDPROC(atomic_##op);							\
 
-#define ATOMIC_OP_RETURN(op)						\
-ENTRY(atomic_##op##_return) /* %o0 = increment, %o1 = atomic_ptr */	\
+#define ATOMIC_OP(op) __ATOMIC_OP(op, , op, ) \
+		      __ATOMIC_OP(op, _unchecked, __REFCOUNT_OP(op), __OVERFLOW_IOP)
+
+#define __ATOMIC_OP_RETURN(op, suffix, asm_op, post_op)			\
+ENTRY(atomic_##op##_return##suffix) /* %o0 = increment, %o1 = atomic_ptr */\
 	BACKOFF_SETUP(%o2);						\
 1:	lduw	[%o1], %g1;						\
-	op	%g1, %o0, %g7;						\
+	asm_op	%g1, %o0, %g7;						\
+	post_op								\
 	cas	[%o1], %g1, %g7;					\
 	cmp	%g1, %g7;						\
 	bne,pn	%icc, BACKOFF_LABEL(2f, 1b);				\
@@ -43,6 +58,9 @@ ENTRY(atomic_##op##_return) /* %o0 = increment, %o1 = atomic_ptr */	\
 	 sra	%g1, 0, %o0;						\
 2:	BACKOFF_SPIN(%o2, %o3, 1b);					\
 ENDPROC(atomic_##op##_return);
+
+#define ATOMIC_OP_RETURN(op) __ATOMIC_OP_RETURN(op, , op, ) \
+			     __ATOMIC_OP_RETURN(op, _unchecked, __REFCOUNT_OP(op), __OVERFLOW_IOP)
 
 #define ATOMIC_FETCH_OP(op)						\
 ENTRY(atomic_fetch_##op) /* %o0 = increment, %o1 = atomic_ptr */	\
@@ -73,13 +91,16 @@ ATOMIC_OPS(xor)
 #undef ATOMIC_OPS
 #undef ATOMIC_FETCH_OP
 #undef ATOMIC_OP_RETURN
+#undef __ATOMIC_OP_RETURN
 #undef ATOMIC_OP
+#undef __ATOMIC_OP
 
-#define ATOMIC64_OP(op)							\
-ENTRY(atomic64_##op) /* %o0 = increment, %o1 = atomic_ptr */		\
+#define __ATOMIC64_OP(op, suffix, asm_op, post_op)			\
+ENTRY(atomic64_##op##suffix) /* %o0 = increment, %o1 = atomic_ptr */	\
 	BACKOFF_SETUP(%o2);						\
 1:	ldx	[%o1], %g1;						\
-	op	%g1, %o0, %g7;						\
+	asm_op	%g1, %o0, %g7;						\
+	post_op								\
 	casx	[%o1], %g1, %g7;					\
 	cmp	%g1, %g7;						\
 	bne,pn	%xcc, BACKOFF_LABEL(2f, 1b);				\
@@ -89,11 +110,15 @@ ENTRY(atomic64_##op) /* %o0 = increment, %o1 = atomic_ptr */		\
 2:	BACKOFF_SPIN(%o2, %o3, 1b);					\
 ENDPROC(atomic64_##op);							\
 
-#define ATOMIC64_OP_RETURN(op)						\
-ENTRY(atomic64_##op##_return) /* %o0 = increment, %o1 = atomic_ptr */	\
+#define ATOMIC64_OP(op) __ATOMIC64_OP(op, , op, ) \
+			__ATOMIC64_OP(op, _unchecked, __REFCOUNT_OP(op), __OVERFLOW_XOP)
+
+#define __ATOMIC64_OP_RETURN(op, suffix, asm_op, post_op)		\
+ENTRY(atomic64_##op##_return##suffix) /* %o0 = increment, %o1 = atomic_ptr */\
 	BACKOFF_SETUP(%o2);						\
 1:	ldx	[%o1], %g1;						\
-	op	%g1, %o0, %g7;						\
+	asm_op	%g1, %o0, %g7;						\
+	post_op								\
 	casx	[%o1], %g1, %g7;					\
 	cmp	%g1, %g7;						\
 	bne,pn	%xcc, BACKOFF_LABEL(2f, 1b);				\
@@ -102,6 +127,9 @@ ENTRY(atomic64_##op##_return) /* %o0 = increment, %o1 = atomic_ptr */	\
 	 op	%g1, %o0, %o0;						\
 2:	BACKOFF_SPIN(%o2, %o3, 1b);					\
 ENDPROC(atomic64_##op##_return);
+
+#define ATOMIC64_OP_RETURN(op) __ATOMIC64_OP_RETURN(op, , op, ) \
+			       __ATOMIC64_OP_RETURN(op, _unchecked, __REFCOUNT_OP(op), __OVERFLOW_XOP)
 
 #define ATOMIC64_FETCH_OP(op)						\
 ENTRY(atomic64_fetch_##op) /* %o0 = increment, %o1 = atomic_ptr */	\
@@ -132,7 +160,12 @@ ATOMIC64_OPS(xor)
 #undef ATOMIC64_OPS
 #undef ATOMIC64_FETCH_OP
 #undef ATOMIC64_OP_RETURN
+#undef __ATOMIC64_OP_RETURN
 #undef ATOMIC64_OP
+#undef __ATOMIC64_OP
+#undef __OVERFLOW_XOP
+#undef __OVERFLOW_IOP
+#undef __REFCOUNT_OP
 
 ENTRY(atomic64_dec_if_positive) /* %o0 = atomic_ptr */
 	BACKOFF_SETUP(%o2)

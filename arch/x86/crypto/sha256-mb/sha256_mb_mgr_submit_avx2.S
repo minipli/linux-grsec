@@ -96,7 +96,7 @@ lane_data	= %r10
 # JOB* sha256_mb_mgr_submit_avx2(MB_MGR *state, JOB_SHA256 *job)
 # arg 1 : rcx : state
 # arg 2 : rdx : job
-ENTRY(sha256_mb_mgr_submit_avx2)
+RAP_ENTRY(sha256_mb_mgr_submit_avx2)
 	FRAME_BEGIN
 	push	%rbx
 	push	%r12
