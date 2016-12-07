@@ -33,9 +33,7 @@
 
 static struct thread_info *pt_regs_to_thread_info(struct pt_regs *regs)
 {
-	unsigned long top_of_stack =
-		(unsigned long)(regs + 1) + TOP_OF_KERNEL_STACK_PADDING;
-	return (struct thread_info *)(top_of_stack - THREAD_SIZE);
+	return current_thread_info();
 }
 
 #ifdef CONFIG_CONTEXT_TRACKING
@@ -47,6 +45,12 @@ __visible inline void enter_from_user_mode(void)
 }
 #else
 static inline void enter_from_user_mode(void) {}
+#endif
+
+#ifdef CONFIG_PAX_MEMORY_STACKLEAK
+asmlinkage void pax_erase_kstack(void);
+#else
+static void pax_erase_kstack(void) {}
 #endif
 
 static void do_audit_syscall_entry(struct pt_regs *regs, u32 arch)
@@ -85,8 +89,10 @@ static long syscall_trace_enter(struct pt_regs *regs)
 		emulated = true;
 
 	if ((emulated || (work & _TIF_SYSCALL_TRACE)) &&
-	    tracehook_report_syscall_entry(regs))
+	    tracehook_report_syscall_entry(regs)) {
+		pax_erase_kstack();
 		return -1L;
+	}
 
 	if (emulated)
 		return -1L;
@@ -121,8 +127,10 @@ static long syscall_trace_enter(struct pt_regs *regs)
 		}
 
 		ret = __secure_computing(&sd);
-		if (ret == -1)
+		if (ret == -1) {
+			pax_erase_kstack();
 			return ret;
+		}
 	}
 #endif
 
@@ -131,6 +139,7 @@ static long syscall_trace_enter(struct pt_regs *regs)
 
 	do_audit_syscall_entry(regs, arch);
 
+	pax_erase_kstack();
 	return ret ?: regs->orig_ax;
 }
 
@@ -237,7 +246,7 @@ static void syscall_slow_exit_work(struct pt_regs *regs, u32 cached_flags)
 	step = unlikely(
 		(cached_flags & (_TIF_SINGLESTEP | _TIF_SYSCALL_EMU))
 		== _TIF_SINGLESTEP);
-	if (step || cached_flags & _TIF_SYSCALL_TRACE)
+	if (step || (cached_flags & _TIF_SYSCALL_TRACE))
 		tracehook_report_syscall_exit(regs, step);
 }
 
@@ -285,9 +294,29 @@ __visible void do_syscall_64(struct pt_regs *regs)
 	 * regs->orig_ax, which changes the behavior of some syscalls.
 	 */
 	if (likely((nr & __SYSCALL_MASK) < NR_syscalls)) {
+#ifdef CONFIG_PAX_RAP
+		asm volatile("movq %[param1],%%rdi\n\t"
+			     "movq %[param2],%%rsi\n\t"
+			     "movq %[param3],%%rdx\n\t"
+			     "movq %[param4],%%rcx\n\t"
+			     "movq %[param5],%%r8\n\t"
+			     "movq %[param6],%%r9\n\t"
+			     "call *%P[syscall]\n\t"
+			     "mov %%rax,%[result]\n\t"
+			: [result] "=m" (regs->ax)
+			: [syscall] "m" (sys_call_table[nr & __SYSCALL_MASK]),
+			  [param1] "m" (regs->di),
+			  [param2] "m" (regs->si),
+			  [param3] "m" (regs->dx),
+			  [param4] "m" (regs->r10),
+			  [param5] "m" (regs->r8),
+			  [param6] "m" (regs->r9)
+			: "ax", "di", "si", "dx", "cx", "r8", "r9", "r10", "r11", "memory");
+#else
 		regs->ax = sys_call_table[nr & __SYSCALL_MASK](
 			regs->di, regs->si, regs->dx,
 			regs->r10, regs->r8, regs->r9);
+#endif
 	}
 
 	syscall_return_slowpath(regs);
@@ -327,10 +356,51 @@ static __always_inline void do_syscall_32_irqs_on(struct pt_regs *regs)
 		 * the high bits are zero.  Make sure we zero-extend all
 		 * of the args.
 		 */
+#ifdef CONFIG_PAX_RAP
+#ifdef CONFIG_X86_64
+		asm volatile("movl %[param1],%%edi\n\t"
+			     "movl %[param2],%%esi\n\t"
+			     "movl %[param3],%%edx\n\t"
+			     "movl %[param4],%%ecx\n\t"
+			     "movl %[param5],%%r8d\n\t"
+			     "movl %[param6],%%r9d\n\t"
+			     "call *%P[syscall]\n\t"
+			     "mov %%rax,%[result]\n\t"
+			: [result] "=m" (regs->ax)
+			: [syscall] "m" (ia32_sys_call_table[nr]),
+			  [param1] "m" (regs->bx),
+			  [param2] "m" (regs->cx),
+			  [param3] "m" (regs->dx),
+			  [param4] "m" (regs->si),
+			  [param5] "m" (regs->di),
+			  [param6] "m" (regs->bp)
+			: "ax", "di", "si", "dx", "cx", "r8", "r9", "r10", "r11", "memory");
+#else
+		asm volatile("pushl %[param6]\n\t"
+			     "pushl %[param5]\n\t"
+			     "pushl %[param4]\n\t"
+			     "pushl %[param3]\n\t"
+			     "pushl %[param2]\n\t"
+			     "pushl %[param1]\n\t"
+			     "call *%P[syscall]\n\t"
+			     "addl $6*8,%%esp\n\t"
+			     "mov %%eax,%[result]\n\t"
+			: [result] "=m" (regs->ax)
+			: [syscall] "m" (ia32_sys_call_table[nr]),
+			  [param1] "m" (regs->bx),
+			  [param2] "m" (regs->cx),
+			  [param3] "m" (regs->dx),
+			  [param4] "m" (regs->si),
+			  [param5] "m" (regs->di),
+			  [param6] "m" (regs->bp)
+			: "ax", "dx", "cx", "memory");
+#endif
+#else
 		regs->ax = ia32_sys_call_table[nr](
 			(unsigned int)regs->bx, (unsigned int)regs->cx,
 			(unsigned int)regs->dx, (unsigned int)regs->si,
 			(unsigned int)regs->di, (unsigned int)regs->bp);
+#endif
 	}
 
 	syscall_return_slowpath(regs);
@@ -354,6 +424,7 @@ __visible long do_fast_syscall_32(struct pt_regs *regs)
 
 	unsigned long landing_pad = (unsigned long)current->mm->context.vdso +
 		vdso_image_32.sym_int80_landing_pad;
+	u32 __user *saved_bp = (u32 __force_user *)(unsigned long)(u32)regs->sp;
 
 	/*
 	 * SYSENTER loses EIP, and even SYSCALL32 needs us to skip forward
@@ -373,11 +444,9 @@ __visible long do_fast_syscall_32(struct pt_regs *regs)
 		 * Micro-optimization: the pointer we're following is explicitly
 		 * 32 bits, so it can't be out of range.
 		 */
-		__get_user(*(u32 *)&regs->bp,
-			    (u32 __user __force *)(unsigned long)(u32)regs->sp)
+		__get_user_nocheck(*(u32 *)&regs->bp, saved_bp, sizeof(u32))
 #else
-		get_user(*(u32 *)&regs->bp,
-			 (u32 __user __force *)(unsigned long)(u32)regs->sp)
+		get_user(regs->bp, saved_bp)
 #endif
 		) {
 
