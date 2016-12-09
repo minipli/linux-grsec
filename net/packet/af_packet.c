@@ -278,7 +278,7 @@ static int packet_direct_xmit(struct sk_buff *skb)
 
 	return ret;
 drop:
-	atomic_long_inc(&dev->tx_dropped);
+	atomic_long_inc_unchecked(&dev->tx_dropped);
 	kfree_skb_list(skb);
 	return NET_XMIT_DROP;
 }
@@ -1391,9 +1391,9 @@ static unsigned int fanout_demux_rollover(struct packet_fanout *f,
 		    packet_rcv_has_room(po_next, skb) == ROOM_NORMAL) {
 			if (i != j)
 				po->rollover->sock = i;
-			atomic_long_inc(&po->rollover->num);
+			atomic_long_inc_unchecked(&po->rollover->num);
 			if (room == ROOM_LOW)
-				atomic_long_inc(&po->rollover->num_huge);
+				atomic_long_inc_unchecked(&po->rollover->num_huge);
 			return i;
 		}
 
@@ -1401,7 +1401,7 @@ static unsigned int fanout_demux_rollover(struct packet_fanout *f,
 			i = 0;
 	} while (i != j);
 
-	atomic_long_inc(&po->rollover->num_failed);
+	atomic_long_inc_unchecked(&po->rollover->num_failed);
 	return idx;
 }
 
@@ -1652,9 +1652,9 @@ static int fanout_add(struct sock *sk, u16 id, u16 type_flags)
 		po->rollover = kzalloc(sizeof(*po->rollover), GFP_KERNEL);
 		if (!po->rollover)
 			return -ENOMEM;
-		atomic_long_set(&po->rollover->num, 0);
-		atomic_long_set(&po->rollover->num_huge, 0);
-		atomic_long_set(&po->rollover->num_failed, 0);
+		atomic_long_set_unchecked(&po->rollover->num, 0);
+		atomic_long_set_unchecked(&po->rollover->num_huge, 0);
+		atomic_long_set_unchecked(&po->rollover->num_failed, 0);
 	}
 
 	mutex_lock(&fanout_mutex);
@@ -2106,7 +2106,7 @@ drop_n_acct:
 	is_drop_n_account = true;
 	spin_lock(&sk->sk_receive_queue.lock);
 	po->stats.stats1.tp_drops++;
-	atomic_inc(&sk->sk_drops);
+	atomic_inc_unchecked(&sk->sk_drops);
 	spin_unlock(&sk->sk_receive_queue.lock);
 
 drop_n_restore:
@@ -3648,19 +3648,25 @@ packet_setsockopt(struct socket *sock, int level, int optname, char __user *optv
 
 		if (optlen != sizeof(val))
 			return -EINVAL;
-		if (po->rx_ring.pg_vec || po->tx_ring.pg_vec)
-			return -EBUSY;
 		if (copy_from_user(&val, optval, sizeof(val)))
 			return -EFAULT;
 		switch (val) {
 		case TPACKET_V1:
 		case TPACKET_V2:
 		case TPACKET_V3:
-			po->tp_version = val;
-			return 0;
+			break;
 		default:
 			return -EINVAL;
 		}
+		lock_sock(sk);
+		if (po->rx_ring.pg_vec || po->tx_ring.pg_vec) {
+			ret = -EBUSY;
+		} else {
+			po->tp_version = val;
+			ret = 0;
+		}
+		release_sock(sk);
+		return ret;
 	}
 	case PACKET_RESERVE:
 	{
@@ -3841,7 +3847,7 @@ static int packet_getsockopt(struct socket *sock, int level, int optname,
 	case PACKET_HDRLEN:
 		if (len > sizeof(int))
 			len = sizeof(int);
-		if (copy_from_user(&val, optval, len))
+		if (len > sizeof(val) || copy_from_user(&val, optval, len))
 			return -EFAULT;
 		switch (val) {
 		case TPACKET_V1:
@@ -3876,9 +3882,9 @@ static int packet_getsockopt(struct socket *sock, int level, int optname,
 	case PACKET_ROLLOVER_STATS:
 		if (!po->rollover)
 			return -EINVAL;
-		rstats.tp_all = atomic_long_read(&po->rollover->num);
-		rstats.tp_huge = atomic_long_read(&po->rollover->num_huge);
-		rstats.tp_failed = atomic_long_read(&po->rollover->num_failed);
+		rstats.tp_all = atomic_long_read_unchecked(&po->rollover->num);
+		rstats.tp_huge = atomic_long_read_unchecked(&po->rollover->num_huge);
+		rstats.tp_failed = atomic_long_read_unchecked(&po->rollover->num_failed);
 		data = &rstats;
 		lv = sizeof(rstats);
 		break;
@@ -3896,7 +3902,7 @@ static int packet_getsockopt(struct socket *sock, int level, int optname,
 		len = lv;
 	if (put_user(len, optlen))
 		return -EFAULT;
-	if (copy_to_user(optval, data, len))
+	if (len > sizeof(st) || copy_to_user(optval, data, len))
 		return -EFAULT;
 	return 0;
 }
@@ -4164,6 +4170,7 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 	/* Added to avoid minimal code churn */
 	struct tpacket_req *req = &req_u->req;
 
+	lock_sock(sk);
 	/* Opening a Tx-ring is NOT supported in TPACKET_V3 */
 	if (!closing && tx_ring && (po->tp_version > TPACKET_V2)) {
 		net_warn_ratelimited("Tx-ring is not supported.\n");
@@ -4245,7 +4252,6 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 			goto out;
 	}
 
-	lock_sock(sk);
 
 	/* Detach socket from network */
 	spin_lock(&po->bind_lock);
@@ -4294,11 +4300,11 @@ static int packet_set_ring(struct sock *sk, union tpacket_req_u *req_u,
 		if (!tx_ring)
 			prb_shutdown_retire_blk_timer(po, rb_queue);
 	}
-	release_sock(sk);
 
 	if (pg_vec)
 		free_pg_vec(pg_vec, order, req->tp_block_nr);
 out:
+	release_sock(sk);
 	return err;
 }
 
