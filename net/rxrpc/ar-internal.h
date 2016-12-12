@@ -85,7 +85,7 @@ struct rxrpc_host_header {
 	u32		epoch;		/* client boot timestamp */
 	u32		cid;		/* connection and channel ID */
 	u32		callNumber;	/* call ID (0 for connection-level packets) */
-	u32		seq;		/* sequence number of pkt in call stream */
+	u32		seq __intentional_overflow(-1);	/* sequence number of pkt in call stream */
 	u32		serial;		/* serial number of pkt sent to network */
 	u8		type;		/* packet type */
 	u8		flags;		/* packet flags */
@@ -321,8 +321,8 @@ struct rxrpc_connection {
 	u32			remote_abort;	/* remote abort code */
 	int			error;		/* local error incurred */
 	int			debug_id;	/* debug ID for printks */
-	atomic_t		serial;		/* packet serial number counter */
-	atomic_t		hi_serial;	/* highest serial number received */
+	atomic_unchecked_t	serial;		/* packet serial number counter */
+	atomic_unchecked_t	hi_serial;	/* highest serial number received */
 	atomic_t		avail_chans;	/* number of channels available */
 	u8			size_align;	/* data size alignment (for security) */
 	u8			header_size;	/* rxrpc + security header size */
@@ -426,7 +426,7 @@ struct rxrpc_call {
 	rwlock_t		state_lock;	/* lock for state transition */
 	atomic_t		usage;
 	atomic_t		skb_count;	/* Outstanding packets on this call */
-	atomic_t		sequence;	/* Tx data packet sequence counter */
+	atomic_unchecked_t	sequence;	/* Tx data packet sequence counter */
 	u32			local_abort;	/* local abort code */
 	u32			remote_abort;	/* remote abort code */
 	int			error_report;	/* Network error (ICMP/local transport) */
@@ -489,7 +489,7 @@ static inline void rxrpc_abort_call(struct rxrpc_call *call, u32 abort_code)
  */
 extern atomic_t rxrpc_n_skbs;
 extern u32 rxrpc_epoch;
-extern atomic_t rxrpc_debug_id;
+extern atomic_unchecked_t rxrpc_debug_id;
 extern struct workqueue_struct *rxrpc_workqueue;
 
 /*
