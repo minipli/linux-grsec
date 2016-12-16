@@ -23,6 +23,7 @@
 #include <asm/x86_init.h>
 #include <asm/geode.h>
 #include <asm/apic.h>
+#include <asm/pgtable.h>
 
 unsigned int __read_mostly cpu_khz;	/* TSC clocks / usec, not used here */
 EXPORT_SYMBOL(cpu_khz);
@@ -157,7 +158,7 @@ static void cyc2ns_write_end(int cpu, struct cyc2ns_data *data)
 	 */
 	smp_wmb();
 
-	ACCESS_ONCE(c2n->head) = data;
+	ACCESS_ONCE_RW(c2n->head) = data;
 }
 
 /*
@@ -992,7 +993,9 @@ static int time_cpufreq_notifier(struct notifier_block *nb, unsigned long val,
 	}
 	if ((val == CPUFREQ_PRECHANGE  && freq->old < freq->new) ||
 			(val == CPUFREQ_POSTCHANGE && freq->old > freq->new)) {
+		pax_open_kernel();
 		*lpj = cpufreq_scale(loops_per_jiffy_ref, ref_freq, freq->new);
+		pax_close_kernel();
 
 		tsc_khz = cpufreq_scale(tsc_khz_ref, ref_freq, freq->new);
 		if (!(freq->flags & CPUFREQ_CONST_LOOPS))

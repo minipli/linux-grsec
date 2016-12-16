@@ -52,7 +52,7 @@ struct rxrpc_connection *rxrpc_alloc_connection(gfp_t gfp)
 		 * on the rxrpc_connections list.
 		 */
 		atomic_set(&conn->usage, 2);
-		conn->debug_id = atomic_inc_return(&rxrpc_debug_id);
+		conn->debug_id = atomic_inc_return_unchecked(&rxrpc_debug_id);
 		atomic_set(&conn->avail_chans, RXRPC_MAXCALLS);
 		conn->size_align = 4;
 		conn->header_size = sizeof(struct rxrpc_wire_header);
