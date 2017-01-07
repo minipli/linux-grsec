@@ -23,4 +23,8 @@ EXPORT_SYMBOL(init_task);
  * linker map entry.
  */
 union thread_union init_thread_union __init_task_data =
+#ifdef CONFIG_X86
+	{ .stack[0] = ~0xabcd1234, };
+#else
 	{ INIT_THREAD_INFO(init_task) };
+#endif
