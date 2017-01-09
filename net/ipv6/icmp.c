@@ -447,8 +447,10 @@ static void icmp6_send(struct sk_buff *skb, u8 type, u8 code, __u32 info,
 
 	if (__ipv6_addr_needs_scope_id(addr_type))
 		iif = skb->dev->ifindex;
-	else
-		iif = l3mdev_master_ifindex(skb_dst(skb)->dev);
+	else {
+		dst = skb_dst(skb);
+		iif = l3mdev_master_ifindex(dst ? dst->dev : skb->dev);
+	}
 
 	/*
 	 *	Must not send error if the source does not uniquely
@@ -1073,7 +1075,7 @@ static struct ctl_table ipv6_icmp_table_template[] = {
 
 struct ctl_table * __net_init ipv6_icmp_sysctl_init(struct net *net)
 {
-	struct ctl_table *table;
+	ctl_table_no_const *table;
 
 	table = kmemdup(ipv6_icmp_table_template,
 			sizeof(ipv6_icmp_table_template),
