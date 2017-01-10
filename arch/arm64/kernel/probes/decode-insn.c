@@ -157,10 +157,10 @@ arm_kprobe_decode_insn(kprobe_opcode_t *addr, struct arch_specific_insn *asi)
 		mod = __module_address((unsigned long)addr);
 		if (mod && within_module_init((unsigned long)addr, mod) &&
 			!within_module_init((unsigned long)scan_end, mod))
-			scan_end = (kprobe_opcode_t *)mod->init_layout.base;
+			scan_end = (kprobe_opcode_t *)mod->init_layout.base_rx;
 		else if (mod && within_module_core((unsigned long)addr, mod) &&
 			!within_module_core((unsigned long)scan_end, mod))
-			scan_end = (kprobe_opcode_t *)mod->core_layout.base;
+			scan_end = (kprobe_opcode_t *)mod->core_layout.base_rx;
 		preempt_enable();
 	}
 #endif
