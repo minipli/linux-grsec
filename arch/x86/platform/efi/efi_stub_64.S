@@ -11,6 +11,7 @@
 #include <asm/msr.h>
 #include <asm/processor-flags.h>
 #include <asm/page_types.h>
+#include <asm/alternative-asm.h>
 
 #define SAVE_XMM			\
 	mov %rsp, %rax;			\
@@ -53,5 +54,5 @@ ENTRY(efi_call)
 	addq $48, %rsp
 	RESTORE_XMM
 	popq %rbp
-	ret
+	pax_ret efi_call
 ENDPROC(efi_call)
