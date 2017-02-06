@@ -42,7 +42,9 @@ struct inactive_task_frame {
 	unsigned long r15;
 	unsigned long r14;
 	unsigned long r13;
+#ifndef CONFIG_PAX_KERNEXEC_PLUGIN_METHOD_OR
 	unsigned long r12;
+#endif
 #else
 	unsigned long si;
 	unsigned long di;
@@ -57,11 +59,20 @@ struct fork_frame {
 	struct pt_regs regs;
 };
 
+#ifdef CONFIG_X86_32
 #define switch_to(prev, next, last)					\
 do {									\
 	prepare_switch_to(prev, next);					\
 									\
 	((last) = __switch_to_asm((prev), (next)));			\
 } while (0)
+#else
+#define switch_to(prev, next, last)					\
+do {									\
+	prepare_switch_to(prev, next);					\
+									\
+	((last) = __switch_to_asm((prev), (next)));			\
+} while (0)
+#endif
 
 #endif /* _ASM_X86_SWITCH_TO_H */

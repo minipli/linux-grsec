@@ -21,12 +21,22 @@ bool pv_is_native_spin_unlock(void)
 		__raw_callee_save___native_queued_spin_unlock;
 }
 
-struct pv_lock_ops pv_lock_ops = {
+#ifdef CONFIG_SMP
+static void native_wait(u8 *ptr, u8 val)
+{
+}
+
+static void native_kick(int cpu)
+{
+}
+#endif /* SMP */
+
+struct pv_lock_ops pv_lock_ops __read_only = {
 #ifdef CONFIG_SMP
 	.queued_spin_lock_slowpath = native_queued_spin_lock_slowpath,
 	.queued_spin_unlock = PV_CALLEE_SAVE(__native_queued_spin_unlock),
-	.wait = paravirt_nop,
-	.kick = paravirt_nop,
+	.wait = native_wait,
+	.kick = native_kick,
 #endif /* SMP */
 };
 EXPORT_SYMBOL(pv_lock_ops);

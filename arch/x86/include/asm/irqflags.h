@@ -27,11 +27,17 @@ static inline unsigned long native_save_fl(void)
 		     : /* no input */
 		     : "memory");
 
+#if !defined(CONFIG_GRKERNSEC_CONFIG_VIRT_HOST) || !defined(CONFIG_GRKERNSEC_CONFIG_VIRT_VIRTUALBOX)
+	BUG_ON(flags & X86_EFLAGS_AC);
+#endif
 	return flags;
 }
 
 static inline void native_restore_fl(unsigned long flags)
 {
+#if !defined(CONFIG_GRKERNSEC_CONFIG_VIRT_HOST) || !defined(CONFIG_GRKERNSEC_CONFIG_VIRT_VIRTUALBOX)
+	BUG_ON(flags & X86_EFLAGS_AC);
+#endif
 	asm volatile("push %0 ; popf"
 		     : /* no output */
 		     :"g" (flags)
@@ -141,6 +147,11 @@ static inline notrace unsigned long arch_local_irq_save(void)
 	swapgs;					\
 	sysretl
 
+#define GET_CR0_INTO_RDI		mov %cr0, %rdi
+#define SET_RDI_INTO_CR0		mov %rdi, %cr0
+#define GET_CR3_INTO_RDI		mov %cr3, %rdi
+#define SET_RDI_INTO_CR3		mov %rdi, %cr3
+
 #else
 #define INTERRUPT_RETURN		iret
 #define ENABLE_INTERRUPTS_SYSEXIT	sti; sysexit
@@ -196,6 +207,14 @@ static inline int arch_irqs_disabled(void)
 #else
 #  define LOCKDEP_SYS_EXIT
 #  define LOCKDEP_SYS_EXIT_IRQ
+#endif
+#else
+#ifdef CONFIG_TRACE_IRQFLAGS
+void trace_hardirqs_on_thunk(void);
+void trace_hardirqs_off_thunk(void);
+#endif
+#ifdef CONFIG_DEBUG_LOCK_ALLOC
+void lockdep_sys_exit_thunk(void);
 #endif
 #endif /* __ASSEMBLY__ */
 

@@ -54,11 +54,12 @@ struct cpumask;
 
 /*
  * Wrapper type for pointers to code which uses the non-standard
- * calling convention.  See PV_CALL_SAVE_REGS_THUNK below.
+ * calling convention.  See PV_CALLEE_SAVE_REGS_THUNK below.
  */
+typedef void (*paravirt_callee_save_t)(void);
 struct paravirt_callee_save {
-	void *func;
-};
+	paravirt_callee_save_t func;
+} __no_const;
 
 /* general info */
 struct pv_info {
@@ -83,7 +84,7 @@ struct pv_init_ops {
 	 */
 	unsigned (*patch)(u8 type, u16 clobber, void *insnbuf,
 			  unsigned long addr, unsigned len);
-};
+} __no_const __no_randomize_layout;
 
 
 struct pv_lazy_ops {
@@ -91,12 +92,12 @@ struct pv_lazy_ops {
 	void (*enter)(void);
 	void (*leave)(void);
 	void (*flush)(void);
-};
+} __no_const __no_randomize_layout;
 
 struct pv_time_ops {
 	unsigned long long (*sched_clock)(void);
 	unsigned long long (*steal_clock)(int cpu);
-};
+} __rap_hash __no_const __no_randomize_layout;
 
 struct pv_cpu_ops {
 	/* hooks for various privileged instructions */
@@ -177,7 +178,7 @@ struct pv_cpu_ops {
 
 	void (*start_context_switch)(struct task_struct *prev);
 	void (*end_context_switch)(struct task_struct *next);
-};
+} __rap_hash __no_const __no_randomize_layout;
 
 struct pv_irq_ops {
 	/*
@@ -200,7 +201,7 @@ struct pv_irq_ops {
 #ifdef CONFIG_X86_64
 	void (*adjust_exception_frame)(void);
 #endif
-};
+} __rap_hash __no_randomize_layout;
 
 struct pv_mmu_ops {
 	unsigned long (*read_cr2)(void);
@@ -284,6 +285,7 @@ struct pv_mmu_ops {
 	struct paravirt_callee_save make_pud;
 
 	void (*set_pgd)(pgd_t *pudp, pgd_t pgdval);
+	void (*set_pgd_batched)(pgd_t *pudp, pgd_t pgdval);
 #endif	/* CONFIG_PGTABLE_LEVELS == 4 */
 #endif	/* CONFIG_PGTABLE_LEVELS >= 3 */
 
@@ -295,7 +297,13 @@ struct pv_mmu_ops {
 	   an mfn.  We can tell which is which from the index. */
 	void (*set_fixmap)(unsigned /* enum fixed_addresses */ idx,
 			   phys_addr_t phys, pgprot_t flags);
-};
+
+#ifdef CONFIG_PAX_KERNEXEC
+	unsigned long (*pax_open_kernel)(void);
+	unsigned long (*pax_close_kernel)(void);
+#endif
+
+} __rap_hash __no_randomize_layout;
 
 struct arch_spinlock;
 #ifdef CONFIG_SMP
@@ -310,11 +318,14 @@ struct pv_lock_ops {
 
 	void (*wait)(u8 *ptr, u8 val);
 	void (*kick)(int cpu);
-};
+} __rap_hash __no_randomize_layout;
 
 /* This contains all the paravirt structures: we get a convenient
  * number for each function using the offset which we use to indicate
- * what to patch. */
+ * what to patch.
+ * shouldn't be randomized due to the "NEAT TRICK" in paravirt.c
+ */
+
 struct paravirt_patch_template {
 	struct pv_init_ops pv_init_ops;
 	struct pv_time_ops pv_time_ops;
@@ -322,7 +333,7 @@ struct paravirt_patch_template {
 	struct pv_irq_ops pv_irq_ops;
 	struct pv_mmu_ops pv_mmu_ops;
 	struct pv_lock_ops pv_lock_ops;
-};
+} __no_randomize_layout;
 
 extern struct pv_info pv_info;
 extern struct pv_init_ops pv_init_ops;
@@ -391,7 +402,7 @@ int paravirt_disable_iospace(void);
  * offset into the paravirt_patch_template structure, and can therefore be
  * freely converted back into a structure offset.
  */
-#define PARAVIRT_CALL	"call *%c[paravirt_opptr];"
+#define PARAVIRT_CALL(op)	PAX_INDIRECT_CALL("*%c[paravirt_opptr]", #op) ";"
 
 /*
  * These macros are intended to wrap calls through one of the paravirt
@@ -518,7 +529,7 @@ int paravirt_disable_iospace(void);
 		/* since this condition will never hold */		\
 		if (sizeof(rettype) > sizeof(unsigned long)) {		\
 			asm volatile(pre				\
-				     paravirt_alt(PARAVIRT_CALL)	\
+				     paravirt_alt(PARAVIRT_CALL(op))	\
 				     post				\
 				     : call_clbr, "+r" (__sp)		\
 				     : paravirt_type(op),		\
@@ -528,7 +539,7 @@ int paravirt_disable_iospace(void);
 			__ret = (rettype)((((u64)__edx) << 32) | __eax); \
 		} else {						\
 			asm volatile(pre				\
-				     paravirt_alt(PARAVIRT_CALL)	\
+				     paravirt_alt(PARAVIRT_CALL(op))	\
 				     post				\
 				     : call_clbr, "+r" (__sp)		\
 				     : paravirt_type(op),		\
@@ -555,7 +566,7 @@ int paravirt_disable_iospace(void);
 		PVOP_VCALL_ARGS;					\
 		PVOP_TEST_NULL(op);					\
 		asm volatile(pre					\
-			     paravirt_alt(PARAVIRT_CALL)		\
+			     paravirt_alt(PARAVIRT_CALL(op))		\
 			     post					\
 			     : call_clbr, "+r" (__sp)			\
 			     : paravirt_type(op),			\
