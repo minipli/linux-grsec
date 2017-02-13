@@ -119,7 +119,7 @@ struct kobj_type {
 	struct attribute **default_attrs;
 	const struct kobj_ns_type_operations *(*child_ns_type)(struct kobject *kobj);
 	const void *(*namespace)(struct kobject *kobj);
-};
+} __do_const;
 
 struct kobj_uevent_env {
 	char *argv[3];
@@ -143,6 +143,14 @@ struct kobj_attribute {
 	ssize_t (*store)(struct kobject *kobj, struct kobj_attribute *attr,
 			 const char *buf, size_t count);
 };
+typedef struct kobj_attribute __no_const kobj_attribute_no_const;
+
+#define KOBJECT_ATTR(_name, _mode, _show, _store) \
+	struct kobj_attribute dev_attr_##_name = __ATTR(_name, _mode, _show, _store)
+#define KOBJECT_ATTR_RW(_name) \
+	struct kobj_attribute dev_attr_##_name = __ATTR_RW(_name)
+#define KOBJECT_ATTR_RO(_name) \
+	struct kobj_attribute dev_attr_##_name = __ATTR_RO(_name)
 
 extern const struct sysfs_ops kobj_sysfs_ops;
 
