@@ -117,7 +117,8 @@ struct ctl_table
 	struct ctl_table_poll *poll;
 	void *extra1;
 	void *extra2;
-};
+} __do_const;
+typedef struct ctl_table __no_const ctl_table_no_const;
 
 struct ctl_node {
 	struct rb_node node;
@@ -131,9 +132,9 @@ struct ctl_table_header
 	union {
 		struct {
 			struct ctl_table *ctl_table;
-			int used;
-			int count;
-			int nreg;
+			atomic_t used;
+			atomic_t count;
+			atomic_t nreg;
 		};
 		struct rcu_head rcu;
 	};

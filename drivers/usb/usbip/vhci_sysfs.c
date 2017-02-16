@@ -383,7 +383,7 @@ static void finish_status_attrs(void)
 	kfree(status_attrs);
 }
 
-struct attribute_group vhci_attr_group = {
+attribute_group_no_const vhci_attr_group = {
 	.attrs = NULL,
 };
 

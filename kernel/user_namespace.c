@@ -1034,7 +1034,7 @@ static int userns_install(struct nsproxy *nsproxy, struct ns_common *ns)
 	if (!thread_group_empty(current))
 		return -EINVAL;
 
-	if (current->fs->users != 1)
+	if (atomic_read(&current->fs->users) != 1)
 		return -EINVAL;
 
 	if (!ns_capable(user_ns, CAP_SYS_ADMIN))

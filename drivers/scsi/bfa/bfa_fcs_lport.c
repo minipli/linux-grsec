@@ -6040,7 +6040,7 @@ static void	bfa_fcs_vport_sm_stopping(struct bfa_fcs_vport_s *vport,
 static void	bfa_fcs_vport_sm_logo_for_stop(struct bfa_fcs_vport_s *vport,
 					enum bfa_fcs_vport_event event);
 
-static struct bfa_sm_table_s  vport_sm_table[] = {
+static struct vport_sm_table_s vport_sm_table[] = {
 	{BFA_SM(bfa_fcs_vport_sm_uninit), BFA_FCS_VPORT_UNINIT},
 	{BFA_SM(bfa_fcs_vport_sm_created), BFA_FCS_VPORT_CREATED},
 	{BFA_SM(bfa_fcs_vport_sm_offline), BFA_FCS_VPORT_OFFLINE},
@@ -6871,7 +6871,7 @@ bfa_fcs_vport_get_attr(struct bfa_fcs_vport_s *vport,
 	memset(attr, 0, sizeof(struct bfa_vport_attr_s));
 
 	bfa_fcs_lport_get_attr(&vport->lport, &attr->port_attr);
-	attr->vport_state = bfa_sm_to_state(vport_sm_table, vport->sm);
+	attr->vport_state = vport_sm_to_state(vport_sm_table, vport->sm);
 }
 
 
