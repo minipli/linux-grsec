@@ -28,7 +28,7 @@ check_events:
 	push %eax
 	push %ecx
 	push %edx
-	call xen_force_evtchn_callback
+	pax_direct_call xen_force_evtchn_callback
 	pop %edx
 	pop %ecx
 	pop %eax
@@ -85,7 +85,7 @@ ENTRY(xen_iret)
 	pushw %fs
 	movl $(__KERNEL_PERCPU), %eax
 	movl %eax, %fs
-	movl %fs:xen_vcpu, %eax
+	mov PER_CPU_VAR(xen_vcpu), %eax
 	POP_FS
 #else
 	movl %ss:xen_vcpu, %eax
