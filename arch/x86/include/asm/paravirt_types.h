@@ -39,6 +39,7 @@
 
 #ifndef __ASSEMBLY__
 
+#include <linux/linkage.h>
 #include <asm/desc_defs.h>
 #include <asm/kmap_types.h>
 #include <asm/pgtable_types.h>
@@ -60,10 +61,10 @@ struct qspinlock;
 union paravirt_callee_save {
 	void (*queued_spin_unlock)(struct qspinlock *);
 
-	unsigned long (*save_fl)(void);
+	asmlinkage unsigned long (*save_fl)(void);
 	void (*restore_fl)(unsigned long);
-	void (*irq_disable)(void);
-	void (*irq_enable)(void);
+	asmlinkage void (*irq_disable)(void);
+	asmlinkage void (*irq_enable)(void);
 
 	pteval_t (*pte_val)(pte_t);
 	pte_t (*make_pte)(pteval_t);

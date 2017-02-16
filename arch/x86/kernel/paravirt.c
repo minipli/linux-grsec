@@ -155,7 +155,7 @@ static void *get_call_destination(u8 type)
 	return *((void **)&tmpl + type);
 }
 
-#ifdef CONFIG_PAX_RAP
+#if (defined(CONFIG_X86_32) && defined(CONFIG_X86_PAE)) || defined(CONFIG_PAX_RAP)
 #if CONFIG_PGTABLE_LEVELS >= 3
 PV_CALLEE_SAVE_REGS_THUNK(native_pmd_val);
 PV_CALLEE_SAVE_REGS_THUNK(native_make_pmd);

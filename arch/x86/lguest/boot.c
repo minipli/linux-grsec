@@ -262,7 +262,7 @@ PV_CALLEE_SAVE_REGS_THUNK(lguest_irq_disable);
 /*:*/
 
 /* These are in head_32.S */
-extern void lg_irq_enable(void);
+extern asmlinkage void lg_irq_enable(void);
 extern void lg_restore_fl(unsigned long flags);
 
 /*M:003
