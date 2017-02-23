@@ -57,11 +57,13 @@
 #define atomic_set(v, i)		WRITE_ONCE(((v)->counter), (i))
 
 #define atomic_add_return_relaxed	atomic_add_return_relaxed
+#define atomic_add_return_unchecked_relaxed	atomic_add_return_relaxed
 #define atomic_add_return_acquire	atomic_add_return_acquire
 #define atomic_add_return_release	atomic_add_return_release
 #define atomic_add_return		atomic_add_return
 
 #define atomic_inc_return_relaxed(v)	atomic_add_return_relaxed(1, (v))
+#define atomic_inc_return_unchecked_relaxed(v)	atomic_add_return_relaxed(1, (v))
 #define atomic_inc_return_acquire(v)	atomic_add_return_acquire(1, (v))
 #define atomic_inc_return_release(v)	atomic_add_return_release(1, (v))
 #define atomic_inc_return(v)		atomic_add_return(1, (v))
@@ -205,6 +207,17 @@
 #define atomic64_andnot			atomic64_andnot
 
 #define atomic64_inc_not_zero(v)	atomic64_add_unless((v), 1, 0)
+
+#define atomic64_read_unchecked(v)		atomic64_read(v)
+#define atomic64_set_unchecked(v, i)		atomic64_set((v), (i))
+#define atomic64_add_unchecked(a, v)		atomic64_add((a), (v))
+#define atomic64_add_return_unchecked(a, v)	atomic64_add_return((a), (v))
+#define atomic64_sub_unchecked(a, v)		atomic64_sub((a), (v))
+#define atomic64_inc_unchecked(v)		atomic64_inc(v)
+#define atomic64_inc_return_unchecked(v)	atomic64_inc_return(v)
+#define atomic64_dec_unchecked(v)		atomic64_dec(v)
+#define atomic64_cmpxchg_unchecked(v, o, n)	atomic64_cmpxchg((v), (o), (n))
+#define atomic64_xchg_unchecked(v, n)		atomic64_xchg((v), (n))
 
 #endif
 #endif
