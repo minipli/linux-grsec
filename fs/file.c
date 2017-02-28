@@ -165,7 +165,8 @@ out:
  */
 static int expand_fdtable(struct files_struct *files, unsigned int nr)
 	__releases(files->file_lock)
-	__acquires(files->file_lock)
+	__acquires(files->file_lock);
+static int expand_fdtable(struct files_struct *files, unsigned int nr)
 {
 	struct fdtable *new_fdt, *cur_fdt;
 
@@ -210,7 +211,8 @@ static int expand_fdtable(struct files_struct *files, unsigned int nr)
  */
 static int expand_files(struct files_struct *files, unsigned int nr)
 	__releases(files->file_lock)
-	__acquires(files->file_lock)
+	__acquires(files->file_lock);
+static int expand_files(struct files_struct *files, unsigned int nr)
 {
 	struct fdtable *fdt;
 	int expanded = 0;
@@ -822,7 +824,9 @@ bool get_close_on_exec(unsigned int fd)
 
 static int do_dup2(struct files_struct *files,
 	struct file *file, unsigned fd, unsigned flags)
-__releases(&files->file_lock)
+__releases(&files->file_lock);
+static int do_dup2(struct files_struct *files,
+	struct file *file, unsigned fd, unsigned flags)
 {
 	struct file *tofree;
 	struct fdtable *fdt;

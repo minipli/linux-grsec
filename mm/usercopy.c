@@ -16,14 +16,9 @@
 
 #include <linux/mm.h>
 #include <linux/slab.h>
+#include <linux/ratelimit.h>
 #include <asm/sections.h>
-
-enum {
-	BAD_STACK = -1,
-	NOT_STACK = 0,
-	GOOD_FRAME,
-	GOOD_STACK,
-};
+#include <asm/uaccess.h>
 
 /*
  * Checks if a given pointer and length is contained by the current
@@ -35,11 +30,13 @@ enum {
  *	GOOD_STACK: fully on the stack (when can't do frame-checking)
  *	BAD_STACK: error condition (invalid stack position or bad stack frame)
  */
-static noinline int check_stack_object(const void *obj, unsigned long len)
+static noinline int check_stack_object(unsigned long obj, unsigned long len)
 {
-	const void * const stack = task_stack_page(current);
-	const void * const stackend = stack + THREAD_SIZE;
-	int ret;
+	unsigned long stack = (unsigned long)task_stack_page(current);
+	unsigned long stackend = (unsigned long)stack + THREAD_SIZE;
+
+	if (obj + len < obj)
+		return BAD_STACK;
 
 	/* Object is not on the stack at all. */
 	if (obj + len <= stack || stackend <= obj)
@@ -54,25 +51,29 @@ static noinline int check_stack_object(const void *obj, unsigned long len)
 		return BAD_STACK;
 
 	/* Check if object is safely within a valid frame. */
-	ret = arch_within_stack_frames(stack, stackend, obj, len);
-	if (ret)
-		return ret;
-
-	return GOOD_STACK;
+	return arch_within_stack_frames(stack, stackend, obj, len);
 }
 
-static void report_usercopy(const void *ptr, unsigned long len,
-			    bool to_user, const char *type)
+static DEFINE_RATELIMIT_STATE(usercopy_ratelimit, 15 * HZ, 3);
+
+static __noreturn void report_usercopy(const void *ptr, unsigned long len,
+				       bool to_user, const char *type)
 {
-	pr_emerg("kernel memory %s attempt detected %s %p (%s) (%lu bytes)\n",
-		to_user ? "exposure" : "overwrite",
-		to_user ? "from" : "to", ptr, type ? : "unknown", len);
+	if (__ratelimit(&usercopy_ratelimit)) {
+		pr_emerg("kernel memory %s attempt detected %s %p (%s) (%lu bytes)\n",
+			to_user ? "exposure" : "overwrite",
+			to_user ? "from" : "to", ptr, type ? : "unknown", len);
+		dump_stack();
+	}
+	do_group_exit(SIGKILL);
+#ifdef CONFIG_BROKEN_SECURITY
 	/*
 	 * For greater effect, it would be nice to do do_group_exit(),
 	 * but BUG() actually hooks all the lock-breaking and per-arch
 	 * Oops code, so that is used here instead.
 	 */
 	BUG();
+#endif
 }
 
 /* Returns true if any portion of [ptr,ptr+n) over laps with [low,high). */
@@ -252,10 +253,17 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
 		goto report;
 
 	/* Check for bad stack object. */
-	switch (check_stack_object(ptr, n)) {
+	switch (check_stack_object((unsigned long)ptr, n)) {
 	case NOT_STACK:
 		/* Object is not touching the current process stack. */
-		break;
+#ifdef CONFIG_BROKEN_SECURITY
+		/* Check for object in kernel to avoid text exposure. */
+		err = check_kernel_text_object(ptr, n);
+		if (err)
+			break;
+#endif
+		return;
+
 	case GOOD_FRAME:
 	case GOOD_STACK:
 		/*
@@ -264,15 +272,11 @@ void __check_object_size(const void *ptr, unsigned long n, bool to_user)
 		 * process stack (when frame checking not available).
 		 */
 		return;
-	default:
-		err = "<process stack>";
-		goto report;
-	}
 
-	/* Check for object in kernel to avoid text exposure. */
-	err = check_kernel_text_object(ptr, n);
-	if (!err)
-		return;
+	case BAD_STACK:
+		err = "<process stack>";
+		break;
+	}
 
 report:
 	report_usercopy(ptr, n, to_user, err);
