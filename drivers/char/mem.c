@@ -98,6 +98,7 @@ static ssize_t read_mem(struct file *file, char __user *buf,
 	phys_addr_t p = *ppos;
 	ssize_t read, sz;
 	void *ptr;
+	char *temp;
 
 	if (p != *ppos)
 		return 0;
@@ -120,13 +121,19 @@ static ssize_t read_mem(struct file *file, char __user *buf,
 	}
 #endif
 
+	temp = kmalloc(PAGE_SIZE, GFP_KERNEL|GFP_USERCOPY);
+	if (!temp)
+		return -ENOMEM;
+
 	while (count > 0) {
 		unsigned long remaining;
 
 		sz = size_inside_page(p, count);
 
-		if (!range_is_allowed(p >> PAGE_SHIFT, count))
+		if (!range_is_allowed(p >> PAGE_SHIFT, count)) {
+			kfree(temp);
 			return -EPERM;
+		}
 
 		/*
 		 * On ia64 if a page has been mapped somewhere as uncached, then
@@ -134,19 +141,25 @@ static ssize_t read_mem(struct file *file, char __user *buf,
 		 * corruption may occur.
 		 */
 		ptr = xlate_dev_mem_ptr(p);
-		if (!ptr)
+		if (!ptr || probe_kernel_read(temp, ptr, sz)) {
+			kfree(temp);
 			return -EFAULT;
+		}
 
-		remaining = copy_to_user(buf, ptr, sz);
+		remaining = copy_to_user(buf, temp, sz);
 		unxlate_dev_mem_ptr(p, ptr);
-		if (remaining)
+		if (remaining) {
+			kfree(temp);
 			return -EFAULT;
+		}
 
 		buf += sz;
 		p += sz;
 		count -= sz;
 		read += sz;
 	}
+
+	kfree(temp);
 
 	*ppos += read;
 	return read;
@@ -383,6 +396,8 @@ static ssize_t read_kmem(struct file *file, char __user *buf,
 
 	read = 0;
 	if (p < (unsigned long) high_memory) {
+		char *temp;
+
 		low_count = count;
 		if (count > (unsigned long)high_memory - p)
 			low_count = (unsigned long)high_memory - p;
@@ -400,6 +415,11 @@ static ssize_t read_kmem(struct file *file, char __user *buf,
 			count -= sz;
 		}
 #endif
+
+		temp = kmalloc(PAGE_SIZE, GFP_KERNEL|GFP_USERCOPY);
+		if (!temp)
+			return -ENOMEM;
+
 		while (low_count > 0) {
 			sz = size_inside_page(p, low_count);
 
@@ -412,14 +432,18 @@ static ssize_t read_kmem(struct file *file, char __user *buf,
 			if (!virt_addr_valid(kbuf))
 				return -ENXIO;
 
-			if (copy_to_user(buf, kbuf, sz))
+			if (probe_kernel_read(temp, kbuf, sz) || copy_to_user(buf, temp, sz)) {
+				kfree(temp);
 				return -EFAULT;
+			}
 			buf += sz;
 			p += sz;
 			read += sz;
 			low_count -= sz;
 			count -= sz;
 		}
+
+		kfree(temp);
 	}
 
 	if (count > 0) {
@@ -887,7 +911,7 @@ static int __init chr_dev_init(void)
 			continue;
 
 		device_create(mem_class, NULL, MKDEV(MEM_MAJOR, minor),
-			      NULL, devlist[minor].name);
+			      NULL, "%s", devlist[minor].name);
 	}
 
 	return tty_init();

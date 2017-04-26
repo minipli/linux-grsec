@@ -15,6 +15,7 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 #include <linux/uaccess.h>
+#include <linux/syscalls.h>
 
 #include <asm/ldt.h>
 #include <asm/desc.h>
@@ -108,6 +109,23 @@ int init_new_context_ldt(struct task_struct *tsk, struct mm_struct *mm)
 	struct ldt_struct *new_ldt;
 	struct mm_struct *old_mm;
 	int retval = 0;
+
+	if (tsk == current) {
+		mm->context.vdso = 0;
+
+#ifdef CONFIG_X86_32
+#if defined(CONFIG_PAX_PAGEEXEC) || defined(CONFIG_PAX_SEGMEXEC)
+		mm->context.user_cs_base = 0UL;
+		mm->context.user_cs_limit = ~0UL;
+
+#if defined(CONFIG_PAX_PAGEEXEC) && defined(CONFIG_SMP)
+		cpumask_clear(&mm->context.cpu_user_cs_mask);
+#endif
+
+#endif
+#endif
+
+	}
 
 	mutex_init(&mm->context.lock);
 	old_mm = current->mm;
@@ -235,6 +253,14 @@ static int write_ldt(void __user *ptr, unsigned long bytecount, int oldmode)
 		/* The user wants to clear the entry. */
 		memset(&ldt, 0, sizeof(ldt));
 	} else {
+
+#ifdef CONFIG_PAX_SEGMEXEC
+		if ((mm->pax_flags & MF_PAX_SEGMEXEC) && (ldt_info.contents & MODIFY_LDT_CONTENTS_CODE)) {
+			error = -EINVAL;
+			goto out;
+		}
+#endif
+
 		if (!IS_ENABLED(CONFIG_X86_16BIT) && !ldt_info.seg_32bit) {
 			error = -EINVAL;
 			goto out;
@@ -271,8 +297,7 @@ out:
 	return error;
 }
 
-asmlinkage int sys_modify_ldt(int func, void __user *ptr,
-			      unsigned long bytecount)
+SYSCALL_DEFINE3(modify_ldt, int, func, void __user *, ptr, unsigned long, bytecount)
 {
 	int ret = -ENOSYS;
 

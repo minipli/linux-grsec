@@ -7,7 +7,7 @@
 
 
 struct sched_param {
-	int sched_priority;
+	unsigned int sched_priority;
 };
 
 #include <asm/param.h>	/* for HZ */
@@ -134,6 +134,7 @@ struct perf_event_context;
 struct blk_plug;
 struct filename;
 struct nameidata;
+struct linux_binprm;
 
 #define VMACACHE_BITS 2
 #define VMACACHE_SIZE (1U << VMACACHE_BITS)
@@ -454,6 +455,7 @@ struct nsproxy;
 struct user_namespace;
 
 #ifdef CONFIG_MMU
+extern bool check_heap_stack_gap(const struct vm_area_struct *vma, unsigned long addr, unsigned long len);
 extern void arch_pick_mmap_layout(struct mm_struct *mm);
 extern unsigned long
 arch_get_unmapped_area(struct file *, unsigned long, unsigned long,
@@ -1624,8 +1626,8 @@ struct task_struct {
 	struct list_head thread_node;
 
 	struct completion *vfork_done;		/* for vfork() */
-	int __user *set_child_tid;		/* CLONE_CHILD_SETTID */
-	int __user *clear_child_tid;		/* CLONE_CHILD_CLEARTID */
+	pid_t __user *set_child_tid;		/* CLONE_CHILD_SETTID */
+	pid_t __user *clear_child_tid;		/* CLONE_CHILD_CLEARTID */
 
 	cputime_t utime, stime, utimescaled, stimescaled;
 	cputime_t gtime;
@@ -1686,8 +1688,11 @@ struct task_struct {
 	struct signal_struct *signal;
 	struct sighand_struct *sighand;
 
-	sigset_t blocked, real_blocked;
-	sigset_t saved_sigmask;	/* restored if set_restore_sigmask() was used */
+	sigset_t real_blocked;
+	struct {
+		sigset_t blocked;
+		sigset_t saved_sigmask;	/* restored if set_restore_sigmask() was used */
+	};
 	struct sigpending pending;
 
 	unsigned long sas_ss_sp;
@@ -1907,7 +1912,7 @@ struct task_struct {
 	 * Number of functions that haven't been traced
 	 * because of depth overrun.
 	 */
-	atomic_t trace_overrun;
+	atomic_unchecked_t trace_overrun;
 	/* Pause for the tracing */
 	atomic_t tracing_graph_pause;
 #endif
@@ -1966,11 +1971,68 @@ struct task_struct {
  */
 };
 
+#ifdef CONFIG_THREAD_INFO_IN_TASK
+#ifndef current_thread_info
+# define current_thread_info() (&current->thread_info)
+#endif
+#endif
+
 #ifdef CONFIG_ARCH_WANTS_DYNAMIC_TASK_STRUCT
-extern int arch_task_struct_size __read_mostly;
+extern size_t arch_task_struct_size __read_mostly;
 #else
 # define arch_task_struct_size (sizeof(struct task_struct))
 #endif
+
+#define MF_PAX_PAGEEXEC		0x01000000	/* Paging based non-executable pages */
+#define MF_PAX_EMUTRAMP		0x02000000	/* Emulate trampolines */
+#define MF_PAX_MPROTECT		0x04000000	/* Restrict mprotect() */
+#define MF_PAX_RANDMMAP		0x08000000	/* Randomize mmap() base */
+/*#define MF_PAX_RANDEXEC		0x10000000*/	/* Randomize ET_EXEC base */
+#define MF_PAX_SEGMEXEC		0x20000000	/* Segmentation based non-executable pages */
+
+#ifdef CONFIG_PAX_SOFTMODE
+extern int pax_softmode;
+#endif
+
+extern int pax_check_flags(unsigned long *);
+#define PAX_PARSE_FLAGS_FALLBACK	(~0UL)
+
+/* if tsk != current then task_lock must be held on it */
+#if defined(CONFIG_PAX_NOEXEC) || defined(CONFIG_PAX_ASLR)
+static inline unsigned long pax_get_flags(struct task_struct *tsk)
+{
+	if (likely(tsk->mm))
+		return tsk->mm->pax_flags;
+	else
+		return 0UL;
+}
+
+/* if tsk != current then task_lock must be held on it */
+static inline long pax_set_flags(struct task_struct *tsk, unsigned long flags)
+{
+	if (likely(tsk->mm)) {
+		tsk->mm->pax_flags = flags;
+		return 0;
+	}
+	return -EINVAL;
+}
+#endif
+
+#ifdef CONFIG_PAX_HAVE_ACL_FLAGS
+extern void pax_set_initial_flags(struct linux_binprm *bprm);
+#elif defined(CONFIG_PAX_HOOK_ACL_FLAGS)
+extern void (*pax_set_initial_flags_func)(struct linux_binprm *bprm);
+#endif
+
+#ifdef CONFIG_PAX_SIZE_OVERFLOW
+extern bool pax_size_overflow_report_only;
+#endif
+
+struct path;
+extern char *pax_get_path(const struct path *path, char *buf, int buflen);
+extern void pax_report_fault(struct pt_regs *regs, void *pc, void *sp);
+extern void pax_report_insns(struct pt_regs *regs, void *pc, void *sp);
+extern void pax_report_refcount_error(struct pt_regs *regs, const char *kind);
 
 #ifdef CONFIG_VMAP_STACK
 static inline struct vm_struct *task_stack_vm_area(const struct task_struct *t)
@@ -2686,7 +2748,7 @@ extern void proc_caches_init(void);
 extern void flush_signals(struct task_struct *);
 extern void ignore_signals(struct task_struct *);
 extern void flush_signal_handlers(struct task_struct *, int force_default);
-extern int dequeue_signal(struct task_struct *tsk, sigset_t *mask, siginfo_t *info);
+extern int dequeue_signal(struct task_struct *tsk, sigset_t *mask, siginfo_t *info) __must_hold(&tsk->sighand->siglock);
 
 static inline int kernel_dequeue_signal(siginfo_t *info)
 {
@@ -2952,7 +3014,7 @@ extern void __cleanup_sighand(struct sighand_struct *);
 extern void exit_itimers(struct signal_struct *);
 extern void flush_itimer_signals(void);
 
-extern void do_group_exit(int);
+extern __noreturn void do_group_exit(int);
 
 extern int do_execve(struct filename *,
 		     const char __user * const __user *,
@@ -3067,11 +3129,13 @@ static inline int thread_group_empty(struct task_struct *p)
  * It must not be nested with write_lock_irq(&tasklist_lock),
  * neither inside nor outside.
  */
+static inline void task_lock(struct task_struct *p) __acquires(&p->alloc_lock);
 static inline void task_lock(struct task_struct *p)
 {
 	spin_lock(&p->alloc_lock);
 }
 
+static inline void task_unlock(struct task_struct *p) __releases(&p->alloc_lock);
 static inline void task_unlock(struct task_struct *p)
 {
 	spin_unlock(&p->alloc_lock);
@@ -3145,7 +3209,7 @@ static inline void *task_stack_page(const struct task_struct *task)
 
 static inline unsigned long *end_of_stack(const struct task_struct *task)
 {
-	return task->stack;
+	return (unsigned long *)task->stack + 1;
 }
 
 #elif !defined(__HAVE_THREAD_FUNCTIONS)
@@ -3199,9 +3263,9 @@ static inline void put_task_stack(struct task_struct *tsk) {}
 #define task_stack_end_corrupted(task) \
 		(*(end_of_stack(task)) != STACK_END_MAGIC)
 
-static inline int object_is_on_stack(void *obj)
+static inline int object_starts_on_stack(const void *obj)
 {
-	void *stack = task_stack_page(current);
+	const void *stack = task_stack_page(current);
 
 	return (obj >= stack) && (obj < (stack + THREAD_SIZE));
 }
@@ -3600,7 +3664,7 @@ static inline unsigned long rlimit_max(unsigned int limit)
 #ifdef CONFIG_CPU_FREQ
 struct update_util_data {
        void (*func)(struct update_util_data *data, u64 time, unsigned int flags);
-};
+} __no_const;
 
 void cpufreq_add_update_util_hook(int cpu, struct update_util_data *data,
                        void (*func)(struct update_util_data *data, u64 time,

@@ -336,7 +336,7 @@ static struct stub_priv *stub_priv_alloc(struct stub_device *sdev,
 	return priv;
 }
 
-static int get_pipe(struct stub_device *sdev, int epnum, int dir)
+static  int get_pipe(struct stub_device *sdev, int epnum, int dir)
 {
 	struct usb_device *udev = sdev->udev;
 	struct usb_host_endpoint *ep;
