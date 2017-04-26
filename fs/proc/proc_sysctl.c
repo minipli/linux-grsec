@@ -32,13 +32,17 @@ static bool is_empty_dir(struct ctl_table_header *head)
 
 static void set_empty_dir(struct ctl_dir *dir)
 {
-	dir->header.ctl_table[0].child = sysctl_mount_point;
+	pax_open_kernel();
+	const_cast(dir->header.ctl_table[0].child) = sysctl_mount_point;
+	pax_close_kernel();
 }
 
 static void clear_empty_dir(struct ctl_dir *dir)
 
 {
-	dir->header.ctl_table[0].child = NULL;
+	pax_open_kernel();
+	const_cast(dir->header.ctl_table[0].child) = NULL;
+	pax_close_kernel();
 }
 
 void proc_sys_poll_notify(struct ctl_table_poll *poll)
@@ -59,8 +63,8 @@ static struct ctl_table root_table[] = {
 };
 static struct ctl_table_root sysctl_table_root = {
 	.default_set.dir.header = {
-		{{.count = 1,
-		  .nreg = 1,
+		{{.count = ATOMIC_INIT(1),
+		  .nreg = ATOMIC_INIT(1),
 		  .ctl_table = root_table }},
 		.ctl_table_arg = root_table,
 		.root = &sysctl_table_root,
@@ -182,9 +186,9 @@ static void init_header(struct ctl_table_header *head,
 {
 	head->ctl_table = table;
 	head->ctl_table_arg = table;
-	head->used = 0;
-	head->count = 1;
-	head->nreg = 1;
+	atomic_set(&head->used, 0);
+	atomic_set(&head->count, 1);
+	atomic_set(&head->nreg, 1);
 	head->unregistering = NULL;
 	head->root = root;
 	head->set = set;
@@ -220,7 +224,7 @@ static int insert_header(struct ctl_dir *dir, struct ctl_table_header *header)
 		set_empty_dir(dir);
 	}
 
-	dir->header.nreg++;
+	atomic_inc(&dir->header.nreg);
 	header->parent = dir;
 	err = insert_links(header);
 	if (err)
@@ -247,14 +251,14 @@ static int use_table(struct ctl_table_header *p)
 {
 	if (unlikely(p->unregistering))
 		return 0;
-	p->used++;
+	atomic_inc(&p->used);
 	return 1;
 }
 
 /* called under sysctl_lock */
 static void unuse_table(struct ctl_table_header *p)
 {
-	if (!--p->used)
+	if (atomic_dec_and_test(&p->used))
 		if (unlikely(p->unregistering))
 			complete(p->unregistering);
 }
@@ -266,7 +270,7 @@ static void start_unregistering(struct ctl_table_header *p)
 	 * if p->used is 0, nobody will ever touch that entry again;
 	 * we'll eliminate all paths to it before dropping sysctl_lock
 	 */
-	if (unlikely(p->used)) {
+	if (unlikely(atomic_read(&p->used))) {
 		struct completion wait;
 		init_completion(&wait);
 		p->unregistering = &wait;
@@ -287,14 +291,14 @@ static void start_unregistering(struct ctl_table_header *p)
 static void sysctl_head_get(struct ctl_table_header *head)
 {
 	spin_lock(&sysctl_lock);
-	head->count++;
+	atomic_inc(&head->count);
 	spin_unlock(&sysctl_lock);
 }
 
 void sysctl_head_put(struct ctl_table_header *head)
 {
 	spin_lock(&sysctl_lock);
-	if (!--head->count)
+	if (atomic_dec_and_test(&head->count))
 		kfree_rcu(head, rcu);
 	spin_unlock(&sysctl_lock);
 }
@@ -883,7 +887,7 @@ static struct ctl_dir *find_subdir(struct ctl_dir *dir,
 static struct ctl_dir *new_dir(struct ctl_table_set *set,
 			       const char *name, int namelen)
 {
-	struct ctl_table *table;
+	ctl_table_no_const *table;
 	struct ctl_dir *new;
 	struct ctl_node *node;
 	char *new_name;
@@ -895,7 +899,7 @@ static struct ctl_dir *new_dir(struct ctl_table_set *set,
 		return NULL;
 
 	node = (struct ctl_node *)(new + 1);
-	table = (struct ctl_table *)(node + 1);
+	table = (ctl_table_no_const *)(node + 1);
 	new_name = (char *)(table + 2);
 	memcpy(new_name, name, namelen);
 	new_name[namelen] = '\0';
@@ -953,7 +957,7 @@ static struct ctl_dir *get_subdir(struct ctl_dir *dir,
 		goto failed;
 	subdir = new;
 found:
-	subdir->header.nreg++;
+	atomic_inc(&subdir->header.nreg);
 failed:
 	if (IS_ERR(subdir)) {
 		pr_err("sysctl could not get directory: ");
@@ -1064,7 +1068,8 @@ static int sysctl_check_table(const char *path, struct ctl_table *table)
 static struct ctl_table_header *new_links(struct ctl_dir *dir, struct ctl_table *table,
 	struct ctl_table_root *link_root)
 {
-	struct ctl_table *link_table, *entry, *link;
+	ctl_table_no_const *link_table, *link;
+	struct ctl_table *entry;
 	struct ctl_table_header *links;
 	struct ctl_node *node;
 	char *link_name;
@@ -1087,7 +1092,7 @@ static struct ctl_table_header *new_links(struct ctl_dir *dir, struct ctl_table 
 		return NULL;
 
 	node = (struct ctl_node *)(links + 1);
-	link_table = (struct ctl_table *)(node + nr_entries);
+	link_table = (ctl_table_no_const *)(node + nr_entries);
 	link_name = (char *)&link_table[nr_entries + 1];
 
 	for (link = link_table, entry = table; entry->procname; link++, entry++) {
@@ -1099,7 +1104,7 @@ static struct ctl_table_header *new_links(struct ctl_dir *dir, struct ctl_table 
 		link_name += len;
 	}
 	init_header(links, dir->header.root, dir->header.set, node, link_table);
-	links->nreg = nr_entries;
+	atomic_set(&links->nreg, nr_entries);
 
 	return links;
 }
@@ -1127,7 +1132,7 @@ static bool get_links(struct ctl_dir *dir,
 	for (entry = table; entry->procname; entry++) {
 		const char *procname = entry->procname;
 		link = find_entry(&head, dir, procname, strlen(procname));
-		head->nreg++;
+		atomic_inc(&head->nreg);
 	}
 	return true;
 }
@@ -1149,7 +1154,7 @@ static int insert_links(struct ctl_table_header *head)
 	if (get_links(core_parent, head->ctl_table, head->root))
 		return 0;
 
-	core_parent->header.nreg++;
+	atomic_inc(&core_parent->header.nreg);
 	spin_unlock(&sysctl_lock);
 
 	links = new_links(core_parent, head->ctl_table, head->root);
@@ -1243,7 +1248,7 @@ struct ctl_table_header *__register_sysctl_table(
 	spin_lock(&sysctl_lock);
 	dir = &set->dir;
 	/* Reference moved down the diretory tree get_subdir */
-	dir->header.nreg++;
+	atomic_inc(&dir->header.nreg);
 	spin_unlock(&sysctl_lock);
 
 	/* Find the directory for the ctl_table */
@@ -1335,8 +1340,8 @@ static int register_leaf_sysctl_tables(const char *path, char *pos,
 	struct ctl_table_header ***subheader, struct ctl_table_set *set,
 	struct ctl_table *table)
 {
-	struct ctl_table *ctl_table_arg = NULL;
-	struct ctl_table *entry, *files;
+	ctl_table_no_const *ctl_table_arg = NULL, *files = NULL;
+	struct ctl_table *entry;
 	int nr_files = 0;
 	int nr_dirs = 0;
 	int err = -ENOMEM;
@@ -1348,10 +1353,9 @@ static int register_leaf_sysctl_tables(const char *path, char *pos,
 			nr_files++;
 	}
 
-	files = table;
 	/* If there are mixed files and directories we need a new table */
 	if (nr_dirs && nr_files) {
-		struct ctl_table *new;
+		ctl_table_no_const *new;
 		files = kzalloc(sizeof(struct ctl_table) * (nr_files + 1),
 				GFP_KERNEL);
 		if (!files)
@@ -1369,7 +1373,7 @@ static int register_leaf_sysctl_tables(const char *path, char *pos,
 	/* Register everything except a directory full of subdirectories */
 	if (nr_files || !nr_dirs) {
 		struct ctl_table_header *header;
-		header = __register_sysctl_table(set, path, files);
+		header = __register_sysctl_table(set, path, files ? files : table);
 		if (!header) {
 			kfree(ctl_table_arg);
 			goto out;
@@ -1550,12 +1554,12 @@ static void drop_sysctl_table(struct ctl_table_header *header)
 {
 	struct ctl_dir *parent = header->parent;
 
-	if (--header->nreg)
+	if (atomic_dec_return(&header->nreg))
 		return;
 
 	put_links(header);
 	start_unregistering(header);
-	if (!--header->count)
+	if (atomic_dec_and_test(&header->count))
 		kfree_rcu(header, rcu);
 
 	if (parent)

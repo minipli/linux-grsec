@@ -51,7 +51,7 @@ void task_mem(struct seq_file *m, struct mm_struct *mm)
 	else
 		bytes += kobjsize(mm);
 	
-	if (current->fs && current->fs->users > 1)
+	if (current->fs && atomic_read(&current->fs->users) > 1)
 		sbytes += kobjsize(current->fs);
 	else
 		bytes += kobjsize(current->fs);
@@ -133,8 +133,9 @@ static int is_stack(struct proc_maps_private *priv,
 	 * its "stack".  It's not even well-defined for programs written
 	 * languages like Go.
 	 */
-	return vma->vm_start <= mm->start_stack &&
-		vma->vm_end >= mm->start_stack;
+	return (vma->vm_start <= mm->start_stack &&
+		vma->vm_end >= mm->start_stack) ||
+		(vma->vm_flags & (VM_GROWSDOWN | VM_GROWSUP));
 }
 
 /*
@@ -175,7 +176,7 @@ static int nommu_vma_show(struct seq_file *m, struct vm_area_struct *vma,
 
 	if (file) {
 		seq_pad(m, ' ');
-		seq_file_path(m, file, "");
+		seq_file_path(m, file, "\n\\");
 	} else if (mm && is_stack(priv, vma)) {
 		seq_pad(m, ' ');
 		seq_printf(m, "[stack]");
